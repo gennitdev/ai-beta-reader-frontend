@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
-import { createChapterService, createReviewService } from '@/services/api'
+import { createChapterService, createReviewService, createBookService } from '@/services/api'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import {
@@ -40,6 +40,13 @@ interface Review {
   tone_key: string
 }
 
+interface Character {
+  id: string
+  character_name: string
+  wiki_page_id: string | null
+  has_wiki_page: boolean
+}
+
 const route = useRoute()
 const router = useRouter()
 const { getAccessTokenSilently } = useAuth0()
@@ -59,6 +66,7 @@ const getToken = async () => {
 
 const chapterService = createChapterService(getToken)
 const reviewService = createReviewService(getToken)
+const bookService = createBookService(getToken)
 
 const chapter = ref<Chapter | null>(null)
 const loading = ref(false)
@@ -72,6 +80,7 @@ const reviewText = ref('')
 const savedReviews = ref<Review[]>([])
 const loadingReviews = ref(false)
 const deletingReviewId = ref<string | null>(null)
+const characters = ref<Character[]>([])
 
 const hasUnsavedChanges = computed(() => {
   if (!chapter.value) return false
@@ -188,6 +197,26 @@ const deleteReview = async (reviewId: string) => {
   }
 }
 
+const loadCharacters = async () => {
+  try {
+    const charactersData = await bookService.getBookCharacters(bookId)
+    characters.value = charactersData
+  } catch (error) {
+    console.error('Failed to load characters:', error)
+  }
+}
+
+const getCharacterWikiInfo = (characterName: string) => {
+  return characters.value.find(char => char.character_name === characterName)
+}
+
+const navigateToWiki = (characterName: string) => {
+  const character = getCharacterWikiInfo(characterName)
+  if (character?.has_wiki_page && character.wiki_page_id) {
+    router.push(`/books/${bookId}/wiki/${character.wiki_page_id}`)
+  }
+}
+
 const getGravatarUrl = (profileName: string) => {
   // Use profile name as input for consistent avatars
   const hash = profileName.toLowerCase().replace(/\s+/g, '')
@@ -220,6 +249,7 @@ const startEdit = () => {
 onMounted(async () => {
   await loadChapter()
   await loadSavedReviews()
+  await loadCharacters()
 })
 </script>
 
@@ -461,13 +491,21 @@ onMounted(async () => {
               <div v-if="chapter.characters && chapter.characters.length">
                 <h4 class="font-medium text-gray-900 dark:text-white mb-1">Characters</h4>
                 <div class="flex flex-wrap gap-1">
-                  <span
+                  <button
                     v-for="character in chapter.characters"
                     :key="character"
-                    class="inline-block px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded"
+                    @click="navigateToWiki(character)"
+                    :class="[
+                      'inline-block px-2 py-1 text-xs rounded transition-colors',
+                      getCharacterWikiInfo(character)?.has_wiki_page
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 cursor-pointer'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-default'
+                    ]"
+                    :disabled="!getCharacterWikiInfo(character)?.has_wiki_page"
+                    :title="getCharacterWikiInfo(character)?.has_wiki_page ? `View ${character}'s wiki page` : `${character} (no wiki page)`"
                   >
                     {{ character }}
-                  </span>
+                  </button>
                 </div>
               </div>
 
