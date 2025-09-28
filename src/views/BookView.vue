@@ -269,7 +269,7 @@ onMounted(async () => {
           class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
         >
           <router-link
-            :to="`/books/${bookId}/chapters/${chapter.id}`"
+            :to="`/m/books/${bookId}/chapters/${chapter.id}`"
             class="block p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             <div class="flex items-start justify-between">
@@ -373,7 +373,7 @@ onMounted(async () => {
             <router-link
               v-for="page in pages"
               :key="page.id"
-              :to="`/books/${bookId}/wiki/${page.id}`"
+              :to="`/m/books/${bookId}/wiki/${page.id}`"
               class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 p-4 block hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
             >
               <div class="flex items-start justify-between mb-2">

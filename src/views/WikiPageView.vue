@@ -53,6 +53,9 @@ const { getAccessTokenSilently } = useAuth0()
 const bookId = route.params.bookId as string
 const wikiPageId = route.params.wikiPageId as string
 
+// Mobile detection
+const isMobileRoute = computed(() => route.meta?.mobile === true)
+
 // Create authenticated service
 const getToken = async () => {
   try {
@@ -181,7 +184,11 @@ const cancelEdit = () => {
 }
 
 const goBack = () => {
-  router.push(`/books/${bookId}?tab=wiki`)
+  if (isMobileRoute.value) {
+    router.push(`/books/${bookId}?tab=wiki`)
+  } else {
+    router.push(`/books/${bookId}?tab=wiki`)
+  }
 }
 
 const formatDate = (dateString: string) => {
@@ -227,7 +234,7 @@ onMounted(() => {
         <div class="flex items-center space-x-4">
           <button
             @click="goBack"
-            class="lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            :class="isMobileRoute ? 'p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors' : 'lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'"
           >
             <ArrowLeftIcon class="w-5 h-5" />
           </button>

@@ -75,6 +75,18 @@ const router = createRouter({
       name: 'wiki-page',
       component: () => import('../views/WikiPageView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/m/books/:bookId/chapters/:chapterId',
+      name: 'mobile-chapter',
+      component: () => import('../views/ChapterView.vue'),
+      meta: { requiresAuth: true, mobile: true }
+    },
+    {
+      path: '/m/books/:bookId/wiki/:wikiPageId',
+      name: 'mobile-wiki-page',
+      component: () => import('../views/WikiPageView.vue'),
+      meta: { requiresAuth: true, mobile: true }
     }
   ]
 })

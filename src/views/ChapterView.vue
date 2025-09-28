@@ -14,7 +14,8 @@ import {
   ClockIcon,
   ChevronDownIcon,
   TrashIcon,
-  UserCircleIcon
+  UserCircleIcon,
+  ArrowLeftIcon
 } from '@heroicons/vue/24/outline'
 
 interface Chapter {
@@ -87,6 +88,9 @@ const characters = ref<Character[]>([])
 const showFullChapterText = ref(false)
 const showFullCurrentReview = ref(false)
 const expandedReviews = ref<Set<string>>(new Set())
+
+// Mobile detection
+const isMobileRoute = computed(() => route.meta?.mobile === true)
 
 const hasUnsavedChanges = computed(() => {
   if (!chapter.value) return false
@@ -273,6 +277,14 @@ const startEdit = () => {
   isEditing.value = true
 }
 
+const goBack = () => {
+  if (isMobileRoute.value) {
+    router.push(`/books/${bookId}`)
+  } else {
+    router.push(`/books/${bookId}`)
+  }
+}
+
 // Text truncation helpers
 const getTruncatedText = (text: string, wordLimit: number = 150): { truncated: string; needsTruncation: boolean } => {
   if (!text) return { truncated: '', needsTruncation: false }
@@ -333,31 +345,42 @@ onMounted(async () => {
       </nav>
 
       <div class="flex justify-between items-start">
-        <div class="flex-1">
-          <div v-if="isEditing" class="space-y-2">
-            <input
-              v-model="editedTitle"
-              type="text"
-              placeholder="Chapter title (optional)"
-              class="text-3xl font-bold bg-transparent border-b-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none w-full"
-            />
-          </div>
-          <div v-else>
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-              {{ chapter?.title || chapterId }}
-            </h1>
-          </div>
+        <div class="flex items-center flex-1">
+          <!-- Back button for mobile routes -->
+          <button
+            v-if="isMobileRoute"
+            @click="goBack"
+            class="mr-4 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeftIcon class="w-5 h-5" />
+          </button>
 
-          <div class="flex items-center space-x-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
-            <span>{{ chapter?.word_count?.toLocaleString() || 0 }} words</span>
-            <div class="flex items-center">
-              <CheckCircleIcon
-                :class="chapter?.summary ? 'text-green-500' : 'text-gray-300'"
-                class="w-4 h-4 mr-1"
+          <div class="flex-1">
+            <div v-if="isEditing" class="space-y-2">
+              <input
+                v-model="editedTitle"
+                type="text"
+                placeholder="Chapter title (optional)"
+                class="text-3xl font-bold bg-transparent border-b-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none w-full"
               />
-              <span :class="chapter?.summary ? 'text-green-600' : 'text-gray-500'">
-                {{ chapter?.summary ? 'Summarized' : 'Not summarized' }}
-              </span>
+            </div>
+            <div v-else>
+              <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                {{ chapter?.title || chapterId }}
+              </h1>
+            </div>
+
+            <div class="flex items-center space-x-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
+              <span>{{ chapter?.word_count?.toLocaleString() || 0 }} words</span>
+              <div class="flex items-center">
+                <CheckCircleIcon
+                  :class="chapter?.summary ? 'text-green-500' : 'text-gray-300'"
+                  class="w-4 h-4 mr-1"
+                />
+                <span :class="chapter?.summary ? 'text-green-600' : 'text-gray-500'">
+                  {{ chapter?.summary ? 'Summarized' : 'Not summarized' }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
