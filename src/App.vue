@@ -26,7 +26,7 @@ const handleLogout = () => {
         <div class="flex justify-between items-center h-16">
           <!-- Logo -->
           <div class="flex items-center">
-            <router-link to="/books" class="flex items-center">
+            <router-link :to="isAuthenticated ? '/books' : '/'" class="flex items-center">
               <BookOpenIcon class="w-8 h-8 text-blue-600 mr-3" />
               <h1 class="text-xl font-bold text-gray-900 dark:text-white">AI Beta Reader</h1>
             </router-link>
