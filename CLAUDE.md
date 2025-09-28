@@ -201,7 +201,6 @@ await reviewService.generateReview({
 - Added comprehensive error handling and loading states
 
 ## Future Enhancements
-- Real-time collaboration
 - Advanced text formatting options
 - Export functionality (PDF, DOCX)
 - Offline support with PWA
