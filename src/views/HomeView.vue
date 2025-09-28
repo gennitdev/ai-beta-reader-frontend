@@ -42,10 +42,10 @@ if (isAuthenticated.value) {
         <div class="max-w-xl mx-auto text-center">
           <BookOpenIcon class="w-16 h-16 text-blue-600 mx-auto mb-6" />
           <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-            AI Beta Reader
+            Beta Bot
           </h1>
           <p class="text-lg text-gray-600 dark:text-gray-300 mb-8">
-            Get intelligent feedback on your creative writing. Organize your manuscripts and receive AI-powered reviews.
+            Your AI Beta Reader. Get intelligent feedback on your creative writing. Organize your manuscripts and receive AI-powered reviews.
           </p>
 
           <!-- CTA Buttons -->
@@ -114,10 +114,10 @@ if (isAuthenticated.value) {
         <div class="max-w-lg">
           <BookOpenIcon class="w-16 h-16 text-blue-600 mb-8" />
           <h1 class="text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
-            AI Beta Reader
+            Beta Bot
           </h1>
           <p class="text-xl text-gray-600 dark:text-gray-300 mb-10 leading-relaxed">
-            Get intelligent feedback on your creative writing. Organize your manuscripts, track your progress, and receive AI-powered reviews that understand your story's context.
+            Your AI Beta Reader. Get intelligent feedback on your creative writing. Organize your manuscripts, track your progress, and receive AI-powered reviews that understand your story's context.
           </p>
 
           <!-- CTA Buttons -->

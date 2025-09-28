@@ -22,13 +22,13 @@ const handleLogout = () => {
   <div class="h-screen bg-gray-50 dark:bg-gray-900">
     <!-- Header -->
     <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="px-4 sm:px-6">
         <div class="flex justify-between items-center h-16">
           <!-- Logo -->
           <div class="flex items-center">
             <router-link :to="isAuthenticated ? '/books' : '/'" class="flex items-center">
               <BookOpenIcon class="w-8 h-8 text-blue-600 mr-3" />
-              <h1 class="text-xl font-bold text-gray-900 dark:text-white">AI Beta Reader</h1>
+              <h1 class="text-xl font-bold text-gray-900 dark:text-white">Beta Bot</h1>
             </router-link>
           </div>
 
