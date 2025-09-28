@@ -42,13 +42,13 @@ const router = createRouter({
     },
     {
       path: '/books/:bookId/chapters/:chapterId',
-      name: 'chapter',
+      name: 'chapter-direct',
       component: () => import('../views/ChapterView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/books/:bookId/wiki/:wikiPageId',
-      name: 'wiki-page',
+      name: 'wiki-page-direct',
       component: () => import('../views/WikiPageView.vue'),
       meta: { requiresAuth: true }
     },
@@ -66,13 +66,13 @@ const router = createRouter({
     },
     {
       path: '/books/:bookId/chapters/:chapterId',
-      name: 'chapter',
+      name: 'standalone-chapter',
       component: () => import('../views/ChapterView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/books/:bookId/wiki/:wikiPageId',
-      name: 'wiki-page',
+      name: 'standalone-wiki-page',
       component: () => import('../views/WikiPageView.vue'),
       meta: { requiresAuth: true }
     },
@@ -87,6 +87,12 @@ const router = createRouter({
       name: 'mobile-wiki-page',
       component: () => import('../views/WikiPageView.vue'),
       meta: { requiresAuth: true, mobile: true }
+    },
+    {
+      path: '/ai-profiles/:id',
+      name: 'ai-profile',
+      component: () => import('../views/AIProfileView.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

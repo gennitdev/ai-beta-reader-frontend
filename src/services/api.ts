@@ -63,6 +63,11 @@ export function createBookService(getToken: () => Promise<string | undefined>) {
   const client = createAuthenticatedApiClient(getToken)
 
   return {
+    async getBooks() {
+      const response = await client.get('/books')
+      return response.data
+    },
+
     async createBook(book: { id: string; title: string }) {
       const response = await client.post('/books', book)
       return response.data
@@ -174,6 +179,17 @@ export function createWikiService(getToken: () => Promise<string | undefined>) {
 
     async getWikiPageHistory(wikiPageId: string) {
       const response = await client.get(`/wiki/${wikiPageId}/history`)
+      return response.data
+    }
+  }
+}
+
+export const createAIProfileService = (getToken: () => Promise<string | undefined>) => {
+  const client = createAuthenticatedApiClient(getToken)
+
+  return {
+    async getAIProfile(profileId: string) {
+      const response = await client.get(`/ai-profiles/${profileId}`)
       return response.data
     }
   }

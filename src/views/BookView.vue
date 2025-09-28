@@ -426,7 +426,7 @@ onMounted(async () => {
   </div>
 
   <!-- Desktop layout: Full screen split view -->
-  <div class="hidden lg:flex h-screen">
+  <div class="hidden lg:flex max-h-screen">
     <!-- Split view -->
     <div class="flex flex-1 overflow-hidden">
       <!-- Left sidebar: Compact list -->

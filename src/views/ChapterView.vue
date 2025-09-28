@@ -547,16 +547,28 @@ onMounted(async () => {
                 <!-- Review Header -->
                 <div class="flex items-start justify-between mb-3">
                   <div class="flex items-center space-x-3">
-                    <!-- Avatar -->
-                    <img
-                      :src="getGravatarUrl(review.profile_name)"
-                      :alt="review.profile_name"
-                      class="w-10 h-10 rounded-full"
-                    />
+                    <!-- Clickable Avatar -->
+                    <router-link
+                      :to="`/ai-profiles/${review.profile_id}`"
+                      class="block hover:opacity-80 transition-opacity"
+                      :title="`View ${review.profile_name} profile`"
+                    >
+                      <img
+                        :src="getGravatarUrl(review.profile_name)"
+                        :alt="review.profile_name"
+                        class="w-10 h-10 rounded-full"
+                      />
+                    </router-link>
 
                     <!-- Profile Info -->
                     <div>
-                      <h4 class="font-medium text-gray-900 dark:text-white">{{ review.profile_name }}</h4>
+                      <router-link
+                        :to="`/ai-profiles/${review.profile_id}`"
+                        class="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        :title="`View ${review.profile_name} profile`"
+                      >
+                        {{ review.profile_name }}
+                      </router-link>
                       <p class="text-xs text-gray-500 dark:text-gray-400">
                         {{ formatDate(review.created_at) }}
                       </p>

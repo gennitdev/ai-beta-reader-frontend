@@ -1,20 +1,37 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuth0 } from '@auth0/auth0-vue'
+import { createBookService } from '@/services/api'
 import { useBooks } from '@/composables/useBooks'
 import { PlusIcon, BookOpenIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
 
 interface Book {
   id: string
   title: string
-  chapterCount?: number
+  chapter_count?: number
+  created_at?: string
+  updated_at?: string
 }
 
 const router = useRouter()
+const { getAccessTokenSilently } = useAuth0()
 const books = ref<Book[]>([])
 const loading = ref(false)
 const showCreateModal = ref(false)
 const newBook = ref({ id: '', title: '' })
+
+// Create authenticated service
+const getToken = async () => {
+  try {
+    return await getAccessTokenSilently()
+  } catch (error) {
+    console.warn('Failed to get access token:', error)
+    return undefined
+  }
+}
+
+const bookService = createBookService(getToken)
 
 // Use TanStack Query for book operations
 const { createBook } = useBooks()
@@ -22,13 +39,23 @@ const { createBook } = useBooks()
 const loadBooks = async () => {
   loading.value = true
   try {
-    // For now, we'll manage books in localStorage until we add a proper books endpoint
+    // Fetch books from backend
+    const booksData = await bookService.getBooks()
+    books.value = booksData
+
+    // Also sync with localStorage for backward compatibility
+    const booksSummary = booksData.map((book: Book) => ({
+      id: book.id,
+      title: book.title
+    }))
+    localStorage.setItem('books', JSON.stringify(booksSummary))
+  } catch (error) {
+    console.error('Failed to load books:', error)
+    // Fall back to localStorage if API fails
     const savedBooks = localStorage.getItem('books')
     if (savedBooks) {
       books.value = JSON.parse(savedBooks)
     }
-  } catch (error) {
-    console.error('Failed to load books:', error)
   } finally {
     loading.value = false
   }
@@ -40,13 +67,9 @@ const createBookHandler = async () => {
   try {
     await createBook.mutateAsync(newBook.value)
 
-    // Save to localStorage
-    const savedBooks = localStorage.getItem('books')
-    const booksArray = savedBooks ? JSON.parse(savedBooks) : []
-    booksArray.push(newBook.value)
-    localStorage.setItem('books', JSON.stringify(booksArray))
+    // Reload books from backend to get updated list with chapter counts
+    await loadBooks()
 
-    books.value.push({ ...newBook.value })
     newBook.value = { id: '', title: '' }
     showCreateModal.value = false
   } catch (error) {
@@ -111,7 +134,7 @@ onMounted(() => {
           </p>
           <div class="mt-4 flex justify-between items-center">
             <span class="text-sm text-gray-500 dark:text-gray-400">
-              {{ book.chapterCount || 0 }} chapters
+              {{ book.chapter_count || 0 }} chapters
             </span>
             <span class="text-blue-600 hover:text-blue-700 text-sm font-medium">
               Open →
