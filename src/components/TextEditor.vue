@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, computed } from 'vue'
+import { ref, nextTick, onMounted, computed, watch } from 'vue'
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/vue'
 import MarkdownRenderer from './MarkdownRenderer.vue'
 
 // Props
 const props = defineProps({
+  modelValue: {
+    type: String,
+    default: '',
+  },
   initialValue: {
     type: String,
     default: '',
@@ -34,9 +38,16 @@ const emit = defineEmits<{
 }>()
 
 // Reactive state
-const textValue = ref(props.initialValue)
+const textValue = ref(props.modelValue || props.initialValue)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const selectedTab = ref(0)
+
+// Watch for modelValue changes
+watch(() => props.modelValue, (newValue) => {
+  if (newValue !== textValue.value) {
+    textValue.value = newValue
+  }
+})
 
 // Computed
 const remainingChars = computed(() => props.maxLength - textValue.value.length)

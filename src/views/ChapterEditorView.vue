@@ -11,7 +11,7 @@ const router = useRouter()
 const { getAccessTokenSilently } = useAuth0()
 
 const bookId = route.params.bookId as string
-const chapterId = route.query.chapterId as string
+const chapterId = route.params.chapterId as string
 const isEditing = !!chapterId
 
 // Create authenticated service

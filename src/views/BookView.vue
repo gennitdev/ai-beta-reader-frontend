@@ -94,7 +94,7 @@ const createNewChapter = () => {
 }
 
 const editChapter = (chapterId: string) => {
-  router.push(`/books/${bookId}/chapter-editor?chapterId=${chapterId}`)
+  router.push(`/books/${bookId}/chapter-editor/${chapterId}`)
 }
 
 const viewChapter = (chapterId: string) => {
