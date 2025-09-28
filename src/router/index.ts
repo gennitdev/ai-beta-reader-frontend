@@ -24,6 +24,32 @@ const router = createRouter({
       path: '/books/:id',
       name: 'book',
       component: () => import('../views/BookView.vue'),
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: 'chapters/:chapterId',
+          name: 'book-chapter',
+          component: () => import('../views/ChapterView.vue'),
+          meta: { requiresAuth: true }
+        },
+        {
+          path: 'wiki/:wikiPageId',
+          name: 'book-wiki-page',
+          component: () => import('../views/WikiPageView.vue'),
+          meta: { requiresAuth: true }
+        }
+      ]
+    },
+    {
+      path: '/books/:bookId/chapters/:chapterId',
+      name: 'chapter',
+      component: () => import('../views/ChapterView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/books/:bookId/wiki/:wikiPageId',
+      name: 'wiki-page',
+      component: () => import('../views/WikiPageView.vue'),
       meta: { requiresAuth: true }
     },
     {

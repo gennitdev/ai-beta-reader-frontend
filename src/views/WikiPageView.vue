@@ -69,6 +69,7 @@ const bookService = createBookService(getToken)
 const wikiPage = ref<WikiPage | null>(null)
 const wikiHistory = ref<WikiUpdate[]>([])
 const characters = ref<Character[]>([])
+const bookTitle = ref<string>('')
 const loading = ref(false)
 const loadingHistory = ref(false)
 const showHistory = ref(false)
@@ -90,6 +91,27 @@ const getTypeColor = (type: string) => {
     case 'location': return 'text-green-600'
     case 'concept': return 'text-purple-600'
     default: return 'text-gray-600'
+  }
+}
+
+const loadBookTitle = async () => {
+  try {
+    // Load book info from localStorage first (faster)
+    const savedBooks = localStorage.getItem('books')
+    if (savedBooks) {
+      const books = JSON.parse(savedBooks)
+      const book = books.find((b: any) => b.id === bookId)
+      if (book) {
+        bookTitle.value = book.title
+        return
+      }
+    }
+
+    // Fallback to bookId if not found in localStorage
+    bookTitle.value = bookId
+  } catch (error) {
+    console.error('Failed to load book title:', error)
+    bookTitle.value = bookId
   }
 }
 
@@ -181,6 +203,7 @@ const toggleHistory = () => {
 }
 
 onMounted(() => {
+  loadBookTitle()
   loadWikiPage()
   loadCharacters()
 })
@@ -194,7 +217,7 @@ onMounted(() => {
         <router-link to="/books" class="text-blue-600 hover:text-blue-700">Books</router-link>
         <span class="mx-2 text-gray-500">></span>
         <router-link :to="`/books/${bookId}?tab=wiki`" class="text-blue-600 hover:text-blue-700">
-          {{ bookId }}
+          {{ bookTitle || 'Loading...' }}
         </router-link>
         <span class="mx-2 text-gray-500">></span>
         <span class="text-gray-700 dark:text-gray-300">{{ wikiPage?.page_name || 'Loading...' }}</span>
@@ -204,7 +227,7 @@ onMounted(() => {
         <div class="flex items-center space-x-4">
           <button
             @click="goBack"
-            class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            class="lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
             <ArrowLeftIcon class="w-5 h-5" />
           </button>

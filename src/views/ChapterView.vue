@@ -69,6 +69,7 @@ const reviewService = createReviewService(getToken)
 const bookService = createBookService(getToken)
 
 const chapter = ref<Chapter | null>(null)
+const bookTitle = ref<string>('')
 const loading = ref(false)
 const isEditing = ref(false)
 const editedText = ref('')
@@ -86,6 +87,27 @@ const hasUnsavedChanges = computed(() => {
   if (!chapter.value) return false
   return editedText.value !== chapter.value.text || editedTitle.value !== (chapter.value.title || '')
 })
+
+const loadBookTitle = async () => {
+  try {
+    // Load book info from localStorage first (faster)
+    const savedBooks = localStorage.getItem('books')
+    if (savedBooks) {
+      const books = JSON.parse(savedBooks)
+      const book = books.find((b: any) => b.id === bookId)
+      if (book) {
+        bookTitle.value = book.title
+        return
+      }
+    }
+
+    // Fallback to bookId if not found in localStorage
+    bookTitle.value = bookId
+  } catch (error) {
+    console.error('Failed to load book title:', error)
+    bookTitle.value = bookId
+  }
+}
 
 const loadChapter = async () => {
   loading.value = true
@@ -247,6 +269,7 @@ const startEdit = () => {
 }
 
 onMounted(async () => {
+  await loadBookTitle()
   await loadChapter()
   await loadSavedReviews()
   await loadCharacters()
@@ -261,7 +284,7 @@ onMounted(async () => {
         <router-link to="/books" class="text-blue-600 hover:text-blue-700">Books</router-link>
         <span class="mx-2 text-gray-500">></span>
         <router-link :to="`/books/${bookId}`" class="text-blue-600 hover:text-blue-700">
-          {{ bookId }}
+          {{ bookTitle || 'Loading...' }}
         </router-link>
         <span class="mx-2 text-gray-500">></span>
         <span class="text-gray-700 dark:text-gray-300">{{ chapter?.title || chapterId }}</span>
