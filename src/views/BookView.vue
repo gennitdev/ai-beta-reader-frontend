@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { createBookService, createChapterService, createWikiService } from '@/services/api'
@@ -205,9 +205,33 @@ watch(
   }
 )
 
+const checkAndRedirectToFirstChapter = () => {
+  const isDesktop = window.innerWidth >= 1024 // lg breakpoint
+  const hasChapterInRoute = route.path.includes('/chapters/') || route.path.includes('/wiki/')
+
+  if (isDesktop && !hasChapterInRoute && sortedChapters.value.length > 0) {
+    const firstChapter = sortedChapters.value[0]
+    router.replace(`/books/${bookId}/chapters/${firstChapter.id}`)
+  }
+}
+
+const handleResize = () => {
+  checkAndRedirectToFirstChapter()
+}
+
 onMounted(async () => {
   await loadBook()
   await loadWiki()
+
+  // Check if we need to redirect to first chapter
+  checkAndRedirectToFirstChapter()
+
+  // Add resize listener
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 
