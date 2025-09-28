@@ -38,7 +38,7 @@ if (isAuthenticated.value) {
       </div>
 
       <!-- Content below image on mobile -->
-      <div class="px-4 sm:px-6 py-12 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+      <div class="px-4 sm:px-6 py-12 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
         <div class="max-w-xl mx-auto text-center">
           <BookOpenIcon class="w-16 h-16 text-blue-600 mx-auto mb-6" />
           <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
@@ -89,6 +89,11 @@ if (isAuthenticated.value) {
             </div>
           </div>
         </div>
+
+        <!-- Attribution Footer for Mobile -->
+        <div class="absolute bottom-4 right-4 text-xs text-gray-500 dark:text-gray-400">
+          Illustration by <a href="https://unsplash.com/@artattackzone?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Art Attack</a> on <a href="https://unsplash.com/illustrations/a-cup-of-coffee-and-a-book-on-a-table-RpSTMkZGKyE?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Unsplash</a>
+        </div>
       </div>
     </div>
 
@@ -105,7 +110,7 @@ if (isAuthenticated.value) {
       </div>
 
       <!-- Right Half - Content -->
-      <div class="w-1/2 flex flex-col justify-center px-12 xl:px-16 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+      <div class="w-1/2 flex flex-col justify-center px-12 xl:px-16 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
         <div class="max-w-lg">
           <BookOpenIcon class="w-16 h-16 text-blue-600 mb-8" />
           <h1 class="text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
@@ -155,6 +160,11 @@ if (isAuthenticated.value) {
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Attribution Footer -->
+        <div class="absolute bottom-4 right-4 text-xs text-gray-500 dark:text-gray-400">
+          Illustration by <a href="https://unsplash.com/@artattackzone?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Art Attack</a> on <a href="https://unsplash.com/illustrations/a-cup-of-coffee-and-a-book-on-a-table-RpSTMkZGKyE?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Unsplash</a>
         </div>
       </div>
     </div>
