@@ -3,9 +3,10 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { createBookService, createChapterService, createWikiService } from '@/services/api'
-import { PlusIcon, DocumentTextIcon, SparklesIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, DocumentTextIcon, SparklesIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import draggable from 'vuedraggable'
 
 interface Chapter {
   id: string
@@ -13,6 +14,10 @@ interface Chapter {
   word_count: number
   has_summary: boolean
   summary: string | null
+  position: number
+  part_id: string | null
+  part_name: string | null
+  part_position: number | null
 }
 
 interface WikiPage {
@@ -57,6 +62,11 @@ const bookService = createBookService(getToken)
 const chapterService = createChapterService(getToken)
 const wikiService = createWikiService(getToken)
 
+// Drag and drop state
+const isDragging = ref(false)
+const showOrganizeModal = ref(false)
+const draggableChapters = ref<Chapter[]>([])
+
 const currentTab = computed(() => {
   // Check if we're on a wiki page child route
   if (route.path.includes('/wiki/')) {
@@ -68,10 +78,15 @@ const currentTab = computed(() => {
 
 const sortedChapters = computed(() => {
   return chapters.value.slice().sort((a, b) => {
-    // Extract numbers from chapter IDs for natural sorting
-    const aNum = parseInt(a.id.replace(/\D/g, '')) || 0
-    const bNum = parseInt(b.id.replace(/\D/g, '')) || 0
-    return aNum - bNum
+    // Sort by part position first, then by chapter position within part
+    const aPartPos = a.part_position ?? 999999
+    const bPartPos = b.part_position ?? 999999
+
+    if (aPartPos !== bPartPos) {
+      return aPartPos - bPartPos
+    }
+
+    return (a.position || 0) - (b.position || 0)
   })
 })
 
@@ -114,6 +129,53 @@ const createNewChapter = () => {
 
 const editChapter = (chapterId: string) => {
   router.push(`/books/${bookId}/chapter-editor/${chapterId}`)
+}
+
+// Update draggable chapters when chapters change
+watch(chapters, (newChapters) => {
+  draggableChapters.value = [...newChapters].sort((a, b) => {
+    const aPartPos = a.part_position ?? 999999
+    const bPartPos = b.part_position ?? 999999
+    if (aPartPos !== bPartPos) {
+      return aPartPos - bPartPos
+    }
+    return (a.position || 0) - (b.position || 0)
+  })
+}, { immediate: true })
+
+// Drag and drop handlers
+const onDragStart = () => {
+  isDragging.value = true
+}
+
+const onDragEnd = async () => {
+  isDragging.value = false
+  await saveChapterOrder()
+}
+
+const saveChapterOrder = async () => {
+  try {
+    const reorderedChapters = draggableChapters.value.map((chapter, index) => ({
+      id: chapter.id,
+      position: index,
+      partId: chapter.part_id
+    }))
+
+    await bookService.reorderChapters(bookId, reorderedChapters)
+
+    // Update the original chapters array with new positions
+    chapters.value = chapters.value.map(chapter => {
+      const reordered = reorderedChapters.find(r => r.id === chapter.id)
+      if (reordered) {
+        return { ...chapter, position: reordered.position }
+      }
+      return chapter
+    })
+  } catch (error) {
+    console.error('Failed to save chapter order:', error)
+    // Reload chapters to revert any UI changes
+    await loadBook()
+  }
 }
 
 
@@ -477,14 +539,23 @@ onUnmounted(() => {
             </p>
           </div>
 
-          <!-- New Chapter Button -->
-          <button
-            @click="createNewChapter"
-            class="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mb-6"
-          >
-            <PlusIcon class="w-5 h-5 mr-2" />
-            New Chapter
-          </button>
+          <!-- Action Buttons -->
+          <div class="space-y-3 mb-6">
+            <button
+              @click="createNewChapter"
+              class="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <PlusIcon class="w-5 h-5 mr-2" />
+              New Chapter
+            </button>
+            <button
+              @click="showOrganizeModal = true"
+              class="w-full inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              <Cog6ToothIcon class="w-5 h-5 mr-2" />
+              Organize Chapters
+            </button>
+          </div>
 
           <div class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-2">
             <router-link
@@ -520,15 +591,33 @@ onUnmounted(() => {
             </div>
 
             <!-- Chapters list -->
-            <div v-else-if="chapters.length > 0" class="space-y-2">
-              <router-link
-                v-for="chapter in sortedChapters"
-                :key="chapter.id"
-                :to="`/books/${bookId}/chapters/${chapter.id}`"
-                class="block p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                :class="route.params.chapterId === chapter.id ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600' : ''"
+            <div v-else-if="chapters.length > 0">
+              <draggable
+                v-model="draggableChapters"
+                item-key="id"
+                class="space-y-2"
+                @start="onDragStart"
+                @end="onDragEnd"
+                :disabled="false"
+                ghost-class="opacity-50"
+                drag-class="rotate-2"
+                handle=".drag-handle"
               >
+                <template #item="{ element: chapter }">
+                  <router-link
+                    :to="`/books/${bookId}/chapters/${chapter.id}`"
+                    class="block p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                    :class="route.params.chapterId === chapter.id ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600' : ''"
+                  >
                 <div class="flex items-center justify-between">
+                  <div
+                    class="drag-handle mr-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                    @click.prevent.stop
+                  >
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"></path>
+                    </svg>
+                  </div>
                   <div class="flex-1 min-w-0">
                     <h3 class="text-sm font-medium text-gray-900 dark:text-white truncate">
                       {{ chapter.title || chapter.id }}
@@ -552,7 +641,9 @@ onUnmounted(() => {
                     </button>
                   </div>
                 </div>
-              </router-link>
+                  </router-link>
+                </template>
+              </draggable>
             </div>
 
             <!-- Empty state -->
@@ -618,6 +709,42 @@ onUnmounted(() => {
       <!-- Right content area: router-view -->
       <div class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
         <router-view :key="routerViewKey" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Organize Chapters Modal -->
+  <div v-if="showOrganizeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+      <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Organize Chapters</h2>
+          <button
+            @click="showOrganizeModal = false"
+            class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-md"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-6 overflow-y-auto max-h-[70vh]">
+        <div class="text-center text-gray-500 dark:text-gray-400">
+          <Cog6ToothIcon class="w-12 h-12 mx-auto mb-3" />
+          <p>Advanced chapter organization with parts coming soon!</p>
+          <p class="text-sm mt-2">For now, you can drag and drop chapters in the sidebar to reorder them.</p>
+        </div>
+      </div>
+
+      <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+        <button
+          @click="showOrganizeModal = false"
+          class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+        >
+          Close
+        </button>
       </div>
     </div>
   </div>

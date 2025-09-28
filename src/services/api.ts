@@ -81,6 +81,31 @@ export function createBookService(getToken: () => Promise<string | undefined>) {
     async getBookCharacters(bookId: string) {
       const response = await client.get(`/books/${bookId}/characters`)
       return response.data
+    },
+
+    async getBookParts(bookId: string) {
+      const response = await client.get(`/books/${bookId}/parts`)
+      return response.data
+    },
+
+    async createBookPart(bookId: string, part: { name: string; position?: number }) {
+      const response = await client.post(`/books/${bookId}/parts`, part)
+      return response.data
+    },
+
+    async updateBookPart(bookId: string, partId: string, updates: { name?: string; position?: number }) {
+      const response = await client.put(`/books/${bookId}/parts/${partId}`, updates)
+      return response.data
+    },
+
+    async deleteBookPart(bookId: string, partId: string) {
+      const response = await client.delete(`/books/${bookId}/parts/${partId}`)
+      return response.data
+    },
+
+    async reorderChapters(bookId: string, chapters: { id: string; position: number; partId?: string | null }[]) {
+      const response = await client.put(`/books/${bookId}/chapters/reorder`, { chapters })
+      return response.data
     }
   }
 }
@@ -116,6 +141,11 @@ export function createChapterService(getToken: () => Promise<string | undefined>
 
     async deleteChapterReview(reviewId: string) {
       const response = await client.delete(`/reviews/${reviewId}`)
+      return response.data
+    },
+
+    async reorderChapter(chapterId: string, data: { position?: number; partId?: string | null }) {
+      const response = await client.put(`/chapters/${chapterId}/reorder`, data)
       return response.data
     }
   }
