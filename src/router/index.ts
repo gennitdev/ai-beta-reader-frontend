@@ -27,6 +27,12 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/books/:bookId/chapter-editor',
+      name: 'chapter-editor',
+      component: () => import('../views/ChapterEditorView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/books/:bookId/chapters/:chapterId',
       name: 'chapter',
       component: () => import('../views/ChapterView.vue'),

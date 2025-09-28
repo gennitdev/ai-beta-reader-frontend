@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { createBookService, createChapterService } from '@/services/api'
-import { PlusIcon, DocumentTextIcon, EyeIcon, SparklesIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, DocumentTextIcon, EyeIcon, SparklesIcon, PencilIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 
 interface Chapter {
@@ -21,8 +21,6 @@ const bookId = route.params.id as string
 const book = ref<{ id: string; title: string } | null>(null)
 const chapters = ref<Chapter[]>([])
 const loading = ref(false)
-const showCreateModal = ref(false)
-const newChapter = ref({ id: '', title: '', text: '' })
 
 // Create authenticated services
 const getToken = async () => {
@@ -69,24 +67,12 @@ const loadBook = async () => {
   }
 }
 
-const createChapter = async () => {
-  if (!newChapter.value.id || !newChapter.value.text) return
+const createNewChapter = () => {
+  router.push(`/books/${bookId}/chapter-editor`)
+}
 
-  loading.value = true
-  try {
-    await chapterService.createChapter({
-      ...newChapter.value,
-      bookId
-    })
-
-    await loadBook()
-    newChapter.value = { id: '', title: '', text: '' }
-    showCreateModal.value = false
-  } catch (error) {
-    console.error('Failed to create chapter:', error)
-  } finally {
-    loading.value = false
-  }
+const editChapter = (chapterId: string) => {
+  router.push(`/books/${bookId}/chapter-editor?chapterId=${chapterId}`)
 }
 
 const viewChapter = (chapterId: string) => {
@@ -119,7 +105,7 @@ onMounted(() => {
           <p class="text-gray-600 dark:text-gray-400 mt-1">{{ chapters.length }} chapters</p>
         </div>
         <button
-          @click="showCreateModal = true"
+          @click="createNewChapter"
           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <PlusIcon class="w-5 h-5 mr-2" />
@@ -170,6 +156,13 @@ onMounted(() => {
 
             <div class="flex items-center space-x-2">
               <button
+                @click="editChapter(chapter.id)"
+                class="inline-flex items-center px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+              >
+                <PencilIcon class="w-4 h-4 mr-1" />
+                Edit
+              </button>
+              <button
                 @click="viewChapter(chapter.id)"
                 class="inline-flex items-center px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
@@ -190,7 +183,7 @@ onMounted(() => {
         Add your first chapter to start getting AI feedback.
       </p>
       <button
-        @click="showCreateModal = true"
+        @click="createNewChapter"
         class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
       >
         <PlusIcon class="w-5 h-5 mr-2" />
@@ -198,80 +191,5 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Create chapter modal -->
-    <div v-if="showCreateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Add New Chapter</h2>
-
-        <form @submit.prevent="createChapter" class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="chapterId" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Chapter ID
-              </label>
-              <input
-                id="chapterId"
-                v-model="newChapter.id"
-                type="text"
-                required
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="ch-01"
-              />
-              <button
-                type="button"
-                @click="generateChapterId"
-                class="text-xs text-blue-600 hover:text-blue-700 mt-1"
-              >
-                Auto-generate
-              </button>
-            </div>
-
-            <div>
-              <label for="chapterTitle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Title (optional)
-              </label>
-              <input
-                id="chapterTitle"
-                v-model="newChapter.title"
-                type="text"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Chapter title"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label for="chapterText" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Chapter Text
-            </label>
-            <textarea
-              id="chapterText"
-              v-model="newChapter.text"
-              required
-              rows="10"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
-              placeholder="Paste or write your chapter content here..."
-            />
-          </div>
-
-          <div class="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              @click="showCreateModal = false"
-              class="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              :disabled="!newChapter.id || !newChapter.text || loading"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {{ loading ? 'Creating...' : 'Add Chapter' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
   </div>
 </template>

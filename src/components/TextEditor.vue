@@ -23,7 +23,7 @@ const props = defineProps({
   },
   height: {
     type: String,
-    default: '300px',
+    default: '500px',
   },
 })
 
@@ -145,25 +145,31 @@ onMounted(() => {
 
 <template>
   <div class="w-full">
-    <TabGroup v-model="selectedTab">
+    <TabGroup v-model="selectedTab" as="div">
       <TabList class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-4">
-        <Tab
-          v-slot="{ selected }: { selected: boolean }"
-          class="w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2"
-          :class="selected
-            ? 'bg-white text-blue-700 shadow'
-            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'"
-        >
-          Write
+        <Tab as="template" v-slot="{ selected }">
+          <button
+            :class="[
+              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+              selected
+                ? 'bg-white text-blue-700 shadow'
+                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+            ]"
+          >
+            Write
+          </button>
         </Tab>
-        <Tab
-          v-slot="{ selected }: { selected: boolean }"
-          class="w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2"
-          :class="selected
-            ? 'bg-white text-blue-700 shadow'
-            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'"
-        >
-          Preview
+        <Tab as="template" v-slot="{ selected }">
+          <button
+            :class="[
+              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+              selected
+                ? 'bg-white text-blue-700 shadow'
+                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+            ]"
+          >
+            Preview
+          </button>
         </Tab>
       </TabList>
 
@@ -246,20 +252,13 @@ onMounted(() => {
               ref="textareaRef"
               v-model="textValue"
               @input="updateValue"
+              rows="15"
               :placeholder="placeholder"
               :readonly="readonly"
               :style="{ height }"
               class="w-full p-4 border-l border-r border-b border-gray-300 dark:border-gray-600 rounded-b-lg resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-900 dark:text-white"
               :class="{ 'border-red-500': isOverLimit }"
             />
-
-            <!-- Character counter -->
-            <div
-              class="absolute bottom-2 right-2 text-xs"
-              :class="isOverLimit ? 'text-red-500' : 'text-gray-500'"
-            >
-              {{ remainingChars }} characters remaining
-            </div>
           </div>
         </TabPanel>
 
