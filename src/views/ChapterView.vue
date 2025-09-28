@@ -11,7 +11,8 @@ import {
   SparklesIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
-  ClockIcon
+  ClockIcon,
+  ChevronDownIcon
 } from '@heroicons/vue/24/outline'
 
 interface Chapter {
@@ -262,14 +263,18 @@ onMounted(() => {
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white">AI Review</h2>
 
               <div class="flex items-center space-x-3">
-                <select
-                  v-model="reviewTone"
-                  class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="fanficnet">FanFiction.net Style</option>
-                  <option value="editorial">Editorial Notes</option>
-                  <option value="line-notes">Line Editor</option>
-                </select>
+                <div class="relative">
+                  <select
+                    v-model="reviewTone"
+                    class="px-3 py-1 pr-8 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    style="-webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: none;"
+                  >
+                    <option value="fanficnet">Fanfic review style</option>
+                    <option value="editorial">Editorial Notes</option>
+                    <option value="line-notes">Line Editor</option>
+                  </select>
+                  <ChevronDownIcon class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
 
                 <button
                   @click="generateReview"
