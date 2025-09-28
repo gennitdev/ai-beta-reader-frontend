@@ -463,7 +463,7 @@ onUnmounted(() => {
   </div>
 
   <!-- Desktop layout: Full screen split view -->
-  <div class="hidden lg:flex max-h-screen">
+  <div class="hidden lg:flex h-[calc(100vh-4rem-1px)]">
     <!-- Split view -->
     <div class="flex flex-1 overflow-hidden">
       <!-- Left sidebar: Compact list -->
