@@ -36,6 +36,7 @@ const chapterId = route.params.chapterId as string
 // Create authenticated services
 const getToken = async () => {
   try {
+    // Request token with client ID as audience (for UI-based authentication)
     return await getAccessTokenSilently()
   } catch (error) {
     console.warn('Failed to get access token:', error)

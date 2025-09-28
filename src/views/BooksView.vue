@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
-import { createBookService } from '@/services/api'
-import { PlusIcon, BookOpenIcon } from '@heroicons/vue/24/outline'
+import { useBooks } from '@/composables/useBooks'
+import { PlusIcon, BookOpenIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
 
 interface Book {
   id: string
@@ -12,21 +11,13 @@ interface Book {
 }
 
 const router = useRouter()
-const { getAccessTokenSilently } = useAuth0()
 const books = ref<Book[]>([])
 const loading = ref(false)
 const showCreateModal = ref(false)
 const newBook = ref({ id: '', title: '' })
 
-// Create authenticated book service
-const bookService = createBookService(async () => {
-  try {
-    return await getAccessTokenSilently()
-  } catch (error) {
-    console.warn('Failed to get access token:', error)
-    return undefined
-  }
-})
+// Use TanStack Query for book operations
+const { createBook } = useBooks()
 
 const loadBooks = async () => {
   loading.value = true
@@ -43,11 +34,11 @@ const loadBooks = async () => {
   }
 }
 
-const createBook = async () => {
+const createBookHandler = async () => {
   if (!newBook.value.id || !newBook.value.title) return
 
   try {
-    await bookService.createBook(newBook.value)
+    await createBook.mutateAsync(newBook.value)
 
     // Save to localStorage
     const savedBooks = localStorage.getItem('books')
@@ -59,6 +50,7 @@ const createBook = async () => {
     newBook.value = { id: '', title: '' }
     showCreateModal.value = false
   } catch (error) {
+    // Error handling is done in the mutation, but we can add UI feedback here
     console.error('Failed to create book:', error)
   }
 }
@@ -150,7 +142,7 @@ onMounted(() => {
       <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Create New Book</h2>
 
-        <form @submit.prevent="createBook" class="space-y-4">
+        <form @submit.prevent="createBookHandler" class="space-y-4">
           <div>
             <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Title
@@ -183,6 +175,23 @@ onMounted(() => {
             </p>
           </div>
 
+          <!-- Error display -->
+          <div v-if="createBook.error.value" class="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <ExclamationTriangleIcon class="h-5 w-5 text-red-400" />
+              </div>
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800 dark:text-red-200">
+                  Failed to create book
+                </h3>
+                <div class="mt-2 text-sm text-red-700 dark:text-red-300">
+                  <p>{{ createBook.error.value?.message || 'An unexpected error occurred' }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="flex justify-end space-x-3 pt-4">
             <button
               type="button"
@@ -193,10 +202,11 @@ onMounted(() => {
             </button>
             <button
               type="submit"
-              :disabled="!newBook.title || !newBook.id"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              :disabled="!newBook.title || !newBook.id || createBook.isPending.value"
+              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
             >
-              Create Book
+              <div v-if="createBook.isPending.value" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              {{ createBook.isPending.value ? 'Creating...' : 'Create Book' }}
             </button>
           </div>
         </form>

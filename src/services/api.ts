@@ -23,6 +23,14 @@ export function createAuthenticatedApiClient(getToken: () => Promise<string | un
       const token = await getToken()
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
+        console.log('Request with token:', {
+          url: config.url,
+          method: config.method,
+          hasToken: !!token,
+          tokenPreview: token.substring(0, 20) + '...'
+        })
+      } else {
+        console.warn('No token available for request:', config.url)
       }
     } catch (error) {
       console.warn('Failed to get access token:', error)
@@ -31,6 +39,23 @@ export function createAuthenticatedApiClient(getToken: () => Promise<string | un
   })
 
   return client
+}
+
+// Auth service functions
+export function createAuthService(getToken: () => Promise<string | undefined>) {
+  const client = createAuthenticatedApiClient(getToken)
+
+  return {
+    async createProfile() {
+      const response = await client.post('/auth/profile')
+      return response.data
+    },
+
+    async getProfile() {
+      const response = await client.get('/auth/me')
+      return response.data
+    }
+  }
 }
 
 // API service functions that create services with authentication
