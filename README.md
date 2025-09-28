@@ -9,7 +9,7 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 - **Chapter Editor**: Rich markdown editor with live preview
 - **AI Summaries**: Generate structured summaries for each chapter
 - **AI Reviews**: Get contextual feedback with different tones:
-  - FanFiction.net style (enthusiastic reader)
+  - Fan style (enthusiastic reader)
   - Editorial notes (developmental editor)
   - Line editor (concrete suggestions)
 - **Responsive Design**: Works on desktop and mobile devices
