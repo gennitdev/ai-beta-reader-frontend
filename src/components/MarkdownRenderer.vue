@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
+import { processWikiLinks } from '@/utils/wikiLinks'
 
 // Helper function to generate heading anchors
 function generateHeadingId(text: string): string {
@@ -12,6 +13,13 @@ function generateHeadingId(text: string): string {
     .replace(/\s+/g, '-') // Replace spaces with hyphens
     .replace(/-+/g, '-') // Replace multiple hyphens with single
     .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
+}
+
+interface Character {
+  id: string
+  character_name: string
+  wiki_page_id: string | null
+  has_wiki_page: boolean
 }
 
 const props = defineProps({
@@ -26,6 +34,18 @@ const props = defineProps({
   imageMaxHeight: {
     type: String,
     default: '350px',
+  },
+  characters: {
+    type: Array as () => Character[],
+    default: () => [],
+  },
+  bookId: {
+    type: String,
+    default: '',
+  },
+  enableWikiLinks: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -72,9 +92,15 @@ md.renderer.rules.heading_close = function (tokens, idx) {
   return `</${level}>`
 }
 
-// Render markdown with custom image styling
+// Render markdown with custom image styling and wiki links
 const renderedHtml = computed(() => {
-  let html = md.render(props.text)
+  // Process wiki links if enabled
+  let text = props.text
+  if (props.enableWikiLinks && props.characters.length > 0 && props.bookId) {
+    text = processWikiLinks(text, props.characters, props.bookId)
+  }
+
+  let html = md.render(text)
 
   // Add custom styling to images
   html = html.replace(

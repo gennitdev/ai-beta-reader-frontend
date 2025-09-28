@@ -71,6 +71,11 @@ export function createBookService(getToken: () => Promise<string | undefined>) {
     async getBookChapters(bookId: string) {
       const response = await client.get(`/books/${bookId}/chapters`)
       return response.data
+    },
+
+    async getBookCharacters(bookId: string) {
+      const response = await client.get(`/books/${bookId}/characters`)
+      return response.data
     }
   }
 }

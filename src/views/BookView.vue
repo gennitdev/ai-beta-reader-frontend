@@ -5,7 +5,6 @@ import { useAuth0 } from '@auth0/auth0-vue'
 import { createBookService, createChapterService, createWikiService } from '@/services/api'
 import { PlusIcon, DocumentTextIcon, EyeIcon, SparklesIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
 interface Chapter {
@@ -39,7 +38,6 @@ const chapters = ref<Chapter[]>([])
 const wikiPages = ref<WikiPage[]>([])
 const loading = ref(false)
 const loadingWiki = ref(false)
-const selectedTab = ref(0)
 
 // Create authenticated services
 const getToken = async () => {
@@ -55,6 +53,10 @@ const getToken = async () => {
 const bookService = createBookService(getToken)
 const chapterService = createChapterService(getToken)
 const wikiService = createWikiService(getToken)
+
+const currentTab = computed(() => {
+  return route.query.tab === 'wiki' ? 'wiki' : 'chapters'
+})
 
 const sortedChapters = computed(() => {
   return chapters.value.slice().sort((a, b) => {
@@ -186,38 +188,35 @@ onMounted(async () => {
     </div>
 
     <!-- Tabs -->
-    <TabGroup v-model="selectedTab" as="div">
-      <TabList class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-6">
-        <Tab as="template" v-slot="{ selected }">
-          <button
-            :class="[
-              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-              selected
-                ? 'bg-white text-blue-700 shadow'
-                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
-            ]"
-          >
-            <DocumentTextIcon class="w-5 h-5 inline mr-2" />
-            Chapters
-          </button>
-        </Tab>
-        <Tab as="template" v-slot="{ selected }">
-          <button
-            :class="[
-              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-              selected
-                ? 'bg-white text-blue-700 shadow'
-                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
-            ]"
-          >
-            <BookOpenIcon class="w-5 h-5 inline mr-2" />
-            Wiki
-          </button>
-        </Tab>
-      </TabList>
+    <div class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-6">
+      <router-link
+        :to="`/books/${bookId}`"
+        :class="[
+          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
+          currentTab === 'chapters'
+            ? 'bg-white text-blue-700 shadow'
+            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+        ]"
+      >
+        <DocumentTextIcon class="w-5 h-5 inline mr-2" />
+        Chapters
+      </router-link>
+      <router-link
+        :to="`/books/${bookId}?tab=wiki`"
+        :class="[
+          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
+          currentTab === 'wiki'
+            ? 'bg-white text-blue-700 shadow'
+            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+        ]"
+      >
+        <BookOpenIcon class="w-5 h-5 inline mr-2" />
+        Wiki
+      </router-link>
+    </div>
 
-      <TabPanels>
-        <TabPanel>
+    <!-- Tab Content -->
+    <div v-if="currentTab === 'chapters'">
           <!-- Loading state -->
           <div v-if="loading" class="flex justify-center items-center h-64">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -294,9 +293,9 @@ onMounted(async () => {
         Add First Chapter
       </button>
           </div>
-        </TabPanel>
+    </div>
 
-        <TabPanel>
+    <div v-else-if="currentTab === 'wiki'">
           <!-- Wiki Content -->
           <div v-if="loadingWiki" class="flex justify-center items-center h-64">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -322,9 +321,6 @@ onMounted(async () => {
                       <h3 class="font-semibold text-gray-900 dark:text-white">{{ page.page_name }}</h3>
                       <span v-if="page.is_major" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
                         Major
-                      </span>
-                      <span v-if="page.created_by_ai" class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
-                        AI Created
                       </span>
                     </div>
                   </div>
@@ -366,8 +362,6 @@ onMounted(async () => {
               💡 Try generating a summary for a chapter to see the wiki in action!
             </div>
           </div>
-        </TabPanel>
-      </TabPanels>
-    </TabGroup>
+    </div>
   </div>
 </template>

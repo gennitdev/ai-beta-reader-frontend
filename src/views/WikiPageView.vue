@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
-import { createWikiService } from '@/services/api'
+import { createWikiService, createBookService } from '@/services/api'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import {
   ArrowLeftIcon,
@@ -40,6 +40,13 @@ interface WikiUpdate {
   chapter_title: string | null
 }
 
+interface Character {
+  id: string
+  character_name: string
+  wiki_page_id: string | null
+  has_wiki_page: boolean
+}
+
 const route = useRoute()
 const router = useRouter()
 const { getAccessTokenSilently } = useAuth0()
@@ -57,9 +64,11 @@ const getToken = async () => {
 }
 
 const wikiService = createWikiService(getToken)
+const bookService = createBookService(getToken)
 
 const wikiPage = ref<WikiPage | null>(null)
 const wikiHistory = ref<WikiUpdate[]>([])
+const characters = ref<Character[]>([])
 const loading = ref(false)
 const loadingHistory = ref(false)
 const showHistory = ref(false)
@@ -95,6 +104,15 @@ const loadWikiPage = async () => {
     router.push(`/books/${bookId}`)
   } finally {
     loading.value = false
+  }
+}
+
+const loadCharacters = async () => {
+  try {
+    const charactersData = await bookService.getBookCharacters(bookId)
+    characters.value = charactersData
+  } catch (error) {
+    console.error('Failed to load characters:', error)
   }
 }
 
@@ -141,7 +159,7 @@ const cancelEdit = () => {
 }
 
 const goBack = () => {
-  router.push(`/books/${bookId}`)
+  router.push(`/books/${bookId}?tab=wiki`)
 }
 
 const formatDate = (dateString: string) => {
@@ -164,6 +182,7 @@ const toggleHistory = () => {
 
 onMounted(() => {
   loadWikiPage()
+  loadCharacters()
 })
 </script>
 
@@ -174,7 +193,7 @@ onMounted(() => {
       <nav class="text-sm breadcrumbs mb-4">
         <router-link to="/books" class="text-blue-600 hover:text-blue-700">Books</router-link>
         <span class="mx-2 text-gray-500">></span>
-        <router-link :to="`/books/${bookId}`" class="text-blue-600 hover:text-blue-700">
+        <router-link :to="`/books/${bookId}?tab=wiki`" class="text-blue-600 hover:text-blue-700">
           {{ bookId }}
         </router-link>
         <span class="mx-2 text-gray-500">></span>
@@ -269,7 +288,12 @@ onMounted(() => {
             </div>
 
             <div v-else-if="wikiPage.content" class="prose prose-gray dark:prose-invert max-w-none">
-              <MarkdownRenderer :text="wikiPage.content" />
+              <MarkdownRenderer
+                :text="wikiPage.content"
+                :characters="characters"
+                :book-id="bookId"
+                :enable-wiki-links="true"
+              />
             </div>
 
             <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
