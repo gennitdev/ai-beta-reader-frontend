@@ -93,23 +93,7 @@ const handleLogout = () => {
         </div>
       </div>
 
-      <div v-else-if="!isAuthenticated" class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <div class="text-center max-w-md mx-auto px-6">
-          <BookOpenIcon class="w-16 h-16 text-blue-600 mx-auto mb-6" />
-          <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-            Welcome to AI Beta Reader
-          </h2>
-          <p class="text-gray-600 dark:text-gray-400 mb-8">
-            Get AI-powered feedback on your creative writing. Track your books, organize chapters, and receive intelligent reviews that consider your story's context.
-          </p>
-          <button
-            @click="handleLogin"
-            class="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-lg"
-          >
-            Get Started
-          </button>
-        </div>
-      </div>
+      <RouterView v-else-if="!isAuthenticated" />
 
       <div v-else-if="profileError" class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <div class="text-center max-w-md mx-auto px-6">
