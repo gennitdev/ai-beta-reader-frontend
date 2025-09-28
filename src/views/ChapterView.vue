@@ -7,14 +7,12 @@ import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import {
   PencilIcon,
-  EyeIcon,
   SparklesIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ClockIcon,
   ChevronDownIcon,
   TrashIcon,
-  UserCircleIcon,
   ArrowLeftIcon
 } from '@heroicons/vue/24/outline'
 
@@ -51,8 +49,10 @@ interface Character {
 const route = useRoute()
 const router = useRouter()
 const { getAccessTokenSilently } = useAuth0()
-const bookId = route.params.bookId as string
-const chapterId = route.params.chapterId as string
+
+// Computed route parameters to handle both nested and standalone routes
+const bookId = computed(() => (route.params.bookId || route.params.id) as string)
+const chapterId = computed(() => route.params.chapterId as string)
 
 // Create authenticated services
 const getToken = async () => {
@@ -70,7 +70,6 @@ const reviewService = createReviewService(getToken)
 const bookService = createBookService(getToken)
 
 const chapter = ref<Chapter | null>(null)
-const bookTitle = ref<string>('')
 const loading = ref(false)
 const isEditing = ref(false)
 const editedText = ref('')
@@ -92,42 +91,44 @@ const expandedReviews = ref<Set<string>>(new Set())
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true)
 
+// Computed book title from localStorage
+const bookTitle = computed(() => {
+  try {
+    const savedBooks = localStorage.getItem('books')
+    if (savedBooks) {
+      const books = JSON.parse(savedBooks)
+      const book = books.find((b: any) => b.id === bookId.value)
+      if (book) {
+        return book.title
+      }
+    }
+    return bookId.value // Fallback to bookId
+  } catch (error) {
+    console.error('Failed to load book title:', error)
+    return bookId.value
+  }
+})
+
 const hasUnsavedChanges = computed(() => {
   if (!chapter.value) return false
   return editedText.value !== chapter.value.text || editedTitle.value !== (chapter.value.title || '')
 })
 
-const loadBookTitle = async () => {
-  try {
-    // Load book info from localStorage first (faster)
-    const savedBooks = localStorage.getItem('books')
-    if (savedBooks) {
-      const books = JSON.parse(savedBooks)
-      const book = books.find((b: any) => b.id === bookId)
-      if (book) {
-        bookTitle.value = book.title
-        return
-      }
-    }
+// Computed navigation URLs
+const bookUrl = computed(() => `/books/${bookId.value}`)
+const backButtonUrl = computed(() => bookUrl.value)
 
-    // Fallback to bookId if not found in localStorage
-    bookTitle.value = bookId
-  } catch (error) {
-    console.error('Failed to load book title:', error)
-    bookTitle.value = bookId
-  }
-}
 
 const loadChapter = async () => {
   loading.value = true
   try {
-    const chapterData = await chapterService.getChapter(chapterId)
+    const chapterData = await chapterService.getChapter(chapterId.value)
     chapter.value = chapterData
     editedText.value = chapterData.text
     editedTitle.value = chapterData.title || ''
   } catch (error) {
     console.error('Failed to load chapter:', error)
-    router.push(`/books/${bookId}`)
+    router.push(`/books/${bookId.value}`)
   } finally {
     loading.value = false
   }
@@ -230,21 +231,30 @@ const deleteReview = async (reviewId: string) => {
 
 const loadCharacters = async () => {
   try {
-    const charactersData = await bookService.getBookCharacters(bookId)
+    const charactersData = await bookService.getBookCharacters(bookId.value)
     characters.value = charactersData
   } catch (error) {
     console.error('Failed to load characters:', error)
   }
 }
 
+// Character lookup helper - now more functional
 const getCharacterWikiInfo = (characterName: string) => {
   return characters.value.find(char => char.character_name === characterName)
 }
 
+// Computed character map for better performance with large character lists
+const characterMap = computed(() => {
+  return characters.value.reduce((map, char) => {
+    map[char.character_name] = char
+    return map
+  }, {} as Record<string, Character>)
+})
+
 const navigateToWiki = (characterName: string) => {
   const character = getCharacterWikiInfo(characterName)
   if (character?.has_wiki_page && character.wiki_page_id) {
-    router.push(`/books/${bookId}/wiki/${character.wiki_page_id}`)
+    router.push(`/books/${bookId.value}/wiki/${character.wiki_page_id}`)
   }
 }
 
@@ -278,40 +288,29 @@ const startEdit = () => {
 }
 
 const goBack = () => {
-  if (isMobileRoute.value) {
-    router.push(`/books/${bookId}`)
-  } else {
-    router.push(`/books/${bookId}`)
-  }
+  router.push(backButtonUrl.value)
 }
 
-// Text truncation helpers
+// Text truncation helpers - more functional approach
 const getTruncatedText = (text: string, wordLimit: number = 150): { truncated: string; needsTruncation: boolean } => {
   if (!text) return { truncated: '', needsTruncation: false }
 
-  // Split text while preserving line breaks and whitespace structure
   const words = text.split(/(\s+)/)
-
-  // Count only actual words (not whitespace)
   let wordCount = 0
-  let truncatedParts = []
 
-  for (const part of words) {
+  const truncatedParts = words.filter(part => {
     if (/\S/.test(part)) { // If part contains non-whitespace characters
       wordCount++
-      if (wordCount > wordLimit) {
-        break
-      }
+      return wordCount <= wordLimit
     }
-    truncatedParts.push(part)
-  }
+    return wordCount <= wordLimit // Include whitespace if we haven't exceeded limit
+  })
 
-  if (wordCount <= wordLimit) {
-    return { truncated: text, needsTruncation: false }
+  const needsTruncation = wordCount > wordLimit
+  return {
+    truncated: needsTruncation ? truncatedParts.join('') : text,
+    needsTruncation
   }
-
-  const truncated = truncatedParts.join('')
-  return { truncated, needsTruncation: true }
 }
 
 const toggleReviewExpansion = (reviewId: string) => {
@@ -323,7 +322,6 @@ const toggleReviewExpansion = (reviewId: string) => {
 }
 
 onMounted(async () => {
-  await loadBookTitle()
   await loadChapter()
   await loadSavedReviews()
   await loadCharacters()
@@ -337,8 +335,8 @@ onMounted(async () => {
       <nav class="text-sm breadcrumbs mb-4">
         <router-link to="/books" class="text-blue-600 hover:text-blue-700">Books</router-link>
         <span class="mx-2 text-gray-500">></span>
-        <router-link :to="`/books/${bookId}`" class="text-blue-600 hover:text-blue-700">
-          {{ bookTitle || 'Loading...' }}
+        <router-link :to="bookUrl" class="text-blue-600 hover:text-blue-700">
+          {{ bookTitle }}
         </router-link>
         <span class="mx-2 text-gray-500">></span>
         <span class="text-gray-700 dark:text-gray-300">{{ chapter?.title || chapterId }}</span>

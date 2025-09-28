@@ -50,8 +50,10 @@ interface Character {
 const route = useRoute()
 const router = useRouter()
 const { getAccessTokenSilently } = useAuth0()
-const bookId = route.params.bookId as string
-const wikiPageId = route.params.wikiPageId as string
+
+// Computed route parameters to handle both nested and standalone routes
+const bookId = computed(() => (route.params.bookId || route.params.id) as string)
+const wikiPageId = computed(() => route.params.wikiPageId as string)
 
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true)
@@ -72,7 +74,6 @@ const bookService = createBookService(getToken)
 const wikiPage = ref<WikiPage | null>(null)
 const wikiHistory = ref<WikiUpdate[]>([])
 const characters = ref<Character[]>([])
-const bookTitle = ref<string>('')
 const loading = ref(false)
 const loadingHistory = ref(false)
 const showHistory = ref(false)
@@ -97,36 +98,36 @@ const getTypeColor = (type: string) => {
   }
 }
 
-const loadBookTitle = async () => {
+// Computed book title from localStorage
+const bookTitle = computed(() => {
   try {
-    // Load book info from localStorage first (faster)
     const savedBooks = localStorage.getItem('books')
     if (savedBooks) {
       const books = JSON.parse(savedBooks)
-      const book = books.find((b: any) => b.id === bookId)
+      const book = books.find((b: any) => b.id === bookId.value)
       if (book) {
-        bookTitle.value = book.title
-        return
+        return book.title
       }
     }
-
-    // Fallback to bookId if not found in localStorage
-    bookTitle.value = bookId
+    return bookId.value // Fallback to bookId
   } catch (error) {
     console.error('Failed to load book title:', error)
-    bookTitle.value = bookId
+    return bookId.value
   }
-}
+})
+
+// Computed navigation URLs
+const bookWikiUrl = computed(() => `/books/${bookId.value}?tab=wiki`)
 
 const loadWikiPage = async () => {
   loading.value = true
   try {
-    const pageData = await wikiService.getWikiPage(wikiPageId)
+    const pageData = await wikiService.getWikiPage(wikiPageId.value)
     wikiPage.value = pageData
     editedContent.value = pageData.content
   } catch (error) {
     console.error('Failed to load wiki page:', error)
-    router.push(`/books/${bookId}`)
+    router.push(`/books/${bookId.value}`)
   } finally {
     loading.value = false
   }
@@ -134,7 +135,7 @@ const loadWikiPage = async () => {
 
 const loadCharacters = async () => {
   try {
-    const charactersData = await bookService.getBookCharacters(bookId)
+    const charactersData = await bookService.getBookCharacters(bookId.value)
     characters.value = charactersData
   } catch (error) {
     console.error('Failed to load characters:', error)
@@ -146,7 +147,7 @@ const loadWikiHistory = async () => {
 
   loadingHistory.value = true
   try {
-    const historyData = await wikiService.getWikiPageHistory(wikiPageId)
+    const historyData = await wikiService.getWikiPageHistory(wikiPageId.value)
     wikiHistory.value = historyData
   } catch (error) {
     console.error('Failed to load wiki history:', error)
@@ -159,7 +160,7 @@ const saveChanges = async () => {
   if (!wikiPage.value || editedContent.value === wikiPage.value.content) return
 
   try {
-    await wikiService.updateWikiPage(wikiPageId, {
+    await wikiService.updateWikiPage(wikiPageId.value, {
       content: editedContent.value
     })
 
@@ -184,11 +185,7 @@ const cancelEdit = () => {
 }
 
 const goBack = () => {
-  if (isMobileRoute.value) {
-    router.push(`/books/${bookId}?tab=wiki`)
-  } else {
-    router.push(`/books/${bookId}?tab=wiki`)
-  }
+  router.push(bookWikiUrl.value)
 }
 
 const formatDate = (dateString: string) => {
@@ -210,7 +207,6 @@ const toggleHistory = () => {
 }
 
 onMounted(() => {
-  loadBookTitle()
   loadWikiPage()
   loadCharacters()
 })
@@ -223,8 +219,8 @@ onMounted(() => {
       <nav class="text-sm breadcrumbs mb-4">
         <router-link to="/books" class="text-blue-600 hover:text-blue-700">Books</router-link>
         <span class="mx-2 text-gray-500">></span>
-        <router-link :to="`/books/${bookId}?tab=wiki`" class="text-blue-600 hover:text-blue-700">
-          {{ bookTitle || 'Loading...' }}
+        <router-link :to="bookWikiUrl" class="text-blue-600 hover:text-blue-700">
+          {{ bookTitle }}
         </router-link>
         <span class="mx-2 text-gray-500">></span>
         <span class="text-gray-700 dark:text-gray-300">{{ wikiPage?.page_name || 'Loading...' }}</span>
