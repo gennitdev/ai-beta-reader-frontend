@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { createBookService, createChapterService, createWikiService } from '@/services/api'
-import { PlusIcon, DocumentTextIcon, EyeIcon, SparklesIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, DocumentTextIcon, SparklesIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
@@ -105,9 +105,6 @@ const editChapter = (chapterId: string) => {
   router.push(`/books/${bookId}/chapter-editor/${chapterId}`)
 }
 
-const viewChapter = (chapterId: string) => {
-  router.push(`/books/${bookId}/chapters/${chapterId}`)
-}
 
 const loadWiki = async () => {
   if (!book.value) return
@@ -271,18 +268,16 @@ onMounted(async () => {
           :key="chapter.id"
           class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
         >
-          <div class="p-6">
+          <router-link
+            :to="`/books/${bookId}/chapters/${chapter.id}`"
+            class="block p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
             <div class="flex items-start justify-between">
               <div class="flex items-start flex-1">
                 <DocumentTextIcon class="w-6 h-6 text-gray-400 mr-3 mt-0.5" />
                 <div class="flex-1">
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                    <button
-                      @click="viewChapter(chapter.id)"
-                      class="text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                    >
-                      {{ chapter.title || chapter.id }}
-                    </button>
+                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                    {{ chapter.title || chapter.id }}
                   </h3>
                   <div class="flex items-center space-x-4 mt-1">
                     <span class="text-sm text-gray-500 dark:text-gray-400">
@@ -327,24 +322,18 @@ onMounted(async () => {
                   </div>
                 </div>
               </div>
-
-              <div class="flex items-center space-x-2">
-                <button
-                  @click="editChapter(chapter.id)"
-                  class="inline-flex items-center px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-                >
-                  <PencilIcon class="w-4 h-4 mr-1" />
-                  Edit
-                </button>
-                <button
-                  @click="viewChapter(chapter.id)"
-                  class="inline-flex items-center px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <EyeIcon class="w-4 h-4 mr-1" />
-                  View
-                </button>
-              </div>
             </div>
+          </router-link>
+
+          <!-- Action buttons outside router-link -->
+          <div class="px-6 pb-4 flex justify-end space-x-2">
+            <button
+              @click="editChapter(chapter.id)"
+              class="inline-flex items-center px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+            >
+              <PencilIcon class="w-4 h-4 mr-1" />
+              Edit
+            </button>
           </div>
         </div>
       </div>

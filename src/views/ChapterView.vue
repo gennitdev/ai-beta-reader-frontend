@@ -83,6 +83,11 @@ const loadingReviews = ref(false)
 const deletingReviewId = ref<string | null>(null)
 const characters = ref<Character[]>([])
 
+// Text truncation state
+const showFullChapterText = ref(false)
+const showFullCurrentReview = ref(false)
+const expandedReviews = ref<Set<string>>(new Set())
+
 const hasUnsavedChanges = computed(() => {
   if (!chapter.value) return false
   return editedText.value !== chapter.value.text || editedTitle.value !== (chapter.value.title || '')
@@ -268,6 +273,43 @@ const startEdit = () => {
   isEditing.value = true
 }
 
+// Text truncation helpers
+const getTruncatedText = (text: string, wordLimit: number = 150): { truncated: string; needsTruncation: boolean } => {
+  if (!text) return { truncated: '', needsTruncation: false }
+
+  // Split text while preserving line breaks and whitespace structure
+  const words = text.split(/(\s+)/)
+
+  // Count only actual words (not whitespace)
+  let wordCount = 0
+  let truncatedParts = []
+
+  for (const part of words) {
+    if (/\S/.test(part)) { // If part contains non-whitespace characters
+      wordCount++
+      if (wordCount > wordLimit) {
+        break
+      }
+    }
+    truncatedParts.push(part)
+  }
+
+  if (wordCount <= wordLimit) {
+    return { truncated: text, needsTruncation: false }
+  }
+
+  const truncated = truncatedParts.join('')
+  return { truncated, needsTruncation: true }
+}
+
+const toggleReviewExpansion = (reviewId: string) => {
+  if (expandedReviews.value.has(reviewId)) {
+    expandedReviews.value.delete(reviewId)
+  } else {
+    expandedReviews.value.add(reviewId)
+  }
+}
+
 onMounted(async () => {
   await loadBookTitle()
   await loadChapter()
@@ -370,7 +412,29 @@ onMounted(async () => {
               />
             </div>
             <div v-else class="prose prose-gray dark:prose-invert max-w-none">
-              <MarkdownRenderer :text="chapter.text" />
+              <template v-if="!showFullChapterText && getTruncatedText(chapter.text).needsTruncation">
+                <MarkdownRenderer :text="getTruncatedText(chapter.text).truncated" />
+                <div class="not-prose">
+                  <span class="text-gray-500">...</span>
+                  <button
+                    @click="showFullChapterText = true"
+                    class="inline-flex items-center ml-2 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+                  >
+                    Show more
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <MarkdownRenderer :text="chapter.text" />
+                <div v-if="getTruncatedText(chapter.text).needsTruncation" class="not-prose">
+                  <button
+                    @click="showFullChapterText = false"
+                    class="inline-flex items-center mt-3 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+                  >
+                    Show less
+                  </button>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -412,7 +476,29 @@ onMounted(async () => {
             </div>
 
             <div v-else-if="reviewText" class="prose prose-gray dark:prose-invert max-w-none">
-              <MarkdownRenderer :text="reviewText" />
+              <template v-if="!showFullCurrentReview && getTruncatedText(reviewText).needsTruncation">
+                <MarkdownRenderer :text="getTruncatedText(reviewText).truncated" />
+                <div class="not-prose">
+                  <span class="text-gray-500">...</span>
+                  <button
+                    @click="showFullCurrentReview = true"
+                    class="inline-flex items-center ml-2 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+                  >
+                    Show more
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <MarkdownRenderer :text="reviewText" />
+                <div v-if="getTruncatedText(reviewText).needsTruncation" class="not-prose">
+                  <button
+                    @click="showFullCurrentReview = false"
+                    class="inline-flex items-center mt-3 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+                  >
+                    Show less
+                  </button>
+                </div>
+              </template>
             </div>
 
             <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -470,7 +556,29 @@ onMounted(async () => {
 
                 <!-- Review Content -->
                 <div class="prose prose-sm prose-gray dark:prose-invert max-w-none">
-                  <MarkdownRenderer :text="review.review_text" />
+                  <template v-if="!expandedReviews.has(review.id) && getTruncatedText(review.review_text).needsTruncation">
+                    <MarkdownRenderer :text="getTruncatedText(review.review_text).truncated" />
+                    <div class="not-prose">
+                      <span class="text-gray-500">...</span>
+                      <button
+                        @click="toggleReviewExpansion(review.id)"
+                        class="inline-flex items-center ml-2 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+                      >
+                        Show more
+                      </button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <MarkdownRenderer :text="review.review_text" />
+                    <div v-if="getTruncatedText(review.review_text).needsTruncation" class="not-prose">
+                      <button
+                        @click="toggleReviewExpansion(review.id)"
+                        class="inline-flex items-center mt-3 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+                      >
+                        Show less
+                      </button>
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>
