@@ -29,7 +29,6 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.13",
     "@tsconfig/node22": "^22.0.2",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.16.5",
