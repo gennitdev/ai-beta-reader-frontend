@@ -37,6 +37,12 @@ const router = createRouter({
       name: 'chapter',
       component: () => import('../views/ChapterView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/books/:bookId/wiki/:wikiPageId',
+      name: 'wiki-page',
+      component: () => import('../views/WikiPageView.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

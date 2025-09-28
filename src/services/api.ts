@@ -121,3 +121,55 @@ export function createReviewService(getToken: () => Promise<string | undefined>)
     }
   }
 }
+
+export function createWikiService(getToken: () => Promise<string | undefined>) {
+  const client = createAuthenticatedApiClient(getToken)
+
+  return {
+    async getBookWiki(bookId: string) {
+      const response = await client.get(`/books/${bookId}/wiki`)
+      return response.data
+    },
+
+    async getWikiPage(wikiPageId: string) {
+      const response = await client.get(`/wiki/${wikiPageId}`)
+      return response.data
+    },
+
+    async createWikiPage(bookId: string, page: {
+      page_name: string
+      page_type?: 'character' | 'location' | 'concept' | 'other'
+      content?: string
+      summary?: string
+      aliases?: string[]
+      tags?: string[]
+      is_major?: boolean
+    }) {
+      const response = await client.post(`/books/${bookId}/wiki`, page)
+      return response.data
+    },
+
+    async updateWikiPage(wikiPageId: string, updates: {
+      page_name?: string
+      page_type?: 'character' | 'location' | 'concept' | 'other'
+      content?: string
+      summary?: string
+      aliases?: string[]
+      tags?: string[]
+      is_major?: boolean
+    }) {
+      const response = await client.put(`/wiki/${wikiPageId}`, updates)
+      return response.data
+    },
+
+    async deleteWikiPage(wikiPageId: string) {
+      const response = await client.delete(`/wiki/${wikiPageId}`)
+      return response.data
+    },
+
+    async getWikiPageHistory(wikiPageId: string) {
+      const response = await client.get(`/wiki/${wikiPageId}/history`)
+      return response.data
+    }
+  }
+}

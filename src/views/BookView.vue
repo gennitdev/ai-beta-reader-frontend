@@ -2,15 +2,31 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
-import { createBookService, createChapterService } from '@/services/api'
-import { PlusIcon, DocumentTextIcon, EyeIcon, SparklesIcon, PencilIcon } from '@heroicons/vue/24/outline'
+import { createBookService, createChapterService, createWikiService } from '@/services/api'
+import { PlusIcon, DocumentTextIcon, EyeIcon, SparklesIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/vue'
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
 interface Chapter {
   id: string
   title: string | null
   word_count: number
   has_summary: boolean
+}
+
+interface WikiPage {
+  id: string
+  page_name: string
+  page_type: 'character' | 'location' | 'concept' | 'other'
+  summary: string | null
+  aliases: string[]
+  tags: string[]
+  is_major: boolean
+  created_by_ai: boolean
+  created_at: string
+  updated_at: string
+  content_length: number
 }
 
 const route = useRoute()
@@ -20,7 +36,10 @@ const bookId = route.params.id as string
 
 const book = ref<{ id: string; title: string } | null>(null)
 const chapters = ref<Chapter[]>([])
+const wikiPages = ref<WikiPage[]>([])
 const loading = ref(false)
+const loadingWiki = ref(false)
+const selectedTab = ref(0)
 
 // Create authenticated services
 const getToken = async () => {
@@ -35,6 +54,7 @@ const getToken = async () => {
 
 const bookService = createBookService(getToken)
 const chapterService = createChapterService(getToken)
+const wikiService = createWikiService(getToken)
 
 const sortedChapters = computed(() => {
   return chapters.value.slice().sort((a, b) => {
@@ -79,13 +99,64 @@ const viewChapter = (chapterId: string) => {
   router.push(`/books/${bookId}/chapters/${chapterId}`)
 }
 
-const generateChapterId = () => {
-  const chapterNum = chapters.value.length + 1
-  newChapter.value.id = `ch-${chapterNum.toString().padStart(2, '0')}`
+const loadWiki = async () => {
+  if (!book.value) return
+
+  loadingWiki.value = true
+  try {
+    const wikiData = await wikiService.getBookWiki(book.value.id)
+    wikiPages.value = wikiData
+  } catch (error) {
+    console.error('Failed to load wiki:', error)
+  } finally {
+    loadingWiki.value = false
+  }
 }
 
-onMounted(() => {
-  loadBook()
+const wikiPagesByType = computed(() => {
+  const grouped = wikiPages.value.reduce((acc, page) => {
+    if (!acc[page.page_type]) {
+      acc[page.page_type] = []
+    }
+    acc[page.page_type].push(page)
+    return acc
+  }, {} as Record<string, WikiPage[]>)
+
+  // Sort each group: major pages first, then alphabetical
+  Object.keys(grouped).forEach(type => {
+    grouped[type].sort((a, b) => {
+      if (a.is_major !== b.is_major) {
+        return b.is_major ? 1 : -1
+      }
+      return a.page_name.localeCompare(b.page_name)
+    })
+  })
+
+  return grouped
+})
+
+const getTypeIcon = (type: string) => {
+  switch (type) {
+    case 'character': return UserIcon
+    case 'location': return MapPinIcon
+    case 'concept': return LightBulbIcon
+    default: return BookOpenIcon
+  }
+}
+
+const getTypeColor = (type: string) => {
+  switch (type) {
+    case 'character': return 'text-blue-600'
+    case 'location': return 'text-green-600'
+    case 'concept': return 'text-purple-600'
+    default: return 'text-gray-600'
+  }
+}
+
+
+onMounted(async () => {
+  await loadBook()
+  await loadWiki()
 })
 </script>
 
@@ -114,13 +185,46 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Loading state -->
-    <div v-if="loading" class="flex justify-center items-center h-64">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    </div>
+    <!-- Tabs -->
+    <TabGroup v-model="selectedTab" as="div">
+      <TabList class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-6">
+        <Tab as="template" v-slot="{ selected }">
+          <button
+            :class="[
+              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+              selected
+                ? 'bg-white text-blue-700 shadow'
+                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+            ]"
+          >
+            <DocumentTextIcon class="w-5 h-5 inline mr-2" />
+            Chapters
+          </button>
+        </Tab>
+        <Tab as="template" v-slot="{ selected }">
+          <button
+            :class="[
+              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+              selected
+                ? 'bg-white text-blue-700 shadow'
+                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+            ]"
+          >
+            <BookOpenIcon class="w-5 h-5 inline mr-2" />
+            Wiki
+          </button>
+        </Tab>
+      </TabList>
 
-    <!-- Chapters list -->
-    <div v-else-if="chapters.length > 0" class="space-y-4">
+      <TabPanels>
+        <TabPanel>
+          <!-- Loading state -->
+          <div v-if="loading" class="flex justify-center items-center h-64">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+
+          <!-- Chapters list -->
+          <div v-else-if="chapters.length > 0" class="space-y-4">
       <div
         v-for="chapter in sortedChapters"
         :key="chapter.id"
@@ -189,7 +293,81 @@ onMounted(() => {
         <PlusIcon class="w-5 h-5 mr-2" />
         Add First Chapter
       </button>
-    </div>
+          </div>
+        </TabPanel>
 
+        <TabPanel>
+          <!-- Wiki Content -->
+          <div v-if="loadingWiki" class="flex justify-center items-center h-64">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+
+          <div v-else-if="wikiPages.length > 0" class="space-y-8">
+            <div v-for="(pages, type) in wikiPagesByType" :key="type" class="space-y-4">
+              <div class="flex items-center space-x-2">
+                <component :is="getTypeIcon(type)" :class="['w-6 h-6', getTypeColor(type)]" />
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white capitalize">{{ type }}s</h2>
+                <span class="text-sm text-gray-500 dark:text-gray-400">({{ pages.length }})</span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <router-link
+                  v-for="page in pages"
+                  :key="page.id"
+                  :to="`/books/${bookId}/wiki/${page.id}`"
+                  class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 p-4 block hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
+                >
+                  <div class="flex items-start justify-between mb-2">
+                    <div class="flex items-center space-x-2">
+                      <h3 class="font-semibold text-gray-900 dark:text-white">{{ page.page_name }}</h3>
+                      <span v-if="page.is_major" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                        Major
+                      </span>
+                      <span v-if="page.created_by_ai" class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
+                        AI Created
+                      </span>
+                    </div>
+                  </div>
+
+                  <p v-if="page.summary" class="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                    {{ page.summary }}
+                  </p>
+
+                  <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>{{ page.content_length ? `${page.content_length} chars` : 'No content' }}</span>
+                    <span>Updated {{ new Date(page.updated_at).toLocaleDateString() }}</span>
+                  </div>
+
+                  <div v-if="page.tags && page.tags.length > 0" class="flex flex-wrap gap-1 mt-2">
+                    <span
+                      v-for="tag in page.tags.slice(0, 3)"
+                      :key="tag"
+                      class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
+                    >
+                      {{ tag }}
+                    </span>
+                    <span v-if="page.tags.length > 3" class="text-xs text-gray-500">
+                      +{{ page.tags.length - 3 }} more
+                    </span>
+                  </div>
+                </router-link>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty wiki state -->
+          <div v-else class="text-center py-16">
+            <BookOpenIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No wiki pages yet</h3>
+            <p class="text-gray-600 dark:text-gray-400 mb-6">
+              Wiki pages will be automatically created when you generate chapter summaries with character mentions.
+            </p>
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+              💡 Try generating a summary for a chapter to see the wiki in action!
+            </div>
+          </div>
+        </TabPanel>
+      </TabPanels>
+    </TabGroup>
   </div>
 </template>
