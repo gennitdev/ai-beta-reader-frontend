@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { bookService } from '@/services/api'
+import { useAuth0 } from '@auth0/auth0-vue'
+import { createBookService } from '@/services/api'
 import { PlusIcon, BookOpenIcon } from '@heroicons/vue/24/outline'
 
 interface Book {
@@ -11,10 +12,21 @@ interface Book {
 }
 
 const router = useRouter()
+const { getAccessTokenSilently } = useAuth0()
 const books = ref<Book[]>([])
 const loading = ref(false)
 const showCreateModal = ref(false)
 const newBook = ref({ id: '', title: '' })
+
+// Create authenticated book service
+const bookService = createBookService(async () => {
+  try {
+    return await getAccessTokenSilently()
+  } catch (error) {
+    console.warn('Failed to get access token:', error)
+    return undefined
+  }
+})
 
 const loadBooks = async () => {
   loading.value = true

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { chapterService, reviewService } from '@/services/api'
+import { useAuth0 } from '@auth0/auth0-vue'
+import { createChapterService, createReviewService } from '@/services/api'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import {
@@ -28,8 +29,22 @@ interface Chapter {
 
 const route = useRoute()
 const router = useRouter()
+const { getAccessTokenSilently } = useAuth0()
 const bookId = route.params.bookId as string
 const chapterId = route.params.chapterId as string
+
+// Create authenticated services
+const getToken = async () => {
+  try {
+    return await getAccessTokenSilently()
+  } catch (error) {
+    console.warn('Failed to get access token:', error)
+    return undefined
+  }
+}
+
+const chapterService = createChapterService(getToken)
+const reviewService = createReviewService(getToken)
 
 const chapter = ref<Chapter | null>(null)
 const loading = ref(false)

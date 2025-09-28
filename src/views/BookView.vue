@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { bookService, chapterService } from '@/services/api'
+import { useAuth0 } from '@auth0/auth0-vue'
+import { createBookService, createChapterService } from '@/services/api'
 import { PlusIcon, DocumentTextIcon, EyeIcon, SparklesIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 
@@ -14,6 +15,7 @@ interface Chapter {
 
 const route = useRoute()
 const router = useRouter()
+const { getAccessTokenSilently } = useAuth0()
 const bookId = route.params.id as string
 
 const book = ref<{ id: string; title: string } | null>(null)
@@ -21,6 +23,19 @@ const chapters = ref<Chapter[]>([])
 const loading = ref(false)
 const showCreateModal = ref(false)
 const newChapter = ref({ id: '', title: '', text: '' })
+
+// Create authenticated services
+const getToken = async () => {
+  try {
+    return await getAccessTokenSilently()
+  } catch (error) {
+    console.warn('Failed to get access token:', error)
+    return undefined
+  }
+}
+
+const bookService = createBookService(getToken)
+const chapterService = createChapterService(getToken)
 
 const sortedChapters = computed(() => {
   return chapters.value.slice().sort((a, b) => {
