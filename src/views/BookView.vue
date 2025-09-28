@@ -256,7 +256,7 @@ onMounted(async () => {
       <router-link
         :to="`/books/${bookId}?tab=wiki`"
         :class="[
-          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
+          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
           currentTab === 'wiki'
             ? 'bg-white text-blue-700 shadow'
             : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
@@ -478,7 +478,7 @@ onMounted(async () => {
             <router-link
               :to="`/books/${bookId}?tab=wiki`"
               :class="[
-                'px-4 py-2 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center rounded-lg transition-colors',
+                'px-4 py-2 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center rounded-lg transition-colors',
                 currentTab === 'wiki'
                   ? 'bg-white text-blue-700 shadow'
                   : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
