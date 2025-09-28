@@ -10,6 +10,7 @@ interface Book {
   id: string
   title: string
   chapter_count?: number
+  total_word_count?: number
   created_at?: string
   updated_at?: string
 }
@@ -91,6 +92,12 @@ const generateBookId = () => {
   newBook.value.id = title + '-' + Date.now().toString(36)
 }
 
+const formatWordCount = (count?: number) => {
+  if (!count) return '0'
+  if (count < 1000) return count.toString()
+  return (count / 1000).toFixed(1) + 'k'
+}
+
 onMounted(() => {
   loadBooks()
 })
@@ -134,7 +141,7 @@ onMounted(() => {
           </p>
           <div class="mt-4 flex justify-between items-center">
             <span class="text-sm text-gray-500 dark:text-gray-400">
-              {{ book.chapter_count || 0 }} chapters
+              {{ book.chapter_count || 0 }} chapters · {{ formatWordCount(book.total_word_count) }} words
             </span>
             <span class="text-blue-600 hover:text-blue-700 text-sm font-medium">
               Open →

@@ -75,6 +75,17 @@ const sortedChapters = computed(() => {
   })
 })
 
+const totalWordCount = computed(() => {
+  return chapters.value.reduce((total, chapter) => {
+    return total + (chapter.word_count || 0)
+  }, 0)
+})
+
+const formatWordCount = (count: number) => {
+  if (count < 1000) return count.toString()
+  return (count / 1000).toFixed(1) + 'k'
+}
+
 const loadBook = async () => {
   try {
     // Load book info from localStorage
@@ -214,7 +225,9 @@ onMounted(async () => {
       <div class="flex justify-between items-center">
         <div>
           <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ book?.title }}</h1>
-          <p class="text-gray-600 dark:text-gray-400 mt-1">{{ chapters.length }} chapters</p>
+          <p class="text-gray-600 dark:text-gray-400 mt-1">
+            {{ chapters.length }} chapters · {{ formatWordCount(totalWordCount) }} words total
+          </p>
         </div>
         <button
           @click="createNewChapter"
@@ -435,7 +448,9 @@ onMounted(async () => {
           <!-- Book header -->
           <div class="mb-6">
             <h1 class="text-xl font-bold text-gray-900 dark:text-white">{{ book?.title }}</h1>
-            <p class="text-gray-600 dark:text-gray-400 mt-1">{{ chapters.length }} chapters</p>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">
+              {{ chapters.length }} chapters · {{ formatWordCount(totalWordCount) }} words total
+            </p>
           </div>
 
           <!-- New Chapter Button -->
