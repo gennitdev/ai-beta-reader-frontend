@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAuth0 } from '@auth0/auth0-vue'
 import { useRouter } from 'vue-router'
-import { BookOpenIcon, SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon } from '@heroicons/vue/24/outline'
+import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon } from '@heroicons/vue/24/outline'
 
 const { isAuthenticated, loginWithRedirect } = useAuth0()
 const router = useRouter()
@@ -40,8 +40,7 @@ if (isAuthenticated.value) {
       <!-- Content below image on mobile -->
       <div class="px-4 sm:px-6 py-12 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
         <div class="max-w-xl mx-auto text-center">
-          <BookOpenIcon class="w-16 h-16 text-blue-600 mx-auto mb-6" />
-          <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+          <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-6 space-grotesk-logo">
             Beta Bot
           </h1>
           <p class="text-lg text-gray-600 dark:text-gray-300 mb-8">
@@ -112,8 +111,7 @@ if (isAuthenticated.value) {
       <!-- Right Half - Content -->
       <div class="w-1/2 flex flex-col justify-center px-12 xl:px-16 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
         <div class="max-w-lg">
-          <BookOpenIcon class="w-16 h-16 text-blue-600 mb-8" />
-          <h1 class="text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
+          <h1 class="text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-8 leading-tight space-grotesk-logo">
             Beta Bot
           </h1>
           <p class="text-xl text-gray-600 dark:text-gray-300 mb-10 leading-relaxed">
@@ -170,3 +168,12 @@ if (isAuthenticated.value) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.space-grotesk-logo {
+  font-family: "Space Grotesk", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-style: normal;
+}
+</style>

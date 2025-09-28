@@ -2,7 +2,7 @@
 import { RouterView } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { useAuthWithProfile } from '@/composables/useAuth'
-import { UserIcon, BookOpenIcon, ArrowRightOnRectangleIcon } from '@heroicons/vue/24/outline'
+import { UserIcon, ArrowRightOnRectangleIcon } from '@heroicons/vue/24/outline'
 
 const { isLoading, isAuthenticated, user, loginWithRedirect, logout } = useAuth0()
 
@@ -27,8 +27,7 @@ const handleLogout = () => {
           <!-- Logo -->
           <div class="flex items-center">
             <router-link :to="isAuthenticated ? '/books' : '/'" class="flex items-center">
-              <BookOpenIcon class="w-8 h-8 text-blue-600 mr-3" />
-              <h1 class="text-xl font-bold text-gray-900 dark:text-white">Beta Bot</h1>
+              <h1 class="text-2xl font-bold text-gray-900 dark:text-white space-grotesk-logo">Beta Bot</h1>
             </router-link>
           </div>
 
@@ -130,5 +129,10 @@ const handleLogout = () => {
 </template>
 
 <style>
-/* Remove the default styles */
+.space-grotesk-logo {
+  font-family: "Space Grotesk", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-style: normal;
+}
 </style>
