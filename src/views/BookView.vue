@@ -12,6 +12,7 @@ interface Chapter {
   title: string | null
   word_count: number
   has_summary: boolean
+  summary: string | null
 }
 
 interface WikiPage {
@@ -38,6 +39,7 @@ const chapters = ref<Chapter[]>([])
 const wikiPages = ref<WikiPage[]>([])
 const loading = ref(false)
 const loadingWiki = ref(false)
+const expandedSummaries = ref<Set<string>>(new Set())
 
 // Create authenticated services
 const getToken = async () => {
@@ -155,6 +157,31 @@ const getTypeColor = (type: string) => {
   }
 }
 
+const toggleSummary = (chapterId: string) => {
+  if (expandedSummaries.value.has(chapterId)) {
+    expandedSummaries.value.delete(chapterId)
+  } else {
+    expandedSummaries.value.add(chapterId)
+  }
+}
+
+const getSummaryPreview = (summary: string, maxLength: number = 100) => {
+  if (!summary) return ''
+  if (summary.length <= maxLength) return summary
+
+  // Find the last complete sentence within the limit
+  const truncated = summary.substring(0, maxLength)
+  const lastSentence = truncated.lastIndexOf('.')
+
+  if (lastSentence > 0 && lastSentence > maxLength * 0.6) {
+    return truncated.substring(0, lastSentence + 1)
+  }
+
+  // If no good sentence break, just truncate at word boundary
+  const lastSpace = truncated.lastIndexOf(' ')
+  return lastSpace > 0 ? truncated.substring(0, lastSpace) + '...' : truncated + '...'
+}
+
 
 onMounted(async () => {
   await loadBook()
@@ -230,12 +257,17 @@ onMounted(async () => {
         class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
       >
         <div class="p-6">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center flex-1">
-              <DocumentTextIcon class="w-6 h-6 text-gray-400 mr-3" />
+          <div class="flex items-start justify-between">
+            <div class="flex items-start flex-1">
+              <DocumentTextIcon class="w-6 h-6 text-gray-400 mr-3 mt-0.5" />
               <div class="flex-1">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                  {{ chapter.title || chapter.id }}
+                  <button
+                    @click="viewChapter(chapter.id)"
+                    class="text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                  >
+                    {{ chapter.title || chapter.id }}
+                  </button>
                 </h3>
                 <div class="flex items-center space-x-4 mt-1">
                   <span class="text-sm text-gray-500 dark:text-gray-400">
@@ -251,6 +283,30 @@ onMounted(async () => {
                       class="text-sm"
                     >
                       {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Summary Preview -->
+                <div v-if="chapter.has_summary && chapter.summary" class="mt-3">
+                  <div class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                    <span v-if="!expandedSummaries.has(chapter.id)">
+                      {{ getSummaryPreview(chapter.summary) }}
+                      <button
+                        @click="toggleSummary(chapter.id)"
+                        class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+                      >
+                        See more
+                      </button>
+                    </span>
+                    <span v-else>
+                      {{ chapter.summary }}
+                      <button
+                        @click="toggleSummary(chapter.id)"
+                        class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+                      >
+                        Show less
+                      </button>
                     </span>
                   </div>
                 </div>
