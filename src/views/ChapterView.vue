@@ -12,7 +12,9 @@ import {
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ClockIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  TrashIcon,
+  UserCircleIcon
 } from '@heroicons/vue/24/outline'
 
 interface Chapter {
@@ -26,6 +28,16 @@ interface Chapter {
   characters: string[] | null
   beats: string[] | null
   spoilers_ok: boolean | null
+}
+
+interface Review {
+  id: string
+  review_text: string
+  created_at: string
+  updated_at: string
+  profile_id: number
+  profile_name: string
+  tone_key: string
 }
 
 const route = useRoute()
@@ -57,6 +69,9 @@ const generatingReview = ref(false)
 const generatingSummary = ref(false)
 const reviewTone = ref<'fanficnet' | 'editorial' | 'line-notes'>('fanficnet')
 const reviewText = ref('')
+const savedReviews = ref<Review[]>([])
+const loadingReviews = ref(false)
+const deletingReviewId = ref<string | null>(null)
 
 const hasUnsavedChanges = computed(() => {
   if (!chapter.value) return false
@@ -134,11 +149,61 @@ const generateReview = async () => {
     })
 
     reviewText.value = result.review
+    // Reload saved reviews to include the new one
+    await loadSavedReviews()
   } catch (error) {
     console.error('Failed to generate review:', error)
   } finally {
     generatingReview.value = false
   }
+}
+
+const loadSavedReviews = async () => {
+  if (!chapter.value) return
+
+  loadingReviews.value = true
+  try {
+    const reviews = await chapterService.getChapterReviews(chapter.value.id)
+    savedReviews.value = reviews
+  } catch (error) {
+    console.error('Failed to load saved reviews:', error)
+    savedReviews.value = []
+  } finally {
+    loadingReviews.value = false
+  }
+}
+
+const deleteReview = async (reviewId: string) => {
+  if (!confirm('Are you sure you want to delete this review?')) return
+
+  deletingReviewId.value = reviewId
+  try {
+    await chapterService.deleteChapterReview(reviewId)
+    savedReviews.value = savedReviews.value.filter(r => r.id !== reviewId)
+  } catch (error) {
+    console.error('Failed to delete review:', error)
+    alert('Failed to delete review')
+  } finally {
+    deletingReviewId.value = null
+  }
+}
+
+const getGravatarUrl = (profileName: string) => {
+  // Use profile name as input for consistent avatars
+  const hash = profileName.toLowerCase().replace(/\s+/g, '')
+  // Use identicon style for placeholder avatars
+  return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=40`
+}
+
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 const cancelEdit = () => {
@@ -152,8 +217,9 @@ const startEdit = () => {
   isEditing.value = true
 }
 
-onMounted(() => {
-  loadChapter()
+onMounted(async () => {
+  await loadChapter()
+  await loadSavedReviews()
 })
 </script>
 
@@ -299,6 +365,61 @@ onMounted(() => {
             <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
               <ChatBubbleLeftRightIcon class="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p>Click "Get Review" to receive AI feedback on this chapter.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Saved Reviews -->
+        <div v-if="savedReviews.length > 0" class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+          <div class="p-6">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6">AI Reviews</h2>
+
+            <div v-if="loadingReviews" class="flex justify-center py-4">
+              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+
+            <div v-else class="space-y-6">
+              <div
+                v-for="review in savedReviews"
+                :key="review.id"
+                class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+              >
+                <!-- Review Header -->
+                <div class="flex items-start justify-between mb-3">
+                  <div class="flex items-center space-x-3">
+                    <!-- Avatar -->
+                    <img
+                      :src="getGravatarUrl(review.profile_name)"
+                      :alt="review.profile_name"
+                      class="w-10 h-10 rounded-full"
+                    />
+
+                    <!-- Profile Info -->
+                    <div>
+                      <h4 class="font-medium text-gray-900 dark:text-white">{{ review.profile_name }}</h4>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        {{ formatDate(review.created_at) }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Delete Button -->
+                  <button
+                    @click="deleteReview(review.id)"
+                    :disabled="deletingReviewId === review.id"
+                    class="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    title="Delete review"
+                  >
+                    <div v-if="deletingReviewId === review.id" class="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                    <TrashIcon v-else class="w-4 h-4" />
+                  </button>
+                </div>
+
+                <!-- Review Content -->
+                <div class="prose prose-sm prose-gray dark:prose-invert max-w-none">
+                  <MarkdownRenderer :text="review.review_text" />
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -97,6 +97,16 @@ export function createChapterService(getToken: () => Promise<string | undefined>
     async updateChapter(chapter: { id: string; bookId: string; title?: string; text: string }) {
       const response = await client.post('/chapters', chapter)
       return response.data
+    },
+
+    async getChapterReviews(chapterId: string) {
+      const response = await client.get(`/chapters/${chapterId}/reviews`)
+      return response.data
+    },
+
+    async deleteChapterReview(reviewId: string) {
+      const response = await client.delete(`/reviews/${reviewId}`)
+      return response.data
     }
   }
 }
