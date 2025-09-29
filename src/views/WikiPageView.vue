@@ -79,6 +79,7 @@ const loadingHistory = ref(false)
 const showHistory = ref(false)
 const isEditing = ref(false)
 const editedContent = ref('')
+const saving = ref(false)
 
 const getTypeIcon = (type: string) => {
   switch (type) {
@@ -159,6 +160,7 @@ const loadWikiHistory = async () => {
 const saveChanges = async () => {
   if (!wikiPage.value || editedContent.value === wikiPage.value.content) return
 
+  saving.value = true
   try {
     await wikiService.updateWikiPage(wikiPageId.value, {
       content: editedContent.value
@@ -175,6 +177,8 @@ const saveChanges = async () => {
   } catch (error) {
     console.error('Failed to save wiki page:', error)
     alert('Failed to save changes')
+  } finally {
+    saving.value = false
   }
 }
 
@@ -271,9 +275,11 @@ onMounted(() => {
             </button>
             <button
               @click="saveChanges"
-              class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              :disabled="saving"
+              class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center"
             >
-              Save Changes
+              <span v-if="saving" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></span>
+              {{ saving ? 'Saving...' : 'Save Changes' }}
             </button>
           </template>
           <template v-else>
