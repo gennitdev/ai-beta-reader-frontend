@@ -33,6 +33,7 @@ interface Chapter {
 interface Review {
   id: string
   review_text: string
+  prompt_used?: string | null
   created_at: string
   updated_at: string
   profile_id: number
@@ -103,6 +104,7 @@ const savingSummary = ref(false)
 const showFullChapterText = ref(false)
 const showFullCurrentReview = ref(false)
 const expandedReviews = ref<Set<string>>(new Set())
+const expandedPrompts = ref<Set<string>>(new Set())
 
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true)
@@ -229,7 +231,7 @@ const generateReview = async () => {
     // Check if it's a custom profile
     const isCustomProfile = reviewTone.value.startsWith('custom-')
 
-    let requestData: any = {
+    const requestData: any = {
       bookId: chapter.value.book_id,
       newChapterId: chapter.value.id
     }
@@ -360,7 +362,7 @@ const goBack = () => {
 }
 
 // Text truncation helpers - more functional approach
-const getTruncatedText = (text: string, wordLimit: number = 150): { truncated: string; needsTruncation: boolean } => {
+const getTruncatedText = (text: string, wordLimit: number = 120): { truncated: string; needsTruncation: boolean } => {
   if (!text) return { truncated: '', needsTruncation: false }
 
   const words = text.split(/(\s+)/)
@@ -386,6 +388,14 @@ const toggleReviewExpansion = (reviewId: string) => {
     expandedReviews.value.delete(reviewId)
   } else {
     expandedReviews.value.add(reviewId)
+  }
+}
+
+const togglePromptExpansion = (reviewId: string) => {
+  if (expandedPrompts.value.has(reviewId)) {
+    expandedPrompts.value.delete(reviewId)
+  } else {
+    expandedPrompts.value.add(reviewId)
   }
 }
 
@@ -694,6 +704,32 @@ onMounted(async () => {
                       </button>
                     </div>
                   </template>
+                </div>
+
+                <!-- Prompt Display Section -->
+                <div v-if="review.prompt_used" class="mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
+                  <div v-if="!expandedPrompts.has(review.id)">
+                    <button
+                      @click="togglePromptExpansion(review.id)"
+                      class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"
+                    >
+                      Click here to see the prompt that was used to generate this review
+                    </button>
+                  </div>
+                  <div v-else class="space-y-3">
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Full Prompt Used:</span>
+                      <button
+                        @click="togglePromptExpansion(review.id)"
+                        class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"
+                      >
+                        Hide prompt
+                      </button>
+                    </div>
+                    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-sm">
+                      <pre class="whitespace-pre-wrap text-gray-800 dark:text-gray-200 font-mono text-xs leading-relaxed">{{ review.prompt_used }}</pre>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
