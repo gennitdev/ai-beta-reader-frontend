@@ -50,14 +50,18 @@ const handleLogout = () => {
 
               <!-- User menu -->
               <div class="flex items-center space-x-3">
-                <div class="flex items-center space-x-2">
+                <router-link
+                  to="/settings"
+                  class="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+                  title="User Settings"
+                >
                   <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                     <UserIcon class="w-5 h-5 text-white" />
                   </div>
                   <span class="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {{ user?.name || user?.email }}
                   </span>
-                </div>
+                </router-link>
 
                 <button
                   @click="handleLogout"
