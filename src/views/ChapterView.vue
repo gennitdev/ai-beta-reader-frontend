@@ -46,6 +46,14 @@ interface Character {
   has_wiki_page: boolean
 }
 
+interface CustomReviewerProfile {
+  id: number
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
 const route = useRoute()
 const router = useRouter()
 const { getAccessTokenSilently } = useAuth0()
@@ -76,8 +84,10 @@ const editedText = ref('')
 const editedTitle = ref('')
 const generatingReview = ref(false)
 const generatingSummary = ref(false)
-const reviewTone = ref<'fanficnet' | 'editorial' | 'line-notes'>('fanficnet')
+const reviewTone = ref<string>('fanficnet')
 const reviewText = ref('')
+const customProfiles = ref<CustomReviewerProfile[]>([])
+const loadingProfiles = ref(false)
 const savedReviews = ref<Review[]>([])
 const loadingReviews = ref(false)
 const deletingReviewId = ref<string | null>(null)
@@ -183,11 +193,21 @@ const generateReview = async () => {
   reviewText.value = ''
 
   try {
-    const result = await reviewService.generateReview({
+    // Check if it's a custom profile
+    const isCustomProfile = reviewTone.value.startsWith('custom-')
+
+    let requestData: any = {
       bookId: chapter.value.book_id,
-      newChapterId: chapter.value.id,
-      tone: reviewTone.value
-    })
+      newChapterId: chapter.value.id
+    }
+
+    if (isCustomProfile) {
+      requestData.customProfileId = parseInt(reviewTone.value.replace('custom-', ''))
+    } else {
+      requestData.tone = reviewTone.value
+    }
+
+    const result = await reviewService.generateReview(requestData)
 
     reviewText.value = result.review
     // Reload saved reviews to include the new one
@@ -235,6 +255,28 @@ const loadCharacters = async () => {
     characters.value = charactersData
   } catch (error) {
     console.error('Failed to load characters:', error)
+  }
+}
+
+const loadCustomProfiles = async () => {
+  try {
+    loadingProfiles.value = true
+    const token = await getToken()
+    if (!token) return
+
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/custom-reviewer-profiles`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    if (response.ok) {
+      customProfiles.value = await response.json()
+    }
+  } catch (error) {
+    console.error('Failed to load custom profiles:', error)
+  } finally {
+    loadingProfiles.value = false
   }
 }
 
@@ -325,6 +367,7 @@ onMounted(async () => {
   await loadChapter()
   await loadSavedReviews()
   await loadCharacters()
+  await loadCustomProfiles()
 })
 </script>
 
@@ -473,9 +516,23 @@ onMounted(async () => {
                     class="px-3 py-1 pr-8 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 cursor-pointer"
                     style="-webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: none;"
                   >
-                    <option value="fanficnet">Fanfic review style</option>
-                    <option value="editorial">Editorial Notes</option>
-                    <option value="line-notes">Line Editor</option>
+                    <!-- Built-in profiles -->
+                    <optgroup label="Built-in Styles">
+                      <option value="fanficnet">Fan style</option>
+                      <option value="editorial">Editorial Notes</option>
+                      <option value="line-notes">Line Editor</option>
+                    </optgroup>
+
+                    <!-- Custom profiles -->
+                    <optgroup v-if="customProfiles.length > 0" label="Custom Profiles">
+                      <option
+                        v-for="profile in customProfiles"
+                        :key="profile.id"
+                        :value="`custom-${profile.id}`"
+                      >
+                        {{ profile.name }}
+                      </option>
+                    </optgroup>
                   </select>
                   <ChevronDownIcon class="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 </div>

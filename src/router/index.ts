@@ -93,6 +93,12 @@ const router = createRouter({
       name: 'ai-profile',
       component: () => import('../views/AIProfileView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('../views/UserSettingsView.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

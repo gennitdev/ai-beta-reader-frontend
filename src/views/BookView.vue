@@ -76,6 +76,11 @@ const currentTab = computed(() => {
   return route.query.tab === 'wiki' ? 'wiki' : 'chapters'
 })
 
+const isOnBookOnly = computed(() => {
+  // Check if we're on the book route but no child route (chapter or wiki page) is active
+  return route.name === 'book' && !route.params.chapterId && !route.params.wikiPageId
+})
+
 const sortedChapters = computed(() => {
   return chapters.value.slice().sort((a, b) => {
     // Sort by part position first, then by chapter position within part
@@ -529,8 +534,8 @@ onUnmounted(() => {
     <!-- Split view -->
     <div class="flex flex-1 overflow-hidden">
       <!-- Left sidebar: Compact list -->
-      <div class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto">
-        <div class="p-4">
+      <div class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto relative">
+        <div class="p-4 pb-16">
           <!-- Book header -->
           <div class="mb-6">
             <h1 class="text-xl font-bold text-gray-900 dark:text-white">{{ book?.title }}</h1>
@@ -703,12 +708,35 @@ onUnmounted(() => {
               </p>
             </div>
           </div>
+
+          <!-- Settings link at bottom of sidebar -->
+          <div class="absolute bottom-4 left-4">
+            <router-link
+              to="/settings"
+              class="inline-flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              title="User Settings"
+            >
+              <Cog6ToothIcon class="w-5 h-5 mr-2" />
+              Settings
+            </router-link>
+          </div>
         </div>
       </div>
 
       <!-- Right content area: router-view -->
       <div class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
-        <router-view :key="routerViewKey" />
+        <!-- Show placeholder when no chapter is selected -->
+        <div v-if="isOnBookOnly" class="flex items-center justify-center h-full">
+          <div class="text-center">
+            <DocumentTextIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">Please select a chapter</h3>
+            <p class="text-gray-600 dark:text-gray-400 max-w-md">
+              Choose a chapter from the sidebar to view and edit its content, or create a new chapter to get started.
+            </p>
+          </div>
+        </div>
+        <!-- Regular router view when chapter/wiki page is selected -->
+        <router-view v-else :key="routerViewKey" />
       </div>
     </div>
   </div>

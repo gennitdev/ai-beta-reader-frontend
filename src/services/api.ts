@@ -155,7 +155,7 @@ export function createReviewService(getToken: () => Promise<string | undefined>)
   const client = createAuthenticatedApiClient(getToken)
 
   return {
-    async generateReview(data: { bookId: string; newChapterId: string; tone?: 'fanficnet' | 'editorial' | 'line-notes' }) {
+    async generateReview(data: { bookId: string; newChapterId: string; tone?: 'fanficnet' | 'editorial' | 'line-notes'; customProfileId?: number }) {
       const response = await client.post('/reviews', data)
       return response.data
     }
