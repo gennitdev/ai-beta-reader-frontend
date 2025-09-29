@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { createAIProfileService } from '@/services/api'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import AvatarComponent from '@/components/AvatarComponent.vue'
 import {
   ArrowLeftIcon,
   ClockIcon,
@@ -117,11 +118,6 @@ const formatDate = (dateString: string) => {
   })
 }
 
-const getGravatarUrl = (profileName: string) => {
-  const hash = profileName.toLowerCase().replace(/\s+/g, '')
-  return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=80`
-}
-
 onMounted(() => {
   loadProfile()
 })
@@ -186,10 +182,9 @@ onMounted(() => {
           </button>
 
           <div class="flex items-center space-x-4">
-            <img
-              :src="getGravatarUrl(profileData.profile.name)"
-              :alt="profileData.profile.name"
-              class="w-16 h-16 rounded-full"
+            <AvatarComponent
+              :text="profileData.profile.name"
+              size="large"
             />
             <div>
               <h1 class="text-3xl font-bold text-gray-900 dark:text-white">

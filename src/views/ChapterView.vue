@@ -5,6 +5,7 @@ import { useAuth0 } from '@auth0/auth0-vue'
 import { createChapterService, createReviewService, createBookService } from '@/services/api'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import AvatarComponent from '@/components/AvatarComponent.vue'
 import {
   PencilIcon,
   SparklesIcon,
@@ -298,13 +299,6 @@ const navigateToWiki = (characterName: string) => {
   if (character?.has_wiki_page && character.wiki_page_id) {
     router.push(`/books/${bookId.value}/wiki/${character.wiki_page_id}`)
   }
-}
-
-const getGravatarUrl = (profileName: string) => {
-  // Use profile name as input for consistent avatars
-  const hash = profileName.toLowerCase().replace(/\s+/g, '')
-  // Use identicon style for placeholder avatars
-  return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=40`
 }
 
 const formatDate = (dateString: string) => {
@@ -610,10 +604,9 @@ onMounted(async () => {
                       class="block hover:opacity-80 transition-opacity"
                       :title="`View ${review.profile_name} profile`"
                     >
-                      <img
-                        :src="getGravatarUrl(review.profile_name)"
-                        :alt="review.profile_name"
-                        class="w-10 h-10 rounded-full"
+                      <AvatarComponent
+                        :text="review.profile_name"
+                        size="medium"
                       />
                     </router-link>
 
