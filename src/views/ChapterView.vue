@@ -94,6 +94,11 @@ const loadingReviews = ref(false)
 const deletingReviewId = ref<string | null>(null)
 const characters = ref<Character[]>([])
 
+// Summary editing state
+const isEditingSummary = ref(false)
+const editedSummary = ref('')
+const savingSummary = ref(false)
+
 // Text truncation state
 const showFullChapterText = ref(false)
 const showFullCurrentReview = ref(false)
@@ -184,6 +189,33 @@ const generateSummary = async () => {
     console.error('Failed to generate summary:', error)
   } finally {
     generatingSummary.value = false
+  }
+}
+
+const startEditingSummary = () => {
+  if (!chapter.value?.summary) return
+  editedSummary.value = chapter.value.summary
+  isEditingSummary.value = true
+}
+
+const cancelEditingSummary = () => {
+  isEditingSummary.value = false
+  editedSummary.value = ''
+}
+
+const saveSummary = async () => {
+  if (!chapter.value || !editedSummary.value.trim()) return
+
+  savingSummary.value = true
+  try {
+    await chapterService.updateSummary(chapter.value.id, editedSummary.value.trim())
+    chapter.value.summary = editedSummary.value.trim()
+    isEditingSummary.value = false
+  } catch (error) {
+    console.error('Failed to save summary:', error)
+    alert('Failed to save summary')
+  } finally {
+    savingSummary.value = false
   }
 }
 
@@ -676,14 +708,25 @@ onMounted(async () => {
           <div class="p-6">
             <div class="flex justify-between items-center mb-4">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Chapter Summary</h3>
-              <button
-                @click="generateSummary"
-                :disabled="generatingSummary"
-                class="inline-flex items-center px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <SparklesIcon class="w-4 h-4 mr-1" />
-                {{ generatingSummary ? 'Generating...' : chapter.summary ? 'Regenerate' : 'Generate' }}
-              </button>
+              <div class="flex items-center space-x-2">
+                <button
+                  v-if="chapter.summary && !isEditingSummary"
+                  @click="startEditingSummary"
+                  class="inline-flex items-center px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                  title="Edit summary"
+                >
+                  <PencilIcon class="w-3 h-3 mr-1" />
+                  Edit
+                </button>
+                <button
+                  @click="generateSummary"
+                  :disabled="generatingSummary || isEditingSummary"
+                  class="inline-flex items-center px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <SparklesIcon class="w-4 h-4 mr-1" />
+                  {{ generatingSummary ? 'Generating...' : chapter.summary ? 'Regenerate' : 'Generate' }}
+                </button>
+              </div>
             </div>
 
             <div v-if="generatingSummary" class="flex items-center py-4">
@@ -691,10 +734,39 @@ onMounted(async () => {
               <span class="text-sm text-gray-600 dark:text-gray-400">Generating summary...</span>
             </div>
 
-            <div v-else-if="chapter.summary" class="space-y-4 text-sm">
+            <div v-else-if="chapter.summary || isEditingSummary" class="space-y-4 text-sm">
               <div>
-                <h4 class="font-medium text-gray-900 dark:text-white mb-2">Summary</h4>
-                <p class="text-gray-700 dark:text-gray-300">{{ chapter.summary }}</p>
+                <div class="flex justify-between items-center mb-2">
+                  <h4 class="font-medium text-gray-900 dark:text-white">Summary</h4>
+                  <div v-if="isEditingSummary" class="flex items-center space-x-2">
+                    <button
+                      @click="cancelEditingSummary"
+                      class="text-xs px-2 py-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      @click="saveSummary"
+                      :disabled="savingSummary || !editedSummary.trim()"
+                      class="inline-flex items-center text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <span v-if="savingSummary" class="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent mr-1"></span>
+                      {{ savingSummary ? 'Saving...' : 'Save' }}
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="isEditingSummary">
+                  <textarea
+                    v-model="editedSummary"
+                    rows="6"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+                    placeholder="Enter chapter summary..."
+                  ></textarea>
+                </div>
+                <div v-else>
+                  <MarkdownRenderer :text="chapter.summary || ''" class="text-gray-700 dark:text-gray-300" />
+                </div>
               </div>
 
               <div v-if="chapter.pov">

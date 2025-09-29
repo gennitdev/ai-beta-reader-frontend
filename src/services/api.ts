@@ -129,6 +129,11 @@ export function createChapterService(getToken: () => Promise<string | undefined>
       return response.data
     },
 
+    async updateSummary(chapterId: string, summary: string) {
+      const response = await client.put(`/chapters/${chapterId}/summary`, { summary })
+      return response.data
+    },
+
     async updateChapter(chapter: { id: string; bookId: string; title?: string; text: string }) {
       const response = await client.post('/chapters', chapter)
       return response.data
