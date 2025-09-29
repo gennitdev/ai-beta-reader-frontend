@@ -2,7 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
-import { PlusIcon, PencilIcon, TrashIcon, ArrowLeftIcon } from '@heroicons/vue/24/outline'
+import { createBookService, createChapterService, createWikiService } from '@/services/api'
+import JSZip from 'jszip'
+import { PlusIcon, PencilIcon, TrashIcon, ArrowLeftIcon, DocumentArrowDownIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 const { getAccessTokenSilently } = useAuth0()
@@ -21,6 +23,10 @@ const error = ref('')
 const showCreateForm = ref(false)
 const editingProfile = ref<CustomReviewerProfile | null>(null)
 
+// Export state
+const isExporting = ref(false)
+const exportProgress = ref('')
+
 // Form data
 const formData = ref({
   name: '',
@@ -38,6 +44,20 @@ const getAuthToken = async () => {
     return ''
   }
 }
+
+// Create authenticated services
+const getToken = async () => {
+  try {
+    return await getAccessTokenSilently()
+  } catch (error) {
+    console.warn('Failed to get access token:', error)
+    return undefined
+  }
+}
+
+const bookService = createBookService(getToken)
+const chapterService = createChapterService(getToken)
+const wikiService = createWikiService(getToken)
 
 const fetchProfiles = async () => {
   try {
@@ -164,6 +184,131 @@ const handleSubmit = async () => {
 
 const goBack = () => {
   router.back()
+}
+
+const exportUserData = async () => {
+  if (isExporting.value) return
+
+  try {
+    isExporting.value = true
+    exportProgress.value = 'Fetching your books...'
+
+    // Create zip file
+    const zip = new JSZip()
+
+    // Get all books
+    const books = await bookService.getBooks()
+    exportProgress.value = `Found ${books.length} books. Processing...`
+
+    for (let i = 0; i < books.length; i++) {
+      const book = books[i]
+      exportProgress.value = `Processing book ${i + 1}/${books.length}: ${book.title}`
+
+      const bookFolder = zip.folder(sanitizeFileName(book.title))
+      if (!bookFolder) continue
+
+      // Create book info file
+      bookFolder.file('book-info.txt', `Title: ${book.title}\nID: ${book.id}\nCreated: ${book.created_at || 'Unknown'}\n`)
+
+      // Get chapters for this book
+      const chapters = await bookService.getBookChapters(book.id)
+      const chaptersFolder = bookFolder.folder('chapters')
+
+      // Calculate padding length based on total chapters
+      const paddingLength = chapters.length.toString().length
+
+      for (let chapterIndex = 0; chapterIndex < chapters.length; chapterIndex++) {
+        const chapter = chapters[chapterIndex]
+        exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
+
+        // Get full chapter data
+        const fullChapter = await chapterService.getChapter(chapter.id)
+
+        // Create zero-padded chapter number
+        const chapterNumber = (chapterIndex + 1).toString().padStart(paddingLength, '0')
+        const chapterFolderName = `${chapterNumber} - ${sanitizeFileName(chapter.title || chapter.id)}`
+        const chapterFolder = chaptersFolder?.folder(chapterFolderName)
+
+        if (chapterFolder) {
+          // Add chapter content
+          chapterFolder.file('content.md', fullChapter.text || '')
+
+          // Add chapter info
+          const chapterInfo = `Title: ${fullChapter.title || 'Untitled'}\nID: ${fullChapter.id}\nWord Count: ${fullChapter.word_count || 0}\nCreated: ${fullChapter.updated_at || 'Unknown'}\n`
+          chapterFolder.file('chapter-info.txt', chapterInfo)
+
+          // Add summary if exists
+          if (fullChapter.summary) {
+            const summaryInfo = `Summary: ${fullChapter.summary}\n\nPOV: ${fullChapter.pov || 'Not specified'}\n\nCharacters: ${fullChapter.characters ? fullChapter.characters.join(', ') : 'None listed'}\n\nBeats:\n${fullChapter.beats ? fullChapter.beats.map((beat: string) => `- ${beat}`).join('\n') : 'None listed'}\n`
+            chapterFolder.file('summary.txt', summaryInfo)
+          }
+        }
+      }
+
+      // Get wiki pages (characters) for this book
+      try {
+        const wikiPages = await wikiService.getBookWiki(book.id)
+        const charactersFolder = bookFolder.folder('characters')
+
+        for (const wikiPage of wikiPages) {
+          exportProgress.value = `Processing character: ${wikiPage.page_name}`
+
+          // Get full wiki page data
+          const fullWikiPage = await wikiService.getWikiPage(wikiPage.id)
+
+          const wikiFileName = sanitizeFileName(wikiPage.page_name) + '.md'
+          let wikiContent = `# ${fullWikiPage.page_name}\n\n`
+          wikiContent += `**Type:** ${fullWikiPage.page_type}\n`
+          if (fullWikiPage.summary) {
+            wikiContent += `**Summary:** ${fullWikiPage.summary}\n`
+          }
+          if (fullWikiPage.aliases && fullWikiPage.aliases.length > 0) {
+            wikiContent += `**Aliases:** ${fullWikiPage.aliases.join(', ')}\n`
+          }
+          if (fullWikiPage.tags && fullWikiPage.tags.length > 0) {
+            wikiContent += `**Tags:** ${fullWikiPage.tags.join(', ')}\n`
+          }
+          wikiContent += `**Major Character:** ${fullWikiPage.is_major ? 'Yes' : 'No'}\n`
+          wikiContent += `**Created:** ${fullWikiPage.created_at}\n`
+          wikiContent += `**Updated:** ${fullWikiPage.updated_at}\n\n`
+          wikiContent += fullWikiPage.content || 'No content available.'
+
+          charactersFolder?.file(wikiFileName, wikiContent)
+        }
+      } catch (error) {
+        console.warn('Error fetching wiki pages for book:', book.title, error)
+      }
+    }
+
+    exportProgress.value = 'Creating zip file...'
+
+    // Generate and download zip
+    const content = await zip.generateAsync({ type: 'blob' })
+    const url = URL.createObjectURL(content)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `beta-bot-export-${new Date().toISOString().split('T')[0]}.zip`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    exportProgress.value = 'Export completed!'
+    setTimeout(() => {
+      exportProgress.value = ''
+    }, 3000)
+
+  } catch (err) {
+    console.error('Export failed:', err)
+    error.value = 'Export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
+    exportProgress.value = ''
+  } finally {
+    isExporting.value = false
+  }
+}
+
+const sanitizeFileName = (name: string): string => {
+  return name.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')
 }
 
 onMounted(() => {
@@ -309,6 +454,53 @@ onMounted(() => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Export Section -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-8">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Export Your Data</h2>
+              <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Download all your books, chapters, and character data in a structured format.
+              </p>
+            </div>
+            <button
+              @click="exportUserData"
+              :disabled="isExporting"
+              class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+            >
+              <DocumentArrowDownIcon class="w-5 h-5 mr-2" />
+              {{ isExporting ? 'Exporting...' : 'Export Data' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="px-6 py-4">
+          <div v-if="isExporting" class="mb-4">
+            <div class="flex items-center mb-2">
+              <div class="animate-spin rounded-full h-4 w-4 border-2 border-green-600 border-t-transparent mr-2"></div>
+              <span class="text-sm text-gray-600 dark:text-gray-400">{{ exportProgress }}</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div class="bg-green-600 h-2 rounded-full transition-all duration-300" style="width: 60%"></div>
+            </div>
+          </div>
+
+          <div class="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+            <p><strong>What's included in your export:</strong></p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>All your books with metadata</li>
+              <li>Chapter content and summaries</li>
+              <li>Character wiki pages with all details</li>
+              <li>Organized folder structure for easy navigation</li>
+            </ul>
+            <p class="mt-4 text-xs text-gray-500 dark:text-gray-500">
+              Your data will be downloaded as a ZIP file containing folders for each book, with subfolders for chapters and characters.
+            </p>
           </div>
         </div>
       </div>
