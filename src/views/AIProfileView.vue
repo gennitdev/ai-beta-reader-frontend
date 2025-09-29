@@ -297,11 +297,6 @@ onMounted(() => {
                 </div>
 
                 <div>
-                  <span class="font-medium text-gray-700 dark:text-gray-300">Tone Key:</span>
-                  <span class="ml-2 text-gray-600 dark:text-gray-400">{{ profileData.profile.tone_key }}</span>
-                </div>
-
-                <div>
                   <span class="font-medium text-gray-700 dark:text-gray-300">Type:</span>
                   <span class="ml-2 text-gray-600 dark:text-gray-400">
                     {{ profileData.profile.is_system ? 'System Profile' : 'User Profile' }}
