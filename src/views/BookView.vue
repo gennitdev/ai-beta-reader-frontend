@@ -1142,8 +1142,8 @@ onUnmounted(() => {
   </div>
 
   <!-- Organize Chapters Modal -->
-  <div v-if="showOrganizeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div class="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+  <div v-if="showOrganizeModal" @click="showOrganizeModal = false" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div @click.stop class="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
       <div class="p-6 border-b border-gray-200 dark:border-gray-700">
         <div class="flex justify-between items-center">
           <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Organize Chapters</h2>
