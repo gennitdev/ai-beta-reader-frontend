@@ -6,15 +6,30 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 
 ## Features
 
+### Core Writing Tools
 - **Auth0 Authentication**: Secure login and user management
-- **Book Management**: Create and organize your writing projects
-- **Chapter Editor**: Rich markdown editor with live preview
-- **AI Summaries**: Generate structured summaries for each chapter
-- **AI Reviews**: Get contextual feedback with different tones:
-  - Fan style (enthusiastic reader)
-  - Editorial notes (developmental editor)
-  - Line editor (concrete suggestions)
-- **Responsive Design**: Works on desktop and mobile devices
+- **Book Management**: Create and organize your writing projects with support for parts/sections
+- **Chapter Editor**: Rich markdown editor with live preview and word count tracking
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
+
+### AI-Powered Features
+- **Smart Chapter Summaries**: Auto-generate structured summaries that track plot points, characters, and key events to maintain continuity across long manuscripts
+- **Contextual AI Reviews**: Get intelligent feedback that understands your entire story:
+  - Reviews use summaries of previous chapters as context
+  - No need to explain backstory - the AI already knows what happened
+  - Efficient token usage even for long manuscripts
+- **Multiple Review Styles**:
+  - Fan style (enthusiastic reader feedback)
+  - Editorial notes (developmental editor perspective)
+  - Line editor (concrete, actionable suggestions)
+- **Custom AI Profiles**: Create personalized reviewer profiles with custom prompts to get the exact type of feedback you need
+
+### Continuity Management
+- **Interactive Character Sheets**: Auto-generated character profiles with smart linking between related characters
+- **Wiki System**: Build a comprehensive story bible with interconnected pages for characters, locations, and concepts
+- **Cross-Document Search**: Search across all chapters and wiki pages simultaneously
+- **Find and Replace**: Make consistent changes across your entire manuscript with one click
+- **Chapter Organization**: Drag-and-drop reordering with support for parts and uncategorized sections
 
 ## Prerequisites
 
@@ -57,14 +72,29 @@ In your Auth0 dashboard:
    - Authorization Code
    - Refresh Token
 
-## Usage
+## How It Works
 
-1. **Login** with Auth0
-2. **Create a book** from the books page
-3. **Add chapters** to your book
-4. **Edit chapters** with the rich text editor
-5. **Generate summaries** to track plot points and characters
-6. **Get AI reviews** with contextual feedback
+### Getting Started
+1. **Create Your Book**: Start a new project and give it a title
+2. **Write Your First Chapter**: Add content using the markdown editor
+3. **Generate AI Summary**: Click "Generate Summary" to create a structured overview that tracks characters, plot points, and key events
+
+### The Magic of Context
+4. **Add More Chapters**: Continue writing your story
+5. **Get Contextual Reviews**: When you generate a review for a new chapter, the AI automatically receives:
+   - The full text of your current chapter
+   - Summaries of all previous chapters
+   - Character and plot information
+
+   This means the AI understands your story's context without you having to explain anything!
+
+6. **Maintain Continuity**: As your manuscript grows, the system efficiently manages context using summaries, preventing token limits while maintaining story awareness
+
+### Advanced Features
+7. **Custom AI Profiles**: Create personalized reviewer profiles with specific prompts tailored to your needs
+8. **Build Your Story Bible**: Create wiki pages for characters, locations, and concepts
+9. **Search and Replace**: Find names, places, or any text across all chapters and make consistent changes
+10. **Organize with Parts**: Group chapters into parts or sections for better manuscript organization
 
 ## Available Scripts
 
