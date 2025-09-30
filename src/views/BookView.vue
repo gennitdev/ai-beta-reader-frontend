@@ -2,10 +2,11 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
-import { createBookService, createChapterService, createWikiService } from '@/services/api'
-import { PlusIcon, DocumentTextIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
+import { createBookService, createWikiService, createSearchService } from '@/services/api'
+import { PlusIcon, DocumentTextIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import draggable from 'vuedraggable'
+import SearchModal from '@/components/SearchModal.vue'
 
 interface Chapter {
   id: string
@@ -75,13 +76,14 @@ const getToken = async () => {
 }
 
 const bookService = createBookService(getToken)
-const chapterService = createChapterService(getToken)
 const wikiService = createWikiService(getToken)
+const searchService = createSearchService(getToken)
 
 // Drag and drop state
 const isDragging = ref(false)
 const isDraggingInSidebar = ref(false)
 const showOrganizeModal = ref(false)
+const showSearchModal = ref(false)
 const draggableChapters = ref<Chapter[]>([])
 
 const currentTab = computed(() => {
@@ -185,6 +187,11 @@ const loadBook = async () => {
   } catch (error) {
     console.error('Failed to load book:', error)
   }
+}
+
+const refreshData = async () => {
+  await loadBook()
+  await loadWiki()
 }
 
 const createNewChapter = () => {
@@ -860,6 +867,13 @@ onUnmounted(() => {
               <Cog6ToothIcon class="w-5 h-5 mr-2" />
               Organize Chapters
             </button>
+            <button
+              @click="showSearchModal = true"
+              class="w-full inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              <MagnifyingGlassIcon class="w-5 h-5 mr-2" />
+              Search & Replace
+            </button>
           </div>
 
           <div class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-2">
@@ -1397,4 +1411,13 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+
+  <!-- Search Modal -->
+  <SearchModal
+    :show="showSearchModal"
+    :book-id="bookId"
+    :search-service="searchService"
+    @close="showSearchModal = false"
+    @refresh="refreshData"
+  />
 </template>

@@ -229,3 +229,32 @@ export const createAIProfileService = (getToken: () => Promise<string | undefine
     }
   }
 }
+
+export const createSearchService = (getToken: () => Promise<string | undefined>) => {
+  const client = createAuthenticatedApiClient(getToken)
+
+  return {
+    async searchBook(bookId: string, query: string) {
+      const response = await client.get(`/books/${bookId}/search`, {
+        params: { q: query }
+      })
+      return response.data
+    },
+
+    async replaceInChapter(chapterId: string, searchTerm: string, replaceTerm: string) {
+      const response = await client.post(`/chapters/${chapterId}/replace`, {
+        searchTerm,
+        replaceTerm
+      })
+      return response.data
+    },
+
+    async replaceInWikiPage(wikiPageId: string, searchTerm: string, replaceTerm: string) {
+      const response = await client.post(`/wiki/${wikiPageId}/replace`, {
+        searchTerm,
+        replaceTerm
+      })
+      return response.data
+    }
+  }
+}
