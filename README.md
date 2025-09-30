@@ -99,7 +99,7 @@ In your Auth0 dashboard:
 ## Screenshots
 
 ### AI Summary Generation
-The system automatically generates structured summaries that track characters, plot points, and key events for each chapter.
+Clicking the generate summary button generates structured summaries that track characters, plot points, and key events for each chapter.
 
 ![Summary Being Generated](./screenshots/summary-being-generated.png)
 
