@@ -3,9 +3,8 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { createBookService, createChapterService, createWikiService } from '@/services/api'
-import { PlusIcon, DocumentTextIcon, SparklesIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, DocumentTextIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
-import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import draggable from 'vuedraggable'
 
 interface Chapter {
@@ -18,6 +17,15 @@ interface Chapter {
   part_id: string | null
   part_name: string | null
   part_position: number | null
+}
+
+interface Part {
+  id: string
+  name: string
+  position: number
+  book_id: string
+  created_at: string
+  updated_at: string
 }
 
 interface WikiPage {
@@ -41,11 +49,20 @@ const bookId = route.params.id as string
 
 const book = ref<{ id: string; title: string } | null>(null)
 const chapters = ref<Chapter[]>([])
+const parts = ref<Part[]>([])
 const wikiPages = ref<WikiPage[]>([])
 const loading = ref(false)
 const loadingWiki = ref(false)
 const expandedSummaries = ref<Set<string>>(new Set())
 const routerViewKey = ref(0)
+
+// Parts state
+const expandedParts = ref<Set<string>>(new Set())
+const editingPartId = ref<string | null>(null)
+const editingPartName = ref('')
+const creatingPart = ref(false)
+const creatingPartLoading = ref(false)
+const newPartName = ref('')
 
 // Create authenticated services
 const getToken = async () => {
@@ -64,6 +81,7 @@ const wikiService = createWikiService(getToken)
 
 // Drag and drop state
 const isDragging = ref(false)
+const isDraggingInSidebar = ref(false)
 const showOrganizeModal = ref(false)
 const draggableChapters = ref<Chapter[]>([])
 
@@ -101,6 +119,32 @@ const totalWordCount = computed(() => {
   }, 0)
 })
 
+// Organize chapters by parts
+const chaptersByPart = computed(() => {
+  const sortedParts = parts.value.slice().sort((a, b) => a.position - b.position)
+  const uncategorizedChapters = sortedChapters.value.filter(chapter => !chapter.part_id)
+
+  const organizedParts = sortedParts.map(part => ({
+    ...part,
+    chapters: sortedChapters.value.filter(chapter => chapter.part_id === part.id)
+  }))
+
+  return {
+    parts: organizedParts,
+    uncategorized: uncategorizedChapters
+  }
+})
+
+// Check if a part should be expanded by default (contains active chapter)
+const shouldExpandPart = (partId: string) => {
+  const activeChapterId = route.params.chapterId
+  if (!activeChapterId) return false
+
+  return chaptersByPart.value.parts
+    .find(part => part.id === partId)
+    ?.chapters.some(chapter => chapter.id === activeChapterId) || false
+}
+
 const formatWordCount = (count: number) => {
   if (count < 1000) return count.toString()
   return (count / 1000).toFixed(1) + 'k'
@@ -112,7 +156,7 @@ const loadBook = async () => {
     const savedBooks = localStorage.getItem('books')
     if (savedBooks) {
       const books = JSON.parse(savedBooks)
-      book.value = books.find((b: any) => b.id === bookId)
+      book.value = books.find((b: { id: string }) => b.id === bookId)
     }
 
     if (!book.value) {
@@ -120,9 +164,23 @@ const loadBook = async () => {
       return
     }
 
-    // Load chapters
-    const chaptersData = await bookService.getBookChapters(bookId)
+    // Load chapters and parts
+    const [chaptersData, partsData] = await Promise.all([
+      bookService.getBookChapters(bookId),
+      bookService.getBookParts(bookId)
+    ])
     chapters.value = chaptersData
+    parts.value = partsData
+
+    // Initialize expanded parts based on active chapter
+    const activeChapterId = route.params.chapterId
+    if (activeChapterId) {
+      parts.value.forEach(part => {
+        if (shouldExpandPart(part.id)) {
+          expandedParts.value.add(part.id)
+        }
+      })
+    }
   } catch (error) {
     console.error('Failed to load book:', error)
   }
@@ -136,6 +194,181 @@ const editChapter = (chapterId: string) => {
   router.push(`/books/${bookId}/chapter-editor/${chapterId}`)
 }
 
+// Parts management functions
+const togglePart = (partId: string) => {
+  if (expandedParts.value.has(partId)) {
+    expandedParts.value.delete(partId)
+  } else {
+    expandedParts.value.add(partId)
+  }
+}
+
+const startCreatingPart = () => {
+  creatingPart.value = true
+  newPartName.value = ''
+}
+
+const cancelCreatePart = () => {
+  creatingPart.value = false
+  newPartName.value = ''
+}
+
+const createPart = async () => {
+  if (!newPartName.value.trim() || creatingPartLoading.value) return
+
+  try {
+    creatingPartLoading.value = true
+    const newPart = await bookService.createBookPart(bookId, {
+      name: newPartName.value.trim(),
+      position: parts.value.length
+    })
+    parts.value.push(newPart)
+    parts.value.sort((a, b) => a.position - b.position)
+
+    creatingPart.value = false
+    newPartName.value = ''
+    expandedParts.value.add(newPart.id)
+  } catch (error) {
+    console.error('Failed to create part:', error)
+  } finally {
+    creatingPartLoading.value = false
+  }
+}
+
+const startEditingPart = (part: Part) => {
+  editingPartId.value = part.id
+  editingPartName.value = part.name
+}
+
+const cancelEditPart = () => {
+  editingPartId.value = null
+  editingPartName.value = ''
+}
+
+const savePart = async (partId: string) => {
+  if (!editingPartName.value.trim()) return
+
+  try {
+    await bookService.updateBookPart(bookId, partId, {
+      name: editingPartName.value.trim()
+    })
+
+    const part = parts.value.find(p => p.id === partId)
+    if (part) {
+      part.name = editingPartName.value.trim()
+    }
+
+    editingPartId.value = null
+    editingPartName.value = ''
+  } catch (error) {
+    console.error('Failed to update part:', error)
+  }
+}
+
+const deletePart = async (partId: string) => {
+  if (!confirm('Are you sure you want to delete this part? Chapters in this part will become uncategorized.')) {
+    return
+  }
+
+  try {
+    await bookService.deleteBookPart(bookId, partId)
+    parts.value = parts.value.filter(p => p.id !== partId)
+    expandedParts.value.delete(partId)
+
+    // Update chapters to remove part association
+    chapters.value.forEach(chapter => {
+      if (chapter.part_id === partId) {
+        chapter.part_id = null
+        chapter.part_name = null
+        chapter.part_position = null
+      }
+    })
+  } catch (error) {
+    console.error('Failed to delete part:', error)
+  }
+}
+
+const moveChapterToPart = async (chapterId: string, partId: string | null) => {
+  try {
+    const chapterToMove = chapters.value.find(c => c.id === chapterId)
+    if (!chapterToMove) return
+
+    // Build the complete list of chapters with their positions
+    // The backend expects partId (camelCase) not part_id
+    const reorderedChapters = chapters.value.map((chapter, index) => {
+      if (chapter.id === chapterId) {
+        // This is the chapter being moved - update its partId
+        return {
+          id: chapter.id,
+          position: chapter.position || index,
+          partId: partId ? parseInt(partId) : null
+        }
+      }
+      // Keep other chapters as they are
+      return {
+        id: chapter.id,
+        position: chapter.position || index,
+        partId: chapter.part_id ? parseInt(chapter.part_id) : null
+      }
+    })
+
+    // Sort by position to ensure consistency
+    reorderedChapters.sort((a, b) => a.position - b.position)
+
+    await bookService.reorderChapters(bookId, reorderedChapters)
+
+    // Update local state
+    chapterToMove.part_id = partId
+    if (partId) {
+      const part = parts.value.find(p => p.id === partId)
+      chapterToMove.part_name = part?.name || null
+      chapterToMove.part_position = part?.position || null
+    } else {
+      chapterToMove.part_name = null
+      chapterToMove.part_position = null
+    }
+
+    // Reload to get the correct updated state from backend
+    await loadBook()
+  } catch (error) {
+    console.error('Failed to move chapter to part:', error)
+    // Reload on error to revert any UI changes
+    await loadBook()
+  }
+}
+
+const onChapterMove = (event: { moved?: { element: Chapter; newIndex: number; oldIndex: number } }) => {
+  // Handle drag and drop reordering in modal
+  console.log('Chapter moved:', event)
+  // This will be implemented with more sophisticated logic if needed
+}
+
+const onSidebarChapterMove = async (event: { added?: { element: Chapter; newIndex: number }; removed?: { element: Chapter; oldIndex: number } }, targetPartId: string | null) => {
+  // Handle drag and drop between parts in sidebar
+  console.log('Sidebar chapter moved:', event, 'to part:', targetPartId)
+
+  if (event.added) {
+    // Chapter was dropped into this part
+    const chapter = event.added.element
+    console.log('Moving chapter', chapter.id, 'from part', chapter.part_id, 'to part', targetPartId)
+
+    if (targetPartId !== chapter.part_id) {
+      try {
+        await moveChapterToPart(chapter.id, targetPartId)
+        console.log('Successfully moved chapter to part')
+        // Reload data to ensure UI is in sync
+        await loadBook()
+      } catch (error) {
+        // Revert the UI change if API call failed
+        console.error('Failed to move chapter:', error)
+        // Refresh the data to get the correct state
+        await loadBook()
+      }
+    }
+  }
+}
+
+
 // Update draggable chapters when chapters change
 watch(chapters, (newChapters) => {
   draggableChapters.value = [...newChapters].sort((a, b) => {
@@ -148,23 +381,51 @@ watch(chapters, (newChapters) => {
   })
 }, { immediate: true })
 
-// Drag and drop handlers
-const onDragStart = () => {
+// Drag and drop handlers for modal
+
+// Sidebar-specific drag handlers
+const onSidebarDragStart = () => {
   isDragging.value = true
+  isDraggingInSidebar.value = true
 }
 
-const onDragEnd = async () => {
+const onSidebarDragEnd = async () => {
   isDragging.value = false
-  await saveChapterOrder()
+  // For sidebar, we want to save the order after drag ends
+  // This handles reordering within the same part/uncategorized section
+  await saveSidebarChapterOrder()
+  isDraggingInSidebar.value = false
 }
 
-const saveChapterOrder = async () => {
+const saveSidebarChapterOrder = async () => {
   try {
-    const reorderedChapters = draggableChapters.value.map((chapter, index) => ({
-      id: chapter.id,
-      position: index,
-      partId: chapter.part_id
-    }))
+    // Reconstruct the full chapter order from the sidebar data
+    // Backend expects partId (camelCase)
+    const reorderedChapters: { id: string; position: number; partId: number | null }[] = []
+
+    let globalPosition = 0
+
+    // Add uncategorized chapters first
+    chaptersByPart.value.uncategorized.forEach((chapter) => {
+      reorderedChapters.push({
+        id: chapter.id,
+        position: globalPosition++,
+        partId: null
+      })
+    })
+
+    // Add chapters from each part, ordered by part position
+    chaptersByPart.value.parts
+      .sort((a, b) => a.position - b.position)
+      .forEach((part) => {
+        part.chapters.forEach((chapter) => {
+          reorderedChapters.push({
+            id: chapter.id,
+            position: globalPosition++,
+            partId: chapter.part_id ? parseInt(chapter.part_id) : null
+          })
+        })
+      })
 
     await bookService.reorderChapters(bookId, reorderedChapters)
 
@@ -176,12 +437,13 @@ const saveChapterOrder = async () => {
       }
       return chapter
     })
+
+    console.log('Saved sidebar chapter order:', reorderedChapters)
   } catch (error) {
-    console.error('Failed to save chapter order:', error)
-    // Reload chapters to revert any UI changes
-    await loadBook()
+    console.error('Failed to save sidebar chapter order:', error)
   }
 }
+
 
 
 const loadWiki = async () => {
@@ -595,60 +857,160 @@ onUnmounted(() => {
               <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             </div>
 
-            <!-- Chapters list -->
-            <div v-else-if="chapters.length > 0">
-              <draggable
-                v-model="draggableChapters"
-                item-key="id"
-                class="space-y-2"
-                @start="onDragStart"
-                @end="onDragEnd"
-                :disabled="false"
-                ghost-class="opacity-50"
-                drag-class="rotate-2"
-                handle=".drag-handle"
-              >
-                <template #item="{ element: chapter }">
-                  <router-link
-                    :to="`/books/${bookId}/chapters/${chapter.id}`"
-                    class="block p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                    :class="route.params.chapterId === chapter.id ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600' : ''"
+            <!-- Parts and Chapters -->
+            <div v-else-if="chapters.length > 0" class="space-y-3">
+              <!-- Parts accordion -->
+              <div v-for="part in chaptersByPart.parts" :key="part.id" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <!-- Part header -->
+                <button
+                  @click="togglePart(part.id)"
+                  class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-between text-left transition-colors"
+                >
+                  <div>
+                    <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }}
+                    </p>
+                  </div>
+                  <svg
+                    :class="expandedParts.has(part.id) || shouldExpandPart(part.id) ? 'rotate-180' : ''"
+                    class="w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                <div class="flex items-center justify-between">
-                  <div
-                    class="drag-handle mr-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
-                    @click.prevent.stop
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </button>
+
+                <!-- Part chapters -->
+                <div v-if="expandedParts.has(part.id) || shouldExpandPart(part.id)" class="bg-white dark:bg-gray-800">
+                  <draggable
+                    v-model="part.chapters"
+                    item-key="id"
+                    group="sidebar-chapters"
+                    class="space-y-1"
+                    @start="onSidebarDragStart"
+                    @end="onSidebarDragEnd"
+                    @change="(event: { added?: { element: Chapter; newIndex: number }; removed?: { element: Chapter; oldIndex: number } }) => onSidebarChapterMove(event, part.id)"
+                    :disabled="false"
+                    ghost-class="opacity-50"
+                    drag-class="rotate-1"
+                    handle=".drag-handle"
                   >
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"></path>
-                    </svg>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3 class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {{ chapter.title || chapter.id }}
-                    </h3>
-                    <div class="flex items-center space-x-3 mt-1">
-                      <span class="text-xs text-gray-500 dark:text-gray-400">
-                        {{ chapter.word_count?.toLocaleString() || 0 }} words
-                      </span>
-                      <CheckCircleIcon
-                        :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
-                        class="w-3 h-3"
-                      />
-                    </div>
-                  </div>
-                  <div class="flex items-center space-x-1 ml-2">
-                    <button
-                      @click.prevent.stop="editChapter(chapter.id)"
-                      class="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                    >
-                      <PencilIcon class="w-3 h-3" />
-                    </button>
-                  </div>
+                    <template #item="{ element: chapter }">
+                      <router-link
+                        :to="`/books/${bookId}/chapters/${chapter.id}`"
+                        class="block p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer border-l-4"
+                        :class="route.params.chapterId === chapter.id
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
+                          : 'border-l-transparent hover:border-l-gray-300 dark:hover:border-l-gray-600'"
+                      >
+                        <div class="flex items-center justify-between">
+                          <div
+                            class="drag-handle mr-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                            @click.prevent.stop
+                          >
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"></path>
+                            </svg>
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <h3 class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {{ chapter.title || chapter.id }}
+                            </h3>
+                            <div class="flex items-center space-x-3 mt-1">
+                              <span class="text-xs text-gray-500 dark:text-gray-400">
+                                {{ chapter.word_count?.toLocaleString() || 0 }} words
+                              </span>
+                              <CheckCircleIcon
+                                :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
+                                class="w-3 h-3"
+                              />
+                            </div>
+                          </div>
+                          <div class="flex items-center space-x-1 ml-2">
+                            <button
+                              @click.prevent.stop="editChapter(chapter.id)"
+                              class="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            >
+                              <PencilIcon class="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </router-link>
+                    </template>
+                  </draggable>
                 </div>
-                  </router-link>
-                </template>
-              </draggable>
+              </div>
+
+              <!-- Uncategorized chapters -->
+              <div v-if="chaptersByPart.uncategorized.length > 0" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700">
+                  <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized</h4>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {{ chaptersByPart.uncategorized.length }} chapter{{ chaptersByPart.uncategorized.length !== 1 ? 's' : '' }}
+                  </p>
+                </div>
+                <div class="bg-white dark:bg-gray-800">
+                  <draggable
+                    v-model="chaptersByPart.uncategorized"
+                    item-key="id"
+                    group="sidebar-chapters"
+                    class="space-y-1"
+                    @start="onSidebarDragStart"
+                    @end="onSidebarDragEnd"
+                    @change="(event: { added?: { element: Chapter; newIndex: number }; removed?: { element: Chapter; oldIndex: number } }) => onSidebarChapterMove(event, null)"
+                    :disabled="false"
+                    ghost-class="opacity-50"
+                    drag-class="rotate-1"
+                    handle=".drag-handle"
+                  >
+                    <template #item="{ element: chapter }">
+                      <router-link
+                        :to="`/books/${bookId}/chapters/${chapter.id}`"
+                        class="block p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer border-l-4"
+                        :class="route.params.chapterId === chapter.id
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
+                          : 'border-l-transparent hover:border-l-gray-300 dark:hover:border-l-gray-600'"
+                      >
+                        <div class="flex items-center justify-between">
+                          <div
+                            class="drag-handle mr-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                            @click.prevent.stop
+                          >
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"></path>
+                            </svg>
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <h3 class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {{ chapter.title || chapter.id }}
+                            </h3>
+                            <div class="flex items-center space-x-3 mt-1">
+                              <span class="text-xs text-gray-500 dark:text-gray-400">
+                                {{ chapter.word_count?.toLocaleString() || 0 }} words
+                              </span>
+                              <CheckCircleIcon
+                                :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
+                                class="w-3 h-3"
+                              />
+                            </div>
+                          </div>
+                          <div class="flex items-center space-x-1 ml-2">
+                            <button
+                              @click.prevent.stop="editChapter(chapter.id)"
+                              class="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            >
+                              <PencilIcon class="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </router-link>
+                    </template>
+                  </draggable>
+                </div>
+              </div>
             </div>
 
             <!-- Empty state -->
@@ -710,7 +1072,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Settings link at bottom of sidebar -->
-          <div class="absolute bottom-4 left-4">
+          <div class="fixed bottom-4 left-4 z-10">
             <router-link
               to="/settings"
               class="inline-flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-700"
@@ -759,10 +1121,191 @@ onUnmounted(() => {
       </div>
 
       <div class="p-6 overflow-y-auto max-h-[70vh]">
-        <div class="text-center text-gray-500 dark:text-gray-400">
-          <Cog6ToothIcon class="w-12 h-12 mx-auto mb-3" />
-          <p>Advanced chapter organization with parts coming soon!</p>
-          <p class="text-sm mt-2">For now, you can drag and drop chapters in the sidebar to reorder them.</p>
+        <div class="space-y-6">
+          <!-- Instructions -->
+          <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+            <h3 class="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">How to organize chapters</h3>
+            <p class="text-sm text-blue-800 dark:text-blue-300">
+              Use the dropdown next to each chapter to assign it to a part. Create new parts as needed to organize your chapters into logical sections.
+            </p>
+          </div>
+
+          <!-- Create new part section -->
+          <div class="flex justify-between items-center">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Parts</h3>
+            <button
+              v-if="!creatingPart"
+              @click="startCreatingPart"
+              class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <PlusIcon class="w-4 h-4 mr-1" />
+              New Part
+            </button>
+          </div>
+
+          <!-- New part form -->
+          <div v-if="creatingPart" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+            <div class="flex items-center space-x-3">
+              <input
+                v-model="newPartName"
+                @keyup.enter="createPart"
+                @keyup.escape="cancelCreatePart"
+                type="text"
+                placeholder="Enter part name..."
+                class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autofocus
+              />
+              <button
+                @click="createPart"
+                :disabled="!newPartName.trim() || creatingPartLoading"
+                class="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm inline-flex items-center"
+              >
+                <div v-if="creatingPartLoading" class="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent mr-2"></div>
+                {{ creatingPartLoading ? 'Creating...' : 'Create' }}
+              </button>
+              <button
+                @click="cancelCreatePart"
+                class="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <!-- Parts list -->
+          <div class="space-y-4">
+            <!-- Uncategorized chapters -->
+            <div v-if="chaptersByPart.uncategorized.length > 0" class="border border-gray-200 dark:border-gray-700 rounded-lg">
+              <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+                <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized Chapters</h4>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {{ chaptersByPart.uncategorized.length }} chapter{{ chaptersByPart.uncategorized.length !== 1 ? 's' : '' }}
+                </p>
+              </div>
+              <div class="p-4 space-y-2">
+                <draggable
+                  v-model="chaptersByPart.uncategorized"
+                  item-key="id"
+                  group="modal-chapters"
+                  @change="onChapterMove"
+                  class="space-y-2"
+                >
+                  <template #item="{ element: chapter }">
+                    <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                      <div class="flex-1">
+                        <h5 class="text-sm font-medium text-gray-900 dark:text-white">{{ chapter.title || chapter.id }}</h5>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ chapter.word_count?.toLocaleString() || 0 }} words</p>
+                      </div>
+                      <select
+                        :value="chapter.part_id || ''"
+                        @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
+                        class="text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-32 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Uncategorized</option>
+                        <option v-for="part in parts" :key="part.id" :value="part.id">{{ part.name }}</option>
+                      </select>
+                    </div>
+                  </template>
+                </draggable>
+              </div>
+            </div>
+
+            <!-- Parts with chapters -->
+            <div v-for="part in chaptersByPart.parts" :key="part.id" class="border border-gray-200 dark:border-gray-700 rounded-lg">
+              <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <input
+                      v-if="editingPartId === part.id"
+                      v-model="editingPartName"
+                      @keyup.enter="savePart(part.id)"
+                      @keyup.escape="cancelEditPart"
+                      type="text"
+                      class="font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm w-full"
+                      autofocus
+                    />
+                    <h4 v-else class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }}
+                    </p>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <template v-if="editingPartId === part.id">
+                      <button
+                        @click="savePart(part.id)"
+                        class="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                        title="Save"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                      </button>
+                      <button
+                        @click="cancelEditPart"
+                        class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        title="Cancel"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button
+                        @click="startEditingPart(part)"
+                        class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                        title="Edit name"
+                      >
+                        <PencilIcon class="w-4 h-4" />
+                      </button>
+                      <button
+                        @click="deletePart(part.id)"
+                        class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        title="Delete part"
+                      >
+                        <TrashIcon class="w-4 h-4" />
+                      </button>
+                    </template>
+                  </div>
+                </div>
+              </div>
+              <div class="p-4 space-y-2">
+                <draggable
+                  v-model="part.chapters"
+                  item-key="id"
+                  group="modal-chapters"
+                  @change="onChapterMove"
+                  class="space-y-2"
+                >
+                  <template #item="{ element: chapter }">
+                    <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                      <div class="flex-1">
+                        <h5 class="text-sm font-medium text-gray-900 dark:text-white">{{ chapter.title || chapter.id }}</h5>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ chapter.word_count?.toLocaleString() || 0 }} words</p>
+                      </div>
+                      <select
+                        :value="chapter.part_id || ''"
+                        @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
+                        class="text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-32 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Uncategorized</option>
+                        <option v-for="p in parts" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      </select>
+                    </div>
+                  </template>
+                </draggable>
+              </div>
+            </div>
+
+            <!-- Empty state -->
+            <div v-if="parts.length === 0 && chaptersByPart.uncategorized.length === 0" class="text-center py-8">
+              <Cog6ToothIcon class="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No chapters to organize</h3>
+              <p class="text-gray-600 dark:text-gray-400">
+                Create some chapters first, then organize them into parts.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

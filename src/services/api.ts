@@ -103,7 +103,7 @@ export function createBookService(getToken: () => Promise<string | undefined>) {
       return response.data
     },
 
-    async reorderChapters(bookId: string, chapters: { id: string; position: number; partId?: string | null }[]) {
+    async reorderChapters(bookId: string, chapters: { id: string; position: number; partId?: number | null }[]) {
       const response = await client.put(`/books/${bookId}/chapters/reorder`, { chapters })
       return response.data
     }
@@ -149,7 +149,7 @@ export function createChapterService(getToken: () => Promise<string | undefined>
       return response.data
     },
 
-    async reorderChapter(chapterId: string, data: { position?: number; partId?: string | null }) {
+    async reorderChapter(chapterId: string, data: { position?: number; partId?: number | null }) {
       const response = await client.put(`/chapters/${chapterId}/reorder`, data)
       return response.data
     }
