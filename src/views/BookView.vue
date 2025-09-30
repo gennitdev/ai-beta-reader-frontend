@@ -116,14 +116,23 @@ const chaptersByPart = computed(() => {
   )
   const uncategorizedChapters = sortedChapters.value.filter(chapter => !chapter.part_id)
 
-  const organizedParts = sortedParts.map(part => ({
-    ...part,
-    chapters: sortedChapters.value.filter(chapter => chapter.part_id === part.id)
-  }))
+  const organizedParts = sortedParts.map(part => {
+    const partChapters = sortedChapters.value.filter(chapter => chapter.part_id === part.id)
+    const wordCount = partChapters.reduce((total, chapter) => total + (chapter.word_count || 0), 0)
+
+    return {
+      ...part,
+      chapters: partChapters,
+      wordCount
+    }
+  })
+
+  const uncategorizedWordCount = uncategorizedChapters.reduce((total, chapter) => total + (chapter.word_count || 0), 0)
 
   return {
     parts: organizedParts,
-    uncategorized: uncategorizedChapters
+    uncategorized: uncategorizedChapters,
+    uncategorizedWordCount
   }
 })
 
@@ -898,7 +907,7 @@ onUnmounted(() => {
                   <div>
                     <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }}
+                      {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }} · {{ formatWordCount(part.wordCount) }} words
                     </p>
                   </div>
                   <svg
@@ -978,7 +987,7 @@ onUnmounted(() => {
                 <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700">
                   <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized</h4>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ chaptersByPart.uncategorized.length }} chapter{{ chaptersByPart.uncategorized.length !== 1 ? 's' : '' }}
+                    {{ chaptersByPart.uncategorized.length }} chapter{{ chaptersByPart.uncategorized.length !== 1 ? 's' : '' }} · {{ formatWordCount(chaptersByPart.uncategorizedWordCount) }} words
                   </p>
                 </div>
                 <div class="bg-white dark:bg-gray-800">
