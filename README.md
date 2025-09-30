@@ -44,12 +44,15 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
    npm install
    ```
 
-2. **Configure environment:**
-   Copy `.env.local` and update with your values:
+2. **Configure environment variables:**
+   Create a `.env.local` file in the project root with the following variables:
    ```bash
+   # Auth0 Configuration
    VITE_AUTH0_DOMAIN=your-auth0-domain.auth0.com
    VITE_AUTH0_CLIENT_ID=your-auth0-client-id
    VITE_AUTH0_AUDIENCE=your-auth0-audience
+
+   # Backend API URL
    VITE_API_BASE_URL=http://localhost:3001
    ```
 
@@ -71,6 +74,38 @@ In your Auth0 dashboard:
 3. **Enable grants:**
    - Authorization Code
    - Refresh Token
+
+## Environment Variables
+
+Create a `.env.local` file in the project root and configure the following variables:
+
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `VITE_AUTH0_DOMAIN` | Your Auth0 domain | `your-domain.auth0.com` |
+| `VITE_AUTH0_CLIENT_ID` | Your Auth0 application client ID | `abc123def456ghi789` |
+| `VITE_AUTH0_AUDIENCE` | Auth0 API audience (usually your domain + /api/v2/) | `https://your-domain.auth0.com/api/v2/` |
+| `VITE_API_BASE_URL` | Backend API base URL | `http://localhost:3001` |
+
+### Example Configuration
+
+```bash
+# Auth0 Configuration
+VITE_AUTH0_DOMAIN=my-app.auth0.com
+VITE_AUTH0_CLIENT_ID=abc123def456ghi789jkl012
+VITE_AUTH0_AUDIENCE=https://my-app.auth0.com/api/v2/
+
+# Backend API
+VITE_API_BASE_URL=http://localhost:3001
+```
+
+### Notes
+
+- All frontend environment variables must be prefixed with `VITE_` to be accessible in the browser
+- Never commit `.env.local` to version control - it's already in `.gitignore`
+- For production deployment, set these variables in your hosting platform's environment configuration
+- The Auth0 values come from your Auth0 dashboard under Applications > [Your App] > Settings
 
 ## How It Works
 
