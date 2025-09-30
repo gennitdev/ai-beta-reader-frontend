@@ -2,6 +2,11 @@
 
 A Vue.js frontend for the AI Beta Reader application. Manage your books and chapters, edit content with a rich markdown editor, generate AI summaries, and get contextual feedback on your writing.
 
+## Tech Stack
+
+**Frontend:** Vue.js 3 + TypeScript + Tailwind CSS
+**AI:** Powered by the ChatGPT API (GPT-4o Mini)
+**Authentication:** Auth0
 **Backend Repository:** [ai-beta-reader-backend](https://github.com/gennitdev/ai-beta-reader-backend)
 
 ## Features
