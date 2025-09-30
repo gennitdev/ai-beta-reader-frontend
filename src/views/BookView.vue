@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { createBookService, createChapterService, createWikiService } from '@/services/api'
-import { PlusIcon, DocumentTextIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, DocumentTextIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import draggable from 'vuedraggable'
 
@@ -14,15 +14,14 @@ interface Chapter {
   has_summary: boolean
   summary: string | null
   position: number
+  position_in_part: number | null
   part_id: string | null
   part_name: string | null
-  part_position: number | null
 }
 
 interface Part {
   id: string
   name: string
-  position: number
   book_id: string
   created_at: string
   updated_at: string
@@ -100,17 +99,8 @@ const isOnBookOnly = computed(() => {
 })
 
 const sortedChapters = computed(() => {
-  return chapters.value.slice().sort((a, b) => {
-    // Sort by part position first, then by chapter position within part
-    const aPartPos = a.part_position ?? 999999
-    const bPartPos = b.part_position ?? 999999
-
-    if (aPartPos !== bPartPos) {
-      return aPartPos - bPartPos
-    }
-
-    return (a.position || 0) - (b.position || 0)
-  })
+  // Backend returns chapters in correct order based on array positions
+  return chapters.value.slice().sort((a, b) => (a.position || 0) - (b.position || 0))
 })
 
 const totalWordCount = computed(() => {
@@ -121,7 +111,9 @@ const totalWordCount = computed(() => {
 
 // Organize chapters by parts
 const chaptersByPart = computed(() => {
-  const sortedParts = parts.value.slice().sort((a, b) => a.position - b.position)
+  const sortedParts = parts.value.slice().sort((a, b) =>
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  )
   const uncategorizedChapters = sortedChapters.value.filter(chapter => !chapter.part_id)
 
   const organizedParts = sortedParts.map(part => ({
@@ -219,11 +211,12 @@ const createPart = async () => {
   try {
     creatingPartLoading.value = true
     const newPart = await bookService.createBookPart(bookId, {
-      name: newPartName.value.trim(),
-      position: parts.value.length
+      name: newPartName.value.trim()
     })
     parts.value.push(newPart)
-    parts.value.sort((a, b) => a.position - b.position)
+    parts.value.sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
 
     creatingPart.value = false
     newPartName.value = ''
@@ -280,7 +273,6 @@ const deletePart = async (partId: string) => {
       if (chapter.part_id === partId) {
         chapter.part_id = null
         chapter.part_name = null
-        chapter.part_position = null
       }
     })
   } catch (error) {
@@ -290,43 +282,39 @@ const deletePart = async (partId: string) => {
 
 const moveChapterToPart = async (chapterId: string, partId: string | null) => {
   try {
-    const chapterToMove = chapters.value.find(c => c.id === chapterId)
-    if (!chapterToMove) return
+    // Build new chapter order and part assignments using arrays
+    const chapterOrder: string[] = []
+    const partUpdates: { [partId: string]: string[] } = {}
 
-    // Build the complete list of chapters with their positions
-    // The backend expects partId (camelCase) not part_id
-    const reorderedChapters = chapters.value.map((chapter, index) => {
-      if (chapter.id === chapterId) {
-        // This is the chapter being moved - update its partId
-        return {
-          id: chapter.id,
-          position: chapter.position || index,
-          partId: partId ? parseInt(partId) : null
-        }
+    // Initialize part arrays
+    parts.value.forEach(part => {
+      partUpdates[part.id] = []
+    })
+    partUpdates['null'] = [] // For uncategorized chapters
+
+    // Group chapters by their NEW part assignment
+    chapters.value.forEach(chapter => {
+      const targetPartId = chapter.id === chapterId ? partId : chapter.part_id
+      const partKey = targetPartId || 'null'
+
+      if (!partUpdates[partKey]) {
+        partUpdates[partKey] = []
       }
-      // Keep other chapters as they are
-      return {
-        id: chapter.id,
-        position: chapter.position || index,
-        partId: chapter.part_id ? parseInt(chapter.part_id) : null
-      }
+      partUpdates[partKey].push(chapter.id)
     })
 
-    // Sort by position to ensure consistency
-    reorderedChapters.sort((a, b) => a.position - b.position)
+    // Build global chapter order: uncategorized first, then parts in order
+    chapterOrder.push(...partUpdates['null'])
 
-    await bookService.reorderChapters(bookId, reorderedChapters)
+    parts.value
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .forEach(part => {
+        chapterOrder.push(...(partUpdates[part.id] || []))
+      })
 
-    // Update local state
-    chapterToMove.part_id = partId
-    if (partId) {
-      const part = parts.value.find(p => p.id === partId)
-      chapterToMove.part_name = part?.name || null
-      chapterToMove.part_position = part?.position || null
-    } else {
-      chapterToMove.part_name = null
-      chapterToMove.part_position = null
-    }
+    // Send the complete reordered list to backend
+    console.log('Sending array-based reorder to backend:', { chapterOrder, partUpdates })
+    await bookService.reorderChapters(bookId, chapterOrder, partUpdates)
 
     // Reload to get the correct updated state from backend
     await loadBook()
@@ -341,6 +329,63 @@ const onChapterMove = (event: { moved?: { element: Chapter; newIndex: number; ol
   // Handle drag and drop reordering in modal
   console.log('Chapter moved:', event)
   // This will be implemented with more sophisticated logic if needed
+}
+
+const moveChapterUp = async (chapterList: Chapter[], index: number, partId: string | null) => {
+  if (index === 0) return // Can't move up if already at top
+
+  // Swap positions in the array
+  const temp = chapterList[index]
+  chapterList[index] = chapterList[index - 1]
+  chapterList[index - 1] = temp
+
+  // Save the new order with ALL chapters properly reindexed
+  await saveModalChapterOrder()
+}
+
+const moveChapterDown = async (chapterList: Chapter[], index: number, partId: string | null) => {
+  if (index >= chapterList.length - 1) return // Can't move down if already at bottom
+
+  // Swap positions in the array
+  const temp = chapterList[index]
+  chapterList[index] = chapterList[index + 1]
+  chapterList[index + 1] = temp
+
+  // Save the new order with ALL chapters properly reindexed
+  await saveModalChapterOrder()
+}
+
+const saveModalChapterOrder = async () => {
+  try {
+    // Build arrays from modal view state
+    const chapterOrder: string[] = []
+    const partUpdates: { [partId: string]: string[] } = {}
+
+    // Initialize part arrays
+    partUpdates['null'] = chaptersByPart.value.uncategorized.map(c => c.id)
+
+    chaptersByPart.value.parts.forEach(part => {
+      partUpdates[part.id] = part.chapters.map(c => c.id)
+    })
+
+    // Build global chapter order: uncategorized first, then parts in order
+    chapterOrder.push(...partUpdates['null'])
+
+    chaptersByPart.value.parts
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .forEach(part => {
+        chapterOrder.push(...partUpdates[part.id])
+      })
+
+    // Send array-based reorder to backend
+    await bookService.reorderChapters(bookId, chapterOrder, partUpdates)
+
+    // Reload to get updated state
+    await loadBook()
+  } catch (error) {
+    console.error('Failed to save chapter order from modal:', error)
+    await loadBook() // Reload on error
+  }
 }
 
 const onSidebarChapterMove = async (event: { added?: { element: Chapter; newIndex: number }; removed?: { element: Chapter; oldIndex: number } }, targetPartId: string | null) => {
@@ -399,46 +444,30 @@ const onSidebarDragEnd = async () => {
 
 const saveSidebarChapterOrder = async () => {
   try {
-    // Reconstruct the full chapter order from the sidebar data
-    // Backend expects partId (camelCase)
-    const reorderedChapters: { id: string; position: number; partId: number | null }[] = []
+    // Build arrays from sidebar state
+    const chapterOrder: string[] = []
+    const partUpdates: { [partId: string]: string[] } = {}
 
-    let globalPosition = 0
+    // Initialize part arrays
+    partUpdates['null'] = chaptersByPart.value.uncategorized.map(c => c.id)
 
-    // Add uncategorized chapters first
-    chaptersByPart.value.uncategorized.forEach((chapter) => {
-      reorderedChapters.push({
-        id: chapter.id,
-        position: globalPosition++,
-        partId: null
-      })
+    chaptersByPart.value.parts.forEach(part => {
+      partUpdates[part.id] = part.chapters.map(c => c.id)
     })
 
-    // Add chapters from each part, ordered by part position
+    // Build global chapter order: uncategorized first, then parts in order
+    chapterOrder.push(...partUpdates['null'])
+
     chaptersByPart.value.parts
-      .sort((a, b) => a.position - b.position)
-      .forEach((part) => {
-        part.chapters.forEach((chapter) => {
-          reorderedChapters.push({
-            id: chapter.id,
-            position: globalPosition++,
-            partId: chapter.part_id ? parseInt(chapter.part_id) : null
-          })
-        })
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .forEach(part => {
+        chapterOrder.push(...partUpdates[part.id])
       })
 
-    await bookService.reorderChapters(bookId, reorderedChapters)
+    // Send array-based reorder to backend
+    await bookService.reorderChapters(bookId, chapterOrder, partUpdates)
 
-    // Update the original chapters array with new positions
-    chapters.value = chapters.value.map(chapter => {
-      const reordered = reorderedChapters.find(r => r.id === chapter.id)
-      if (reordered) {
-        return { ...chapter, position: reordered.position }
-      }
-      return chapter
-    })
-
-    console.log('Saved sidebar chapter order:', reorderedChapters)
+    console.log('Saved sidebar chapter order with arrays:', { chapterOrder, partUpdates })
   } catch (error) {
     console.error('Failed to save sidebar chapter order:', error)
   }
@@ -1190,20 +1219,40 @@ onUnmounted(() => {
                   @change="onChapterMove"
                   class="space-y-2"
                 >
-                  <template #item="{ element: chapter }">
+                  <template #item="{ element: chapter, index }">
                     <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
                       <div class="flex-1">
                         <h5 class="text-sm font-medium text-gray-900 dark:text-white">{{ chapter.title || chapter.id }}</h5>
                         <p class="text-xs text-gray-500 dark:text-gray-400">{{ chapter.word_count?.toLocaleString() || 0 }} words</p>
                       </div>
-                      <select
-                        :value="chapter.part_id || ''"
-                        @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
-                        class="text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-32 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Uncategorized</option>
-                        <option v-for="part in parts" :key="part.id" :value="part.id">{{ part.name }}</option>
-                      </select>
+                      <div class="flex items-center space-x-2">
+                        <div class="flex flex-col">
+                          <button
+                            @click="moveChapterUp(chaptersByPart.uncategorized, index, null)"
+                            :disabled="index === 0"
+                            class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move up"
+                          >
+                            <ChevronUpIcon class="w-4 h-4" />
+                          </button>
+                          <button
+                            @click="moveChapterDown(chaptersByPart.uncategorized, index, null)"
+                            :disabled="index >= chaptersByPart.uncategorized.length - 1"
+                            class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move down"
+                          >
+                            <ChevronDownIcon class="w-4 h-4" />
+                          </button>
+                        </div>
+                        <select
+                          :value="chapter.part_id || ''"
+                          @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
+                          class="text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-32 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Uncategorized</option>
+                          <option v-for="part in parts" :key="part.id" :value="part.id">{{ part.name }}</option>
+                        </select>
+                      </div>
                     </div>
                   </template>
                 </draggable>
@@ -1277,20 +1326,40 @@ onUnmounted(() => {
                   @change="onChapterMove"
                   class="space-y-2"
                 >
-                  <template #item="{ element: chapter }">
+                  <template #item="{ element: chapter, index }">
                     <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
                       <div class="flex-1">
                         <h5 class="text-sm font-medium text-gray-900 dark:text-white">{{ chapter.title || chapter.id }}</h5>
                         <p class="text-xs text-gray-500 dark:text-gray-400">{{ chapter.word_count?.toLocaleString() || 0 }} words</p>
                       </div>
-                      <select
-                        :value="chapter.part_id || ''"
+                      <div class="flex items-center space-x-2">
+                        <div class="flex flex-col">
+                          <button
+                            @click="moveChapterUp(part.chapters, index, part.id)"
+                            :disabled="index === 0"
+                            class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move up"
+                          >
+                            <ChevronUpIcon class="w-4 h-4" />
+                          </button>
+                          <button
+                            @click="moveChapterDown(part.chapters, index, part.id)"
+                            :disabled="index >= part.chapters.length - 1"
+                            class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move down"
+                          >
+                            <ChevronDownIcon class="w-4 h-4" />
+                          </button>
+                        </div>
+                        <select
+                          :value="chapter.part_id || ''"
                         @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
                         class="text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-32 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Uncategorized</option>
                         <option v-for="p in parts" :key="p.id" :value="p.id">{{ p.name }}</option>
                       </select>
+                      </div>
                     </div>
                   </template>
                 </draggable>

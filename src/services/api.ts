@@ -103,8 +103,8 @@ export function createBookService(getToken: () => Promise<string | undefined>) {
       return response.data
     },
 
-    async reorderChapters(bookId: string, chapters: { id: string; position: number; partId?: number | null }[]) {
-      const response = await client.put(`/books/${bookId}/chapters/reorder`, { chapters })
+    async reorderChapters(bookId: string, chapterOrder: string[], partUpdates: { [partId: string]: string[] }) {
+      const response = await client.put(`/books/${bookId}/chapters/reorder`, { chapterOrder, partUpdates })
       return response.data
     }
   }
@@ -149,7 +149,7 @@ export function createChapterService(getToken: () => Promise<string | undefined>
       return response.data
     },
 
-    async reorderChapter(chapterId: string, data: { position?: number; partId?: number | null }) {
+    async reorderChapter(chapterId: string, data: { partId?: number | null; bookPosition?: number; partPosition?: number }) {
       const response = await client.put(`/chapters/${chapterId}/reorder`, data)
       return response.data
     }
