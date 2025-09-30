@@ -41,7 +41,7 @@ if (isAuthenticated.value) {
       </div>
 
       <!-- Content below image on mobile -->
-      <div class="px-4 sm:px-6 py-12 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
+      <div class="px-4 sm:px-6 py-12 pb-20 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
         <div class="max-w-xl mx-auto text-center">
           <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-6 space-grotesk-logo">
             Beta Bot
@@ -217,7 +217,7 @@ if (isAuthenticated.value) {
       </div>
 
       <!-- Right Half - Content -->
-      <div class="w-1/2 flex flex-col justify-center px-12 xl:px-16 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
+      <div class="w-1/2 flex flex-col justify-center px-12 xl:px-16 py-12 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
         <div class="max-w-lg">
           <h1 class="text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-8 leading-tight space-grotesk-logo">
             Beta Bot

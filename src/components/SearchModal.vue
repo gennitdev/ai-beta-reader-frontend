@@ -57,7 +57,13 @@
               <div class="flex justify-between items-start mb-2">
                 <div>
                   <h4 class="font-medium text-gray-900 dark:text-white">
-                    {{ chapter.title || `Chapter ${chapter.position || 'Untitled'}` }}
+                    <button
+                      @click="navigateToChapter(chapter.id)"
+                      class="hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors text-left cursor-pointer"
+                      title="Click to open chapter"
+                    >
+                      {{ chapter.title || `Chapter ${chapter.position || 'Untitled'}` }}
+                    </button>
                   </h4>
                   <p class="text-sm text-gray-500 dark:text-gray-400">
                     {{ chapter.word_count || 0 }} words
@@ -93,7 +99,13 @@
               <div class="flex justify-between items-start mb-2">
                 <div>
                   <h4 class="font-medium text-gray-900 dark:text-white">
-                    <HighlightedText :text="wikiPage.page_name" :search-input="searchTerm" />
+                    <button
+                      @click="navigateToWikiPage(wikiPage.id)"
+                      class="hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors text-left cursor-pointer"
+                      title="Click to open wiki page"
+                    >
+                      <HighlightedText :text="wikiPage.page_name" :search-input="searchTerm" />
+                    </button>
                   </h4>
                   <p class="text-sm text-gray-500 dark:text-gray-400 capitalize">
                     {{ wikiPage.page_type || 'other' }}
@@ -139,6 +151,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import Modal from './Modal.vue'
 import HighlightedText from './HighlightedText.vue'
 
@@ -159,6 +172,8 @@ const emit = defineEmits<{
   close: []
   refresh: []
 }>()
+
+const router = useRouter()
 
 const searchTerm = ref('')
 const replaceTerm = ref('')
@@ -240,6 +255,16 @@ const replaceInWikiPage = async (wikiPageId: string) => {
   } finally {
     isReplacing.value = false
   }
+}
+
+const navigateToChapter = (chapterId: string) => {
+  emit('close')
+  router.push(`/books/${props.bookId}/chapters/${chapterId}`)
+}
+
+const navigateToWikiPage = (wikiPageId: string) => {
+  emit('close')
+  router.push(`/books/${props.bookId}/wiki/${wikiPageId}`)
 }
 
 const getTextPreview = (text: string): string => {
