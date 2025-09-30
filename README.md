@@ -96,6 +96,53 @@ In your Auth0 dashboard:
 9. **Search and Replace**: Find names, places, or any text across all chapters and make consistent changes
 10. **Organize with Parts**: Group chapters into parts or sections for better manuscript organization
 
+## Screenshots
+
+### AI Summary Generation
+The system automatically generates structured summaries that track characters, plot points, and key events for each chapter.
+
+![Summary Being Generated](./screenshots/summary-being-generated.png)
+
+### Summary Management
+You can manually edit or regenerate summaries to ensure they accurately capture the important details that will provide context for AI reviews.
+
+![Manually Edit Summary](./screenshots/manually-edit-summary.png)
+
+![Regenerate Summary Button](./screenshots/regenerate-summary-button.png)
+
+### AI Review Transparency
+The app shows you exactly what summaries are being sent to the AI as context, giving you full transparency into the review process.
+
+![Review Summaries in Prompt](./screenshots/review-summaries-in-prompt-to-see-if-summaries-need-editing.png)
+
+### Contextual AI Feedback
+Get intelligent feedback that understands your story's continuity and can catch inconsistencies across chapters.
+
+![Example of Feedback on Consistency](./screenshots/example-of-feedback-on-consistency-with-other-chapters.png)
+
+### Custom AI Profiles
+Create personalized reviewer profiles with custom prompts to get the exact type of feedback you need.
+
+![Custom AI Profile Creation](./screenshots/custom-ai-profile-creation.png)
+
+![Custom AI Profile in User Settings](./screenshots/custom-ai-profile-in-user-settings.png)
+
+![Getting Feedback from Custom AI Profile](./screenshots/getting-feedback-from-custom-ai-profile.png)
+
+![Feedback by AI Profile](./screenshots/feedback-by-ai-profile.png)
+
+### Character Wiki System
+Automatically generated character sheets that track relationships and development, with full edit history.
+
+![Auto-generated Character Sheet with Change History](./screenshots/auto-generated-character-sheet-with-change-history.png)
+
+### Search and Replace for Continuity
+Find and replace text across all chapters and wiki pages to maintain consistency throughout your manuscript.
+
+![Search](./screenshots/search.png)
+
+![Find and Replace for Continuity Fixes](./screenshots/find-and-replace-for-continuity-fixes.png)
+
 ## Available Scripts
 
 - `npm run dev` - Start development server
