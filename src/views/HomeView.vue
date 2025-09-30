@@ -56,7 +56,7 @@ if (isAuthenticated.value) {
               @click="handleSignUp"
               class="w-full inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-lg shadow-lg"
             >
-              Get Started Free
+              Get Started
             </button>
             <button
               @click="handleLogin"
@@ -64,6 +64,13 @@ if (isAuthenticated.value) {
             >
               Sign In
             </button>
+            <router-link
+              to="/docs"
+              class="w-full inline-flex items-center justify-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+            >
+              <BookOpenIcon class="w-5 h-5 mr-2" />
+              See Screenshots & Tutorial
+            </router-link>
           </div>
 
           <!-- Mobile Features -->
@@ -206,147 +213,168 @@ if (isAuthenticated.value) {
 
     <!-- Desktop Layout -->
     <div class="hidden lg:flex min-h-[calc(100vh-4rem)]">
-      <!-- Left Half - Image -->
-      <div class="w-1/2 relative overflow-hidden">
+      <!-- Left Image - 1/3 width -->
+      <div class="w-1/3 relative overflow-hidden">
         <img
           src="/art-attack-RpSTMkZGKyE-unsplash.jpg"
           alt="Creative writing inspiration"
           class="w-full h-full object-cover"
         />
-        <div class="absolute inset-0 bg-gradient-to-r from-transparent to-black/20"></div>
+        <div class="absolute inset-0 bg-gradient-to-r from-transparent to-black/10"></div>
       </div>
 
-      <!-- Right Half - Content -->
-      <div class="w-1/2 flex flex-col justify-center px-12 xl:px-16 py-12 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
-        <div class="max-w-lg">
-          <h1 class="text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-8 leading-tight space-grotesk-logo">
-            Beta Bot
-          </h1>
-          <p class="text-xl text-gray-600 dark:text-gray-300 mb-10 leading-relaxed">
-            Your AI Beta Reader. Get intelligent feedback on your creative writing. Organize your manuscripts, track your progress, and receive AI-powered reviews that understand your story's context.
-          </p>
+      <!-- Right Content - 2/3 width -->
+      <div class="w-2/3 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative overflow-y-auto">
+        <div class="px-8 xl:px-12 py-8 lg:py-12 max-w-4xl">
+            <!-- Hero Section -->
+            <div class="mb-8">
+              <h1 class="text-4xl lg:text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight space-grotesk-logo">
+                Beta Bot
+              </h1>
+              <p class="text-lg lg:text-xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
+                Your AI Beta Reader. Get intelligent feedback on your creative writing. Organize your manuscripts, track your progress, and receive AI-powered reviews that understand your story's context.
+              </p>
 
-          <!-- CTA Buttons -->
-          <div class="flex flex-col gap-4 mb-12">
-            <button
-              @click="handleSignUp"
-              class="inline-flex items-center justify-center px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-lg shadow-lg"
-            >
-              Get Started Free
-            </button>
-            <button
-              @click="handleLogin"
-              class="inline-flex items-center justify-center px-8 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium text-lg"
-            >
-              Sign In
-            </button>
+              <!-- CTA Buttons - Horizontal on desktop -->
+              <div class="flex flex-wrap gap-4 mb-10">
+                <button
+                  @click="handleSignUp"
+                  class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-lg"
+                >
+                  Get Started
+                </button>
+                <button
+                  @click="handleLogin"
+                  class="inline-flex items-center justify-center px-6 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
+                >
+                  Sign In
+                </button>
+                <router-link
+                  to="/docs"
+                  class="inline-flex items-center justify-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                >
+                  <BookOpenIcon class="w-5 h-5 mr-2" />
+                  See How It Works
+                </router-link>
+              </div>
+            </div>
+
+            <!-- Features Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+              <div class="flex items-start space-x-3">
+                <DocumentTextIcon class="w-6 h-6 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">Organize Your Writing</h3>
+                  <p class="text-gray-600 dark:text-gray-300 text-sm">Keep books and chapters organized. Track word counts.</p>
+                </div>
+              </div>
+              <div class="flex items-start space-x-3">
+                <SparklesIcon class="w-6 h-6 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">AI-Powered Reviews</h3>
+                  <p class="text-gray-600 dark:text-gray-300 text-sm">Get contextual feedback that knows your entire story.</p>
+                </div>
+              </div>
+              <div class="flex items-start space-x-3">
+                <ChatBubbleLeftRightIcon class="w-6 h-6 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">Character & World Building</h3>
+                  <p class="text-gray-600 dark:text-gray-300 text-sm">Build wikis for characters, locations, and concepts.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- How It Works Section -->
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-8">
+              <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Quick Overview</h2>
+                <router-link
+                  to="/docs"
+                  class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium text-sm flex items-center"
+                >
+                  View Full Tutorial with Screenshots
+                  <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </router-link>
+              </div>
+
+              <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
+                  <div class="flex items-start space-x-2">
+                    <span class="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                    <div>
+                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Create Book</h3>
+                      <p class="text-xs text-gray-600 dark:text-gray-300">Start your project</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
+                  <div class="flex items-start space-x-2">
+                    <span class="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                    <div>
+                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Write</h3>
+                      <p class="text-xs text-gray-600 dark:text-gray-300">Add chapters</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
+                  <div class="flex items-start space-x-2">
+                    <span class="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                    <div>
+                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Summarize</h3>
+                      <p class="text-xs text-gray-600 dark:text-gray-300">AI tracks story</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 border border-indigo-200 dark:border-indigo-700">
+                  <div class="flex items-start space-x-2">
+                    <span class="flex-shrink-0 w-5 h-5 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
+                    <div>
+                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">✨ Review</h3>
+                      <p class="text-xs text-gray-600 dark:text-gray-300">Get feedback</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                The AI automatically understands your entire story through chapter summaries - no need to explain backstory!
+                <router-link to="/docs" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 ml-1">See it in action →</router-link>
+              </p>
+
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p class="font-semibold text-gray-900 dark:text-white mb-2">Core Features:</p>
+                  <ul class="text-gray-600 dark:text-gray-300 space-y-1">
+                    <li class="flex items-center"><span class="mr-2">•</span>Rich markdown editor</li>
+                    <li class="flex items-center"><span class="mr-2">•</span>Multiple review styles</li>
+                    <li class="flex items-center"><span class="mr-2">•</span>Chapter organization</li>
+                  </ul>
+                </div>
+                <div>
+                  <p class="font-semibold text-gray-900 dark:text-white mb-2">Advanced Tools:</p>
+                  <ul class="text-gray-600 dark:text-gray-300 space-y-1">
+                    <li class="flex items-center"><span class="mr-2">•</span>Custom AI profiles</li>
+                    <li class="flex items-center"><span class="mr-2">•</span>Character wikis</li>
+                    <li class="flex items-center"><span class="mr-2">•</span>Search & replace</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Features List -->
-          <div class="space-y-6">
-            <div class="flex items-start space-x-4">
-              <DocumentTextIcon class="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 class="font-semibold text-gray-900 dark:text-white mb-1">Organize Your Writing</h3>
-                <p class="text-gray-600 dark:text-gray-300">Keep your books and chapters organized. Track word counts and manage drafts.</p>
-              </div>
-            </div>
-            <div class="flex items-start space-x-4">
-              <SparklesIcon class="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 class="font-semibold text-gray-900 dark:text-white mb-1">AI-Powered Reviews</h3>
-                <p class="text-gray-600 dark:text-gray-300">Get contextual feedback that considers your entire story and characters.</p>
-              </div>
-            </div>
-            <div class="flex items-start space-x-4">
-              <ChatBubbleLeftRightIcon class="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 class="font-semibold text-gray-900 dark:text-white mb-1">Character & World Building</h3>
-                <p class="text-gray-600 dark:text-gray-300">Build comprehensive wikis for your characters, locations, and concepts.</p>
-              </div>
-            </div>
+          <!-- Attribution Footer -->
+          <div class="absolute bottom-4 right-4 text-xs text-gray-500 dark:text-gray-400">
+            Illustration by <a href="https://unsplash.com/@artattackzone?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Art Attack</a>
           </div>
-
-          <!-- How It Works Section - Desktop -->
-          <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
-            <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">How It Works</h2>
-
-            <div class="space-y-3">
-              <!-- Steps 1-4 in a grid -->
-              <div class="grid grid-cols-2 gap-3">
-                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
-                  <div class="flex items-start space-x-2">
-                    <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                    <div>
-                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Create Your Book</h3>
-                      <p class="text-xs text-gray-600 dark:text-gray-300">Start a new project</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
-                  <div class="flex items-start space-x-2">
-                    <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                    <div>
-                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Write Chapters</h3>
-                      <p class="text-xs text-gray-600 dark:text-gray-300">Use markdown editor</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
-                  <div class="flex items-start space-x-2">
-                    <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                    <div>
-                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Generate Summaries</h3>
-                      <p class="text-xs text-gray-600 dark:text-gray-300">AI tracks your story</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
-                  <div class="flex items-start space-x-2">
-                    <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
-                    <div>
-                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Continue Writing</h3>
-                      <p class="text-xs text-gray-600 dark:text-gray-300">Build your story</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Step 5 - The Magic -->
-              <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 border border-indigo-200 dark:border-indigo-700">
-                <div class="flex items-start space-x-2">
-                  <span class="flex-shrink-0 w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold">5</span>
-                  <div>
-                    <h3 class="font-semibold text-sm text-gray-900 dark:text-white">✨ Get Contextual Reviews</h3>
-                    <p class="text-xs text-gray-600 dark:text-gray-300">The AI knows your entire story through summaries - no explanations needed!</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Advanced Features -->
-              <div class="text-xs text-gray-600 dark:text-gray-300 mt-4">
-                <p class="font-semibold mb-2">Plus advanced features:</p>
-                <ul class="space-y-1">
-                  <li>• Custom AI reviewer profiles</li>
-                  <li>• Character wikis & world-building</li>
-                  <li>• Search & replace across chapters</li>
-                  <li>• Parts organization</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Attribution Footer -->
-        <div class="absolute bottom-4 right-4 text-xs text-gray-500 dark:text-gray-400">
-          Illustration by <a href="https://unsplash.com/@artattackzone?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Art Attack</a> on <a href="https://unsplash.com/illustrations/a-cup-of-coffee-and-a-book-on-a-table-RpSTMkZGKyE?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Unsplash</a>
         </div>
       </div>
     </div>
-  </div>
+
 </template>
 
 <style scoped>

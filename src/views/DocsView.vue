@@ -1,0 +1,295 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
+
+interface Section {
+  id: string
+  title: string
+  description: string
+  screenshots: {
+    src: string
+    alt: string
+    caption: string
+  }[]
+}
+
+const sections = ref<Section[]>([
+  {
+    id: 'summaries',
+    title: 'AI Summary Generation',
+    description: 'Generate structured summaries that track characters, plot points, and key events for each chapter. These summaries provide crucial context for AI reviews.',
+    screenshots: [
+      {
+        src: '/screenshots/summary-being-generated.png',
+        alt: 'Summary being generated',
+        caption: 'Click the generate summary button to create structured summaries that track characters, plot points, and key events for each chapter.'
+      }
+    ]
+  },
+  {
+    id: 'summary-management',
+    title: 'Summary Management',
+    description: 'Manually edit or regenerate summaries to ensure they accurately capture the important details that will provide context for AI reviews.',
+    screenshots: [
+      {
+        src: '/screenshots/manually-edit-summary.png',
+        alt: 'Manually edit summary',
+        caption: 'You can manually edit summaries to ensure accuracy.'
+      },
+      {
+        src: '/screenshots/regenerate-summary-button.png',
+        alt: 'Regenerate summary button',
+        caption: 'Regenerate summaries with a single click if needed.'
+      }
+    ]
+  },
+  {
+    id: 'review-transparency',
+    title: 'AI Review Transparency',
+    description: 'See exactly what summaries are being sent to the AI as context, giving you full transparency into the review process.',
+    screenshots: [
+      {
+        src: '/screenshots/review-summaries-in-prompt-to-see-if-summaries-need-editing.png',
+        alt: 'Review summaries in prompt',
+        caption: 'The app shows you exactly what summaries are being sent to the AI as context, giving you full transparency into the review process.'
+      }
+    ]
+  },
+  {
+    id: 'contextual-feedback',
+    title: 'Contextual AI Feedback',
+    description: 'Get intelligent feedback that understands your story\'s continuity and can catch inconsistencies across chapters.',
+    screenshots: [
+      {
+        src: '/screenshots/example-of-feedback-on-consistency-with-other-chapters.png',
+        alt: 'Feedback on consistency',
+        caption: 'Get intelligent feedback that understands your story\'s continuity and can catch inconsistencies across chapters.'
+      }
+    ]
+  },
+  {
+    id: 'custom-profiles',
+    title: 'Custom AI Profiles',
+    description: 'Create personalized reviewer profiles with custom prompts to get the exact type of feedback you need.',
+    screenshots: [
+      {
+        src: '/screenshots/custom-ai-profile-creation.png',
+        alt: 'Custom AI profile creation',
+        caption: 'Create personalized reviewer profiles with custom prompts.'
+      },
+      {
+        src: '/screenshots/custom-ai-profile-in-user-settings.png',
+        alt: 'Custom AI profile in settings',
+        caption: 'Manage your custom AI profiles in user settings.'
+      },
+      {
+        src: '/screenshots/getting-feedback-from-custom-ai-profile.png',
+        alt: 'Getting feedback from custom profile',
+        caption: 'Select your custom profile when generating reviews.'
+      },
+      {
+        src: '/screenshots/feedback-by-ai-profile.png',
+        alt: 'Feedback organized by AI profile',
+        caption: 'View feedback organized by different AI profiles.'
+      }
+    ]
+  },
+  {
+    id: 'character-wiki',
+    title: 'Character Wiki System',
+    description: 'Automatically generated character sheets that track relationships and development, with full edit history.',
+    screenshots: [
+      {
+        src: '/screenshots/auto-generated-character-sheet-with-change-history.png',
+        alt: 'Auto-generated character sheet',
+        caption: 'Auto-generated character sheets with change history track your characters\' development and relationships throughout your story.'
+      }
+    ]
+  },
+  {
+    id: 'search-replace',
+    title: 'Search and Replace for Continuity',
+    description: 'Find and replace text across all chapters and wiki pages to maintain consistency throughout your manuscript.',
+    screenshots: [
+      {
+        src: '/screenshots/find-and-replace-for-continuity-fixes.png',
+        alt: 'Find and replace',
+        caption: 'Find and replace text across all chapters to maintain consistency throughout your manuscript.'
+      }
+    ]
+  }
+])
+
+const currentSectionIndex = ref(0)
+const currentSection = ref(sections.value[0])
+
+const nextSection = () => {
+  if (currentSectionIndex.value < sections.value.length - 1) {
+    currentSectionIndex.value++
+    currentSection.value = sections.value[currentSectionIndex.value]
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+const prevSection = () => {
+  if (currentSectionIndex.value > 0) {
+    currentSectionIndex.value--
+    currentSection.value = sections.value[currentSectionIndex.value]
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+const goToSection = (index: number) => {
+  currentSectionIndex.value = index
+  currentSection.value = sections.value[index]
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+</script>
+
+<template>
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div class="container mx-auto px-4 py-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">How Beta Bot Works</h1>
+            <p class="mt-2 text-gray-600 dark:text-gray-300">
+              A visual guide to using AI-powered feedback for your creative writing
+            </p>
+          </div>
+          <router-link
+            to="/"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Back to Home
+          </router-link>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div class="container mx-auto px-4 py-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm text-gray-600 dark:text-gray-400">
+            Section {{ currentSectionIndex + 1 }} of {{ sections.length }}
+          </span>
+          <span class="text-sm font-medium text-gray-900 dark:text-white">
+            {{ currentSection.title }}
+          </span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+          <div
+            class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+            :style="{ width: `${((currentSectionIndex + 1) / sections.length) * 100}%` }"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
+      <div class="container mx-auto px-4">
+        <div class="flex overflow-x-auto py-3 space-x-4">
+          <button
+            v-for="(section, index) in sections"
+            :key="section.id"
+            @click="goToSection(index)"
+            :class="[
+              'px-4 py-2 rounded-lg whitespace-nowrap transition-colors',
+              currentSectionIndex === index
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            ]"
+          >
+            {{ section.title }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8">
+      <div class="max-w-6xl mx-auto">
+        <!-- Section Header -->
+        <div class="mb-8">
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+            {{ currentSection.title }}
+          </h2>
+          <p class="text-lg text-gray-600 dark:text-gray-300">
+            {{ currentSection.description }}
+          </p>
+        </div>
+
+        <!-- Screenshots -->
+        <div class="space-y-8">
+          <div
+            v-for="(screenshot, index) in currentSection.screenshots"
+            :key="index"
+            class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden"
+          >
+            <div class="p-4">
+              <p class="text-gray-700 dark:text-gray-300 mb-4">
+                {{ screenshot.caption }}
+              </p>
+            </div>
+            <div class="relative">
+              <img
+                :src="screenshot.src"
+                :alt="screenshot.alt"
+                class="w-full h-auto"
+                loading="lazy"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="flex justify-between items-center mt-12 pb-8">
+          <button
+            @click="prevSection"
+            :disabled="currentSectionIndex === 0"
+            :class="[
+              'flex items-center px-6 py-3 rounded-lg transition-colors',
+              currentSectionIndex === 0
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600'
+            ]"
+          >
+            <ChevronLeftIcon class="w-5 h-5 mr-2" />
+            Previous
+          </button>
+
+          <div class="flex space-x-2">
+            <button
+              v-for="(_, index) in sections"
+              :key="index"
+              @click="goToSection(index)"
+              :class="[
+                'w-2 h-2 rounded-full transition-colors',
+                currentSectionIndex === index
+                  ? 'bg-blue-600'
+                  : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
+              ]"
+            ></button>
+          </div>
+
+          <button
+            @click="nextSection"
+            :disabled="currentSectionIndex === sections.length - 1"
+            :class="[
+              'flex items-center px-6 py-3 rounded-lg transition-colors',
+              currentSectionIndex === sections.length - 1
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            ]"
+          >
+            Next
+            <ChevronRightIcon class="w-5 h-5 ml-2" />
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
