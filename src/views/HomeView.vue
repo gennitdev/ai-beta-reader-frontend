@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { useRouter } from 'vue-router'
 import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, PencilIcon, LightBulbIcon, UserGroupIcon, CogIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
+import heroImage from '/art-attack-RpSTMkZGKyE-unsplash.jpg'
 
 const { isAuthenticated, loginWithRedirect } = useAuth0()
 const router = useRouter()
@@ -34,7 +35,7 @@ if (isAuthenticated.value) {
       <!-- Hero Image at top on mobile -->
       <div class="h-64 sm:h-80 overflow-hidden">
         <img
-          src="/art-attack-RpSTMkZGKyE-unsplash.jpg"
+          :src="heroImage"
           alt="Creative writing inspiration"
           class="w-full h-full object-cover"
         />
@@ -216,7 +217,7 @@ if (isAuthenticated.value) {
       <!-- Left Image - 1/3 width -->
       <div class="w-1/3 relative overflow-hidden">
         <img
-          src="/art-attack-RpSTMkZGKyE-unsplash.jpg"
+          :src="heroImage"
           alt="Creative writing inspiration"
           class="w-full h-full object-cover"
         />

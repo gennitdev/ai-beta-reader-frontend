@@ -433,8 +433,8 @@ const onSidebarChapterMove = async (event: { added?: { element: Chapter; newInde
 // Update draggable chapters when chapters change
 watch(chapters, (newChapters) => {
   draggableChapters.value = [...newChapters].sort((a, b) => {
-    const aPartPos = a.part_position ?? 999999
-    const bPartPos = b.part_position ?? 999999
+    const aPartPos = a.position_in_part ?? 999999
+    const bPartPos = b.position_in_part ?? 999999
     if (aPartPos !== bPartPos) {
       return aPartPos - bPartPos
     }
@@ -484,8 +484,13 @@ const saveSidebarChapterOrder = async () => {
     await bookService.reorderChapters(bookId, chapterOrder, partUpdates)
 
     console.log('Saved sidebar chapter order with arrays:', { chapterOrder, partUpdates })
+
+    // Reload to ensure UI reflects the saved state
+    await loadBook()
   } catch (error) {
     console.error('Failed to save sidebar chapter order:', error)
+    // Reload on error to revert UI to correct state
+    await loadBook()
   }
 }
 
