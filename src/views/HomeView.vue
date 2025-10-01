@@ -45,7 +45,7 @@ if (isAuthenticated.value) {
       <div class="px-4 sm:px-6 py-12 pb-20 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative">
         <div class="max-w-xl mx-auto text-center">
           <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-6 space-grotesk-logo">
-            Beta Bot
+            Beta-bot
           </h1>
           <p class="text-lg text-gray-600 dark:text-gray-300 mb-8">
             Your AI Beta Reader. Get intelligent feedback on your creative writing. Organize your manuscripts and receive AI-powered reviews.
@@ -230,7 +230,7 @@ if (isAuthenticated.value) {
             <!-- Hero Section -->
             <div class="mb-8">
               <h1 class="text-4xl lg:text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight space-grotesk-logo">
-                Beta Bot
+                Beta-bot
               </h1>
               <p class="text-lg lg:text-xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
                 Your AI Beta Reader. Get intelligent feedback on your creative writing. Organize your manuscripts, track your progress, and receive AI-powered reviews that understand your story's context.

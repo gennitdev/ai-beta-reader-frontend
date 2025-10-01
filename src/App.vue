@@ -27,7 +27,7 @@ const handleLogout = () => {
           <!-- Logo -->
           <div class="flex items-center">
             <router-link :to="isAuthenticated ? '/books' : '/'" class="flex items-center">
-              <h1 class="text-2xl font-bold text-gray-900 dark:text-white space-grotesk-logo">Beta Bot</h1>
+              <h1 class="text-2xl font-bold text-gray-900 dark:text-white space-grotesk-logo">Beta-bot</h1>
             </router-link>
           </div>
 

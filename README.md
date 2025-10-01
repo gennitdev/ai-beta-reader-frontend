@@ -93,7 +93,7 @@ Find and replace text across all chapters and wiki pages to maintain consistency
 
 ![Find and Replace for Continuity Fixes](./src/assets/screenshots/find-and-replace-for-continuity-fixes.png)
 
-## Prerequisites for Self Hosting Beta Bot
+## Prerequisites for Self Hosting Beta-bot
 
 - Node.js 18+
 - Auth0 account configured
