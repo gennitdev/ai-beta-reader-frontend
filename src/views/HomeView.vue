@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { useRouter } from 'vue-router'
 import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, PencilIcon, LightBulbIcon, UserGroupIcon, CogIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
-import heroImage from '/art-attack-RpSTMkZGKyE-unsplash.jpg'
+import heroImage from '@/assets/art-attack-RpSTMkZGKyE-unsplash.jpg'
 
 const { isAuthenticated, loginWithRedirect } = useAuth0()
 const router = useRouter()
