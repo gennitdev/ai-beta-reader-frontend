@@ -1,5 +1,5 @@
 import { ref, onMounted } from 'vue'
-import { db, type Book, type Chapter } from '@/lib/database'
+import { db, type Book, type Chapter, type ChapterSummary, type ChapterReview } from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 
 const isInitialized = ref(false)
@@ -153,6 +153,77 @@ export function useDatabase() {
     }
   }
 
+  // Summary operations
+  async function saveSummary(summary: {
+    chapter_id: string;
+    summary: string;
+    pov: string | null;
+    characters: string[];
+    beats: string[];
+    spoilers_ok: boolean;
+  }) {
+    try {
+      await initializeDatabase()
+      await db.saveSummary(summary)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to save summary'
+      console.error('Save summary error:', e)
+      throw e
+    }
+  }
+
+  async function getSummary(chapterId: string): Promise<ChapterSummary | null> {
+    try {
+      await initializeDatabase()
+      return await db.getSummary(chapterId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get summary'
+      console.error('Get summary error:', e)
+      return null
+    }
+  }
+
+  // Review operations
+  async function saveReview(review: {
+    chapter_id: string;
+    review_text: string;
+    prompt_used: string | null;
+    profile_id: number | null;
+    profile_name: string | null;
+    tone_key: string | null;
+  }) {
+    try {
+      await initializeDatabase()
+      await db.saveReview(review)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to save review'
+      console.error('Save review error:', e)
+      throw e
+    }
+  }
+
+  async function getReviews(chapterId: string): Promise<ChapterReview[]> {
+    try {
+      await initializeDatabase()
+      return await db.getReviews(chapterId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get reviews'
+      console.error('Get reviews error:', e)
+      return []
+    }
+  }
+
+  async function deleteReview(reviewId: string) {
+    try {
+      await initializeDatabase()
+      await db.deleteReview(reviewId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete review'
+      console.error('Delete review error:', e)
+      throw e
+    }
+  }
+
   return {
     // State
     books,
@@ -168,6 +239,15 @@ export function useDatabase() {
     // Chapter operations
     loadChapters,
     saveChapter,
+
+    // Summary operations
+    saveSummary,
+    getSummary,
+
+    // Review operations
+    saveReview,
+    getReviews,
+    deleteReview,
 
     // Cloud sync
     backupToCloud,

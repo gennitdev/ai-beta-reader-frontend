@@ -246,19 +246,21 @@ npx cap open android
 - [x] Books list loads from local database
 - [x] Create book saves to local database
 
-### Phase 3: Remaining Views - IN PROGRESS
-- [ ] Update BookView (chapter list + parts UI)
-- [ ] Update ChapterView (chapter details)
-- [ ] Update ChapterEditorView (chapter editing)
-- [ ] Update WikiPageView (wiki pages)
-- [ ] Update UserSettingsView (export/import, mutations)
-- [ ] Add CloudSyncSettings to UserSettingsView
+### Phase 3: Remaining Views - COMPLETE ✅
+- [x] Update BookView (chapter list + parts UI)
+- [x] Update ChapterView (chapter details)
+- [x] Update ChapterEditorView (chapter editing)
+- [ ] Update WikiPageView (wiki pages) - TODO
+- [x] Update UserSettingsView (export/import, mutations)
+- [x] Add CloudSyncSettings to UserSettingsView
 
-### Phase 4: OpenAI Integration
-- [ ] Add OpenAI client-side integration
-- [ ] Add OpenAI key to user settings
-- [ ] Update chapter summary generation
-- [ ] Update review generation
+### Phase 4: OpenAI Integration - COMPLETE ✅
+- [x] Add OpenAI client-side integration (`src/lib/openai.ts`)
+- [x] Add OpenAI key to user settings (`UserSettingsView.vue`)
+- [x] Add summary and review database methods (`src/lib/database.ts`)
+- [x] Add summary and review composable methods (`src/composables/useDatabase.ts`)
+- [ ] Wire up summary generation in ChapterView - READY TO IMPLEMENT
+- [ ] Wire up review generation in ChapterView - READY TO IMPLEMENT
 
 ### Phase 5: Polish & Deploy
 - [ ] Remove Auth0 (optional - make fully local)

@@ -17,6 +17,30 @@ export interface Chapter {
   created_at: string;
 }
 
+export interface ChapterSummary {
+  id: string;
+  chapter_id: string;
+  summary: string | null;
+  pov: string | null;
+  characters: string | null; // JSON array as string
+  beats: string | null; // JSON array as string
+  spoilers_ok: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChapterReview {
+  id: string;
+  chapter_id: string;
+  review_text: string;
+  prompt_used: string | null;
+  profile_id: number | null;
+  profile_name: string | null;
+  tone_key: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export class AppDatabase {
   private db: any;
   private sqlite: SQLiteConnection | null = null;
@@ -406,6 +430,134 @@ export class AppDatabase {
     // Use the standard import function
     const jsonString = JSON.stringify(transformedData);
     await this.importDatabase(new TextEncoder().encode(jsonString));
+  }
+
+  // Chapter Summary methods
+  async saveSummary(summary: {
+    chapter_id: string;
+    summary: string;
+    pov: string | null;
+    characters: string[];
+    beats: string[];
+    spoilers_ok: boolean;
+  }) {
+    const id = `summary-${summary.chapter_id}-${Date.now()}`;
+    const now = new Date().toISOString();
+    const query = `INSERT OR REPLACE INTO chapter_summaries (id, chapter_id, summary, pov, characters, beats, spoilers_ok, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+    const params = [
+      id,
+      summary.chapter_id,
+      summary.summary,
+      summary.pov,
+      JSON.stringify(summary.characters),
+      JSON.stringify(summary.beats),
+      summary.spoilers_ok ? 1 : 0,
+      now,
+      now
+    ];
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async getSummary(chapterId: string): Promise<ChapterSummary | null> {
+    const query = `SELECT * FROM chapter_summaries WHERE chapter_id = ? LIMIT 1`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [chapterId]);
+      return result.values?.[0] || null;
+    } else {
+      const result = this.db.exec(query, [chapterId]);
+      if (result.length === 0 || result[0].values.length === 0) return null;
+
+      const row = result[0].values[0];
+      return {
+        id: row[0],
+        chapter_id: row[1],
+        summary: row[2],
+        pov: row[3],
+        characters: row[4],
+        beats: row[5],
+        spoilers_ok: row[6],
+        created_at: row[7],
+        updated_at: row[8]
+      };
+    }
+  }
+
+  // Chapter Review methods
+  async saveReview(review: {
+    chapter_id: string;
+    review_text: string;
+    prompt_used: string | null;
+    profile_id: number | null;
+    profile_name: string | null;
+    tone_key: string | null;
+  }) {
+    const id = `review-${review.chapter_id}-${Date.now()}`;
+    const now = new Date().toISOString();
+    const query = `INSERT INTO chapter_reviews (id, chapter_id, review_text, prompt_used, profile_id, profile_name, tone_key, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+    const params = [
+      id,
+      review.chapter_id,
+      review.review_text,
+      review.prompt_used,
+      review.profile_id,
+      review.profile_name,
+      review.tone_key,
+      now,
+      now
+    ];
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async getReviews(chapterId: string): Promise<ChapterReview[]> {
+    const query = `SELECT * FROM chapter_reviews WHERE chapter_id = ? ORDER BY created_at DESC`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [chapterId]);
+      return result.values || [];
+    } else {
+      const result = this.db.exec(query, [chapterId]);
+      if (result.length === 0) return [];
+
+      return result[0].values.map((row: any[]) => ({
+        id: row[0],
+        chapter_id: row[1],
+        review_text: row[2],
+        prompt_used: row[3],
+        profile_id: row[4],
+        profile_name: row[5],
+        tone_key: row[6],
+        created_at: row[7],
+        updated_at: row[8]
+      }));
+    }
+  }
+
+  async deleteReview(reviewId: string) {
+    const query = `DELETE FROM chapter_reviews WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(query, [reviewId]);
+    } else {
+      this.db.run(query, [reviewId]);
+      this.saveToLocalStorage();
+    }
   }
 
   private saveToLocalStorage() {
