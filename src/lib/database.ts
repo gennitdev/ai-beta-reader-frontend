@@ -86,6 +86,7 @@ export class AppDatabase {
     }
 
     await this.createTables();
+    await this.runMigrations();
   }
 
   private async createTables() {
@@ -215,6 +216,35 @@ export class AppDatabase {
       await this.db.execute(schema);
     } else {
       this.db.run(schema);
+      this.saveToLocalStorage();
+    }
+  }
+
+  private async runMigrations() {
+    // Add missing columns to existing tables
+    const migrations = [
+      // Add chapter_order to books if not exists
+      `ALTER TABLE books ADD COLUMN chapter_order TEXT DEFAULT '[]'`,
+      // Add part_id to chapters if not exists
+      `ALTER TABLE chapters ADD COLUMN part_id TEXT`,
+      // Add chapter_order to book_parts if not exists
+      `ALTER TABLE book_parts ADD COLUMN chapter_order TEXT DEFAULT '[]'`
+    ];
+
+    for (const migration of migrations) {
+      try {
+        if (this.isNative) {
+          await this.db.execute(migration);
+        } else {
+          this.db.run(migration);
+        }
+      } catch (e) {
+        // Column already exists, ignore error
+        // SQLite throws error if column exists, which is expected
+      }
+    }
+
+    if (!this.isNative) {
       this.saveToLocalStorage();
     }
   }
