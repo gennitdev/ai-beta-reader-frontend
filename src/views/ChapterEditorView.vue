@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createChapterService } from '@/services/api'
+import { useDatabase } from '@/composables/useDatabase'
 import TextEditor from '@/components/TextEditor.vue'
 import { ArrowLeftIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 
@@ -12,15 +12,8 @@ const bookId = route.params.bookId as string
 const chapterId = route.params.chapterId as string
 const isEditing = !!chapterId
 
-// Create service (no auth needed for local-first)
-const chapterService = createChapterService(async () => {
-  try {
-    return undefined
-  } catch (error) {
-    console.warn('Failed to get access token:', error)
-    return undefined
-  }
-})
+// Use local database
+const { chapters, loadChapters, saveChapter: dbSaveChapter } = useDatabase()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -35,11 +28,21 @@ const loadChapter = async () => {
 
   loading.value = true
   try {
-    const chapterData = await chapterService.getChapter(chapterId)
-    chapter.value = {
-      id: chapterData.id,
-      title: chapterData.title || '',
-      text: chapterData.text
+    // Load chapters from database
+    await loadChapters(bookId)
+
+    // Find the chapter being edited
+    const chapterData = chapters.value.find((ch: any) => ch.id === chapterId)
+
+    if (chapterData) {
+      chapter.value = {
+        id: chapterData.id,
+        title: chapterData.title || '',
+        text: chapterData.text
+      }
+    } else {
+      console.error('Chapter not found')
+      router.push(`/books/${bookId}`)
     }
   } catch (error) {
     console.error('Failed to load chapter:', error)
@@ -66,11 +69,17 @@ const saveChapter = async () => {
 
   saving.value = true
   try {
-    await chapterService.createChapter({
+    // Calculate word count
+    const wordCount = chapter.value.text.trim().split(/\s+/).length
+
+    // Save to local database
+    await dbSaveChapter({
       id: chapter.value.id,
-      bookId: bookId,
+      book_id: bookId,
       title: chapter.value.title,
-      text: chapter.value.text
+      text: chapter.value.text,
+      word_count: wordCount,
+      created_at: new Date().toISOString()
     })
 
     // Navigate back to book view
