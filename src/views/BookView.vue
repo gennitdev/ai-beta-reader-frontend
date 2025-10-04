@@ -46,7 +46,7 @@ const router = useRouter()
 const bookId = route.params.id as string
 
 // Use local database
-const { books, loadBooks } = useDatabase()
+const { books, chapters: dbChapters, loadBooks, loadChapters } = useDatabase()
 
 const book = ref<{ id: string; title: string } | null>(null)
 const chapters = ref<Chapter[]>([])
@@ -174,9 +174,23 @@ const loadBook = async () => {
       return
     }
 
-    // TODO: Load chapters from local database when implemented
-    // For now, chapters and parts are empty arrays
-    chapters.value = []
+    // Load chapters from local database
+    await loadChapters(bookId)
+
+    // Map database chapters to BookView chapter format
+    chapters.value = dbChapters.value.map((ch: any, index: number) => ({
+      id: ch.id,
+      title: ch.title,
+      word_count: ch.word_count || 0,
+      has_summary: false, // TODO: Implement summaries
+      summary: null,
+      position: index,
+      position_in_part: null,
+      part_id: null,
+      part_name: null
+    }))
+
+    // TODO: Implement parts when needed
     parts.value = []
   } catch (error) {
     console.error('Failed to load book:', error)
