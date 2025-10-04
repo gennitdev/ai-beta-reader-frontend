@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
 import { createBookService, createChapterService, createWikiService } from '@/services/api'
 import JSZip from 'jszip'
 import { PlusIcon, PencilIcon, TrashIcon, ArrowLeftIcon, DocumentArrowDownIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
-const { getAccessTokenSilently } = useAuth0()
 
 interface CustomReviewerProfile {
   id: number
@@ -36,24 +34,10 @@ const formData = ref({
 // API functions
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
 
-const getAuthToken = async () => {
-  try {
-    return await getAccessTokenSilently()
-  } catch (error) {
-    console.warn('Failed to get access token:', error)
-    return ''
-  }
-}
+const getAuthToken = async () => undefined
 
-// Create authenticated services
-const getToken = async () => {
-  try {
-    return await getAccessTokenSilently()
-  } catch (error) {
-    console.warn('Failed to get access token:', error)
-    return undefined
-  }
-}
+// Create services (no auth needed for local-first)
+const getToken = async () => undefined
 
 const bookService = createBookService(getToken)
 const chapterService = createChapterService(getToken)

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
 import { createChapterService, createReviewService, createBookService } from '@/services/api'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -58,17 +57,15 @@ interface CustomReviewerProfile {
 
 const route = useRoute()
 const router = useRouter()
-const { getAccessTokenSilently } = useAuth0()
 
 // Computed route parameters to handle both nested and standalone routes
 const bookId = computed(() => (route.params.bookId || route.params.id) as string)
 const chapterId = computed(() => route.params.chapterId as string)
 
-// Create authenticated services
+// Create services (no auth needed for local-first)
 const getToken = async () => {
   try {
-    // Request token with client ID as audience (for UI-based authentication)
-    return await getAccessTokenSilently()
+    return undefined
   } catch (error) {
     console.warn('Failed to get access token:', error)
     return undefined

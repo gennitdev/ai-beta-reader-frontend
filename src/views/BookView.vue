@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
 import { createBookService, createWikiService, createSearchService } from '@/services/api'
 import { PlusIcon, DocumentTextIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
@@ -44,7 +43,6 @@ interface WikiPage {
 
 const route = useRoute()
 const router = useRouter()
-const { getAccessTokenSilently } = useAuth0()
 const bookId = route.params.id as string
 
 const book = ref<{ id: string; title: string } | null>(null)
@@ -64,16 +62,8 @@ const creatingPart = ref(false)
 const creatingPartLoading = ref(false)
 const newPartName = ref('')
 
-// Create authenticated services
-const getToken = async () => {
-  try {
-    // Request token with client ID as audience (for UI-based authentication)
-    return await getAccessTokenSilently()
-  } catch (error) {
-    console.warn('Failed to get access token:', error)
-    return undefined
-  }
-}
+// Create services (no auth needed for local-first)
+const getToken = async () => undefined
 
 const bookService = createBookService(getToken)
 const wikiService = createWikiService(getToken)

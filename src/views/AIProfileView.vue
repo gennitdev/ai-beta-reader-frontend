@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
 import { createAIProfileService } from '@/services/api'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AvatarComponent from '@/components/AvatarComponent.vue'
@@ -42,15 +41,14 @@ interface ProfileData {
 
 const route = useRoute()
 const router = useRouter()
-const { getAccessTokenSilently } = useAuth0()
 
 // Computed route parameters
 const profileId = computed(() => route.params.id as string)
 
-// Create authenticated service
+// Create service (no auth needed for local-first)
 const getToken = async () => {
   try {
-    return await getAccessTokenSilently()
+    return undefined
   } catch (error) {
     console.warn('Failed to get access token:', error)
     return undefined

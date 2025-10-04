@@ -1,29 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useAuth0 } from '@auth0/auth0-vue'
 import { useRouter } from 'vue-router'
 import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, PencilIcon, LightBulbIcon, UserGroupIcon, CogIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
 import heroImage from '@/assets/art-attack-RpSTMkZGKyE-unsplash.jpg'
 
-const { isAuthenticated, loginWithRedirect } = useAuth0()
 const router = useRouter()
-
 const showHowItWorks = ref(false)
 
-const handleLogin = () => {
-  loginWithRedirect()
-}
-
-const handleSignUp = () => {
-  loginWithRedirect({
-    authorizationParams: {
-      screen_hint: 'signup'
-    }
-  })
-}
-
-// If already authenticated, redirect to books
-if (isAuthenticated.value) {
+const handleGetStarted = () => {
   router.push('/books')
 }
 </script>
@@ -62,16 +46,10 @@ if (isAuthenticated.value) {
           <!-- CTA Buttons -->
           <div class="flex flex-col gap-3 mb-12">
             <button
-              @click="handleSignUp"
+              @click="handleGetStarted"
               class="w-full inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-lg shadow-lg"
             >
               Get Started
-            </button>
-            <button
-              @click="handleLogin"
-              class="w-full inline-flex items-center justify-center px-6 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
-            >
-              Sign In
             </button>
             <router-link
               to="/docs"
@@ -255,16 +233,10 @@ if (isAuthenticated.value) {
               <!-- CTA Buttons - Horizontal on desktop -->
               <div class="flex flex-wrap gap-4 mb-10">
                 <button
-                  @click="handleSignUp"
+                  @click="handleGetStarted"
                   class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-lg"
                 >
                   Get Started
-                </button>
-                <button
-                  @click="handleLogin"
-                  class="inline-flex items-center justify-center px-6 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
-                >
-                  Sign In
                 </button>
                 <router-link
                   to="/docs"

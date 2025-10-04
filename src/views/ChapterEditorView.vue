@@ -1,23 +1,21 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
 import { createChapterService } from '@/services/api'
 import TextEditor from '@/components/TextEditor.vue'
 import { ArrowLeftIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
 const router = useRouter()
-const { getAccessTokenSilently } = useAuth0()
 
 const bookId = route.params.bookId as string
 const chapterId = route.params.chapterId as string
 const isEditing = !!chapterId
 
-// Create authenticated service
+// Create service (no auth needed for local-first)
 const chapterService = createChapterService(async () => {
   try {
-    return await getAccessTokenSilently()
+    return undefined
   } catch (error) {
     console.warn('Failed to get access token:', error)
     return undefined

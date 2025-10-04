@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
 import { createWikiService, createBookService } from '@/services/api'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import {
@@ -49,7 +48,6 @@ interface Character {
 
 const route = useRoute()
 const router = useRouter()
-const { getAccessTokenSilently } = useAuth0()
 
 // Computed route parameters to handle both nested and standalone routes
 const bookId = computed(() => (route.params.bookId || route.params.id) as string)
@@ -58,15 +56,8 @@ const wikiPageId = computed(() => route.params.wikiPageId as string)
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true)
 
-// Create authenticated service
-const getToken = async () => {
-  try {
-    return await getAccessTokenSilently()
-  } catch (error) {
-    console.warn('Failed to get access token:', error)
-    return undefined
-  }
-}
+// Create service (no auth needed for local-first)
+const getToken = async () => undefined
 
 const wikiService = createWikiService(getToken)
 const bookService = createBookService(getToken)
