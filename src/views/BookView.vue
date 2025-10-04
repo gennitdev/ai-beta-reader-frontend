@@ -180,8 +180,8 @@ const loadBook = async () => {
     // Map database chapters to BookView chapter format
     chapters.value = dbChapters.value.map((ch: any, index: number) => ({
       id: ch.id,
-      title: ch.title,
-      word_count: ch.word_count || 0,
+      title: ch.title || null,
+      word_count: Number(ch.word_count) || 0,
       has_summary: false, // TODO: Implement summaries
       summary: null,
       position: index,

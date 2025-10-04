@@ -63,7 +63,7 @@ const bookId = computed(() => (route.params.bookId || route.params.id) as string
 const chapterId = computed(() => route.params.chapterId as string)
 
 // Use local database
-const { chapters, loadChapters, saveChapter: dbSaveChapter } = useDatabase()
+const { books, chapters, loadBooks, loadChapters, saveChapter: dbSaveChapter } = useDatabase()
 
 const chapter = ref<Chapter | null>(null)
 const loading = ref(false)
@@ -95,22 +95,10 @@ const expandedPrompts = ref<Set<string>>(new Set())
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true)
 
-// Computed book title from localStorage
+// Computed book title from database
 const bookTitle = computed(() => {
-  try {
-    const savedBooks = localStorage.getItem('books')
-    if (savedBooks) {
-      const books = JSON.parse(savedBooks)
-      const book = books.find((b: any) => b.id === bookId.value)
-      if (book) {
-        return book.title
-      }
-    }
-    return bookId.value // Fallback to bookId
-  } catch (error) {
-    console.error('Failed to load book title:', error)
-    return bookId.value
-  }
+  const book = books.value.find((b: any) => b.id === bookId.value)
+  return book?.title || bookId.value
 })
 
 const hasUnsavedChanges = computed(() => {
@@ -126,7 +114,8 @@ const backButtonUrl = computed(() => bookUrl.value)
 const loadChapter = async () => {
   loading.value = true
   try {
-    // Load chapters from database
+    // Load books and chapters from database
+    await loadBooks()
     await loadChapters(bookId.value)
 
     // Find the current chapter
