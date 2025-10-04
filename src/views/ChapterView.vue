@@ -137,7 +137,7 @@ const loadChapter = async () => {
         id: chapterData.id,
         book_id: chapterData.book_id,
         title: chapterData.title || null,
-        text: chapterData.text,
+        text: String(chapterData.text || ''),
         word_count: chapterData.word_count,
         summary: null, // TODO: Implement summaries
         pov: null,
@@ -145,7 +145,7 @@ const loadChapter = async () => {
         beats: null,
         spoilers_ok: null
       }
-      editedText.value = chapterData.text
+      editedText.value = String(chapterData.text || '')
       editedTitle.value = chapterData.title || ''
     } else {
       console.error('Chapter not found')
@@ -284,7 +284,7 @@ const goBack = () => {
 
 // Text truncation helpers - more functional approach
 const getTruncatedText = (text: string, wordLimit: number = 120): { truncated: string; needsTruncation: boolean } => {
-  if (!text) return { truncated: '', needsTruncation: false }
+  if (!text || typeof text !== 'string') return { truncated: '', needsTruncation: false }
 
   const words = text.split(/(\s+)/)
   let wordCount = 0
