@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createBookService, createWikiService, createSearchService } from '@/services/api'
+import { useDatabase } from '@/composables/useDatabase'
 import { PlusIcon, DocumentTextIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import draggable from 'vuedraggable'
@@ -45,6 +45,9 @@ const route = useRoute()
 const router = useRouter()
 const bookId = route.params.id as string
 
+// Use local database
+const { books, loadBooks } = useDatabase()
+
 const book = ref<{ id: string; title: string } | null>(null)
 const chapters = ref<Chapter[]>([])
 const parts = ref<Part[]>([])
@@ -62,12 +65,25 @@ const creatingPart = ref(false)
 const creatingPartLoading = ref(false)
 const newPartName = ref('')
 
-// Create services (no auth needed for local-first)
-const getToken = async () => undefined
+// TODO: Implement these with local database
+const bookService = {
+  createBookPart: async (_bookId: string, _data: any): Promise<Part> => { throw new Error('Not implemented') },
+  updateBookPart: async (_bookId: string, _partId: string, _data: any): Promise<void> => { throw new Error('Not implemented') },
+  deleteBookPart: async (_bookId: string, _partId: string): Promise<void> => { throw new Error('Not implemented') },
+  reorderChapters: async (_bookId: string, _chapterOrder: any[], _partUpdates: any): Promise<void> => { throw new Error('Not implemented') }
+}
 
-const bookService = createBookService(getToken)
-const wikiService = createWikiService(getToken)
-const searchService = createSearchService(getToken)
+const searchService = {
+  searchBook: async (_bookId: string, _query: string): Promise<{ chapters: any[], wikiPages: any[] }> => {
+    return { chapters: [], wikiPages: [] }
+  },
+  replaceInChapter: async (_bookId: string, _chapterId: string, _searchText: string, _replaceText: string): Promise<any> => {
+    throw new Error('Not implemented')
+  },
+  replaceInWikiPage: async (_bookId: string, _wikiPageId: string, _searchText: string, _replaceText: string): Promise<any> => {
+    throw new Error('Not implemented')
+  }
+}
 
 // Drag and drop state
 const isDragging = ref(false)
@@ -145,37 +161,27 @@ const formatWordCount = (count: number) => {
 
 const loadBook = async () => {
   try {
-    // Load book info from localStorage
-    const savedBooks = localStorage.getItem('books')
-    if (savedBooks) {
-      const books = JSON.parse(savedBooks)
-      book.value = books.find((b: { id: string }) => b.id === bookId)
-    }
+    loading.value = true
+
+    // Load books from database
+    await loadBooks()
+
+    // Find the current book
+    book.value = books.value.find((b: any) => b.id === bookId) || null
 
     if (!book.value) {
       router.push('/books')
       return
     }
 
-    // Load chapters and parts
-    const [chaptersData, partsData] = await Promise.all([
-      bookService.getBookChapters(bookId),
-      bookService.getBookParts(bookId)
-    ])
-    chapters.value = chaptersData
-    parts.value = partsData
-
-    // Initialize expanded parts based on active chapter
-    const activeChapterId = route.params.chapterId
-    if (activeChapterId) {
-      parts.value.forEach(part => {
-        if (shouldExpandPart(part.id)) {
-          expandedParts.value.add(part.id)
-        }
-      })
-    }
+    // TODO: Load chapters from local database when implemented
+    // For now, chapters and parts are empty arrays
+    chapters.value = []
+    parts.value = []
   } catch (error) {
     console.error('Failed to load book:', error)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -487,17 +493,8 @@ const saveSidebarChapterOrder = async () => {
 
 
 const loadWiki = async () => {
-  if (!book.value) return
-
-  loadingWiki.value = true
-  try {
-    const wikiData = await wikiService.getBookWiki(book.value.id)
-    wikiPages.value = wikiData
-  } catch (error) {
-    console.error('Failed to load wiki:', error)
-  } finally {
-    loadingWiki.value = false
-  }
+  // TODO: Load wiki pages from local database when implemented
+  wikiPages.value = []
 }
 
 const wikiPagesByType = computed(() => {
@@ -1411,7 +1408,7 @@ onUnmounted(() => {
   <SearchModal
     :show="showSearchModal"
     :book-id="bookId"
-    :search-service="searchService"
+    :search-service="searchService as any"
     @close="showSearchModal = false"
     @refresh="refreshData"
   />
