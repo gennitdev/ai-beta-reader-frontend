@@ -262,7 +262,7 @@ export class AppDatabase {
   }
 
   async getBooks(): Promise<Book[]> {
-    const query = `SELECT * FROM books ORDER BY created_at DESC`;
+    const query = `SELECT id, title, chapter_order, created_at FROM books ORDER BY created_at DESC`;
 
     if (this.isNative) {
       const result = await this.db.query(query);
@@ -312,7 +312,8 @@ export class AppDatabase {
   }
 
   async getChapters(bookId: string): Promise<Chapter[]> {
-    const query = `SELECT * FROM chapters WHERE book_id = ? ORDER BY created_at`;
+    const query = `SELECT id, book_id, part_id, title, text, word_count, created_at
+                   FROM chapters WHERE book_id = ? ORDER BY created_at`;
 
     if (this.isNative) {
       const result = await this.db.query(query, [bookId]);
