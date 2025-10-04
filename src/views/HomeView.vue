@@ -47,9 +47,17 @@ if (isAuthenticated.value) {
           <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-6 space-grotesk-logo">
             Beta-bot
           </h1>
-          <p class="text-lg text-gray-600 dark:text-gray-300 mb-8">
+          <p class="text-lg text-gray-600 dark:text-gray-300 mb-4">
             Your AI Beta Reader. Get intelligent feedback on your creative writing. Organize your manuscripts and receive AI-powered reviews.
           </p>
+          <div class="bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
+            <p class="text-sm text-blue-900 dark:text-blue-100 font-medium mb-2">
+              🔒 Privacy-First Local Storage
+            </p>
+            <p class="text-sm text-blue-800 dark:text-blue-200">
+              All your data stays on your device. Optional encrypted backups to your own Google Drive. You provide your own OpenAI API key for AI features.
+            </p>
+          </div>
 
           <!-- CTA Buttons -->
           <div class="flex flex-col gap-3 mb-12">
@@ -232,9 +240,17 @@ if (isAuthenticated.value) {
               <h1 class="text-4xl lg:text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight space-grotesk-logo">
                 Beta-bot
               </h1>
-              <p class="text-lg lg:text-xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
+              <p class="text-lg lg:text-xl text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
                 Your AI Beta Reader. Get intelligent feedback on your creative writing. Organize your manuscripts, track your progress, and receive AI-powered reviews that understand your story's context.
               </p>
+              <div class="bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
+                <p class="text-sm text-blue-900 dark:text-blue-100 font-semibold mb-2">
+                  🔒 Privacy-First Local Storage
+                </p>
+                <p class="text-sm text-blue-800 dark:text-blue-200">
+                  All your data stays on your device. Optional encrypted backups to your own Google Drive. You provide your own OpenAI API key for AI features - no third-party servers see your work.
+                </p>
+              </div>
 
               <!-- CTA Buttons - Horizontal on desktop -->
               <div class="flex flex-wrap gap-4 mb-10">
@@ -261,26 +277,33 @@ if (isAuthenticated.value) {
             </div>
 
             <!-- Features Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-              <div class="flex items-start space-x-3">
-                <DocumentTextIcon class="w-6 h-6 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+              <div class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg">
+                <DocumentTextIcon class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">Organize Your Writing</h3>
-                  <p class="text-gray-600 dark:text-gray-300 text-sm">Keep books and chapters organized. Track word counts.</p>
+                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">Local Storage</h3>
+                  <p class="text-gray-600 dark:text-gray-300 text-xs">Works offline. Your data never leaves your device</p>
                 </div>
               </div>
-              <div class="flex items-start space-x-3">
-                <SparklesIcon class="w-6 h-6 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg">
+                <SparklesIcon class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">AI-Powered Reviews</h3>
-                  <p class="text-gray-600 dark:text-gray-300 text-sm">Get contextual feedback that knows your entire story.</p>
+                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">Your OpenAI Key</h3>
+                  <p class="text-gray-600 dark:text-gray-300 text-xs">Use your own API key. Full control over costs</p>
                 </div>
               </div>
-              <div class="flex items-start space-x-3">
-                <ChatBubbleLeftRightIcon class="w-6 h-6 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg">
+                <ChatBubbleLeftRightIcon class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">Character & World Building</h3>
-                  <p class="text-gray-600 dark:text-gray-300 text-sm">Build wikis for characters, locations, and concepts.</p>
+                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">Encrypted Backups</h3>
+                  <p class="text-gray-600 dark:text-gray-300 text-xs">Optional sync to your Google Drive, encrypted</p>
+                </div>
+              </div>
+              <div class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg">
+                <CogIcon class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">Full Privacy</h3>
+                  <p class="text-gray-600 dark:text-gray-300 text-xs">No servers storing your creative work</p>
                 </div>
               </div>
             </div>

@@ -1,80 +1,26 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
-import { createBookService } from '@/services/api'
-import { useBooks } from '@/composables/useBooks'
+import { useBooks, type Book } from '@/composables/useBooks'
 import { PlusIcon, BookOpenIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
 
-interface Book {
-  id: string
-  title: string
-  chapter_count?: number
-  total_word_count?: number
-  created_at?: string
-  updated_at?: string
-}
-
 const router = useRouter()
-const { getAccessTokenSilently } = useAuth0()
-const books = ref<Book[]>([])
-const loading = ref(false)
 const showCreateModal = ref(false)
 const newBook = ref({ id: '', title: '' })
 
-// Create authenticated service
-const getToken = async () => {
-  try {
-    return await getAccessTokenSilently()
-  } catch (error) {
-    console.warn('Failed to get access token:', error)
-    return undefined
-  }
-}
-
-const bookService = createBookService(getToken)
-
-// Use TanStack Query for book operations
-const { createBook } = useBooks()
-
-const loadBooks = async () => {
-  loading.value = true
-  try {
-    // Fetch books from backend
-    const booksData = await bookService.getBooks()
-    books.value = booksData
-
-    // Also sync with localStorage for backward compatibility
-    const booksSummary = booksData.map((book: Book) => ({
-      id: book.id,
-      title: book.title
-    }))
-    localStorage.setItem('books', JSON.stringify(booksSummary))
-  } catch (error) {
-    console.error('Failed to load books:', error)
-    // Fall back to localStorage if API fails
-    const savedBooks = localStorage.getItem('books')
-    if (savedBooks) {
-      books.value = JSON.parse(savedBooks)
-    }
-  } finally {
-    loading.value = false
-  }
-}
+// Use local database instead of API
+const { books, loading, error, loadBooks, createBook } = useBooks()
 
 const createBookHandler = async () => {
   if (!newBook.value.id || !newBook.value.title) return
 
   try {
-    await createBook.mutateAsync(newBook.value)
-
-    // Reload books from backend to get updated list with chapter counts
-    await loadBooks()
+    await createBook(newBook.value)
+    await loadBooks() // Refresh the list
 
     newBook.value = { id: '', title: '' }
     showCreateModal.value = false
   } catch (error) {
-    // Error handling is done in the mutation, but we can add UI feedback here
     console.error('Failed to create book:', error)
   }
 }
@@ -139,10 +85,7 @@ onMounted(() => {
           <p class="text-gray-600 dark:text-gray-400 text-sm">
             ID: {{ book.id }}
           </p>
-          <div class="mt-4 flex justify-between items-center">
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-              {{ book.chapter_count || 0 }} chapters · {{ formatWordCount(book.total_word_count) }} words
-            </span>
+          <div class="mt-4 flex justify-end items-center">
             <span class="text-blue-600 hover:text-blue-700 text-sm font-medium">
               Open →
             </span>
@@ -206,7 +149,7 @@ onMounted(() => {
           </div>
 
           <!-- Error display -->
-          <div v-if="createBook.error.value" class="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+          <div v-if="error" class="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
             <div class="flex">
               <div class="flex-shrink-0">
                 <ExclamationTriangleIcon class="h-5 w-5 text-red-400" />
@@ -216,7 +159,7 @@ onMounted(() => {
                   Failed to create book
                 </h3>
                 <div class="mt-2 text-sm text-red-700 dark:text-red-300">
-                  <p>{{ createBook.error.value?.message || 'An unexpected error occurred' }}</p>
+                  <p>{{ error || 'An unexpected error occurred' }}</p>
                 </div>
               </div>
             </div>
@@ -232,11 +175,11 @@ onMounted(() => {
             </button>
             <button
               type="submit"
-              :disabled="!newBook.title || !newBook.id || createBook.isPending.value"
+              :disabled="!newBook.title || !newBook.id || loading"
               class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
             >
-              <div v-if="createBook.isPending.value" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              {{ createBook.isPending.value ? 'Creating...' : 'Create Book' }}
+              <div v-if="loading" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              {{ loading ? 'Creating...' : 'Create Book' }}
             </button>
           </div>
         </form>

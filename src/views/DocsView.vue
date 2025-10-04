@@ -166,7 +166,7 @@ const goToSection = (index: number) => {
       <div class="container mx-auto px-4 py-6">
         <div class="flex items-center justify-between">
           <div>
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">How Beta Bot Works</h1>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">How Beta-bot Works</h1>
             <p class="mt-2 text-gray-600 dark:text-gray-300">
               A visual guide to using AI-powered feedback for your creative writing
             </p>

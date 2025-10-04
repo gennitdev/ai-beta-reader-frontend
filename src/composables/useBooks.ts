@@ -1,43 +1,35 @@
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useAuth0 } from '@auth0/auth0-vue'
-import { createBookService } from '@/services/api'
+import { useDatabase } from './useDatabase'
 
-interface Book {
+export interface Book {
   id: string
   title: string
+  created_at: string
   chapterCount?: number
 }
 
 export function useBooks() {
-  const { getAccessTokenSilently } = useAuth0()
-  const queryClient = useQueryClient()
+  const {
+    books,
+    loading,
+    error,
+    loadBooks,
+    saveBook
+  } = useDatabase()
 
-  // Create authenticated book service
-  const bookService = createBookService(async () => {
-    try {
-      return await getAccessTokenSilently()
-    } catch (error) {
-      console.warn('Failed to get access token:', error)
-      return undefined
+  async function createBook(book: { id: string; title: string }) {
+    const newBook: Book = {
+      ...book,
+      created_at: new Date().toISOString()
     }
-  })
-
-  // Mutation for creating books
-  const createBookMutation = useMutation({
-    mutationFn: async (book: { id: string; title: string }) => {
-      const result = await bookService.createBook(book)
-      return result
-    },
-    onSuccess: () => {
-      // Invalidate and refetch any book-related queries
-      queryClient.invalidateQueries({ queryKey: ['books'] })
-    },
-    onError: (error) => {
-      console.error('Failed to create book:', error)
-    }
-  })
+    await saveBook(newBook)
+    return newBook
+  }
 
   return {
-    createBook: createBookMutation
+    books,
+    loading,
+    error,
+    loadBooks,
+    createBook
   }
 }
