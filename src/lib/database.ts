@@ -5,16 +5,27 @@ import initSqlJs from 'sql.js';
 export interface Book {
   id: string;
   title: string;
+  chapter_order: string; // JSON array of chapter IDs
   created_at: string;
 }
 
 export interface Chapter {
   id: string;
   book_id: string;
+  part_id?: string | null;
   title?: string;
   text: string;
   word_count: number;
   created_at: string;
+}
+
+export interface BookPart {
+  id: string;
+  book_id: string;
+  name: string;
+  chapter_order: string; // JSON array of chapter IDs
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ChapterSummary {
@@ -82,23 +93,27 @@ export class AppDatabase {
       CREATE TABLE IF NOT EXISTS books (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
+        chapter_order TEXT DEFAULT '[]',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS chapters (
         id TEXT PRIMARY KEY,
         book_id TEXT NOT NULL,
+        part_id TEXT,
         title TEXT,
         text TEXT NOT NULL,
         word_count INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (book_id) REFERENCES books(id)
+        FOREIGN KEY (book_id) REFERENCES books(id),
+        FOREIGN KEY (part_id) REFERENCES book_parts(id)
       );
 
       CREATE TABLE IF NOT EXISTS book_parts (
         id TEXT PRIMARY KEY,
         book_id TEXT NOT NULL,
         name TEXT NOT NULL,
+        chapter_order TEXT DEFAULT '[]',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (book_id) REFERENCES books(id)
@@ -205,12 +220,13 @@ export class AppDatabase {
   }
 
   async saveBook(book: Book) {
-    const query = `INSERT OR REPLACE INTO books (id, title, created_at) VALUES (?, ?, ?)`;
+    const query = `INSERT OR REPLACE INTO books (id, title, chapter_order, created_at) VALUES (?, ?, ?, ?)`;
+    const chapterOrder = book.chapter_order || '[]';
 
     if (this.isNative) {
-      await this.db.run(query, [book.id, book.title, book.created_at]);
+      await this.db.run(query, [book.id, book.title, chapterOrder, book.created_at]);
     } else {
-      this.db.run(query, [book.id, book.title, book.created_at]);
+      this.db.run(query, [book.id, book.title, chapterOrder, book.created_at]);
       this.saveToLocalStorage();
     }
   }
@@ -228,19 +244,21 @@ export class AppDatabase {
       return result[0].values.map((row: any[]) => ({
         id: row[0],
         title: row[1],
-        created_at: row[2]
+        chapter_order: row[2],
+        created_at: row[3]
       }));
     }
   }
 
   async saveChapter(chapter: Chapter) {
-    const query = `INSERT OR REPLACE INTO chapters (id, book_id, title, text, word_count, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)`;
+    const query = `INSERT OR REPLACE INTO chapters (id, book_id, part_id, title, text, word_count, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
     if (this.isNative) {
       await this.db.run(query, [
         chapter.id,
         chapter.book_id,
+        chapter.part_id || null,
         chapter.title,
         chapter.text,
         chapter.word_count,
@@ -250,6 +268,7 @@ export class AppDatabase {
       this.db.run(query, [
         chapter.id,
         chapter.book_id,
+        chapter.part_id || null,
         chapter.title,
         chapter.text,
         chapter.word_count,
@@ -257,6 +276,9 @@ export class AppDatabase {
       ]);
       this.saveToLocalStorage();
     }
+
+    // Add chapter to book's chapter_order if not already present
+    await this.addChapterToBookOrder(chapter.book_id, chapter.id);
   }
 
   async getChapters(bookId: string): Promise<Chapter[]> {
@@ -272,11 +294,171 @@ export class AppDatabase {
       return result[0].values.map((row: any[]) => ({
         id: row[0],
         book_id: row[1],
-        title: row[2],
-        text: row[3],
-        word_count: row[4],
-        created_at: row[5]
+        part_id: row[2],
+        title: row[3],
+        text: row[4],
+        word_count: row[5],
+        created_at: row[6]
       }));
+    }
+  }
+
+  // Helper method to add chapter to book's chapter_order
+  private async addChapterToBookOrder(bookId: string, chapterId: string) {
+    // Get current chapter order
+    const query = `SELECT chapter_order FROM books WHERE id = ?`;
+    let currentOrder: string[] = [];
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [bookId]);
+      if (result.values && result.values[0]) {
+        const orderStr = result.values[0].chapter_order || '[]';
+        currentOrder = JSON.parse(orderStr);
+      }
+    } else {
+      const result = this.db.exec(query, [bookId]);
+      if (result.length > 0 && result[0].values[0]) {
+        const orderStr = result[0].values[0][0] || '[]';
+        currentOrder = JSON.parse(orderStr as string);
+      }
+    }
+
+    // Only add if not already present
+    if (!currentOrder.includes(chapterId)) {
+      currentOrder.push(chapterId);
+      const updateQuery = `UPDATE books SET chapter_order = ? WHERE id = ?`;
+
+      if (this.isNative) {
+        await this.db.run(updateQuery, [JSON.stringify(currentOrder), bookId]);
+      } else {
+        this.db.run(updateQuery, [JSON.stringify(currentOrder), bookId]);
+        this.saveToLocalStorage();
+      }
+    }
+  }
+
+  // Book Parts methods
+  async createPart(part: { book_id: string; name: string }): Promise<BookPart> {
+    const id = `part-${part.book_id}-${Date.now()}`;
+    const now = new Date().toISOString();
+    const query = `INSERT INTO book_parts (id, book_id, name, chapter_order, created_at, updated_at)
+                   VALUES (?, ?, ?, '[]', ?, ?)`;
+
+    if (this.isNative) {
+      await this.db.run(query, [id, part.book_id, part.name, now, now]);
+    } else {
+      this.db.run(query, [id, part.book_id, part.name, now, now]);
+      this.saveToLocalStorage();
+    }
+
+    return {
+      id,
+      book_id: part.book_id,
+      name: part.name,
+      chapter_order: '[]',
+      created_at: now,
+      updated_at: now
+    };
+  }
+
+  async getParts(bookId: string): Promise<BookPart[]> {
+    const query = `SELECT * FROM book_parts WHERE book_id = ? ORDER BY created_at`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [bookId]);
+      return result.values || [];
+    } else {
+      const result = this.db.exec(query, [bookId]);
+      if (result.length === 0) return [];
+
+      return result[0].values.map((row: any[]) => ({
+        id: row[0],
+        book_id: row[1],
+        name: row[2],
+        chapter_order: row[3],
+        created_at: row[4],
+        updated_at: row[5]
+      }));
+    }
+  }
+
+  async updatePart(partId: string, name: string) {
+    const now = new Date().toISOString();
+    const query = `UPDATE book_parts SET name = ?, updated_at = ? WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(query, [name, now, partId]);
+    } else {
+      this.db.run(query, [name, now, partId]);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async deletePart(partId: string) {
+    // Remove part reference from chapters
+    const updateChaptersQuery = `UPDATE chapters SET part_id = NULL WHERE part_id = ?`;
+    const deleteQuery = `DELETE FROM book_parts WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(updateChaptersQuery, [partId]);
+      await this.db.run(deleteQuery, [partId]);
+    } else {
+      this.db.run(updateChaptersQuery, [partId]);
+      this.db.run(deleteQuery, [partId]);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async updateChapterOrders(bookId: string, chapterOrder: string[], partUpdates: Record<string, string[]>) {
+    // Update book's chapter_order
+    const updateBookQuery = `UPDATE books SET chapter_order = ? WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(updateBookQuery, [JSON.stringify(chapterOrder), bookId]);
+
+      // Update each part's chapter_order and chapter part_id assignments
+      for (const [partId, chapterIds] of Object.entries(partUpdates)) {
+        if (partId === 'null') {
+          // Remove part_id from these chapters
+          for (const chapterId of chapterIds) {
+            await this.db.run('UPDATE chapters SET part_id = NULL WHERE id = ?', [chapterId]);
+          }
+        } else {
+          // Update part's chapter_order
+          await this.db.run('UPDATE book_parts SET chapter_order = ? WHERE id = ?', [
+            JSON.stringify(chapterIds),
+            partId
+          ]);
+          // Assign chapters to this part
+          for (const chapterId of chapterIds) {
+            await this.db.run('UPDATE chapters SET part_id = ? WHERE id = ?', [partId, chapterId]);
+          }
+        }
+      }
+    } else {
+      this.db.run(updateBookQuery, [JSON.stringify(chapterOrder), bookId]);
+
+      // Update each part's chapter_order and chapter part_id assignments
+      for (const [partId, chapterIds] of Object.entries(partUpdates)) {
+        if (partId === 'null') {
+          // Remove part_id from these chapters
+          for (const chapterId of chapterIds) {
+            this.db.run('UPDATE chapters SET part_id = NULL WHERE id = ?', [chapterId]);
+          }
+        } else {
+          // Update part's chapter_order
+          this.db.run('UPDATE book_parts SET chapter_order = ? WHERE id = ?', [
+            JSON.stringify(chapterIds),
+            partId
+          ]);
+          // Assign chapters to this part
+          for (const chapterId of chapterIds) {
+            this.db.run('UPDATE chapters SET part_id = ? WHERE id = ?', [partId, chapterId]);
+          }
+        }
+      }
+
+      this.saveToLocalStorage();
     }
   }
 
