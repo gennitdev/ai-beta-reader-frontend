@@ -36,6 +36,7 @@ export function useDatabase() {
     try {
       loading.value = true
       error.value = null
+      await initializeDatabase() // Ensure DB is initialized
       books.value = await db.getBooks()
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load books'
@@ -49,6 +50,7 @@ export function useDatabase() {
     try {
       loading.value = true
       error.value = null
+      await initializeDatabase() // Ensure DB is initialized
       await db.saveBook(book)
       await loadBooks() // Refresh list
     } catch (e) {
@@ -65,6 +67,7 @@ export function useDatabase() {
     try {
       loading.value = true
       error.value = null
+      await initializeDatabase() // Ensure DB is initialized
       chapters.value = await db.getChapters(bookId)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load chapters'
@@ -78,6 +81,7 @@ export function useDatabase() {
     try {
       loading.value = true
       error.value = null
+      await initializeDatabase() // Ensure DB is initialized
       await db.saveChapter(chapter)
       if (chapter.book_id) {
         await loadChapters(chapter.book_id) // Refresh list
