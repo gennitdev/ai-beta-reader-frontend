@@ -136,6 +136,23 @@ export function useDatabase() {
     }
   }
 
+  // Import from JSON file
+  async function importFromJSON(jsonData: any) {
+    try {
+      loading.value = true
+      error.value = null
+      await initializeDatabase()
+      await db.importFromNeonExport(jsonData)
+      await loadBooks() // Refresh after import
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Import failed'
+      console.error('Import error:', e)
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     // State
     books,
@@ -155,6 +172,9 @@ export function useDatabase() {
     // Cloud sync
     backupToCloud,
     restoreFromCloud,
-    hasCloudSync: () => cloudSync.value !== null
+    hasCloudSync: () => cloudSync.value !== null,
+
+    // Import/Export
+    importFromJSON
   }
 }

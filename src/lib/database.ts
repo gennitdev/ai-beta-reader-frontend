@@ -70,6 +70,106 @@ export class AppDatabase {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (book_id) REFERENCES books(id)
       );
+
+      CREATE TABLE IF NOT EXISTS book_parts (
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (book_id) REFERENCES books(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS chapter_summaries (
+        id TEXT PRIMARY KEY,
+        chapter_id TEXT NOT NULL,
+        summary TEXT,
+        pov TEXT,
+        characters TEXT,
+        beats TEXT,
+        spoilers_ok BOOLEAN,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (chapter_id) REFERENCES chapters(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS wiki_pages (
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        page_name TEXT NOT NULL,
+        page_type TEXT,
+        content TEXT,
+        summary TEXT,
+        aliases TEXT,
+        tags TEXT,
+        is_major BOOLEAN,
+        created_by_ai BOOLEAN,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (book_id) REFERENCES books(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS book_characters (
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        character_name TEXT NOT NULL,
+        wiki_page_id TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (book_id) REFERENCES books(id),
+        FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS chapter_reviews (
+        id TEXT PRIMARY KEY,
+        chapter_id TEXT NOT NULL,
+        review_text TEXT NOT NULL,
+        prompt_used TEXT,
+        profile_id INTEGER,
+        profile_name TEXT,
+        tone_key TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (chapter_id) REFERENCES chapters(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS custom_reviewer_profiles (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ai_profiles (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        tone_key TEXT NOT NULL,
+        system_prompt TEXT NOT NULL,
+        is_system BOOLEAN,
+        is_default BOOLEAN,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS wiki_updates (
+        id TEXT PRIMARY KEY,
+        wiki_page_id TEXT NOT NULL,
+        chapter_id TEXT,
+        update_type TEXT,
+        change_summary TEXT,
+        contradiction_notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id),
+        FOREIGN KEY (chapter_id) REFERENCES chapters(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS chapter_wiki_mentions (
+        id TEXT PRIMARY KEY,
+        chapter_id TEXT NOT NULL,
+        wiki_page_id TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (chapter_id) REFERENCES chapters(id),
+        FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id)
+      );
     `;
 
     if (this.isNative) {
@@ -161,7 +261,7 @@ export class AppDatabase {
       const jsonExport = await this.db.exportToJson('ai-beta-reader');
       return new TextEncoder().encode(JSON.stringify(jsonExport));
     } else {
-      // Export as JSON for web too (more reliable than binary)
+      // Export all tables as JSON
       const books = await this.getBooks();
       const allChapters: Chapter[] = [];
 
@@ -170,10 +270,25 @@ export class AppDatabase {
         allChapters.push(...chapters);
       }
 
+      // Get all data from other tables
+      const getAllFromTable = (tableName: string) => {
+        const result = this.db.exec(`SELECT * FROM ${tableName}`);
+        return result.length > 0 ? result[0].values : [];
+      };
+
       const exportData = {
-        version: 1,
+        version: 2,
         books,
-        chapters: allChapters
+        chapters: allChapters,
+        book_parts: getAllFromTable('book_parts'),
+        chapter_summaries: getAllFromTable('chapter_summaries'),
+        wiki_pages: getAllFromTable('wiki_pages'),
+        book_characters: getAllFromTable('book_characters'),
+        chapter_reviews: getAllFromTable('chapter_reviews'),
+        custom_reviewer_profiles: getAllFromTable('custom_reviewer_profiles'),
+        ai_profiles: getAllFromTable('ai_profiles'),
+        wiki_updates: getAllFromTable('wiki_updates'),
+        chapter_wiki_mentions: getAllFromTable('chapter_wiki_mentions')
       };
 
       return new TextEncoder().encode(JSON.stringify(exportData));
@@ -187,9 +302,18 @@ export class AppDatabase {
     if (this.isNative) {
       await this.db.importFromJson(importData);
     } else {
-      // Clear existing database
+      // Clear existing database in reverse order of dependencies
+      this.db.run('DELETE FROM chapter_wiki_mentions');
+      this.db.run('DELETE FROM wiki_updates');
+      this.db.run('DELETE FROM chapter_reviews');
+      this.db.run('DELETE FROM book_characters');
+      this.db.run('DELETE FROM chapter_summaries');
+      this.db.run('DELETE FROM wiki_pages');
       this.db.run('DELETE FROM chapters');
+      this.db.run('DELETE FROM book_parts');
       this.db.run('DELETE FROM books');
+      this.db.run('DELETE FROM custom_reviewer_profiles');
+      this.db.run('DELETE FROM ai_profiles');
 
       // Import books
       if (importData.books) {
@@ -205,8 +329,83 @@ export class AppDatabase {
         }
       }
 
+      // Import other tables
+      const importTable = (tableName: string, rows: any[]) => {
+        if (!rows || rows.length === 0) return;
+
+        for (const row of rows) {
+          const columns = Array.isArray(row) ? row : Object.values(row);
+          const placeholders = columns.map(() => '?').join(', ');
+          this.db.run(`INSERT OR REPLACE INTO ${tableName} VALUES (${placeholders})`, columns);
+        }
+      };
+
+      importTable('book_parts', importData.book_parts);
+      importTable('chapter_summaries', importData.chapter_summaries);
+      importTable('wiki_pages', importData.wiki_pages);
+      importTable('book_characters', importData.book_characters);
+      importTable('chapter_reviews', importData.chapter_reviews);
+      importTable('custom_reviewer_profiles', importData.custom_reviewer_profiles);
+      importTable('ai_profiles', importData.ai_profiles);
+      importTable('wiki_updates', importData.wiki_updates);
+      importTable('chapter_wiki_mentions', importData.chapter_wiki_mentions);
+
       this.saveToLocalStorage();
     }
+  }
+
+  async importFromNeonExport(jsonData: any): Promise<void> {
+    // Transform Neon PostgreSQL export to match our schema
+    // Neon exports tables as arrays of objects with column names
+    const transformedData: any = {
+      version: 2,
+      books: [],
+      chapters: [],
+      book_parts: [],
+      chapter_summaries: [],
+      wiki_pages: [],
+      book_characters: [],
+      chapter_reviews: [],
+      custom_reviewer_profiles: [],
+      ai_profiles: [],
+      wiki_updates: [],
+      chapter_wiki_mentions: []
+    };
+
+    // Map Neon table exports to our format
+    if (jsonData.books) {
+      transformedData.books = jsonData.books.map((b: any) => ({
+        id: b.id,
+        title: b.title,
+        created_at: b.created_at
+      }));
+    }
+
+    if (jsonData.chapters) {
+      transformedData.chapters = jsonData.chapters.map((c: any) => ({
+        id: c.id,
+        book_id: c.book_id,
+        title: c.title,
+        text: c.text,
+        word_count: c.word_count,
+        created_at: c.created_at
+      }));
+    }
+
+    // Just pass through other tables as-is
+    transformedData.book_parts = jsonData.book_parts || [];
+    transformedData.chapter_summaries = jsonData.chapter_summaries || [];
+    transformedData.wiki_pages = jsonData.wiki_pages || [];
+    transformedData.book_characters = jsonData.book_characters || [];
+    transformedData.chapter_reviews = jsonData.chapter_reviews || [];
+    transformedData.custom_reviewer_profiles = jsonData.custom_reviewer_profiles || [];
+    transformedData.ai_profiles = jsonData.ai_profiles || [];
+    transformedData.wiki_updates = jsonData.wiki_updates || [];
+    transformedData.chapter_wiki_mentions = jsonData.chapter_wiki_mentions || [];
+
+    // Use the standard import function
+    const jsonString = JSON.stringify(transformedData);
+    await this.importDatabase(new TextEncoder().encode(jsonString));
   }
 
   private saveToLocalStorage() {

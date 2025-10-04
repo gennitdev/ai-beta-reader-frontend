@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useDatabase } from '@/composables/useDatabase'
 import { createBookService, createChapterService, createWikiService } from '@/services/api'
 import JSZip from 'jszip'
-import { PlusIcon, PencilIcon, TrashIcon, ArrowLeftIcon, DocumentArrowDownIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon, ArrowLeftIcon, DocumentArrowDownIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
+const { importFromJSON } = useDatabase()
 
 interface CustomReviewerProfile {
   id: number
@@ -25,11 +27,51 @@ const editingProfile = ref<CustomReviewerProfile | null>(null)
 const isExporting = ref(false)
 const exportProgress = ref('')
 
+// Import state
+const isImporting = ref(false)
+const importProgress = ref('')
+const importSuccess = ref(false)
+
 // Form data
 const formData = ref({
   name: '',
   description: ''
 })
+
+// Import from JSON file
+const handleImportFile = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (!input.files || input.files.length === 0) return
+
+  const file = input.files[0]
+  isImporting.value = true
+  importProgress.value = 'Reading file...'
+  importSuccess.value = false
+
+  try {
+    const text = await file.text()
+    const jsonData = JSON.parse(text)
+
+    importProgress.value = 'Importing data to local database...'
+    await importFromJSON(jsonData)
+
+    importProgress.value = 'Import complete!'
+    importSuccess.value = true
+
+    // Reset file input
+    input.value = ''
+
+    // Redirect to books after successful import
+    setTimeout(() => {
+      router.push('/books')
+    }, 2000)
+  } catch (err) {
+    console.error('Import failed:', err)
+    importProgress.value = `Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+  } finally {
+    isImporting.value = false
+  }
+}
 
 // API functions
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
@@ -319,7 +361,74 @@ onMounted(() => {
     </div>
 
     <!-- Main Content -->
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <!-- Import Data Section -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Import Data from Neon</h2>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Import your PostgreSQL database export (JSON format) to migrate to local storage.
+          </p>
+        </div>
+
+        <div class="px-6 py-4">
+          <div class="space-y-4">
+            <div>
+              <label class="block">
+                <span class="sr-only">Choose JSON file</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  @change="handleImportFile"
+                  :disabled="isImporting"
+                  class="block w-full text-sm text-gray-900 dark:text-white
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-600 file:text-white
+                    hover:file:bg-blue-700
+                    file:cursor-pointer
+                    disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </label>
+            </div>
+
+            <!-- Import Progress -->
+            <div v-if="isImporting || importProgress" class="mt-4">
+              <div v-if="isImporting" class="flex items-center space-x-3">
+                <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <span class="text-sm text-gray-700 dark:text-gray-300">{{ importProgress }}</span>
+              </div>
+              <div v-else-if="importSuccess" class="flex items-center space-x-3 text-green-600 dark:text-green-400">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-sm font-medium">{{ importProgress }}</span>
+              </div>
+              <div v-else class="text-sm text-red-600 dark:text-red-400">
+                {{ importProgress }}
+              </div>
+            </div>
+
+            <!-- Instructions -->
+            <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <h3 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                How to export from Neon PostgreSQL:
+              </h3>
+              <ol class="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
+                <li>Connect to your Neon database</li>
+                <li>Export each table to JSON format</li>
+                <li>Combine into a single JSON file with table names as keys</li>
+                <li>Upload the JSON file here</li>
+              </ol>
+              <p class="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                Note: The users table will be ignored during import.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Custom Reviewer Profiles Section -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
