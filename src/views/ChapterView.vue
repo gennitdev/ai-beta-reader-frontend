@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createChapterService, createReviewService, createBookService } from '@/services/api'
+import { useDatabase } from '@/composables/useDatabase'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AvatarComponent from '@/components/AvatarComponent.vue'
@@ -62,19 +62,8 @@ const router = useRouter()
 const bookId = computed(() => (route.params.bookId || route.params.id) as string)
 const chapterId = computed(() => route.params.chapterId as string)
 
-// Create services (no auth needed for local-first)
-const getToken = async () => {
-  try {
-    return undefined
-  } catch (error) {
-    console.warn('Failed to get access token:', error)
-    return undefined
-  }
-}
-
-const chapterService = createChapterService(getToken)
-const reviewService = createReviewService(getToken)
-const bookService = createBookService(getToken)
+// Use local database
+const { chapters, loadChapters, saveChapter: dbSaveChapter } = useDatabase()
 
 const chapter = ref<Chapter | null>(null)
 const loading = ref(false)
@@ -137,10 +126,31 @@ const backButtonUrl = computed(() => bookUrl.value)
 const loadChapter = async () => {
   loading.value = true
   try {
-    const chapterData = await chapterService.getChapter(chapterId.value)
-    chapter.value = chapterData
-    editedText.value = chapterData.text
-    editedTitle.value = chapterData.title || ''
+    // Load chapters from database
+    await loadChapters(bookId.value)
+
+    // Find the current chapter
+    const chapterData = chapters.value.find((ch: any) => ch.id === chapterId.value)
+
+    if (chapterData) {
+      chapter.value = {
+        id: chapterData.id,
+        book_id: chapterData.book_id,
+        title: chapterData.title || null,
+        text: chapterData.text,
+        word_count: chapterData.word_count,
+        summary: null, // TODO: Implement summaries
+        pov: null,
+        characters: null,
+        beats: null,
+        spoilers_ok: null
+      }
+      editedText.value = chapterData.text
+      editedTitle.value = chapterData.title || ''
+    } else {
+      console.error('Chapter not found')
+      router.push(`/books/${bookId.value}`)
+    }
   } catch (error) {
     console.error('Failed to load chapter:', error)
     router.push(`/books/${bookId.value}`)
@@ -154,15 +164,22 @@ const saveChapter = async () => {
 
   loading.value = true
   try {
-    await chapterService.updateChapter({
+    // Calculate word count
+    const wordCount = editedText.value.trim().split(/\s+/).length
+
+    // Save to local database
+    await dbSaveChapter({
       id: chapter.value.id,
-      bookId: chapter.value.book_id,
-      title: editedTitle.value || undefined,
-      text: editedText.value
+      book_id: chapter.value.book_id,
+      title: editedTitle.value,
+      text: editedText.value,
+      word_count: wordCount,
+      created_at: new Date().toISOString()
     })
 
     chapter.value.text = editedText.value
     chapter.value.title = editedTitle.value || null
+    chapter.value.word_count = wordCount
     isEditing.value = false
   } catch (error) {
     console.error('Failed to save chapter:', error)
@@ -172,23 +189,9 @@ const saveChapter = async () => {
 }
 
 const generateSummary = async () => {
-  if (!chapter.value) return
-
-  generatingSummary.value = true
-  try {
-    const result = await chapterService.generateSummary(chapter.value.id)
-
-    // Update chapter with new summary data
-    chapter.value.summary = result.summary.summary
-    chapter.value.pov = result.summary.pov
-    chapter.value.characters = result.summary.characters
-    chapter.value.beats = result.summary.beats
-    chapter.value.spoilers_ok = result.summary.spoilers_ok
-  } catch (error) {
-    console.error('Failed to generate summary:', error)
-  } finally {
-    generatingSummary.value = false
-  }
+  // TODO: Implement AI summary generation with local OpenAI key
+  console.log('Summary generation not implemented yet')
+  alert('Summary generation will be implemented with OpenAI integration')
 }
 
 const startEditingSummary = () => {
@@ -203,113 +206,34 @@ const cancelEditingSummary = () => {
 }
 
 const saveSummary = async () => {
-  if (!chapter.value || !editedSummary.value.trim()) return
-
-  savingSummary.value = true
-  try {
-    await chapterService.updateSummary(chapter.value.id, editedSummary.value.trim())
-    chapter.value.summary = editedSummary.value.trim()
-    isEditingSummary.value = false
-  } catch (error) {
-    console.error('Failed to save summary:', error)
-    alert('Failed to save summary')
-  } finally {
-    savingSummary.value = false
-  }
+  // TODO: Implement summary saving to local database
+  console.log('Summary saving not implemented yet')
 }
 
 const generateReview = async () => {
-  if (!chapter.value) return
-
-  generatingReview.value = true
-  reviewText.value = ''
-
-  try {
-    // Check if it's a custom profile
-    const isCustomProfile = reviewTone.value.startsWith('custom-')
-
-    const requestData: any = {
-      bookId: chapter.value.book_id,
-      newChapterId: chapter.value.id
-    }
-
-    if (isCustomProfile) {
-      requestData.customProfileId = parseInt(reviewTone.value.replace('custom-', ''))
-    } else {
-      requestData.tone = reviewTone.value
-    }
-
-    const result = await reviewService.generateReview(requestData)
-
-    reviewText.value = result.review
-    // Reload saved reviews to include the new one
-    await loadSavedReviews()
-  } catch (error) {
-    console.error('Failed to generate review:', error)
-  } finally {
-    generatingReview.value = false
-  }
+  // TODO: Implement AI review generation with local OpenAI key
+  console.log('Review generation not implemented yet')
+  alert('Review generation will be implemented with OpenAI integration')
 }
 
 const loadSavedReviews = async () => {
-  if (!chapter.value) return
-
-  loadingReviews.value = true
-  try {
-    const reviews = await chapterService.getChapterReviews(chapter.value.id)
-    savedReviews.value = reviews
-  } catch (error) {
-    console.error('Failed to load saved reviews:', error)
-    savedReviews.value = []
-  } finally {
-    loadingReviews.value = false
-  }
+  // TODO: Load reviews from local database
+  savedReviews.value = []
 }
 
 const deleteReview = async (reviewId: string) => {
-  if (!confirm('Are you sure you want to delete this review?')) return
-
-  deletingReviewId.value = reviewId
-  try {
-    await chapterService.deleteChapterReview(reviewId)
-    savedReviews.value = savedReviews.value.filter(r => r.id !== reviewId)
-  } catch (error) {
-    console.error('Failed to delete review:', error)
-    alert('Failed to delete review')
-  } finally {
-    deletingReviewId.value = null
-  }
+  // TODO: Delete review from local database
+  console.log('Delete review not implemented yet')
 }
 
 const loadCharacters = async () => {
-  try {
-    const charactersData = await bookService.getBookCharacters(bookId.value)
-    characters.value = charactersData
-  } catch (error) {
-    console.error('Failed to load characters:', error)
-  }
+  // TODO: Load characters from local database
+  characters.value = []
 }
 
 const loadCustomProfiles = async () => {
-  try {
-    loadingProfiles.value = true
-    const token = await getToken()
-    if (!token) return
-
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/custom-reviewer-profiles`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-
-    if (response.ok) {
-      customProfiles.value = await response.json()
-    }
-  } catch (error) {
-    console.error('Failed to load custom profiles:', error)
-  } finally {
-    loadingProfiles.value = false
-  }
+  // TODO: Load custom profiles from local database
+  customProfiles.value = []
 }
 
 // Character lookup helper - now more functional
