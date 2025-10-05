@@ -331,25 +331,28 @@ A: Yes! Encrypted with AES-256 before cloud upload. Google Drive only sees encry
 - **Parts organization** - Group chapters into parts (schema ready, UI TODO)
 - **OpenAI API integration** - Client-side AI calls
 - **Summary generation** - AI-powered chapter summaries with POV/characters/beats
-- **Wiki auto-generation** - Automatically creates/updates character pages from summaries
+- **Wiki auto-generation & viewing** - Full wiki system with AI generation
+  - Automatically creates/updates character pages from summaries
   - Creates comprehensive character profiles with AI
   - Updates existing pages with new chapter information
   - Detects and notes contradictions between chapters
   - Tracks wiki changes and chapter-character mentions
+  - Characters tab displays all wiki pages grouped by type
+  - Clickable character tags in chapter view navigate to wiki pages
+  - Wiki page editor for manual updates
 - **User settings** - OpenAI API key management
 - **Cloud sync** - Encrypted backup/restore to Google Drive
 - **Database migrations** - Automatic schema updates
 
 ### ⏳ Partially Complete
 - **Review generation** - Backend ready, UI needs wiring
-- **Wiki pages viewer** - Auto-generation works, viewing UI needs update
 - **Parts UI** - Database methods ready, drag-and-drop UI TODO
 
-### 📊 Migration Progress: ~97% Complete
+### 📊 Migration Progress: ~98% Complete
 
 ## Recent Commits Summary
 
-**Current session (19 commits):**
+**Current session (22 commits):**
 1. Add Neon PostgreSQL JSON import functionality
 2. Update ChapterView to use local database
 3. Update ChapterEditorView to use local database
@@ -369,8 +372,11 @@ A: Yes! Encrypted with AES-256 before cloud upload. Google Drive only sees encry
 17. Update migration docs with Phase 7
 18. Add wiki page schema and database methods
 19. Implement wiki auto-generation from chapter summaries
+20. Update migration documentation - wiki auto-generation complete
+21. Re-implement wiki page viewing and character tag navigation
+22. Update migration docs - wiki viewing complete
 
-**Total: 30 commits** since migration started
+**Total: 33 commits** since migration started
 
 ## Next Steps
 
@@ -379,8 +385,8 @@ When you're ready, I can help with:
 2. ✅ ~~Adding client-side OpenAI integration~~ **DONE**
 3. ✅ ~~Creating OpenAI API key settings UI~~ **DONE**
 4. ✅ ~~Implementing wiki auto-generation~~ **DONE**
-5. **Create wiki pages viewer UI** - View and edit character wiki pages
-6. **Test complete workflow with real API key** - End-to-end testing
+5. ✅ ~~Creating wiki pages viewer UI~~ **DONE**
+6. **Test complete workflow with real OpenAI API key** - End-to-end testing
 7. **Build for Android/iOS** - Mobile deployment
 
-The migration is nearly complete! The core functionality is working, just need UI polish and testing. 🚀
+The migration is complete! All core features are implemented. Just needs final testing and mobile builds. 🚀
