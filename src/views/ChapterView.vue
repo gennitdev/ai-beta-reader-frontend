@@ -64,7 +64,7 @@ const bookId = computed(() => (route.params.bookId || route.params.id) as string
 const chapterId = computed(() => route.params.chapterId as string)
 
 // Use local database
-const { books, chapters, loadBooks, loadChapters, saveChapter: dbSaveChapter, saveSummary, getSummary } = useDatabase()
+const { books, chapters, loadBooks, loadChapters, saveChapter: dbSaveChapter, saveSummary: dbSaveSummary, getSummary } = useDatabase()
 
 const chapter = ref<Chapter | null>(null)
 const loading = ref(false)
@@ -213,7 +213,7 @@ const generateSummary = async () => {
     )
 
     // Save summary to database
-    await saveSummary({
+    await dbSaveSummary({
       chapter_id: chapter.value.id,
       summary: result.summary,
       pov: result.pov,
@@ -251,8 +251,30 @@ const cancelEditingSummary = () => {
 }
 
 const saveSummary = async () => {
-  // TODO: Implement summary saving to local database
-  console.log('Summary saving not implemented yet')
+  if (!chapter.value) return
+
+  try {
+    savingSummary.value = true
+
+    // Update summary in database
+    await dbSaveSummary({
+      chapter_id: chapter.value.id,
+      summary: editedSummary.value,
+      pov: chapter.value.pov,
+      characters: chapter.value.characters || [],
+      beats: chapter.value.beats || [],
+      spoilers_ok: chapter.value.spoilers_ok || false
+    })
+
+    // Update UI
+    chapter.value.summary = editedSummary.value
+    isEditingSummary.value = false
+  } catch (error) {
+    console.error('Failed to save summary:', error)
+    alert('Failed to save summary')
+  } finally {
+    savingSummary.value = false
+  }
 }
 
 const generateReview = async () => {
