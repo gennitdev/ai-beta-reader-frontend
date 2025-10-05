@@ -357,7 +357,7 @@ A: Yes! Encrypted with AES-256 before cloud upload. Google Drive only sees encry
 
 ## Recent Commits Summary
 
-**Current session (24 commits):**
+**Current session (25 commits):**
 1. Add Neon PostgreSQL JSON import functionality
 2. Update ChapterView to use local database
 3. Update ChapterEditorView to use local database
@@ -382,8 +382,9 @@ A: Yes! Encrypted with AES-256 before cloud upload. Google Drive only sees encry
 22. Update migration docs - wiki viewing complete
 23. Implement AI review generation with profile selection
 24. Update migration docs - review generation complete
+25. Fix custom reviewer profiles in settings to use local database
 
-**Total: 35 commits** since migration started
+**Total: 36 commits** since migration started
 
 ## Next Steps
 
