@@ -364,6 +364,61 @@ export function useDatabase() {
     }
   }
 
+  async function createPart(bookId: string, name: string) {
+    try {
+      await initializeDatabase()
+      return await db.createPart({ book_id: bookId, name })
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to create part'
+      console.error('Create part error:', e)
+      throw e
+    }
+  }
+
+  async function getParts(bookId: string) {
+    try {
+      await initializeDatabase()
+      return await db.getParts(bookId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get parts'
+      console.error('Get parts error:', e)
+      throw e
+    }
+  }
+
+  async function updatePart(partId: string, name: string) {
+    try {
+      await initializeDatabase()
+      await db.updatePart(partId, name)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update part'
+      console.error('Update part error:', e)
+      throw e
+    }
+  }
+
+  async function deletePart(partId: string) {
+    try {
+      await initializeDatabase()
+      await db.deletePart(partId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete part'
+      console.error('Delete part error:', e)
+      throw e
+    }
+  }
+
+  async function updateChapterOrders(bookId: string, chapterOrder: string[], partUpdates: { [partId: string]: string[] }) {
+    try {
+      await initializeDatabase()
+      await db.updateChapterOrders(bookId, chapterOrder, partUpdates)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update chapter orders'
+      console.error('Update chapter orders error:', e)
+      throw e
+    }
+  }
+
   return {
     // State
     books,
@@ -403,6 +458,13 @@ export function useDatabase() {
     getWikiPages,
     trackWikiUpdate,
     addChapterWikiMention,
+
+    // Parts operations
+    createPart,
+    getParts,
+    updatePart,
+    deletePart,
+    updateChapterOrders,
 
     // Cloud sync
     backupToCloud,

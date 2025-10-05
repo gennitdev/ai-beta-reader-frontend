@@ -46,7 +46,7 @@ const router = useRouter()
 const bookId = route.params.id as string
 
 // Use local database
-const { books, chapters: dbChapters, loadBooks, loadChapters, getWikiPages, getSummary } = useDatabase()
+const { books, chapters: dbChapters, loadBooks, loadChapters, getWikiPages, getSummary, saveBook, createPart, getParts, updatePart, deletePart, updateChapterOrders } = useDatabase()
 
 const book = ref<{ id: string; title: string } | null>(null)
 const chapters = ref<Chapter[]>([])
@@ -57,6 +57,10 @@ const loadingWiki = ref(false)
 const expandedSummaries = ref<Set<string>>(new Set())
 const routerViewKey = ref(0)
 
+// Book editing state
+const isEditingBookTitle = ref(false)
+const editingBookTitle = ref('')
+
 // Parts state
 const expandedParts = ref<Set<string>>(new Set())
 const editingPartId = ref<string | null>(null)
@@ -65,13 +69,8 @@ const creatingPart = ref(false)
 const creatingPartLoading = ref(false)
 const newPartName = ref('')
 
-// TODO: Implement these with local database
-const bookService = {
-  createBookPart: async (_bookId: string, _data: any): Promise<Part> => { throw new Error('Not implemented') },
-  updateBookPart: async (_bookId: string, _partId: string, _data: any): Promise<void> => { throw new Error('Not implemented') },
-  deleteBookPart: async (_bookId: string, _partId: string): Promise<void> => { throw new Error('Not implemented') },
-  reorderChapters: async (_bookId: string, _chapterOrder: any[], _partUpdates: any): Promise<void> => { throw new Error('Not implemented') }
-}
+// Search service placeholder (not yet implemented with local DB)
+
 
 const searchService = {
   searchBook: async (_bookId: string, _query: string): Promise<{ chapters: any[], wikiPages: any[] }> => {
@@ -159,6 +158,40 @@ const formatWordCount = (count: number) => {
   return (count / 1000).toFixed(1) + 'k'
 }
 
+const startEditingBookTitle = () => {
+  if (!book.value) return
+  editingBookTitle.value = book.value.title
+  isEditingBookTitle.value = true
+}
+
+const cancelEditingBookTitle = () => {
+  isEditingBookTitle.value = false
+  editingBookTitle.value = ''
+}
+
+const saveBookTitle = async () => {
+  if (!book.value || !editingBookTitle.value.trim()) return
+
+  try {
+    // Update book with new title
+    await saveBook({
+      id: book.value.id,
+      title: editingBookTitle.value.trim(),
+      chapter_order: (book.value as any).chapter_order || '[]',
+      created_at: (book.value as any).created_at || new Date().toISOString()
+    })
+
+    // Update local ref
+    book.value.title = editingBookTitle.value.trim()
+
+    // Close editor
+    isEditingBookTitle.value = false
+    editingBookTitle.value = ''
+  } catch (error) {
+    console.error('Failed to update book title:', error)
+  }
+}
+
 const loadBook = async () => {
   try {
     loading.value = true
@@ -195,8 +228,8 @@ const loadBook = async () => {
 
     chapters.value = await Promise.all(chapterPromises)
 
-    // TODO: Implement parts when needed
-    parts.value = []
+    // Load parts from database
+    parts.value = await getParts(bookId)
   } catch (error) {
     console.error('Failed to load book:', error)
   } finally {
@@ -236,14 +269,12 @@ const cancelCreatePart = () => {
   newPartName.value = ''
 }
 
-const createPart = async () => {
+const createPartFunc = async () => {
   if (!newPartName.value.trim() || creatingPartLoading.value) return
 
   try {
     creatingPartLoading.value = true
-    const newPart = await bookService.createBookPart(bookId, {
-      name: newPartName.value.trim()
-    })
+    const newPart = await createPart(bookId, newPartName.value.trim())
     parts.value.push(newPart)
     parts.value.sort((a, b) =>
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -273,9 +304,7 @@ const savePart = async (partId: string) => {
   if (!editingPartName.value.trim()) return
 
   try {
-    await bookService.updateBookPart(bookId, partId, {
-      name: editingPartName.value.trim()
-    })
+    await updatePart(partId, editingPartName.value.trim())
 
     const part = parts.value.find(p => p.id === partId)
     if (part) {
@@ -289,13 +318,13 @@ const savePart = async (partId: string) => {
   }
 }
 
-const deletePart = async (partId: string) => {
+const deletePartFunc = async (partId: string) => {
   if (!confirm('Are you sure you want to delete this part? Chapters in this part will become uncategorized.')) {
     return
   }
 
   try {
-    await bookService.deleteBookPart(bookId, partId)
+    await deletePart(partId)
     parts.value = parts.value.filter(p => p.id !== partId)
     expandedParts.value.delete(partId)
 
@@ -343,11 +372,11 @@ const moveChapterToPart = async (chapterId: string, partId: string | null) => {
         chapterOrder.push(...(partUpdates[part.id] || []))
       })
 
-    // Send the complete reordered list to backend
-    console.log('Sending array-based reorder to backend:', { chapterOrder, partUpdates })
-    await bookService.reorderChapters(bookId, chapterOrder, partUpdates)
+    // Send the complete reordered list to database
+    console.log('Sending array-based reorder to database:', { chapterOrder, partUpdates })
+    await updateChapterOrders(bookId, chapterOrder, partUpdates)
 
-    // Reload to get the correct updated state from backend
+    // Reload to get the correct updated state from database
     await loadBook()
   } catch (error) {
     console.error('Failed to move chapter to part:', error)
@@ -408,8 +437,8 @@ const saveModalChapterOrder = async () => {
         chapterOrder.push(...partUpdates[part.id])
       })
 
-    // Send array-based reorder to backend
-    await bookService.reorderChapters(bookId, chapterOrder, partUpdates)
+    // Send array-based reorder to database
+    await updateChapterOrders(bookId, chapterOrder, partUpdates)
 
     // Reload to get updated state
     await loadBook()
@@ -658,8 +687,44 @@ onUnmounted(() => {
       </nav>
 
       <div class="flex justify-between items-center">
-        <div>
-          <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ book?.title }}</h1>
+        <div class="flex-1">
+          <!-- Editing mode -->
+          <div v-if="isEditingBookTitle" class="flex items-center space-x-2">
+            <input
+              v-model="editingBookTitle"
+              @keyup.enter="saveBookTitle"
+              @keyup.esc="cancelEditingBookTitle"
+              type="text"
+              class="text-3xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Book title"
+              autofocus
+            />
+            <button
+              @click="saveBookTitle"
+              class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              Save
+            </button>
+            <button
+              @click="cancelEditingBookTitle"
+              class="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+
+          <!-- Display mode -->
+          <div v-else class="flex items-center space-x-2 group">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ book?.title }}</h1>
+            <button
+              @click="startEditingBookTitle"
+              class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Rename book"
+            >
+              <PencilIcon class="w-5 h-5" />
+            </button>
+          </div>
+
           <p class="text-gray-600 dark:text-gray-400 mt-1">
             {{ chapters.length }} chapters · {{ formatWordCount(totalWordCount) }} words total
           </p>
@@ -731,7 +796,10 @@ onUnmounted(() => {
                     <span class="text-sm text-gray-500 dark:text-gray-400">
                       {{ chapter.word_count?.toLocaleString() || 0 }} words
                     </span>
-                    <div class="flex items-center">
+                    <div
+                      class="flex items-center"
+                      :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
+                    >
                       <CheckCircleIcon
                         :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
                         class="w-4 h-4 mr-1"
@@ -882,7 +950,45 @@ onUnmounted(() => {
         <div class="p-4 pb-16">
           <!-- Book header -->
           <div class="mb-6">
-            <h1 class="text-xl font-bold text-gray-900 dark:text-white">{{ book?.title }}</h1>
+            <!-- Editing mode -->
+            <div v-if="isEditingBookTitle" class="flex flex-col space-y-2">
+              <input
+                v-model="editingBookTitle"
+                @keyup.enter="saveBookTitle"
+                @keyup.esc="cancelEditingBookTitle"
+                type="text"
+                class="text-xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Book title"
+                autofocus
+              />
+              <div class="flex space-x-2">
+                <button
+                  @click="saveBookTitle"
+                  class="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                >
+                  Save
+                </button>
+                <button
+                  @click="cancelEditingBookTitle"
+                  class="flex-1 px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <!-- Display mode -->
+            <div v-else class="flex items-center space-x-2">
+              <h1 class="text-xl font-bold text-gray-900 dark:text-white flex-1">{{ book?.title }}</h1>
+              <button
+                @click="startEditingBookTitle"
+                class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                title="Rename book"
+              >
+                <PencilIcon class="w-5 h-5" />
+              </button>
+            </div>
+
             <p class="text-gray-600 dark:text-gray-400 mt-1">
               {{ chapters.length }} chapters · {{ formatWordCount(totalWordCount) }} words total
             </p>
@@ -1015,6 +1121,7 @@ onUnmounted(() => {
                               <CheckCircleIcon
                                 :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
                                 class="w-3 h-3"
+                                :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
                               />
                             </div>
                           </div>
@@ -1083,6 +1190,7 @@ onUnmounted(() => {
                               <CheckCircleIcon
                                 :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
                                 class="w-3 h-3"
+                                :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
                               />
                             </div>
                           </div>
@@ -1245,7 +1353,7 @@ onUnmounted(() => {
                 autofocus
               />
               <button
-                @click="createPart"
+                @click="createPartFunc"
                 :disabled="!newPartName.trim() || creatingPartLoading"
                 class="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm inline-flex items-center"
               >
@@ -1368,7 +1476,7 @@ onUnmounted(() => {
                         <PencilIcon class="w-4 h-4" />
                       </button>
                       <button
-                        @click="deletePart(part.id)"
+                        @click="deletePartFunc(part.id)"
                         class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                         title="Delete part"
                       >
