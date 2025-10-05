@@ -46,7 +46,7 @@ const router = useRouter()
 const bookId = route.params.id as string
 
 // Use local database
-const { books, chapters: dbChapters, loadBooks, loadChapters, getWikiPages } = useDatabase()
+const { books, chapters: dbChapters, loadBooks, loadChapters, getWikiPages, getSummary } = useDatabase()
 
 const book = ref<{ id: string; title: string } | null>(null)
 const chapters = ref<Chapter[]>([])
@@ -177,18 +177,23 @@ const loadBook = async () => {
     // Load chapters from local database
     await loadChapters(bookId)
 
-    // Map database chapters to BookView chapter format
-    chapters.value = dbChapters.value.map((ch: any, index: number) => ({
-      id: ch.id,
-      title: ch.title || null,
-      word_count: Number(ch.word_count) || 0,
-      has_summary: false, // TODO: Implement summaries
-      summary: null,
-      position: index,
-      position_in_part: null,
-      part_id: null,
-      part_name: null
-    }))
+    // Map database chapters to BookView chapter format and check for summaries
+    const chapterPromises = dbChapters.value.map(async (ch: any, index: number) => {
+      const summary = await getSummary(ch.id)
+      return {
+        id: ch.id,
+        title: ch.title || null,
+        word_count: Number(ch.word_count) || 0,
+        has_summary: !!summary,
+        summary: summary?.summary || null,
+        position: index,
+        position_in_part: null,
+        part_id: null,
+        part_name: null
+      }
+    })
+
+    chapters.value = await Promise.all(chapterPromises)
 
     // TODO: Implement parts when needed
     parts.value = []
