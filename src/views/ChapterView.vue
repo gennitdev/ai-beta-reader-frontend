@@ -597,16 +597,6 @@ onMounted(async () => {
   <div class="max-w-6xl mx-auto p-6">
     <!-- Header -->
     <div class="mb-8">
-      <nav class="text-sm breadcrumbs mb-4">
-        <router-link to="/books" class="text-blue-600 hover:text-blue-700">Books</router-link>
-        <span class="mx-2 text-gray-500">></span>
-        <router-link :to="bookUrl" class="text-blue-600 hover:text-blue-700">
-          {{ bookTitle }}
-        </router-link>
-        <span class="mx-2 text-gray-500">></span>
-        <span class="text-gray-700 dark:text-gray-300">{{ chapter?.title || chapterId }}</span>
-      </nav>
-
       <div class="flex justify-between items-start">
         <div class="flex items-center flex-1">
           <!-- Back button for mobile routes -->
