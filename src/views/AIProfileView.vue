@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createAIProfileService } from '@/services/api'
+import { useDatabase } from '@/composables/useDatabase'
+import { BUILT_IN_PROFILES } from '@/lib/openai'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AvatarComponent from '@/components/AvatarComponent.vue'
 import {
@@ -45,17 +46,8 @@ const router = useRouter()
 // Computed route parameters
 const profileId = computed(() => route.params.id as string)
 
-// Create service (no auth needed for local-first)
-const getToken = async () => {
-  try {
-    return undefined
-  } catch (error) {
-    console.warn('Failed to get access token:', error)
-    return undefined
-  }
-}
-
-const aiProfileService = createAIProfileService(getToken)
+// Use local database
+const { getCustomProfiles, getReviews, books, chapters, loadBooks, loadChapters } = useDatabase()
 
 const profileData = ref<ProfileData | null>(null)
 const loading = ref(false)
@@ -87,12 +79,93 @@ const loadProfile = async () => {
   error.value = null
   try {
     console.log('Loading AI profile with ID:', profileId.value)
-    const data = await aiProfileService.getAIProfile(profileId.value)
-    console.log('Received AI profile data:', data)
-    profileData.value = data
+
+    let profile: AIProfile | null = null
+
+    // Check if it's a built-in profile (tone_key like 'fanficnet', 'editorial', etc.)
+    const builtInProfile = BUILT_IN_PROFILES[profileId.value as keyof typeof BUILT_IN_PROFILES]
+
+    if (builtInProfile) {
+      // Built-in profile
+      profile = {
+        id: 0, // Built-in profiles don't have numeric IDs
+        name: builtInProfile.name,
+        tone_key: builtInProfile.tone_key,
+        system_prompt: builtInProfile.system_prompt,
+        created_at: new Date().toISOString(),
+        is_system: true,
+        is_default: builtInProfile.tone_key === 'fanficnet'
+      }
+    } else if (!isNaN(Number(profileId.value))) {
+      // Custom profile (numeric ID)
+      const customProfiles = await getCustomProfiles()
+      const customProfile = customProfiles.find(p => p.id === Number(profileId.value))
+
+      if (customProfile) {
+        profile = {
+          id: customProfile.id,
+          name: customProfile.name,
+          tone_key: `custom-${customProfile.id}`,
+          system_prompt: `You are a beta reader with this personality and approach: ${customProfile.description}. Please review the following chapter providing feedback in this style.`,
+          created_at: customProfile.created_at,
+          is_system: false,
+          is_default: false
+        }
+      }
+    }
+
+    if (!profile) {
+      error.value = 'Profile not found'
+      return
+    }
+
+    // Load all reviews that use this profile
+    // We need to check all chapters for reviews with this tone_key or profile_id
+    await loadBooks()
+    const allReviews: ProfileReview[] = []
+
+    for (const book of books.value) {
+      await loadChapters(book.id)
+
+      for (const chapter of chapters.value) {
+        const chapterReviews = await getReviews(chapter.id)
+
+        // Filter reviews for this profile
+        const matchingReviews = chapterReviews.filter(review => {
+          if (builtInProfile) {
+            // Match by tone_key for built-in profiles
+            return review.tone_key === profileId.value
+          } else {
+            // Match by profile_id for custom profiles
+            return review.profile_id === Number(profileId.value)
+          }
+        })
+
+        // Add book and chapter info to reviews
+        for (const review of matchingReviews) {
+          allReviews.push({
+            id: review.id,
+            review_text: review.review_text,
+            created_at: review.created_at,
+            updated_at: review.updated_at,
+            chapter_id: chapter.id,
+            chapter_title: chapter.title || 'Untitled',
+            book_id: book.id,
+            book_title: book.title
+          })
+        }
+      }
+    }
+
+    profileData.value = {
+      profile,
+      reviews: allReviews
+    }
+
+    console.log('Loaded profile data:', profileData.value)
   } catch (err: any) {
     console.error('Failed to load AI profile:', err)
-    error.value = err.response?.data?.error || err.message || 'Failed to load AI profile'
+    error.value = err.message || 'Failed to load AI profile'
   } finally {
     loading.value = false
   }
