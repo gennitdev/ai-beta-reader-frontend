@@ -46,7 +46,7 @@ const router = useRouter()
 const bookId = route.params.id as string
 
 // Use local database
-const { books, chapters: dbChapters, loadBooks, loadChapters, getWikiPages, getSummary, saveBook, createPart, getParts, updatePart, deletePart, updateChapterOrders } = useDatabase()
+const { books, chapters: dbChapters, loadBooks, loadChapters, getWikiPages, getSummary, saveBook, createPart, getParts, updatePart, deletePart, updateChapterOrders, searchBook, replaceInChapter, replaceInWikiPage } = useDatabase()
 
 const book = ref<{ id: string; title: string } | null>(null)
 const chapters = ref<Chapter[]>([])
@@ -69,18 +69,16 @@ const creatingPart = ref(false)
 const creatingPartLoading = ref(false)
 const newPartName = ref('')
 
-// Search service placeholder (not yet implemented with local DB)
-
-
+// Search service using local database
 const searchService = {
-  searchBook: async (_bookId: string, _query: string): Promise<{ chapters: any[], wikiPages: any[] }> => {
-    return { chapters: [], wikiPages: [] }
+  searchBook: async (bookId: string, query: string) => {
+    return await searchBook(bookId, query)
   },
-  replaceInChapter: async (_bookId: string, _chapterId: string, _searchText: string, _replaceText: string): Promise<any> => {
-    throw new Error('Not implemented')
+  replaceInChapter: async (chapterId: string, searchText: string, replaceText: string) => {
+    await replaceInChapter(chapterId, searchText, replaceText)
   },
-  replaceInWikiPage: async (_bookId: string, _wikiPageId: string, _searchText: string, _replaceText: string): Promise<any> => {
-    throw new Error('Not implemented')
+  replaceInWikiPage: async (wikiPageId: string, searchText: string, replaceText: string) => {
+    await replaceInWikiPage(wikiPageId, searchText, replaceText)
   }
 }
 

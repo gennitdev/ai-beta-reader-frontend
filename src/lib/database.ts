@@ -1062,6 +1062,190 @@ export class AppDatabase {
     }
   }
 
+  // Search and Replace methods
+  async searchBook(bookId: string, searchTerm: string): Promise<{
+    chapters: Array<{
+      id: string;
+      title: string;
+      text: string;
+      word_count: number;
+      position: number;
+    }>;
+    wikiPages: Array<{
+      id: string;
+      page_name: string;
+      content: string;
+      summary: string;
+      page_type: string;
+    }>;
+  }> {
+    const searchLower = searchTerm.toLowerCase();
+    const chapters: any[] = [];
+    const wikiPages: any[] = [];
+
+    // Search in chapters
+    const chaptersQuery = `SELECT id, title, text, word_count FROM chapters WHERE book_id = ?`;
+
+    if (this.isNative) {
+      const result = await this.db.query(chaptersQuery, [bookId]);
+      result.values?.forEach((row: any, index: number) => {
+        const text = row[2] || '';
+        if (text.toLowerCase().includes(searchLower)) {
+          chapters.push({
+            id: row[0],
+            title: row[1],
+            text: text,
+            word_count: row[3],
+            position: index
+          });
+        }
+      });
+    } else {
+      const stmt = this.db.prepare(chaptersQuery);
+      stmt.bind([bookId]);
+      let position = 0;
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        const text = (row.text as string) || '';
+        if (text.toLowerCase().includes(searchLower)) {
+          chapters.push({
+            id: row.id,
+            title: row.title,
+            text: text,
+            word_count: row.word_count,
+            position: position
+          });
+        }
+        position++;
+      }
+      stmt.free();
+    }
+
+    // Search in wiki pages
+    const wikiQuery = `SELECT id, page_name, content, summary, page_type FROM wiki_pages WHERE book_id = ?`;
+
+    if (this.isNative) {
+      const result = await this.db.query(wikiQuery, [bookId]);
+      result.values?.forEach((row: any) => {
+        const pageName = row[1] || '';
+        const content = row[2] || '';
+        const summary = row[3] || '';
+        if (pageName.toLowerCase().includes(searchLower) ||
+            content.toLowerCase().includes(searchLower) ||
+            summary.toLowerCase().includes(searchLower)) {
+          wikiPages.push({
+            id: row[0],
+            page_name: pageName,
+            content: content,
+            summary: summary,
+            page_type: row[4]
+          });
+        }
+      });
+    } else {
+      const stmt = this.db.prepare(wikiQuery);
+      stmt.bind([bookId]);
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        const pageName = (row.page_name as string) || '';
+        const content = (row.content as string) || '';
+        const summary = (row.summary as string) || '';
+        if (pageName.toLowerCase().includes(searchLower) ||
+            content.toLowerCase().includes(searchLower) ||
+            summary.toLowerCase().includes(searchLower)) {
+          wikiPages.push({
+            id: row.id,
+            page_name: pageName,
+            content: content,
+            summary: summary,
+            page_type: row.page_type
+          });
+        }
+      }
+      stmt.free();
+    }
+
+    return { chapters, wikiPages };
+  }
+
+  async replaceInChapter(chapterId: string, searchTerm: string, replaceTerm: string): Promise<void> {
+    // Get current chapter
+    const getQuery = `SELECT text FROM chapters WHERE id = ?`;
+    let currentText = '';
+
+    if (this.isNative) {
+      const result = await this.db.query(getQuery, [chapterId]);
+      if (result.values && result.values.length > 0) {
+        currentText = result.values[0][0] || '';
+      }
+    } else {
+      const stmt = this.db.prepare(getQuery);
+      stmt.bind([chapterId]);
+      if (stmt.step()) {
+        const row = stmt.getAsObject();
+        currentText = (row.text as string) || '';
+      }
+      stmt.free();
+    }
+
+    // Perform replacement (case-sensitive)
+    const newText = currentText.split(searchTerm).join(replaceTerm);
+
+    // Update chapter
+    const updateQuery = `UPDATE chapters SET text = ?, word_count = ? WHERE id = ?`;
+    const wordCount = newText.trim().split(/\s+/).length;
+
+    if (this.isNative) {
+      await this.db.run(updateQuery, [newText, wordCount, chapterId]);
+    } else {
+      this.db.run(updateQuery, [newText, wordCount, chapterId]);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async replaceInWikiPage(wikiPageId: string, searchTerm: string, replaceTerm: string): Promise<void> {
+    // Get current wiki page
+    const getQuery = `SELECT page_name, content, summary FROM wiki_pages WHERE id = ?`;
+    let pageName = '';
+    let content = '';
+    let summary = '';
+
+    if (this.isNative) {
+      const result = await this.db.query(getQuery, [wikiPageId]);
+      if (result.values && result.values.length > 0) {
+        pageName = result.values[0][0] || '';
+        content = result.values[0][1] || '';
+        summary = result.values[0][2] || '';
+      }
+    } else {
+      const stmt = this.db.prepare(getQuery);
+      stmt.bind([wikiPageId]);
+      if (stmt.step()) {
+        const row = stmt.getAsObject();
+        pageName = (row.page_name as string) || '';
+        content = (row.content as string) || '';
+        summary = (row.summary as string) || '';
+      }
+      stmt.free();
+    }
+
+    // Perform replacements (case-sensitive)
+    const newPageName = pageName.split(searchTerm).join(replaceTerm);
+    const newContent = content.split(searchTerm).join(replaceTerm);
+    const newSummary = summary.split(searchTerm).join(replaceTerm);
+
+    // Update wiki page
+    const now = new Date().toISOString();
+    const updateQuery = `UPDATE wiki_pages SET page_name = ?, content = ?, summary = ?, updated_at = ? WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(updateQuery, [newPageName, newContent, newSummary, now, wikiPageId]);
+    } else {
+      this.db.run(updateQuery, [newPageName, newContent, newSummary, now, wikiPageId]);
+      this.saveToLocalStorage();
+    }
+  }
+
   private saveToLocalStorage() {
     if (!this.isNative) {
       const data = this.db.export();

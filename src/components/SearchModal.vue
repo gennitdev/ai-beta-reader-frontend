@@ -72,10 +72,10 @@
                 <button
                   v-if="replaceTerm"
                   @click="replaceInChapter(chapter.id)"
-                  :disabled="isReplacing"
+                  :disabled="replacingItemId !== null"
                   class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {{ isReplacing ? 'Replacing...' : 'Replace' }}
+                  {{ replacingItemId === chapter.id ? 'Replacing...' : 'Replace' }}
                 </button>
               </div>
               <div class="text-sm text-gray-700 dark:text-gray-300 max-h-32 overflow-y-auto">
@@ -114,10 +114,10 @@
                 <button
                   v-if="replaceTerm"
                   @click="replaceInWikiPage(wikiPage.id)"
-                  :disabled="isReplacing"
+                  :disabled="replacingItemId !== null"
                   class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {{ isReplacing ? 'Replacing...' : 'Replace' }}
+                  {{ replacingItemId === wikiPage.id ? 'Replacing...' : 'Replace' }}
                 </button>
               </div>
               <div class="text-sm text-gray-700 dark:text-gray-300 max-h-32 overflow-y-auto">
@@ -178,7 +178,7 @@ const router = useRouter()
 const searchTerm = ref('')
 const replaceTerm = ref('')
 const isSearching = ref(false)
-const isReplacing = ref(false)
+const replacingItemId = ref<string | null>(null) // Track which specific item is being replaced
 const searchResults = ref<{
   chapters: Array<{
     id: string
@@ -228,7 +228,7 @@ const performSearch = () => {
 const replaceInChapter = async (chapterId: string) => {
   if (!replaceTerm.value || !searchTerm.value) return
 
-  isReplacing.value = true
+  replacingItemId.value = chapterId
   try {
     await props.searchService.replaceInChapter(chapterId, searchTerm.value, replaceTerm.value)
     // Refresh search results
@@ -237,14 +237,14 @@ const replaceInChapter = async (chapterId: string) => {
   } catch (error) {
     console.error('Replace error:', error)
   } finally {
-    isReplacing.value = false
+    replacingItemId.value = null
   }
 }
 
 const replaceInWikiPage = async (wikiPageId: string) => {
   if (!replaceTerm.value || !searchTerm.value) return
 
-  isReplacing.value = true
+  replacingItemId.value = wikiPageId
   try {
     await props.searchService.replaceInWikiPage(wikiPageId, searchTerm.value, replaceTerm.value)
     // Refresh search results
@@ -253,7 +253,7 @@ const replaceInWikiPage = async (wikiPageId: string) => {
   } catch (error) {
     console.error('Replace error:', error)
   } finally {
-    isReplacing.value = false
+    replacingItemId.value = null
   }
 }
 

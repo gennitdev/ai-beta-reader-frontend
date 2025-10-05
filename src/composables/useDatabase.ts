@@ -419,6 +419,39 @@ export function useDatabase() {
     }
   }
 
+  async function searchBook(bookId: string, searchTerm: string) {
+    try {
+      await initializeDatabase()
+      return await db.searchBook(bookId, searchTerm)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to search'
+      console.error('Search error:', e)
+      throw e
+    }
+  }
+
+  async function replaceInChapter(chapterId: string, searchTerm: string, replaceTerm: string) {
+    try {
+      await initializeDatabase()
+      await db.replaceInChapter(chapterId, searchTerm, replaceTerm)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to replace in chapter'
+      console.error('Replace in chapter error:', e)
+      throw e
+    }
+  }
+
+  async function replaceInWikiPage(wikiPageId: string, searchTerm: string, replaceTerm: string) {
+    try {
+      await initializeDatabase()
+      await db.replaceInWikiPage(wikiPageId, searchTerm, replaceTerm)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to replace in wiki page'
+      console.error('Replace in wiki page error:', e)
+      throw e
+    }
+  }
+
   return {
     // State
     books,
@@ -465,6 +498,11 @@ export function useDatabase() {
     updatePart,
     deletePart,
     updateChapterOrders,
+
+    // Search and Replace operations
+    searchBook,
+    replaceInChapter,
+    replaceInWikiPage,
 
     // Cloud sync
     backupToCloud,
