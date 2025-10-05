@@ -1,11 +1,54 @@
 <script setup lang="ts">
 import { RouterView, useRoute } from 'vue-router'
-import { UserIcon } from '@heroicons/vue/24/outline'
-import { computed, watch } from 'vue'
+import { UserIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
+import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
+import SearchModal from '@/components/SearchModal.vue'
 
 const route = useRoute()
-const { books, chapters, loadBooks, loadChapters, getWikiPage } = useDatabase()
+const { books, chapters, loadBooks, loadChapters, getWikiPage, searchBook, replaceInChapter, replaceInWikiPage } = useDatabase()
+
+// Search modal state
+const showSearchModal = ref(false)
+
+// Search service for the modal
+const searchService = {
+  searchBook: async (bookId: string, query: string) => {
+    return await searchBook(bookId, query)
+  },
+  replaceInChapter: async (chapterId: string, searchText: string, replaceText: string) => {
+    await replaceInChapter(chapterId, searchText, replaceText)
+  },
+  replaceInWikiPage: async (wikiPageId: string, searchText: string, replaceText: string) => {
+    await replaceInWikiPage(wikiPageId, searchText, replaceText)
+  }
+}
+
+// Keyboard shortcut for search
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.key === '/' && !showSearchModal.value && currentBookId.value) {
+    // Only if not already in an input
+    if (e.target instanceof HTMLElement && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+      return
+    }
+    e.preventDefault()
+    showSearchModal.value = true
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+})
+
+// Get current book ID from route
+const currentBookId = computed(() => {
+  const bookId = (route.params.bookId || route.params.id) as string | undefined
+  return bookId || null
+})
 
 // Load books on mount
 loadBooks()
@@ -123,6 +166,26 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
 
           <!-- Right side menu -->
           <div class="flex items-center space-x-4">
+            <!-- Search bar (desktop) -->
+            <button
+              v-if="currentBookId"
+              @click="showSearchModal = true"
+              class="hidden md:flex items-center px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md border border-gray-300 dark:border-gray-600 transition-colors"
+            >
+              <MagnifyingGlassIcon class="w-4 h-4 mr-2" />
+              <span>Type <kbd class="px-1 py-0.5 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded">/</kbd> to search</span>
+            </button>
+
+            <!-- Search button (mobile) -->
+            <button
+              v-if="currentBookId"
+              @click="showSearchModal = true"
+              class="md:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              title="Search"
+            >
+              <MagnifyingGlassIcon class="w-5 h-5" />
+            </button>
+
             <!-- Settings menu -->
             <router-link
               to="/settings"
@@ -160,6 +223,16 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
             </router-link>
 
             <div class="flex items-center space-x-2">
+              <!-- Search button (mobile) -->
+              <button
+                v-if="currentBookId"
+                @click="showSearchModal = true"
+                class="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                title="Search"
+              >
+                <MagnifyingGlassIcon class="w-5 h-5" />
+              </button>
+
               <!-- Settings menu -->
               <router-link
                 to="/settings"
@@ -226,6 +299,15 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
     <main class="flex-1">
       <RouterView />
     </main>
+
+    <!-- Search Modal -->
+    <SearchModal
+      v-if="currentBookId"
+      :show="showSearchModal"
+      :book-id="currentBookId"
+      :search-service="searchService as any"
+      @close="showSearchModal = false"
+    />
   </div>
 </template>
 
