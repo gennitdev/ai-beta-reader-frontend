@@ -773,6 +773,179 @@ export class AppDatabase {
     }
   }
 
+  // Wiki Page methods
+  async createWikiPage(page: {
+    book_id: string;
+    page_name: string;
+    content: string;
+    summary: string;
+    page_type?: string;
+    created_by_ai?: boolean;
+  }) {
+    const id = `wiki-${page.book_id}-${Date.now()}`;
+    const now = new Date().toISOString();
+    const query = `INSERT INTO wiki_pages (id, book_id, page_name, page_type, content, summary, created_by_ai, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+    const params = [
+      id,
+      page.book_id,
+      page.page_name,
+      page.page_type || 'character',
+      page.content,
+      page.summary,
+      page.created_by_ai ? 1 : 0,
+      now,
+      now
+    ];
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+
+    return id;
+  }
+
+  async updateWikiPage(pageId: string, updates: {
+    content?: string;
+    summary?: string;
+    page_name?: string;
+  }) {
+    const now = new Date().toISOString();
+    const sets: string[] = [];
+    const params: any[] = [];
+
+    if (updates.content !== undefined) {
+      sets.push('content = ?');
+      params.push(updates.content);
+    }
+    if (updates.summary !== undefined) {
+      sets.push('summary = ?');
+      params.push(updates.summary);
+    }
+    if (updates.page_name !== undefined) {
+      sets.push('page_name = ?');
+      params.push(updates.page_name);
+    }
+
+    sets.push('updated_at = ?');
+    params.push(now);
+    params.push(pageId);
+
+    const query = `UPDATE wiki_pages SET ${sets.join(', ')} WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async getWikiPage(bookId: string, pageName: string): Promise<any | null> {
+    const query = `SELECT * FROM wiki_pages WHERE book_id = ? AND page_name = ? LIMIT 1`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [bookId, pageName]);
+      return result.values?.[0] || null;
+    } else {
+      const result = this.db.exec(query, [bookId, pageName]);
+      if (result.length === 0 || result[0].values.length === 0) return null;
+
+      const row = result[0].values[0];
+      return {
+        id: row[0],
+        book_id: row[1],
+        page_name: row[2],
+        page_type: row[3],
+        content: row[4],
+        summary: row[5],
+        aliases: row[6],
+        tags: row[7],
+        is_major: row[8],
+        created_by_ai: row[9],
+        created_at: row[10],
+        updated_at: row[11]
+      };
+    }
+  }
+
+  async getWikiPages(bookId: string): Promise<any[]> {
+    const query = `SELECT * FROM wiki_pages WHERE book_id = ? ORDER BY page_name`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [bookId]);
+      return result.values || [];
+    } else {
+      const result = this.db.exec(query, [bookId]);
+      if (result.length === 0) return [];
+
+      return result[0].values.map((row: any[]) => ({
+        id: row[0],
+        book_id: row[1],
+        page_name: row[2],
+        page_type: row[3],
+        content: row[4],
+        summary: row[5],
+        aliases: row[6],
+        tags: row[7],
+        is_major: row[8],
+        created_by_ai: row[9],
+        created_at: row[10],
+        updated_at: row[11]
+      }));
+    }
+  }
+
+  async trackWikiUpdate(update: {
+    wiki_page_id: string;
+    chapter_id: string;
+    update_type: string;
+    change_summary?: string;
+    contradiction_notes?: string;
+  }) {
+    const id = `update-${update.wiki_page_id}-${Date.now()}`;
+    const now = new Date().toISOString();
+    const query = `INSERT INTO wiki_updates (id, wiki_page_id, chapter_id, update_type, change_summary, contradiction_notes, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`;
+
+    const params = [
+      id,
+      update.wiki_page_id,
+      update.chapter_id,
+      update.update_type,
+      update.change_summary || null,
+      update.contradiction_notes || null,
+      now
+    ];
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async addChapterWikiMention(chapterId: string, wikiPageId: string) {
+    const id = `mention-${chapterId}-${wikiPageId}`;
+    const now = new Date().toISOString();
+    const query = `INSERT OR IGNORE INTO chapter_wiki_mentions (id, chapter_id, wiki_page_id, created_at)
+                   VALUES (?, ?, ?, ?)`;
+
+    const params = [id, chapterId, wikiPageId, now];
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
   private saveToLocalStorage() {
     if (!this.isNative) {
       const data = this.db.export();

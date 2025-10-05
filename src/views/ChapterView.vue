@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
-import { generateChapterSummary } from '@/lib/openai'
+import { generateChapterSummary, updateWikiPagesFromChapter } from '@/lib/openai'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AvatarComponent from '@/components/AvatarComponent.vue'
@@ -64,7 +64,20 @@ const bookId = computed(() => (route.params.bookId || route.params.id) as string
 const chapterId = computed(() => route.params.chapterId as string)
 
 // Use local database
-const { books, chapters, loadBooks, loadChapters, saveChapter: dbSaveChapter, saveSummary: dbSaveSummary, getSummary } = useDatabase()
+const {
+  books,
+  chapters,
+  loadBooks,
+  loadChapters,
+  saveChapter: dbSaveChapter,
+  saveSummary: dbSaveSummary,
+  getSummary,
+  createWikiPage,
+  updateWikiPage,
+  getWikiPage,
+  trackWikiUpdate,
+  addChapterWikiMention
+} = useDatabase()
 
 const chapter = ref<Chapter | null>(null)
 const loading = ref(false)
@@ -231,6 +244,29 @@ const generateSummary = async () => {
 
     // Update summary editing state
     editedSummary.value = result.summary
+
+    // Auto-generate/update wiki pages for characters
+    if (result.characters && result.characters.length > 0) {
+      try {
+        await updateWikiPagesFromChapter(
+          apiKey,
+          bookId.value,
+          chapter.value.id,
+          chapter.value.text,
+          result.summary,
+          result.characters,
+          getWikiPage,
+          createWikiPage,
+          updateWikiPage,
+          trackWikiUpdate,
+          addChapterWikiMention
+        )
+        console.log(`Updated wiki pages for ${result.characters.length} characters`)
+      } catch (wikiError: any) {
+        console.error('Failed to update wiki pages:', wikiError)
+        // Don't fail the whole operation if wiki update fails
+      }
+    }
   } catch (error: any) {
     console.error('Failed to generate summary:', error)
     alert(`Failed to generate summary: ${error.message || 'Unknown error'}`)

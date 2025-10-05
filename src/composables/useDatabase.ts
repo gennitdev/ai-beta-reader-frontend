@@ -224,6 +224,90 @@ export function useDatabase() {
     }
   }
 
+  // Wiki page operations
+  async function createWikiPage(page: {
+    book_id: string;
+    page_name: string;
+    content: string;
+    summary: string;
+    page_type?: string;
+    created_by_ai?: boolean;
+  }) {
+    try {
+      await initializeDatabase()
+      return await db.createWikiPage(page)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to create wiki page'
+      console.error('Create wiki page error:', e)
+      throw e
+    }
+  }
+
+  async function updateWikiPage(pageId: string, updates: {
+    content?: string;
+    summary?: string;
+    page_name?: string;
+  }) {
+    try {
+      await initializeDatabase()
+      await db.updateWikiPage(pageId, updates)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update wiki page'
+      console.error('Update wiki page error:', e)
+      throw e
+    }
+  }
+
+  async function getWikiPage(bookId: string, pageName: string) {
+    try {
+      await initializeDatabase()
+      return await db.getWikiPage(bookId, pageName)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get wiki page'
+      console.error('Get wiki page error:', e)
+      return null
+    }
+  }
+
+  async function getWikiPages(bookId: string) {
+    try {
+      await initializeDatabase()
+      return await db.getWikiPages(bookId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get wiki pages'
+      console.error('Get wiki pages error:', e)
+      return []
+    }
+  }
+
+  async function trackWikiUpdate(update: {
+    wiki_page_id: string;
+    chapter_id: string;
+    update_type: string;
+    change_summary?: string;
+    contradiction_notes?: string;
+  }) {
+    try {
+      await initializeDatabase()
+      await db.trackWikiUpdate(update)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to track wiki update'
+      console.error('Track wiki update error:', e)
+      throw e
+    }
+  }
+
+  async function addChapterWikiMention(chapterId: string, wikiPageId: string) {
+    try {
+      await initializeDatabase()
+      await db.addChapterWikiMention(chapterId, wikiPageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to add wiki mention'
+      console.error('Add wiki mention error:', e)
+      throw e
+    }
+  }
+
   return {
     // State
     books,
@@ -248,6 +332,14 @@ export function useDatabase() {
     saveReview,
     getReviews,
     deleteReview,
+
+    // Wiki page operations
+    createWikiPage,
+    updateWikiPage,
+    getWikiPage,
+    getWikiPages,
+    trackWikiUpdate,
+    addChapterWikiMention,
 
     // Cloud sync
     backupToCloud,

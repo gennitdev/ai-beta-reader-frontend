@@ -219,3 +219,179 @@ export function getProfileByToneKey(toneKey: string, customProfiles: AIProfile[]
 
   return null
 }
+
+/**
+ * Update wiki pages from chapter summary
+ * Creates new wiki pages for characters that don't exist,
+ * and updates existing ones with new information
+ */
+export async function updateWikiPagesFromChapter(
+  apiKey: string,
+  bookId: string,
+  chapterId: string,
+  chapterText: string,
+  chapterSummary: string,
+  characters: string[],
+  getWikiPageFn: (bookId: string, pageName: string) => Promise<any | null>,
+  createWikiPageFn: (page: {
+    book_id: string;
+    page_name: string;
+    content: string;
+    summary: string;
+    page_type?: string;
+    created_by_ai?: boolean;
+  }) => Promise<string>,
+  updateWikiPageFn: (pageId: string, updates: {
+    content?: string;
+    summary?: string;
+  }) => Promise<void>,
+  trackWikiUpdateFn: (update: {
+    wiki_page_id: string;
+    chapter_id: string;
+    update_type: string;
+    change_summary?: string;
+    contradiction_notes?: string;
+  }) => Promise<void>,
+  addChapterWikiMentionFn: (chapterId: string, wikiPageId: string) => Promise<void>
+): Promise<void> {
+  // Process each character mentioned in the chapter
+  for (const characterName of characters) {
+    try {
+      // Check if wiki page exists
+      const existingPage = await getWikiPageFn(bookId, characterName)
+
+      // Generate wiki content (create new or update existing)
+      const wikiResult = await generateWikiContent(
+        apiKey,
+        characterName,
+        chapterText,
+        chapterSummary,
+        existingPage?.content || null
+      )
+
+      if (existingPage) {
+        // Update existing page
+        if (wikiResult.hasChanges) {
+          await updateWikiPageFn(existingPage.id, {
+            content: wikiResult.content,
+            summary: wikiResult.summary
+          })
+
+          // Track the update
+          await trackWikiUpdateFn({
+            wiki_page_id: existingPage.id,
+            chapter_id: chapterId,
+            update_type: wikiResult.hasContradictions ? 'update_with_contradictions' : 'update',
+            change_summary: wikiResult.changeSummary,
+            contradiction_notes: wikiResult.contradictions
+          })
+        }
+
+        // Add chapter-wiki mention
+        await addChapterWikiMentionFn(chapterId, existingPage.id)
+      } else {
+        // Create new page
+        const newPageId = await createWikiPageFn({
+          book_id: bookId,
+          page_name: characterName,
+          content: wikiResult.content,
+          summary: wikiResult.summary,
+          page_type: 'character',
+          created_by_ai: true
+        })
+
+        // Track the creation
+        await trackWikiUpdateFn({
+          wiki_page_id: newPageId,
+          chapter_id: chapterId,
+          update_type: 'created',
+          change_summary: `Created character page for ${characterName}`
+        })
+
+        // Add chapter-wiki mention
+        await addChapterWikiMentionFn(chapterId, newPageId)
+      }
+    } catch (error) {
+      console.error(`Failed to update wiki for ${characterName}:`, error)
+      // Continue with other characters even if one fails
+    }
+  }
+}
+
+/**
+ * Generate or update wiki page content for a character
+ */
+export async function generateWikiContent(
+  apiKey: string,
+  characterName: string,
+  chapterText: string,
+  chapterSummary: string,
+  existingContent: string | null
+): Promise<{
+  content: string
+  summary: string
+  hasChanges: boolean
+  changeSummary?: string
+  hasContradictions?: boolean
+  contradictions?: string
+}> {
+  const client = createOpenAIClient(apiKey)
+  const isNewPage = !existingContent
+
+  const systemPrompt = isNewPage
+    ? `You are a wiki editor creating a character page. Create a comprehensive character profile based on the information provided. Return JSON with: {content: "markdown content", summary: "brief summary", hasChanges: true}`
+    : `You are a wiki editor updating a character page. Compare the existing content with new information from the chapter. Update the wiki to include new information and note any contradictions. Return JSON with: {content: "updated markdown", summary: "updated summary", hasChanges: boolean, changeSummary: "what changed", hasContradictions: boolean, contradictions: "contradictions found"}`
+
+  const userPrompt = isNewPage
+    ? `Create a wiki page for character: ${characterName}
+
+Chapter Summary: ${chapterSummary}
+
+Chapter Text Context: ${chapterText.substring(0, 2000)}...
+
+Create a character profile with sections for:
+- Basic Information
+- Appearance
+- Personality
+- Background
+- Relationships
+- Chapter Appearances`
+    : `Update the wiki page for character: ${characterName}
+
+EXISTING WIKI CONTENT:
+${existingContent}
+
+NEW CHAPTER INFORMATION:
+Chapter Summary: ${chapterSummary}
+Chapter Text Context: ${chapterText.substring(0, 2000)}...
+
+Update the wiki with any new information. If there are contradictions with existing content, note them clearly in a "Contradictions" section.`
+
+  try {
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3
+    })
+
+    const content = response.choices[0]?.message?.content
+    if (!content) {
+      throw new Error('No content received from OpenAI for wiki generation')
+    }
+
+    return JSON.parse(content)
+  } catch (error) {
+    console.error('Error generating wiki content:', error)
+    // Return a basic fallback
+    return {
+      content: `# ${characterName}\n\nMentioned in chapter summary: ${chapterSummary}`,
+      summary: `Character from the story`,
+      hasChanges: true,
+      changeSummary: 'Basic wiki page created due to AI generation error'
+    }
+  }
+}
