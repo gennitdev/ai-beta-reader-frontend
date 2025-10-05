@@ -75,6 +75,7 @@ const {
   createWikiPage,
   updateWikiPage,
   getWikiPage,
+  getWikiPages,
   trackWikiUpdate,
   addChapterWikiMention
 } = useDatabase()
@@ -154,6 +155,9 @@ const loadChapter = async () => {
       editedText.value = String(chapterData.text || '')
       editedTitle.value = chapterData.title || ''
       editedSummary.value = summaryData?.summary || ''
+
+      // Load character wiki info
+      await loadCharacters()
     } else {
       console.error('Chapter not found')
       router.push(`/books/${bookId.value}`)
@@ -267,6 +271,9 @@ const generateSummary = async () => {
         // Don't fail the whole operation if wiki update fails
       }
     }
+
+    // Reload character wiki info
+    await loadCharacters()
   } catch (error: any) {
     console.error('Failed to generate summary:', error)
     alert(`Failed to generate summary: ${error.message || 'Unknown error'}`)
@@ -330,8 +337,35 @@ const deleteReview = async (reviewId: string) => {
 }
 
 const loadCharacters = async () => {
-  // TODO: Load characters from local database
-  characters.value = []
+  if (!chapter.value?.characters || !bookId.value) {
+    characters.value = []
+    return
+  }
+
+  try {
+    // Get all wiki pages for this book
+    const wikiPages = await getWikiPages(bookId.value)
+
+    // Map chapter characters to include wiki page info
+    characters.value = chapter.value.characters.map(characterName => {
+      const wikiPage = wikiPages.find(page => page.page_name === characterName)
+      return {
+        id: wikiPage?.id || `char-${characterName}`,
+        character_name: characterName,
+        wiki_page_id: wikiPage?.id || null,
+        has_wiki_page: !!wikiPage
+      }
+    })
+  } catch (error) {
+    console.error('Failed to load character wiki info:', error)
+    // Fallback to just character names without wiki info
+    characters.value = chapter.value.characters.map(characterName => ({
+      id: `char-${characterName}`,
+      character_name: characterName,
+      wiki_page_id: null,
+      has_wiki_page: false
+    }))
+  }
 }
 
 const loadCustomProfiles = async () => {

@@ -845,6 +845,34 @@ export class AppDatabase {
     }
   }
 
+  async getWikiPageById(id: string): Promise<any | null> {
+    const query = `SELECT * FROM wiki_pages WHERE id = ? LIMIT 1`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [id]);
+      return result.values?.[0] || null;
+    } else {
+      const result = this.db.exec(query, [id]);
+      if (result.length === 0 || result[0].values.length === 0) return null;
+
+      const row = result[0].values[0];
+      return {
+        id: row[0],
+        book_id: row[1],
+        page_name: row[2],
+        page_type: row[3],
+        content: row[4],
+        summary: row[5],
+        aliases: row[6],
+        tags: row[7],
+        is_major: row[8],
+        created_by_ai: row[9],
+        created_at: row[10],
+        updated_at: row[11]
+      };
+    }
+  }
+
   async getWikiPage(bookId: string, pageName: string): Promise<any | null> {
     const query = `SELECT * FROM wiki_pages WHERE book_id = ? AND page_name = ? LIMIT 1`;
 

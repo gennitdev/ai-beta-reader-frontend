@@ -258,6 +258,17 @@ export function useDatabase() {
     }
   }
 
+  async function getWikiPageById(id: string) {
+    try {
+      await initializeDatabase()
+      return await db.getWikiPageById(id)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get wiki page by ID'
+      console.error('Get wiki page by ID error:', e)
+      return null
+    }
+  }
+
   async function getWikiPage(bookId: string, pageName: string) {
     try {
       await initializeDatabase()
@@ -336,6 +347,7 @@ export function useDatabase() {
     // Wiki page operations
     createWikiPage,
     updateWikiPage,
+    getWikiPageById,
     getWikiPage,
     getWikiPages,
     trackWikiUpdate,

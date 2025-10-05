@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createWikiService, createBookService } from '@/services/api'
+import { useDatabase } from '@/composables/useDatabase'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import {
   ArrowLeftIcon,
@@ -56,11 +56,8 @@ const wikiPageId = computed(() => route.params.wikiPageId as string)
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true)
 
-// Create service (no auth needed for local-first)
-const getToken = async () => undefined
-
-const wikiService = createWikiService(getToken)
-const bookService = createBookService(getToken)
+// Use local database
+const { books, loadBooks, getWikiPageById, updateWikiPage } = useDatabase()
 
 const wikiPage = ref<WikiPage | null>(null)
 const wikiHistory = ref<WikiUpdate[]>([])
@@ -90,13 +87,11 @@ const getTypeColor = (type: string) => {
   }
 }
 
-// Computed book title from localStorage
+// Computed book title from database
 const bookTitle = computed(() => {
   try {
-    const savedBooks = localStorage.getItem('books')
-    if (savedBooks) {
-      const books = JSON.parse(savedBooks)
-      const book = books.find((b: any) => b.id === bookId.value)
+    if (books.value.length > 0) {
+      const book = books.value.find((b: any) => b.id === bookId.value)
       if (book) {
         return book.title
       }
@@ -114,38 +109,47 @@ const bookWikiUrl = computed(() => `/books/${bookId.value}?tab=wiki`)
 const loadWikiPage = async () => {
   loading.value = true
   try {
-    const pageData = await wikiService.getWikiPage(wikiPageId.value)
-    wikiPage.value = pageData
-    editedContent.value = pageData.content
+    // Load books for breadcrumb
+    await loadBooks()
+
+    // Load wiki page from local database
+    const pageData = await getWikiPageById(wikiPageId.value)
+    if (pageData) {
+      wikiPage.value = {
+        id: pageData.id,
+        book_id: pageData.book_id,
+        page_name: pageData.page_name,
+        page_type: pageData.page_type || 'character',
+        content: pageData.content || '',
+        summary: pageData.summary || null,
+        aliases: pageData.aliases ? JSON.parse(pageData.aliases) : [],
+        tags: pageData.tags ? JSON.parse(pageData.tags) : [],
+        is_major: pageData.is_major || false,
+        created_by_ai: pageData.created_by_ai || false,
+        created_at: pageData.created_at,
+        updated_at: pageData.updated_at
+      }
+      editedContent.value = pageData.content || ''
+    } else {
+      console.error('Wiki page not found')
+      router.push(`/books/${bookId.value}?tab=wiki`)
+    }
   } catch (error) {
     console.error('Failed to load wiki page:', error)
-    router.push(`/books/${bookId.value}`)
+    router.push(`/books/${bookId.value}?tab=wiki`)
   } finally {
     loading.value = false
   }
 }
 
 const loadCharacters = async () => {
-  try {
-    const charactersData = await bookService.getBookCharacters(bookId.value)
-    characters.value = charactersData
-  } catch (error) {
-    console.error('Failed to load characters:', error)
-  }
+  // TODO: Load characters from local database if needed
+  characters.value = []
 }
 
 const loadWikiHistory = async () => {
-  if (!wikiPage.value || loadingHistory.value) return
-
-  loadingHistory.value = true
-  try {
-    const historyData = await wikiService.getWikiPageHistory(wikiPageId.value)
-    wikiHistory.value = historyData
-  } catch (error) {
-    console.error('Failed to load wiki history:', error)
-  } finally {
-    loadingHistory.value = false
-  }
+  // TODO: Load wiki history from local database
+  wikiHistory.value = []
 }
 
 const saveChanges = async () => {
@@ -153,7 +157,7 @@ const saveChanges = async () => {
 
   saving.value = true
   try {
-    await wikiService.updateWikiPage(wikiPageId.value, {
+    await updateWikiPage(wikiPageId.value, {
       content: editedContent.value
     })
 
@@ -161,7 +165,7 @@ const saveChanges = async () => {
     wikiPage.value.updated_at = new Date().toISOString()
     isEditing.value = false
 
-    // Reload history to show the update
+    // Reload history if needed
     if (showHistory.value) {
       await loadWikiHistory()
     }

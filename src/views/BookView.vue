@@ -46,7 +46,7 @@ const router = useRouter()
 const bookId = route.params.id as string
 
 // Use local database
-const { books, chapters: dbChapters, loadBooks, loadChapters } = useDatabase()
+const { books, chapters: dbChapters, loadBooks, loadChapters, getWikiPages } = useDatabase()
 
 const book = ref<{ id: string; title: string } | null>(null)
 const chapters = ref<Chapter[]>([])
@@ -507,8 +507,27 @@ const saveSidebarChapterOrder = async () => {
 
 
 const loadWiki = async () => {
-  // TODO: Load wiki pages from local database when implemented
-  wikiPages.value = []
+  if (!bookId) return
+
+  try {
+    loadingWiki.value = true
+    const pages = await getWikiPages(bookId)
+    wikiPages.value = pages.map((page: any) => ({
+      id: page.id,
+      page_name: page.page_name,
+      page_type: page.page_type || 'character',
+      summary: page.summary || '',
+      is_major: page.is_major || false,
+      created_by_ai: page.created_by_ai || false,
+      updated_at: page.updated_at,
+      created_at: page.created_at
+    }))
+  } catch (error) {
+    console.error('Failed to load wiki pages:', error)
+    wikiPages.value = []
+  } finally {
+    loadingWiki.value = false
+  }
 }
 
 const wikiPagesByType = computed(() => {
@@ -598,6 +617,13 @@ const checkAndRedirectToFirstChapter = () => {
 const handleResize = () => {
   checkAndRedirectToFirstChapter()
 }
+
+// Watch for tab changes to reload wiki pages
+watch(currentTab, async (newTab) => {
+  if (newTab === 'wiki') {
+    await loadWiki()
+  }
+})
 
 onMounted(async () => {
   await loadBook()
