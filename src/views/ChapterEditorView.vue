@@ -82,8 +82,8 @@ const saveChapter = async () => {
       created_at: new Date().toISOString()
     })
 
-    // Navigate back to book view
-    router.push(`/books/${bookId}`)
+    // Navigate to the chapter detail page
+    router.push(`/books/${bookId}/chapters/${chapter.value.id}`)
   } catch (error) {
     console.error('Failed to save chapter:', error)
   } finally {

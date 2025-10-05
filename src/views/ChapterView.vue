@@ -86,6 +86,7 @@ const {
 
 const chapter = ref<Chapter | null>(null)
 const loading = ref(false)
+const savingChapter = ref(false)
 const isEditing = ref(false)
 const editedText = ref('')
 const editedTitle = ref('')
@@ -181,7 +182,7 @@ const loadChapter = async () => {
 const saveChapter = async () => {
   if (!chapter.value || !hasUnsavedChanges.value) return
 
-  loading.value = true
+  savingChapter.value = true
   try {
     // Calculate word count
     const wordCount = editedText.value.trim().split(/\s+/).length
@@ -203,7 +204,7 @@ const saveChapter = async () => {
   } catch (error) {
     console.error('Failed to save chapter:', error)
   } finally {
-    loading.value = false
+    savingChapter.value = false
   }
 }
 
@@ -470,7 +471,9 @@ const loadCharacters = async () => {
     const wikiPages = await getWikiPages(bookId.value)
 
     // Map chapter characters to include wiki page info
-    characters.value = chapter.value.characters.map(characterName => {
+    // Handle both string format and object format { name: "...", role: "..." }
+    characters.value = chapter.value.characters.map(character => {
+      const characterName = typeof character === 'string' ? character : character.name
       const wikiPage = wikiPages.find(page => page.page_name === characterName)
       return {
         id: wikiPage?.id || `char-${characterName}`,
@@ -482,12 +485,15 @@ const loadCharacters = async () => {
   } catch (error) {
     console.error('Failed to load character wiki info:', error)
     // Fallback to just character names without wiki info
-    characters.value = chapter.value.characters.map(characterName => ({
-      id: `char-${characterName}`,
-      character_name: characterName,
-      wiki_page_id: null,
-      has_wiki_page: false
-    }))
+    characters.value = chapter.value.characters.map(character => {
+      const characterName = typeof character === 'string' ? character : character.name
+      return {
+        id: `char-${characterName}`,
+        character_name: characterName,
+        wiki_page_id: null,
+        has_wiki_page: false
+      }
+    })
   }
 }
 
@@ -648,10 +654,11 @@ onMounted(async () => {
             </button>
             <button
               @click="saveChapter"
-              :disabled="!hasUnsavedChanges || loading"
-              class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              :disabled="!hasUnsavedChanges || savingChapter"
+              class="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {{ loading ? 'Saving...' : 'Save' }}
+              <span v-if="savingChapter" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></span>
+              {{ savingChapter ? 'Saving...' : 'Save' }}
             </button>
           </template>
           <template v-else>
@@ -991,18 +998,21 @@ onMounted(async () => {
                 <div class="flex flex-wrap gap-1">
                   <button
                     v-for="character in chapter.characters"
-                    :key="character"
-                    @click="navigateToWiki(character)"
+                    :key="typeof character === 'string' ? character : character.name"
+                    @click="navigateToWiki(typeof character === 'string' ? character : character.name)"
                     :class="[
                       'inline-block px-2 py-1 text-xs rounded transition-colors',
-                      getCharacterWikiInfo(character)?.has_wiki_page
+                      getCharacterWikiInfo(typeof character === 'string' ? character : character.name)?.has_wiki_page
                         ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 cursor-pointer'
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-default'
                     ]"
-                    :disabled="!getCharacterWikiInfo(character)?.has_wiki_page"
-                    :title="getCharacterWikiInfo(character)?.has_wiki_page ? `View ${character}'s wiki page` : `${character} (no wiki page)`"
+                    :disabled="!getCharacterWikiInfo(typeof character === 'string' ? character : character.name)?.has_wiki_page"
+                    :title="getCharacterWikiInfo(typeof character === 'string' ? character : character.name)?.has_wiki_page ? `View ${typeof character === 'string' ? character : character.name}'s wiki page` : `${typeof character === 'string' ? character : character.name} (no wiki page)`"
                   >
-                    {{ character }}
+                    {{ typeof character === 'string' ? character : character.name }}
+                    <span v-if="typeof character === 'object' && character.role" class="ml-1 text-gray-500 dark:text-gray-400">
+                      — {{ character.role }}
+                    </span>
                   </button>
                 </div>
               </div>
