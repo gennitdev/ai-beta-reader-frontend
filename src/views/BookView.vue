@@ -210,6 +210,15 @@ const loadBook = async () => {
     // Load chapters from local database
     await loadChapters(bookId)
 
+    // Load parts from database first
+    parts.value = await getParts(bookId)
+
+    // Create a map of part IDs to part names for quick lookup
+    const partNameMap = new Map<string, string>()
+    parts.value.forEach(part => {
+      partNameMap.set(part.id, part.name)
+    })
+
     // Map database chapters to BookView chapter format and check for summaries
     const chapterPromises = dbChapters.value.map(async (ch: any, index: number) => {
       const summary = await getSummary(ch.id)
@@ -221,15 +230,12 @@ const loadBook = async () => {
         summary: summary?.summary || null,
         position: index,
         position_in_part: null,
-        part_id: null,
-        part_name: null
+        part_id: ch.part_id || null,
+        part_name: ch.part_id ? partNameMap.get(ch.part_id) || null : null
       }
     })
 
     chapters.value = await Promise.all(chapterPromises)
-
-    // Load parts from database
-    parts.value = await getParts(bookId)
   } catch (error) {
     console.error('Failed to load book:', error)
   } finally {
