@@ -224,6 +224,51 @@ export function useDatabase() {
     }
   }
 
+  // Custom reviewer profile operations
+  async function getCustomProfiles() {
+    try {
+      await initializeDatabase()
+      return await db.getCustomProfiles()
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get custom profiles'
+      console.error('Get custom profiles error:', e)
+      return []
+    }
+  }
+
+  async function createCustomProfile(profile: { name: string; description: string }) {
+    try {
+      await initializeDatabase()
+      return await db.createCustomProfile(profile)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to create custom profile'
+      console.error('Create custom profile error:', e)
+      throw e
+    }
+  }
+
+  async function updateCustomProfile(profileId: number, updates: { name?: string; description?: string }) {
+    try {
+      await initializeDatabase()
+      await db.updateCustomProfile(profileId, updates)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update custom profile'
+      console.error('Update custom profile error:', e)
+      throw e
+    }
+  }
+
+  async function deleteCustomProfile(profileId: number) {
+    try {
+      await initializeDatabase()
+      await db.deleteCustomProfile(profileId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete custom profile'
+      console.error('Delete custom profile error:', e)
+      throw e
+    }
+  }
+
   // Wiki page operations
   async function createWikiPage(page: {
     book_id: string;
@@ -343,6 +388,12 @@ export function useDatabase() {
     saveReview,
     getReviews,
     deleteReview,
+
+    // Custom reviewer profile operations
+    getCustomProfiles,
+    createCustomProfile,
+    updateCustomProfile,
+    deleteCustomProfile,
 
     // Wiki page operations
     createWikiPage,

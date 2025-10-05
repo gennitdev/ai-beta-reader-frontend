@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
-import { generateChapterSummary, updateWikiPagesFromChapter } from '@/lib/openai'
+import { generateChapterSummary, updateWikiPagesFromChapter, generateReview as generateAIReview, BUILT_IN_PROFILES } from '@/lib/openai'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AvatarComponent from '@/components/AvatarComponent.vue'
@@ -77,7 +77,11 @@ const {
   getWikiPage,
   getWikiPages,
   trackWikiUpdate,
-  addChapterWikiMention
+  addChapterWikiMention,
+  getCustomProfiles,
+  saveReview,
+  getReviews,
+  deleteReview: dbDeleteReview
 } = useDatabase()
 
 const chapter = ref<Chapter | null>(null)
@@ -158,6 +162,10 @@ const loadChapter = async () => {
 
       // Load character wiki info
       await loadCharacters()
+
+      // Load custom profiles and saved reviews
+      await loadCustomProfiles()
+      await loadSavedReviews()
     } else {
       console.error('Chapter not found')
       router.push(`/books/${bookId.value}`)
@@ -321,19 +329,134 @@ const saveSummary = async () => {
 }
 
 const generateReview = async () => {
-  // TODO: Implement AI review generation with local OpenAI key
-  console.log('Review generation not implemented yet')
-  alert('Review generation will be implemented with OpenAI integration')
+  if (!chapter.value) return
+
+  try {
+    generatingReview.value = true
+
+    // Get OpenAI API key
+    const apiKey = localStorage.getItem('openai_api_key')
+    if (!apiKey) {
+      alert('Please add your OpenAI API key in Settings first')
+      router.push('/settings')
+      return
+    }
+
+    // Determine which profile to use
+    let profile
+    let isCustomProfile = false
+    let customProfileId: number | null = null
+    let profileName = ''
+
+    if (reviewTone.value.startsWith('custom-')) {
+      // Custom profile
+      isCustomProfile = true
+      customProfileId = parseInt(reviewTone.value.replace('custom-', ''))
+      const customProfile = customProfiles.value.find(p => p.id === customProfileId)
+      if (!customProfile) {
+        alert('Selected custom profile not found')
+        return
+      }
+      profileName = customProfile.name
+      profile = {
+        id: `custom-${customProfileId}`,
+        name: customProfile.name,
+        tone_key: `custom-${customProfileId}`,
+        system_prompt: `You are a beta reader with this personality and approach: ${customProfile.description}. Please review the following chapter providing feedback in this style.`,
+        is_system: false
+      }
+    } else {
+      // Built-in profile
+      const builtInProfile = BUILT_IN_PROFILES[reviewTone.value as keyof typeof BUILT_IN_PROFILES]
+      if (!builtInProfile) {
+        alert('Selected profile not found')
+        return
+      }
+      profileName = builtInProfile.name
+      profile = builtInProfile
+    }
+
+    // Get prior chapter summaries
+    const book = books.value.find((b: any) => b.id === bookId.value)
+    const chapterOrder = book?.chapter_order ? JSON.parse(book.chapter_order) : []
+
+    let priorSummaries = ''
+    for (const chId of chapterOrder) {
+      if (chId === chapter.value.id) break
+
+      const chData = chapters.value.find((c: any) => c.id === chId)
+      if (chData) {
+        const summary = await getSummary(chId)
+        if (summary) {
+          priorSummaries += `# ${chId}${chData.title ? ` — ${chData.title}` : ''}\n${summary.summary}\n\n`
+        }
+      }
+    }
+
+    // Generate review
+    const result = await generateAIReview(
+      apiKey,
+      chapter.value.text,
+      chapter.value.title || chapter.value.id,
+      chapter.value.id,
+      profile,
+      priorSummaries || undefined
+    )
+
+    // Save to database
+    await saveReview({
+      chapter_id: chapter.value.id,
+      review_text: result.reviewText,
+      prompt_used: result.promptUsed,
+      profile_id: isCustomProfile ? customProfileId : null,
+      profile_name: profileName,
+      tone_key: reviewTone.value
+    })
+
+    // Update UI
+    reviewText.value = result.reviewText
+
+    // Reload saved reviews
+    await loadSavedReviews()
+  } catch (error: any) {
+    console.error('Failed to generate review:', error)
+    alert(`Failed to generate review: ${error.message || 'Unknown error'}`)
+  } finally {
+    generatingReview.value = false
+  }
 }
 
 const loadSavedReviews = async () => {
-  // TODO: Load reviews from local database
-  savedReviews.value = []
+  if (!chapter.value) {
+    savedReviews.value = []
+    return
+  }
+
+  try {
+    loadingReviews.value = true
+    const reviews = await getReviews(chapter.value.id)
+    savedReviews.value = reviews
+  } catch (error) {
+    console.error('Failed to load reviews:', error)
+    savedReviews.value = []
+  } finally {
+    loadingReviews.value = false
+  }
 }
 
 const deleteReview = async (reviewId: string) => {
-  // TODO: Delete review from local database
-  console.log('Delete review not implemented yet')
+  if (!confirm('Are you sure you want to delete this review?')) return
+
+  try {
+    deletingReviewId.value = reviewId
+    await dbDeleteReview(reviewId)
+    await loadSavedReviews()
+  } catch (error) {
+    console.error('Failed to delete review:', error)
+    alert('Failed to delete review')
+  } finally {
+    deletingReviewId.value = null
+  }
 }
 
 const loadCharacters = async () => {
@@ -369,8 +492,13 @@ const loadCharacters = async () => {
 }
 
 const loadCustomProfiles = async () => {
-  // TODO: Load custom profiles from local database
-  customProfiles.value = []
+  try {
+    const profiles = await getCustomProfiles()
+    customProfiles.value = profiles
+  } catch (error) {
+    console.error('Failed to load custom profiles:', error)
+    customProfiles.value = []
+  }
 }
 
 // Character lookup helper - now more functional

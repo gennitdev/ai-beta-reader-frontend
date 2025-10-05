@@ -773,6 +773,94 @@ export class AppDatabase {
     }
   }
 
+  // Custom Reviewer Profile methods
+  async getCustomProfiles(): Promise<any[]> {
+    const query = `SELECT * FROM custom_reviewer_profiles ORDER BY created_at DESC`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query);
+      return result.values || [];
+    } else {
+      const result = this.db.exec(query);
+      if (result.length === 0) return [];
+
+      return result[0].values.map((row: any[]) => ({
+        id: row[0],
+        name: row[1],
+        description: row[2],
+        created_at: row[3],
+        updated_at: row[4]
+      }));
+    }
+  }
+
+  async createCustomProfile(profile: {
+    name: string;
+    description: string;
+  }) {
+    const id = Date.now();
+    const now = new Date().toISOString();
+    const query = `INSERT INTO custom_reviewer_profiles (id, name, description, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?)`;
+
+    const params = [id, profile.name, profile.description, now, now];
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+
+    return id;
+  }
+
+  async updateCustomProfile(profileId: number, updates: {
+    name?: string;
+    description?: string;
+  }) {
+    const now = new Date().toISOString();
+    const sets: string[] = [];
+    const params: any[] = [];
+
+    if (updates.name !== undefined) {
+      sets.push('name = ?');
+      params.push(updates.name);
+    }
+    if (updates.description !== undefined) {
+      sets.push('description = ?');
+      params.push(updates.description);
+    }
+
+    sets.push('updated_at = ?');
+    params.push(now);
+    params.push(profileId);
+
+    const query = `UPDATE custom_reviewer_profiles SET ${sets.join(', ')} WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async deleteCustomProfile(profileId: number) {
+    // First delete any reviews using this profile
+    const deleteReviewsQuery = `DELETE FROM chapter_reviews WHERE profile_id = ?`;
+    const deleteProfileQuery = `DELETE FROM custom_reviewer_profiles WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(deleteReviewsQuery, [profileId]);
+      await this.db.run(deleteProfileQuery, [profileId]);
+    } else {
+      this.db.run(deleteReviewsQuery, [profileId]);
+      this.db.run(deleteProfileQuery, [profileId]);
+      this.saveToLocalStorage();
+    }
+  }
+
   // Wiki Page methods
   async createWikiPage(page: {
     book_id: string;
