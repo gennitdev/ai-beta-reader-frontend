@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
+import { generateChapterSummary } from '@/lib/openai'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AvatarComponent from '@/components/AvatarComponent.vue'
@@ -63,7 +64,7 @@ const bookId = computed(() => (route.params.bookId || route.params.id) as string
 const chapterId = computed(() => route.params.chapterId as string)
 
 // Use local database
-const { books, chapters, loadBooks, loadChapters, saveChapter: dbSaveChapter } = useDatabase()
+const { books, chapters, loadBooks, loadChapters, saveChapter: dbSaveChapter, saveSummary, getSummary } = useDatabase()
 
 const chapter = ref<Chapter | null>(null)
 const loading = ref(false)
@@ -122,20 +123,24 @@ const loadChapter = async () => {
     const chapterData = chapters.value.find((ch: any) => ch.id === chapterId.value)
 
     if (chapterData) {
+      // Load summary from database if exists
+      const summaryData = await getSummary(chapterData.id)
+
       chapter.value = {
         id: chapterData.id,
         book_id: chapterData.book_id,
         title: chapterData.title || null,
         text: String(chapterData.text || ''),
         word_count: chapterData.word_count,
-        summary: null, // TODO: Implement summaries
-        pov: null,
-        characters: null,
-        beats: null,
-        spoilers_ok: null
+        summary: summaryData?.summary || null,
+        pov: summaryData?.pov || null,
+        characters: summaryData?.characters ? JSON.parse(summaryData.characters) : null,
+        beats: summaryData?.beats ? JSON.parse(summaryData.beats) : null,
+        spoilers_ok: summaryData?.spoilers_ok || null
       }
       editedText.value = String(chapterData.text || '')
       editedTitle.value = chapterData.title || ''
+      editedSummary.value = summaryData?.summary || ''
     } else {
       console.error('Chapter not found')
       router.push(`/books/${bookId.value}`)
@@ -178,9 +183,60 @@ const saveChapter = async () => {
 }
 
 const generateSummary = async () => {
-  // TODO: Implement AI summary generation with local OpenAI key
-  console.log('Summary generation not implemented yet')
-  alert('Summary generation will be implemented with OpenAI integration')
+  if (!chapter.value) return
+
+  try {
+    generatingSummary.value = true
+
+    // Get OpenAI API key from localStorage
+    const apiKey = localStorage.getItem('openai_api_key')
+    if (!apiKey) {
+      alert('Please add your OpenAI API key in Settings first')
+      router.push('/settings')
+      return
+    }
+
+    // Check if this is the first chapter (position 0 in book's chapter order)
+    const book = books.value.find((b: any) => b.id === bookId.value)
+    const chapterOrder = book?.chapter_order ? JSON.parse(book.chapter_order) : []
+    const isFirstChapter = chapterOrder[0] === chapter.value.id
+
+    // Generate summary using OpenAI
+    const result = await generateChapterSummary(
+      apiKey,
+      chapter.value.text,
+      chapter.value.title || chapter.value.id,
+      chapter.value.id,
+      bookId.value,
+      book?.title || bookId.value,
+      isFirstChapter
+    )
+
+    // Save summary to database
+    await saveSummary({
+      chapter_id: chapter.value.id,
+      summary: result.summary,
+      pov: result.pov,
+      characters: result.characters,
+      beats: result.beats,
+      spoilers_ok: result.spoilers_ok
+    })
+
+    // Update UI
+    chapter.value.summary = result.summary
+    chapter.value.pov = result.pov
+    chapter.value.characters = result.characters
+    chapter.value.beats = result.beats
+    chapter.value.spoilers_ok = result.spoilers_ok
+
+    // Update summary editing state
+    editedSummary.value = result.summary
+  } catch (error: any) {
+    console.error('Failed to generate summary:', error)
+    alert(`Failed to generate summary: ${error.message || 'Unknown error'}`)
+  } finally {
+    generatingSummary.value = false
+  }
 }
 
 const startEditingSummary = () => {
