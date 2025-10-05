@@ -1188,8 +1188,22 @@ export class AppDatabase {
       stmt.free();
     }
 
-    // Perform replacement (case-sensitive)
-    const newText = currentText.split(searchTerm).join(replaceTerm);
+    // Perform replacement (case-insensitive but preserves the case pattern of replacement)
+    // This will match all case variations of the search term
+    const regex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const newText = currentText.replace(regex, (match) => {
+      // Preserve the case pattern of the matched text
+      if (match === match.toUpperCase() && match.length > 1) {
+        // All caps -> make replacement all caps
+        return replaceTerm.toUpperCase();
+      } else if (match[0] === match[0].toUpperCase()) {
+        // First letter capitalized -> capitalize replacement
+        return replaceTerm.charAt(0).toUpperCase() + replaceTerm.slice(1);
+      } else {
+        // Lowercase -> use replacement as-is
+        return replaceTerm;
+      }
+    });
 
     // Update chapter
     const updateQuery = `UPDATE chapters SET text = ?, word_count = ? WHERE id = ?`;
@@ -1229,10 +1243,27 @@ export class AppDatabase {
       stmt.free();
     }
 
-    // Perform replacements (case-sensitive)
-    const newPageName = pageName.split(searchTerm).join(replaceTerm);
-    const newContent = content.split(searchTerm).join(replaceTerm);
-    const newSummary = summary.split(searchTerm).join(replaceTerm);
+    // Perform replacements (case-insensitive but preserves the case pattern)
+    const regex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const replaceWithCasePreservation = (text: string) => {
+      return text.replace(regex, (match) => {
+        // Preserve the case pattern of the matched text
+        if (match === match.toUpperCase() && match.length > 1) {
+          // All caps -> make replacement all caps
+          return replaceTerm.toUpperCase();
+        } else if (match[0] === match[0].toUpperCase()) {
+          // First letter capitalized -> capitalize replacement
+          return replaceTerm.charAt(0).toUpperCase() + replaceTerm.slice(1);
+        } else {
+          // Lowercase -> use replacement as-is
+          return replaceTerm;
+        }
+      });
+    };
+
+    const newPageName = replaceWithCasePreservation(pageName);
+    const newContent = replaceWithCasePreservation(content);
+    const newSummary = replaceWithCasePreservation(summary);
 
     // Update wiki page
     const now = new Date().toISOString();
