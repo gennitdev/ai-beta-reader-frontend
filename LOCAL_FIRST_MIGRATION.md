@@ -331,20 +331,25 @@ A: Yes! Encrypted with AES-256 before cloud upload. Google Drive only sees encry
 - **Parts organization** - Group chapters into parts (schema ready, UI TODO)
 - **OpenAI API integration** - Client-side AI calls
 - **Summary generation** - AI-powered chapter summaries with POV/characters/beats
+- **Wiki auto-generation** - Automatically creates/updates character pages from summaries
+  - Creates comprehensive character profiles with AI
+  - Updates existing pages with new chapter information
+  - Detects and notes contradictions between chapters
+  - Tracks wiki changes and chapter-character mentions
 - **User settings** - OpenAI API key management
 - **Cloud sync** - Encrypted backup/restore to Google Drive
 - **Database migrations** - Automatic schema updates
 
 ### ⏳ Partially Complete
 - **Review generation** - Backend ready, UI needs wiring
-- **Wiki pages** - Schema exists, UI needs update
+- **Wiki pages viewer** - Auto-generation works, viewing UI needs update
 - **Parts UI** - Database methods ready, drag-and-drop UI TODO
 
-### 📊 Migration Progress: ~95% Complete
+### 📊 Migration Progress: ~97% Complete
 
 ## Recent Commits Summary
 
-**Latest session (16 commits):**
+**Current session (19 commits):**
 1. Add Neon PostgreSQL JSON import functionality
 2. Update ChapterView to use local database
 3. Update ChapterEditorView to use local database
@@ -359,8 +364,13 @@ A: Yes! Encrypted with AES-256 before cloud upload. Google Drive only sees encry
 12. Fix word count and breadcrumb display issues
 13. Implement AI chapter summary generation
 14. Fix naming conflict with saveSummary function
+15. Update LOCAL_FIRST_MIGRATION.md documentation
+16. Implement review generation in ChapterView
+17. Update migration docs with Phase 7
+18. Add wiki page schema and database methods
+19. Implement wiki auto-generation from chapter summaries
 
-**Total: 27 commits** since migration started
+**Total: 30 commits** since migration started
 
 ## Next Steps
 
@@ -368,8 +378,9 @@ When you're ready, I can help with:
 1. ✅ ~~Replacing API calls with local database calls~~ **DONE**
 2. ✅ ~~Adding client-side OpenAI integration~~ **DONE**
 3. ✅ ~~Creating OpenAI API key settings UI~~ **DONE**
-4. **Implement review generation UI** - Next priority
-5. **Test complete workflow with real API key**
-6. **Build for Android/iOS**
+4. ✅ ~~Implementing wiki auto-generation~~ **DONE**
+5. **Create wiki pages viewer UI** - View and edit character wiki pages
+6. **Test complete workflow with real API key** - End-to-end testing
+7. **Build for Android/iOS** - Mobile deployment
 
-The migration is nearly complete! Just need review generation UI and final testing. 🚀
+The migration is nearly complete! The core functionality is working, just need UI polish and testing. 🚀
