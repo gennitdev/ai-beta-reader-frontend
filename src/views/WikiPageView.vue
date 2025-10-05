@@ -69,6 +69,10 @@ const isEditing = ref(false)
 const editedContent = ref('')
 const saving = ref(false)
 
+// Page name editing state
+const isEditingPageName = ref(false)
+const editedPageName = ref('')
+
 const getTypeIcon = (type: string) => {
   switch (type) {
     case 'character': return UserIcon
@@ -177,6 +181,38 @@ const saveChanges = async () => {
   }
 }
 
+const startEditingPageName = () => {
+  if (!wikiPage.value) return
+  editedPageName.value = wikiPage.value.page_name
+  isEditingPageName.value = true
+}
+
+const cancelEditPageName = () => {
+  isEditingPageName.value = false
+  editedPageName.value = ''
+}
+
+const savePageName = async () => {
+  if (!wikiPage.value || !editedPageName.value.trim()) return
+
+  saving.value = true
+  try {
+    await updateWikiPage(wikiPageId.value, {
+      page_name: editedPageName.value.trim()
+    })
+
+    wikiPage.value.page_name = editedPageName.value.trim()
+    wikiPage.value.updated_at = new Date().toISOString()
+    isEditingPageName.value = false
+    editedPageName.value = ''
+  } catch (error) {
+    console.error('Failed to rename wiki page:', error)
+    alert('Failed to rename page')
+  } finally {
+    saving.value = false
+  }
+}
+
 const cancelEdit = () => {
   if (!wikiPage.value) return
   editedContent.value = wikiPage.value.content
@@ -236,17 +272,55 @@ onMounted(() => {
 
           <div v-if="wikiPage" class="flex items-center space-x-3">
             <component :is="getTypeIcon(wikiPage.page_type)" :class="['w-8 h-8', getTypeColor(wikiPage.page_type)]" />
-            <div>
-              <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ wikiPage.page_name }}</h1>
-              <div class="flex items-center space-x-3 mt-1">
-                <span class="text-sm text-gray-500 dark:text-gray-400 capitalize">{{ wikiPage.page_type }}</span>
-                <span v-if="wikiPage.is_major" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
-                  Major
-                </span>
-                <span v-if="wikiPage.created_by_ai" class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full flex items-center">
-                  <SparklesIcon class="w-2.5 h-2.5 mr-1" />
-                  AI Created
-                </span>
+            <div class="flex-1">
+              <!-- Editing mode -->
+              <div v-if="isEditingPageName" class="flex items-center space-x-2">
+                <input
+                  v-model="editedPageName"
+                  @keyup.enter="savePageName"
+                  @keyup.esc="cancelEditPageName"
+                  type="text"
+                  class="text-3xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Page name"
+                  autofocus
+                />
+                <button
+                  @click="savePageName"
+                  :disabled="saving"
+                  class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  Save
+                </button>
+                <button
+                  @click="cancelEditPageName"
+                  class="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <!-- Display mode -->
+              <div v-else>
+                <div class="flex items-center space-x-2 group">
+                  <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ wikiPage.page_name }}</h1>
+                  <button
+                    @click="startEditingPageName"
+                    class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Rename page"
+                  >
+                    <PencilIcon class="w-5 h-5" />
+                  </button>
+                </div>
+                <div class="flex items-center space-x-3 mt-1">
+                  <span class="text-sm text-gray-500 dark:text-gray-400 capitalize">{{ wikiPage.page_type }}</span>
+                  <span v-if="wikiPage.is_major" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                    Major
+                  </span>
+                  <span v-if="wikiPage.created_by_ai" class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full flex items-center">
+                    <SparklesIcon class="w-2.5 h-2.5 mr-1" />
+                    AI Created
+                  </span>
+                </div>
               </div>
             </div>
           </div>
