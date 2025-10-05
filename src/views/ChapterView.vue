@@ -110,6 +110,7 @@ const characters = ref<Character[]>([]);
 const isEditingSummary = ref(false);
 const editedSummary = ref("");
 const savingSummary = ref(false);
+const showSummaryPanel = ref(false);
 
 // Text truncation state
 const showFullChapterText = ref(false);
@@ -652,6 +653,12 @@ onMounted(async () => {
                   {{ chapter?.summary ? "Summarized" : "Not summarized" }}
                 </span>
               </div>
+              <button
+                @click="showSummaryPanel = !showSummaryPanel"
+                class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+              >
+                {{ showSummaryPanel ? 'Hide Summary' : 'Show Summary' }}
+              </button>
             </div>
           </div>
         </div>
@@ -696,6 +703,7 @@ onMounted(async () => {
     <div v-else-if="chapter" class="space-y-6">
       <!-- Summary -->
       <div
+        v-if="showSummaryPanel"
         class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700"
       >
         <div class="p-6">
