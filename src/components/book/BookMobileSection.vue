@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { toRefs } from 'vue'
-import { DocumentTextIcon, BookOpenIcon, PlusIcon, PencilIcon, Cog6ToothIcon } from '@heroicons/vue/24/outline'
-import { CheckCircleIcon } from '@heroicons/vue/24/solid'
+import { DocumentTextIcon, BookOpenIcon, PlusIcon, Cog6ToothIcon, PencilIcon } from '@heroicons/vue/24/outline'
 import type { Book } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import type { PropType } from 'vue'
+import BookMobileChapterCard from './BookMobileChapterCard.vue'
 
 const props = defineProps({
   book: {
@@ -35,13 +35,13 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  sortedChapters: {
-    type: Array as PropType<BookChapter[]>,
-    default: () => []
-  },
   chaptersByPart: {
     type: Object as PropType<BookChaptersByPart>,
     required: true
+  },
+  sortedChapters: {
+    type: Array as PropType<BookChapter[]>,
+    default: () => []
   },
   chapterCount: {
     type: Number,
@@ -150,16 +150,10 @@ const {
               placeholder="Book title"
               autofocus
             />
-            <button
-              @click="saveBookTitle"
-              class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
+            <button @click="saveBookTitle" class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
               Save
             </button>
-            <button
-              @click="cancelEditingBookTitle"
-              class="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-            >
+            <button @click="cancelEditingBookTitle" class="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
               Cancel
             </button>
           </div>
@@ -180,17 +174,11 @@ const {
           </p>
         </div>
         <div class="flex flex-wrap justify-end gap-2">
-          <button
-            @click="createNewChapter"
-            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
+          <button @click="createNewChapter" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
             <PlusIcon class="w-5 h-5 mr-2" />
             New Chapter
           </button>
-          <button
-            @click="goToOrganizeChapters"
-            class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-          >
+          <button @click="goToOrganizeChapters" class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
             <Cog6ToothIcon class="w-5 h-5 mr-2" />
             Organize Chapters
           </button>
@@ -244,193 +232,87 @@ const {
                 {{ formatWordCount(part.wordCount) }} words
               </p>
             </div>
-            <button
-              @click="createNewChapterInPart(part.id)"
-              class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
+            <button @click="createNewChapterInPart(part.id)" class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
               <PlusIcon class="w-4 h-4 mr-2" />
               Add Chapter
             </button>
           </div>
 
           <div class="divide-y divide-gray-200 dark:divide-gray-700">
-            <div
+            <BookMobileChapterCard
               v-for="chapter in part.chapters"
               :key="chapter.id"
-              class="px-4 py-4"
-            >
-              <div class="flex items-start gap-3">
-                <router-link
-                  :to="`/m/books/${bookId}/chapters/${chapter.id}`"
-                  class="flex-1"
-                >
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                    {{ chapter.title || chapter.id }}
-                  </h3>
-                  <div class="mt-1 flex flex-wrap items-center gap-4">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ chapter.word_count?.toLocaleString() || 0 }} words
-                    </span>
-                    <div
-                      class="flex items-center"
-                      :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
-                    >
-                      <CheckCircleIcon
-                        :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
-                        class="w-4 h-4 mr-1"
-                      />
-                      <span
-                        :class="chapter.has_summary ? 'text-green-600' : 'text-gray-500'"
-                        class="text-sm"
-                      >
-                        {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div v-if="chapter.has_summary && chapter.summary" class="mt-3">
-                    <div class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                      <span v-if="!expandedSummaries.has(chapter.id)">
-                        {{ getSummaryPreview(chapter.summary) }}
-                        <button
-                          @click.stop.prevent="toggleSummary(chapter.id)"
-                          class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                        >
-                          See more
-                        </button>
-                      </span>
-                      <span v-else>
-                        {{ chapter.summary }}
-                        <button
-                          @click.stop.prevent="toggleSummary(chapter.id)"
-                          class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                        >
-                          Show less
-                        </button>
-                      </span>
-                    </div>
-                  </div>
-                </router-link>
-
-                <button
-                  @click="editChapter(chapter.id)"
-                  class="mt-1 inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-                >
-                  <PencilIcon class="w-4 h-4 mr-1" />
-                  Edit
-                </button>
-              </div>
-            </div>
+              :book-id="bookId"
+              :chapter="chapter"
+              :expanded-summaries="expandedSummaries"
+              :get-summary-preview="getSummaryPreview"
+              :toggle-summary="toggleSummary"
+              :edit-chapter="editChapter"
+            />
           </div>
         </section>
 
         <section
-                v-if="chaptersByPart.uncategorized.length > 0"
+          v-if="chaptersByPart.uncategorized.length > 0"
           class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
         >
           <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <div>
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Uncategorized</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {{ chaptersByPart.uncategorized.length }} chapter{{
-                chaptersByPart.uncategorized.length !== 1 ? 's' : ''
-              }}
-            </p>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {{ chaptersByPart.uncategorized.length }} chapter{{
+                  chaptersByPart.uncategorized.length !== 1 ? 's' : ''
+                }}
+              </p>
             </div>
-            <button
-              @click="createNewChapter"
-              class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
+            <button @click="createNewChapter" class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
               <PlusIcon class="w-4 h-4 mr-2" />
               Add Chapter
             </button>
           </div>
 
           <div class="divide-y divide-gray-200 dark:divide-gray-700">
-          <div
-            v-for="chapter in chaptersByPart.uncategorized"
+            <BookMobileChapterCard
+              v-for="chapter in chaptersByPart.uncategorized"
               :key="chapter.id"
-              class="px-4 py-4"
-            >
-              <div class="flex items-start gap-3">
-                <router-link
-                  :to="`/m/books/${bookId}/chapters/${chapter.id}`"
-                  class="flex-1"
-                >
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                    {{ chapter.title || chapter.id }}
-                  </h3>
-                  <div class="mt-1 flex flex-wrap items-center gap-4">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ chapter.word_count?.toLocaleString() || 0 }} words
-                    </span>
-                    <div
-                      class="flex items-center"
-                      :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
-                    >
-                      <CheckCircleIcon
-                        :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
-                        class="w-4 h-4 mr-1"
-                      />
-                      <span
-                        :class="chapter.has_summary ? 'text-green-600' : 'text-gray-500'"
-                        class="text-sm"
-                      >
-                        {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
-                      </span>
-                    </div>
-                  </div>
+              :book-id="bookId"
+              :chapter="chapter"
+              :expanded-summaries="expandedSummaries"
+              :get-summary-preview="getSummaryPreview"
+              :toggle-summary="toggleSummary"
+              :edit-chapter="editChapter"
+            />
+          </div>
+        </section>
 
-                  <div v-if="chapter.has_summary && chapter.summary" class="mt-3">
-                    <div class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                    <span v-if="!expandedSummaries.has(chapter.id)">
-                        {{ getSummaryPreview(chapter.summary) }}
-                        <button
-                          @click.stop.prevent="toggleSummary(chapter.id)"
-                          class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                        >
-                          See more
-                        </button>
-                      </span>
-                      <span v-else>
-                        {{ chapter.summary }}
-                        <button
-                          @click.stop.prevent="toggleSummary(chapter.id)"
-                          class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                        >
-                          Show less
-                        </button>
-                      </span>
-                    </div>
-                  </div>
-                </router-link>
-
-                <button
-                  @click="editChapter(chapter.id)"
-                  class="mt-1 inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-                >
-                  <PencilIcon class="w-4 h-4 mr-1" />
-                  Edit
-                </button>
-              </div>
-            </div>
+        <section
+          v-if="chaptersByPart.parts.length === 0"
+          class="space-y-4"
+        >
+          <div
+            v-for="chapter in sortedChapters"
+            :key="chapter.id"
+            class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
+          >
+            <BookMobileChapterCard
+              :book-id="bookId"
+              :chapter="chapter"
+              :expanded-summaries="expandedSummaries"
+              :get-summary-preview="getSummaryPreview"
+              :toggle-summary="toggleSummary"
+              :edit-chapter="editChapter"
+            />
           </div>
         </section>
       </div>
 
-      <div
-        v-else
-        class="text-center py-16"
-      >
+      <div v-else class="text-center py-16">
         <DocumentTextIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No chapters yet</h3>
         <p class="text-gray-600 dark:text-gray-400 mb-6">
           Add your first chapter to start getting AI feedback.
         </p>
-        <button
-          @click="createNewChapter"
-          class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
+        <button @click="createNewChapter" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
           <PlusIcon class="w-5 h-5 mr-2" />
           Add First Chapter
         </button>
@@ -479,9 +361,7 @@ const {
               </p>
 
               <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <span>{{
-                  page.content_length ? `${page.content_length} chars` : 'No content'
-                }}</span>
+                <span>{{ page.content_length ? `${page.content_length} chars` : 'No content' }}</span>
                 <span>Updated {{ new Date(page.updated_at).toLocaleDateString() }}</span>
               </div>
 
@@ -515,3 +395,4 @@ const {
     </div>
   </div>
 </template>
+
