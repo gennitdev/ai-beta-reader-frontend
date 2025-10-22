@@ -654,7 +654,7 @@ onMounted(async () => {
         <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
       </div>
 
-      <div v-else-if="chapter" class="space-y-6">
+      <div v-else-if="chapter" class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-6 sm:divide-y-0">
         <ChapterSummaryPanel
           v-if="showSummaryPanel"
           :chapter-summary="chapter.summary || ''"

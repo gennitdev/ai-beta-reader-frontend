@@ -64,8 +64,8 @@ const hasBeats = computed(() => props.chapterBeats && props.chapterBeats.length 
 </script>
 
 <template>
-  <div class="rounded-lg border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800">
-    <div class="p-6">
+  <div class="py-4 sm:rounded-lg sm:border sm:border-gray-200 sm:bg-white sm:shadow-md sm:dark:border-gray-700 sm:dark:bg-gray-800">
+    <div class="px-0 sm:px-6">
       <div class="mb-4 flex items-center justify-between">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Chapter Summary</h3>
         <div class="flex items-center space-x-2">

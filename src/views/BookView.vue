@@ -786,46 +786,51 @@ onUnmounted(() => {
       </div>
 
       <!-- Chapters list -->
-      <div v-else-if="chapters.length > 0" class="space-y-4">
+      <div v-else-if="chapters.length > 0" class=" divide-gray-200 dark:divide-gray-700 sm:space-y-4 sm:divide-y-0">
         <div
           v-for="chapter in sortedChapters"
           :key="chapter.id"
-          class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
+          class="sm:border-gray-200 sm:dark:border-gray-700 sm:shadow-md sm:hover:shadow-lg sm:transition-shadow"
         >
-          <router-link
+
+            <div class="flex items-start gap-3 px-4">
+              <router-link
             :to="`/m/books/${bookId}/chapters/${chapter.id}`"
-            class="block p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            class="block"
           >
-            <div class="flex items-start justify-between">
-              <div class="flex items-start flex-1">
-                <DocumentTextIcon class="w-6 h-6 text-gray-400 mr-3 mt-0.5" />
-                <div class="flex-1">
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                    {{ chapter.title || chapter.id }}
-                  </h3>
-                  <div class="flex items-center space-x-4 mt-1">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ chapter.word_count?.toLocaleString() || 0 }} words
-                    </span>
-                    <div
-                      class="flex items-center"
-                      :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
+              <div class="flex-1">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                  {{ chapter.title || chapter.id }}
+                </h3>
+                <div class="mt-1 flex flex-wrap items-center gap-4">
+                  <span class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ chapter.word_count?.toLocaleString() || 0 }} words
+                  </span>
+                  <div
+                    class="flex items-center"
+                    :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
+                  >
+                    <CheckCircleIcon
+                      :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
+                      class="w-4 h-4 mr-1"
+                    />
+                    <span
+                      :class="chapter.has_summary ? 'text-green-600' : 'text-gray-500'"
+                      class="text-sm"
                     >
-                      <CheckCircleIcon
-                        :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
-                        class="w-4 h-4 mr-1"
-                      />
-                      <span
-                        :class="chapter.has_summary ? 'text-green-600' : 'text-gray-500'"
-                        class="text-sm"
-                      >
-                        {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
-                      </span>
-                    </div>
+                      {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
+                    </span>
                   </div>
+                  <button
+                    @click.prevent="editChapter(chapter.id)"
+                    class="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors dark:text-blue-400 dark:hover:text-blue-300 sm:hidden"
+                  >
+                    <PencilIcon class="w-4 h-4 mr-1" />
+                    Edit
+                  </button>
 
                   <!-- Summary Preview -->
-                  <div v-if="chapter.has_summary && chapter.summary" class="mt-3">
+                  <div v-if="chapter.has_summary && chapter.summary" class="mt-3 w-full">
                     <div class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                       <span v-if="!expandedSummaries.has(chapter.id)">
                         {{ getSummaryPreview(chapter.summary) }}
@@ -849,11 +854,9 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
-            </div>
-          </router-link>
-
-          <!-- Action buttons outside router-link -->
-          <div class="px-6 pb-4 flex justify-end space-x-2">
+              </router-link>
+                <!-- Action buttons outside router-link -->
+          <div class="mt-3 hidden justify-end space-x-2 sm:flex sm:px-6 sm:pb-4">
             <button
               @click="editChapter(chapter.id)"
               class="inline-flex items-center px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
@@ -862,6 +865,10 @@ onUnmounted(() => {
               Edit
             </button>
           </div>
+            </div>
+
+
+
         </div>
       </div>
 
@@ -1381,25 +1388,25 @@ onUnmounted(() => {
           </div>
 
           <!-- Parts list -->
-          <div class="space-y-4">
+          <div class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-4 sm:divide-y-0">
             <!-- Uncategorized chapters -->
-            <div v-if="chaptersByPart.uncategorized.length > 0" class="border border-gray-200 dark:border-gray-700 rounded-lg">
-              <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+            <div v-if="chaptersByPart.uncategorized.length > 0" class="pt-2">
+              <div class="px-0 py-3">
                 <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized Chapters</h4>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {{ chaptersByPart.uncategorized.length }} chapter{{ chaptersByPart.uncategorized.length !== 1 ? 's' : '' }}
                 </p>
               </div>
-              <div class="p-4 space-y-2">
+              <div class="px-0 py-1">
                 <draggable
                   v-model="chaptersByPart.uncategorized"
                   item-key="id"
                   group="modal-chapters"
                   @change="onChapterMove"
-                  class="space-y-2"
+                  class="divide-y divide-gray-200 dark:divide-gray-700"
                 >
                   <template #item="{ element: chapter, index }">
-                    <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                    <div class="flex items-center justify-between gap-3 py-3 px-0">
                       <div class="flex-1">
                         <h5 class="text-sm font-medium text-gray-900 dark:text-white">{{ chapter.title || chapter.id }}</h5>
                         <p class="text-xs text-gray-500 dark:text-gray-400">{{ chapter.word_count?.toLocaleString() || 0 }} words</p>
@@ -1442,8 +1449,8 @@ onUnmounted(() => {
             </div>
 
             <!-- Parts with chapters -->
-            <div v-for="part in chaptersByPart.parts" :key="part.id" class="border border-gray-200 dark:border-gray-700 rounded-lg">
-              <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+            <div v-for="part in chaptersByPart.parts" :key="part.id" class="pt-2">
+              <div class="px-0 py-3">
                 <div class="flex items-center justify-between">
                   <div class="flex-1">
                     <input
@@ -1500,16 +1507,16 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
-              <div class="p-4 space-y-2">
+              <div class="px-0 py-1">
                 <draggable
                   v-model="part.chapters"
                   item-key="id"
                   group="modal-chapters"
                   @change="onChapterMove"
-                  class="space-y-2"
+                  class="divide-y divide-gray-200 dark:divide-gray-700"
                 >
                   <template #item="{ element: chapter, index }">
-                    <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                    <div class="flex items-center justify-between gap-3 py-3 px-0">
                       <div class="flex-1">
                         <h5 class="text-sm font-medium text-gray-900 dark:text-white">{{ chapter.title || chapter.id }}</h5>
                         <p class="text-xs text-gray-500 dark:text-gray-400">{{ chapter.word_count?.toLocaleString() || 0 }} words</p>

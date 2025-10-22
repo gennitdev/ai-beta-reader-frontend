@@ -41,8 +41,8 @@ const toggleFullChapter = (value: boolean) => {
 </script>
 
 <template>
-  <div class="rounded-lg border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800">
-    <div class="p-6">
+  <div class="py-4 sm:rounded-lg sm:border sm:border-gray-200 sm:bg-white sm:shadow-md sm:dark:border-gray-700 sm:dark:bg-gray-800">
+    <div class="px-0 sm:px-6">
       <h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Chapter Text</h2>
 
       <div v-if="isEditing">
