@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import JSZip from 'jszip'
-import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 import CustomProfilesPanel from '@/components/CustomProfilesPanel.vue'
 
 const router = useRouter()
 
 // Use local database
-const { books, chapters, loadBooks, loadChapters } = useDatabase()
+const { books, chapters, loadBooks, loadChapters, backupToCloud, restoreFromCloud, hasCloudSync } = useDatabase()
 
 // OpenAI API Key state
 const openaiApiKey = ref('')
@@ -68,6 +68,14 @@ const removeApiKey = () => {
 const isExporting = ref(false)
 const exportProgress = ref('')
 const exportError = ref('')
+
+// Cloud backup state
+const cloudPassword = ref('')
+const isBackingUp = ref(false)
+const isRestoring = ref(false)
+const cloudMessage = ref('')
+const cloudMessageType = ref<'success' | 'error' | ''>('')
+const cloudSyncAvailable = computed(() => hasCloudSync())
 
 const goBack = () => {
   router.back()
@@ -163,6 +171,74 @@ const exportUserData = async () => {
 
 const sanitizeFileName = (name: string): string => {
   return name.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')
+}
+
+const showCloudMessage = (message: string, type: 'success' | 'error') => {
+  cloudMessage.value = message
+  cloudMessageType.value = type
+
+  if (type === 'success') {
+    setTimeout(() => {
+      cloudMessage.value = ''
+      cloudMessageType.value = ''
+    }, 5000)
+  }
+}
+
+const handleCloudBackup = async () => {
+  if (!cloudPassword.value.trim()) {
+    showCloudMessage('Enter an encryption password before backing up.', 'error')
+    return
+  }
+
+  if (!cloudSyncAvailable.value) {
+    showCloudMessage('Cloud sync is not configured. Add VITE_GOOGLE_CLIENT_ID to use Google Drive backups.', 'error')
+    return
+  }
+
+  try {
+    isBackingUp.value = true
+    cloudMessage.value = ''
+    await backupToCloud(cloudPassword.value)
+    showCloudMessage('Backup saved to Google Drive.', 'success')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    showCloudMessage(`Backup failed: ${message}`, 'error')
+  } finally {
+    isBackingUp.value = false
+  }
+}
+
+const handleCloudRestore = async () => {
+  if (!cloudPassword.value.trim()) {
+    showCloudMessage('Enter your encryption password before restoring.', 'error')
+    return
+  }
+
+  if (!cloudSyncAvailable.value) {
+    showCloudMessage('Cloud sync is not configured. Add VITE_GOOGLE_CLIENT_ID to use Google Drive backups.', 'error')
+    return
+  }
+
+  if (!confirm('Restoring from backup will replace your local data. Continue?')) {
+    return
+  }
+
+  try {
+    isRestoring.value = true
+    cloudMessage.value = ''
+    const success = await restoreFromCloud(cloudPassword.value)
+    if (success) {
+      showCloudMessage('Backup restored from Google Drive.', 'success')
+    } else {
+      showCloudMessage('No backup found or the password was incorrect.', 'error')
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    showCloudMessage(`Restore failed: ${message}`, 'error')
+  } finally {
+    isRestoring.value = false
+  }
 }
 
 onMounted(() => {
@@ -292,6 +368,105 @@ onMounted(() => {
 
       <!-- Custom Reviewer Profiles Section -->
       <CustomProfilesPanel />
+
+      <!-- Cloud Backup Section -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex items-center space-x-2">
+            <CloudArrowUpIcon class="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Cloud Backup</h2>
+          </div>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Encrypt your data with a password and sync it to your Google Drive. Only the password holder can decrypt the backup.
+          </p>
+          <p
+            v-if="!cloudSyncAvailable"
+            class="mt-3 text-sm text-amber-600 dark:text-amber-400"
+          >
+            Google Drive sync is disabled. Set <code>VITE_GOOGLE_CLIENT_ID</code> in <code>.env.local</code> to enable backups.
+          </p>
+        </div>
+
+        <div class="px-6 py-4 space-y-4">
+          <div>
+            <label for="cloud-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Encryption Password
+            </label>
+            <input
+              id="cloud-password"
+              v-model="cloudPassword"
+              type="password"
+              placeholder="Enter a password used to encrypt your backup"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Remember this password. Without it your backup cannot be decrypted.
+            </p>
+          </div>
+
+          <div class="flex flex-wrap gap-3">
+            <button
+              @click="handleCloudBackup"
+              :disabled="isBackingUp || !cloudPassword || !cloudSyncAvailable"
+              class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg
+                v-if="isBackingUp"
+                class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span class="inline-flex items-center">
+                <CloudArrowUpIcon v-if="!isBackingUp" class="w-5 h-5 mr-2" />
+                {{ isBackingUp ? 'Backing Up...' : 'Backup to Google Drive' }}
+              </span>
+            </button>
+
+            <button
+              @click="handleCloudRestore"
+              :disabled="isRestoring || !cloudPassword || !cloudSyncAvailable"
+              class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg
+                v-if="isRestoring"
+                class="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700 dark:text-gray-200"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span class="inline-flex items-center">
+                <ArrowPathIcon v-if="!isRestoring" class="w-5 h-5 mr-2" />
+                {{ isRestoring ? 'Restoring...' : 'Restore from Backup' }}
+              </span>
+            </button>
+          </div>
+
+          <div
+            v-if="cloudMessage"
+            :class="[
+              'px-4 py-3 rounded-lg text-sm',
+              cloudMessageType === 'success'
+                ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+            ]"
+          >
+            {{ cloudMessage }}
+          </div>
+
+          <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+            <p>✓ Data is encrypted client-side before upload</p>
+            <p>✓ Backups are stored in your Google Drive only</p>
+            <p>✓ Restoring requires the same password used for backup</p>
+          </div>
+        </div>
+      </div>
 
       <!-- Data Export Section -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-8">
