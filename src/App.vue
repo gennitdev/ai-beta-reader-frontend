@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { RouterView, useRoute } from 'vue-router'
-import { UserIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
+import { RouterView, useRoute, useRouter } from 'vue-router'
+import { UserIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
 
 const route = useRoute()
+const router = useRouter()
 const { books, chapters, loadBooks, loadChapters, getWikiPage, searchBook, replaceInChapter, replaceInWikiPage } = useDatabase()
 
 // Search modal state
@@ -49,6 +50,11 @@ const currentBookId = computed(() => {
   const bookId = (route.params.bookId || route.params.id) as string | undefined
   return bookId || null
 })
+
+const goToNewChapter = () => {
+  if (!currentBookId.value) return
+  router.push(`/books/${currentBookId.value}/chapter-editor`)
+}
 
 // Load books on mount
 loadBooks()
@@ -166,6 +172,15 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
 
           <!-- Right side menu -->
           <div class="flex items-center space-x-4">
+            <button
+              v-if="currentBookId"
+              @click="goToNewChapter"
+              class="hidden md:flex items-center justify-center p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              title="New Chapter"
+              aria-label="Create new chapter"
+            >
+              <PlusIcon class="w-5 h-5" />
+            </button>
             <!-- Search bar (desktop) -->
             <button
               v-if="currentBookId"
@@ -185,7 +200,6 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
             >
               <MagnifyingGlassIcon class="w-5 h-5" />
             </button>
-
             <!-- Settings menu -->
             <router-link
               to="/settings"
@@ -231,6 +245,15 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
                 title="Search"
               >
                 <MagnifyingGlassIcon class="w-5 h-5" />
+              </button>
+              <button
+                v-if="currentBookId"
+                @click="goToNewChapter"
+                class="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                title="New Chapter"
+                aria-label="Create new chapter"
+              >
+                <PlusIcon class="w-5 h-5" />
               </button>
 
               <!-- Settings menu -->
