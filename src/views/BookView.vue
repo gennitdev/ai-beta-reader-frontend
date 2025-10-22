@@ -12,9 +12,6 @@ import {
   MapPinIcon,
   LightBulbIcon,
   Cog6ToothIcon,
-  TrashIcon,
-  ChevronUpIcon,
-  ChevronDownIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/vue/24/outline";
 import { CheckCircleIcon } from "@heroicons/vue/24/solid";
@@ -65,10 +62,7 @@ const {
   getWikiPages,
   getSummary,
   saveBook,
-  createPart,
   getParts,
-  updatePart,
-  deletePart,
   updateChapterOrders,
   updatePartOrder,
   searchBook,
@@ -92,11 +86,6 @@ const editingBookTitle = ref("");
 
 // Parts state
 const expandedParts = ref<Set<string>>(new Set());
-const editingPartId = ref<string | null>(null);
-const editingPartName = ref("");
-const creatingPart = ref(false);
-const creatingPartLoading = ref(false);
-const newPartName = ref("");
 
 // Search service using local database
 const searchService = {
@@ -114,9 +103,7 @@ const searchService = {
 // Drag and drop state
 const isDragging = ref(false);
 const isDraggingInSidebar = ref(false);
-const showOrganizeModal = ref(false);
 const showSearchModal = ref(false);
-const draggableChapters = ref<Chapter[]>([]);
 
 const currentTab = computed(() => {
   // Check if we're on a wiki page child route
@@ -399,6 +386,10 @@ const createNewChapter = () => {
   router.push(`/books/${bookId}/chapter-editor`);
 };
 
+const goToOrganizeChapters = () => {
+  router.push(`/books/${bookId}/organize`);
+};
+
 const createNewChapterInPart = (partId: string) => {
   router.push({
     path: `/books/${bookId}/chapter-editor`,
@@ -417,116 +408,6 @@ const togglePart = (partId: string) => {
   } else {
     expandedParts.value.add(partId);
   }
-};
-
-const startCreatingPart = () => {
-  creatingPart.value = true;
-  newPartName.value = "";
-};
-
-const cancelCreatePart = () => {
-  creatingPart.value = false;
-  newPartName.value = "";
-};
-
-const createPartFunc = async () => {
-  if (!newPartName.value.trim() || creatingPartLoading.value) return;
-
-  try {
-    creatingPartLoading.value = true;
-    const newPart = await createPart(bookId, newPartName.value.trim());
-    parts.value.push(newPart);
-    setPartOrderState([...partOrder.value, newPart.id]);
-
-    creatingPart.value = false;
-    newPartName.value = "";
-    expandedParts.value.add(newPart.id);
-  } catch (error) {
-    console.error("Failed to create part:", error);
-  } finally {
-    creatingPartLoading.value = false;
-  }
-};
-
-const startEditingPart = (part: BookPart) => {
-  editingPartId.value = part.id;
-  editingPartName.value = part.name;
-};
-
-const cancelEditPart = () => {
-  editingPartId.value = null;
-  editingPartName.value = "";
-};
-
-const savePart = async (partId: string) => {
-  if (!editingPartName.value.trim()) return;
-
-  try {
-    await updatePart(partId, editingPartName.value.trim());
-
-    const part = parts.value.find((p) => p.id === partId);
-    if (part) {
-      part.name = editingPartName.value.trim();
-    }
-
-    editingPartId.value = null;
-    editingPartName.value = "";
-  } catch (error) {
-    console.error("Failed to update part:", error);
-  }
-};
-
-const deletePartFunc = async (partId: string) => {
-  if (
-    !confirm(
-      "Are you sure you want to delete this part? Chapters in this part will become uncategorized."
-    )
-  ) {
-    return;
-  }
-
-  try {
-    await deletePart(partId);
-    parts.value = parts.value.filter((p) => p.id !== partId);
-    setPartOrderState(partOrder.value.filter((id) => id !== partId));
-    expandedParts.value.delete(partId);
-
-    // Update chapters to remove part association
-    chapters.value.forEach((chapter) => {
-      if (chapter.part_id === partId) {
-        chapter.part_id = null;
-        chapter.part_name = null;
-      }
-    });
-  } catch (error) {
-    console.error("Failed to delete part:", error);
-  }
-};
-
-const movePart = async (partId: string, direction: "up" | "down") => {
-  const currentIndex = partOrder.value.indexOf(partId);
-  if (currentIndex === -1) return;
-
-  const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-  if (newIndex < 0 || newIndex >= partOrder.value.length) return;
-
-  const newOrder = [...partOrder.value];
-  [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
-
-  const success = await persistPartOrder(newOrder);
-  if (!success) {
-    return;
-  }
-
-  await saveModalChapterOrder();
-};
-
-const movePartUp = async (partId: string) => {
-  await movePart(partId, "up");
-};
-
-const movePartDown = async (partId: string) => {
-  await movePart(partId, "down");
 };
 
 const moveChapterToPart = async (chapterId: string, partId: string | null) => {
@@ -560,63 +441,6 @@ const moveChapterToPart = async (chapterId: string, partId: string | null) => {
     console.error("Failed to move chapter to part:", error);
     // Reload on error to revert any UI changes
     await loadBook();
-  }
-};
-
-const onChapterMove = (event: {
-  moved?: { element: Chapter; newIndex: number; oldIndex: number };
-}) => {
-  // Handle drag and drop reordering in modal
-  console.log("Chapter moved:", event);
-  // This will be implemented with more sophisticated logic if needed
-};
-
-const moveChapterUp = async (chapterList: Chapter[], index: number, partId: string | null) => {
-  if (index === 0) return; // Can't move up if already at top
-
-  // Swap positions in the array
-  const temp = chapterList[index];
-  chapterList[index] = chapterList[index - 1];
-  chapterList[index - 1] = temp;
-
-  // Save the new order with ALL chapters properly reindexed
-  await saveModalChapterOrder();
-};
-
-const moveChapterDown = async (chapterList: Chapter[], index: number, partId: string | null) => {
-  if (index >= chapterList.length - 1) return; // Can't move down if already at bottom
-
-  // Swap positions in the array
-  const temp = chapterList[index];
-  chapterList[index] = chapterList[index + 1];
-  chapterList[index + 1] = temp;
-
-  // Save the new order with ALL chapters properly reindexed
-  await saveModalChapterOrder();
-};
-
-const saveModalChapterOrder = async () => {
-  try {
-    // Build arrays from modal view state
-    const partUpdates: { [partId: string]: string[] } = {};
-
-    // Initialize part arrays
-    partUpdates["null"] = chaptersByPart.value.uncategorized.map((c) => c.id);
-
-    chaptersByPart.value.parts.forEach((part) => {
-      partUpdates[part.id] = part.chapters.map((c) => c.id);
-    });
-
-    const chapterOrder = buildChapterOrder(partUpdates);
-
-    // Send array-based reorder to database
-    await updateChapterOrders(bookId, chapterOrder, partUpdates, partOrder.value);
-
-    // Reload to get updated state
-    await loadBook();
-  } catch (error) {
-    console.error("Failed to save chapter order from modal:", error);
-    await loadBook(); // Reload on error
   }
 };
 
@@ -657,24 +481,6 @@ const onSidebarChapterMove = async (
     }
   }
 };
-
-// Update draggable chapters when chapters change
-watch(
-  chapters,
-  (newChapters) => {
-    draggableChapters.value = [...newChapters].sort((a, b) => {
-      const aPartPos = a.position_in_part ?? 999999;
-      const bPartPos = b.position_in_part ?? 999999;
-      if (aPartPos !== bPartPos) {
-        return aPartPos - bPartPos;
-      }
-      return (a.position || 0) - (b.position || 0);
-    });
-  },
-  { immediate: true }
-);
-
-// Drag and drop handlers for modal
 
 // Sidebar-specific drag handlers
 const onSidebarDragStart = () => {
@@ -930,7 +736,7 @@ onUnmounted(() => {
             New Chapter
           </button>
           <button
-            @click="showOrganizeModal = true"
+            @click="goToOrganizeChapters"
             class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
             <Cog6ToothIcon class="w-5 h-5 mr-2" />
@@ -1224,7 +1030,7 @@ onUnmounted(() => {
               New Chapter
             </button>
             <button
-              @click="showOrganizeModal = true"
+              @click="goToOrganizeChapters"
               class="w-full inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
               <Cog6ToothIcon class="w-5 h-5 mr-2" />
@@ -1581,350 +1387,6 @@ onUnmounted(() => {
         </div>
         <!-- Regular router view when chapter/wiki page is selected -->
         <router-view v-else :key="routerViewKey" />
-      </div>
-    </div>
-  </div>
-
-  <!-- Organize Chapters Modal -->
-  <div
-    v-if="showOrganizeModal"
-    @click="showOrganizeModal = false"
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-  >
-    <div
-      @click.stop
-      class="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden"
-    >
-      <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-        <div class="flex justify-between items-center">
-          <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Organize Chapters</h2>
-          <button
-            @click="showOrganizeModal = false"
-            class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-md"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              ></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <div class="p-6 overflow-y-auto max-h-[70vh]">
-        <div class="space-y-6">
-          <!-- Instructions -->
-          <div
-            class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700"
-          >
-            <h3 class="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
-              How to organize chapters
-            </h3>
-            <p class="text-sm text-blue-800 dark:text-blue-300">
-              Use the dropdown next to each chapter to assign it to a part. Create new parts as
-              needed to organize your chapters into logical sections.
-            </p>
-          </div>
-
-          <!-- Create new part section -->
-          <div class="flex justify-between items-center">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Parts</h3>
-            <button
-              v-if="!creatingPart"
-              @click="startCreatingPart"
-              class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              <PlusIcon class="w-4 h-4 mr-1" />
-              New Part
-            </button>
-          </div>
-
-          <!-- New part form -->
-          <div v-if="creatingPart" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-            <div class="flex items-center space-x-3">
-              <input
-                v-model="newPartName"
-                @keyup.enter="createPart"
-                @keyup.escape="cancelCreatePart"
-                type="text"
-                placeholder="Enter part name..."
-                class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                autofocus
-              />
-              <button
-                @click="createPartFunc"
-                :disabled="!newPartName.trim() || creatingPartLoading"
-                class="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm inline-flex items-center"
-              >
-                <div
-                  v-if="creatingPartLoading"
-                  class="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent mr-2"
-                ></div>
-                {{ creatingPartLoading ? "Creating..." : "Create" }}
-              </button>
-              <button
-                @click="cancelCreatePart"
-                class="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-
-          <!-- Parts list -->
-          <div class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-4 sm:divide-y-0">
-            <!-- Uncategorized chapters -->
-            <div v-if="chaptersByPart.uncategorized.length > 0" class="pt-2">
-              <div class="px-0 py-3">
-                <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized Chapters</h4>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {{ chaptersByPart.uncategorized.length }} chapter{{
-                    chaptersByPart.uncategorized.length !== 1 ? "s" : ""
-                  }}
-                </p>
-              </div>
-              <div class="px-0 py-1">
-                <draggable
-                  v-model="chaptersByPart.uncategorized"
-                  item-key="id"
-                  group="modal-chapters"
-                  @change="onChapterMove"
-                  class="divide-y divide-gray-200 dark:divide-gray-700"
-                >
-                  <template #item="{ element: chapter, index }">
-                    <div class="flex items-center justify-between gap-3 py-3 px-0">
-                      <div class="flex-1">
-                        <h5 class="text-sm font-medium text-gray-900 dark:text-white">
-                          {{ chapter.title || chapter.id }}
-                        </h5>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                          {{ chapter.word_count?.toLocaleString() || 0 }} words
-                        </p>
-                      </div>
-                      <div class="flex items-center space-x-2">
-                        <div class="flex flex-col">
-                          <button
-                            @click="moveChapterUp(chaptersByPart.uncategorized, index, null)"
-                            :disabled="index === 0"
-                            class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Move up"
-                          >
-                            <ChevronUpIcon class="w-4 h-4" />
-                          </button>
-                          <button
-                            @click="moveChapterDown(chaptersByPart.uncategorized, index, null)"
-                            :disabled="index >= chaptersByPart.uncategorized.length - 1"
-                            class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Move down"
-                          >
-                            <ChevronDownIcon class="w-4 h-4" />
-                          </button>
-                        </div>
-                        <div class="relative">
-                          <select
-                            :value="chapter.part_id || ''"
-                            @change="
-                              moveChapterToPart(
-                                chapter.id,
-                                ($event.target as HTMLSelectElement)?.value || null
-                              )
-                            "
-                            class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
-                          >
-                            <option value="">Uncategorized</option>
-                            <option v-for="part in orderedParts" :key="part.id" :value="part.id">
-                              {{ part.name }}
-                            </option>
-                          </select>
-                          <ChevronDownIcon
-                            class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </template>
-                </draggable>
-              </div>
-            </div>
-
-            <!-- Parts with chapters -->
-            <div v-for="part in chaptersByPart.parts" :key="part.id" class="pt-2">
-              <div class="px-0 py-3">
-                <div class="flex items-center justify-between">
-                  <div class="flex-1">
-                    <input
-                      v-if="editingPartId === part.id"
-                      v-model="editingPartName"
-                      @keyup.enter="savePart(part.id)"
-                      @keyup.escape="cancelEditPart"
-                      type="text"
-                      class="font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm w-full"
-                      autofocus
-                    />
-                    <h4 v-else class="font-medium text-gray-900 dark:text-white">
-                      {{ part.name }}
-                    </h4>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? "s" : "" }}
-                    </p>
-                  </div>
-                  <div class="flex items-center space-x-2">
-                    <template v-if="editingPartId === part.id">
-                      <button
-                        @click="savePart(part.id)"
-                        class="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-                        title="Save"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
-                          ></path>
-                        </svg>
-                      </button>
-                      <button
-                        @click="cancelEditPart"
-                        class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                        title="Cancel"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M6 18L18 6M6 6l12 12"
-                          ></path>
-                        </svg>
-                      </button>
-                    </template>
-                    <template v-else>
-                      <button
-                        @click="movePartUp(part.id)"
-                        :disabled="partOrder.indexOf(part.id) === 0"
-                        class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Move part up"
-                      >
-                        <ChevronUpIcon class="w-4 h-4" />
-                      </button>
-                      <button
-                        @click="movePartDown(part.id)"
-                        :disabled="partOrder.indexOf(part.id) === partOrder.length - 1"
-                        class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Move part down"
-                      >
-                        <ChevronDownIcon class="w-4 h-4" />
-                      </button>
-                      <button
-                        @click="startEditingPart(part)"
-                        class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                        title="Edit name"
-                      >
-                        <PencilIcon class="w-4 h-4" />
-                      </button>
-                      <button
-                        @click="deletePartFunc(part.id)"
-                        class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                        title="Delete part"
-                      >
-                        <TrashIcon class="w-4 h-4" />
-                      </button>
-                    </template>
-                  </div>
-                </div>
-              </div>
-              <div class="px-0 py-1">
-                <draggable
-                  v-model="part.chapters"
-                  item-key="id"
-                  group="modal-chapters"
-                  @change="onChapterMove"
-                  class="divide-y divide-gray-200 dark:divide-gray-700"
-                >
-                  <template #item="{ element: chapter, index }">
-                    <div class="flex items-center justify-between gap-3 py-3 px-0">
-                      <div class="flex-1">
-                        <h5 class="text-sm font-medium text-gray-900 dark:text-white">
-                          {{ chapter.title || chapter.id }}
-                        </h5>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                          {{ chapter.word_count?.toLocaleString() || 0 }} words
-                        </p>
-                      </div>
-                      <div class="flex items-center space-x-2">
-                        <div class="flex flex-col">
-                          <button
-                            @click="moveChapterUp(part.chapters, index, part.id)"
-                            :disabled="index === 0"
-                            class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Move up"
-                          >
-                            <ChevronUpIcon class="w-4 h-4" />
-                          </button>
-                          <button
-                            @click="moveChapterDown(part.chapters, index, part.id)"
-                            :disabled="index >= part.chapters.length - 1"
-                            class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Move down"
-                          >
-                            <ChevronDownIcon class="w-4 h-4" />
-                          </button>
-                        </div>
-                        <div class="relative">
-                          <select
-                            :value="chapter.part_id || ''"
-                            @change="
-                              moveChapterToPart(
-                                chapter.id,
-                                ($event.target as HTMLSelectElement)?.value || null
-                              )
-                            "
-                            class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
-                          >
-                            <option value="">Uncategorized</option>
-                            <option v-for="p in orderedParts" :key="p.id" :value="p.id">
-                              {{ p.name }}
-                            </option>
-                          </select>
-                          <ChevronDownIcon
-                            class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </template>
-                </draggable>
-              </div>
-            </div>
-
-            <!-- Empty state -->
-            <div
-              v-if="parts.length === 0 && chaptersByPart.uncategorized.length === 0"
-              class="text-center py-8"
-            >
-              <Cog6ToothIcon class="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No chapters to organize
-              </h3>
-              <p class="text-gray-600 dark:text-gray-400">
-                Create some chapters first, then organize them into parts.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-        <button
-          @click="showOrganizeModal = false"
-          class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-        >
-          Close
-        </button>
       </div>
     </div>
   </div>

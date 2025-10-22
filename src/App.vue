@@ -109,6 +109,8 @@ const breadcrumbs = computed(() => {
         } else if (path.includes('/wiki/')) {
           const wikiPageId = route.params.wikiPageId as string
           crumbs.push({ label: 'Wiki' })
+        } else if (path.includes('/organize')) {
+          crumbs.push({ label: 'Organize Chapters' })
         } else if (path.includes('/chapter-editor')) {
           crumbs.push({ label: 'Chapter Editor' })
         }

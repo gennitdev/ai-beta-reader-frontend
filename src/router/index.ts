@@ -56,6 +56,11 @@ const router = createRouter({
       component: () => import('../views/ChapterEditorView.vue')
     },
     {
+      path: '/books/:bookId/organize',
+      name: 'organize-chapters',
+      component: () => import('../views/OrganizeChaptersView.vue')
+    },
+    {
       path: '/books/:bookId/chapters/:chapterId',
       name: 'standalone-chapter',
       component: () => import('../views/ChapterView.vue')
