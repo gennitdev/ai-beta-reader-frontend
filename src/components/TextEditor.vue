@@ -161,10 +161,10 @@ onMounted(() => {
         <Tab as="template" v-slot="{ selected }">
           <button
             :class="[
-              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 dark:text-blue-200 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
               selected
-                ? 'bg-white text-blue-700 shadow'
-                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+                ? 'bg-white text-blue-700 shadow dark:bg-blue-600 dark:text-white'
+                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white dark:text-blue-100'
             ]"
           >
             Write
@@ -173,10 +173,10 @@ onMounted(() => {
         <Tab as="template" v-slot="{ selected }">
           <button
             :class="[
-              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 dark:text-blue-200 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
               selected
-                ? 'bg-white text-blue-700 shadow'
-                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+                ? 'bg-white text-blue-700 shadow dark:bg-blue-600 dark:text-white'
+                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white dark:text-blue-100'
             ]"
           >
             Preview
@@ -191,7 +191,7 @@ onMounted(() => {
             <button
               type="button"
               @click="formatText('bold')"
-              class="px-3 py-1 text-sm font-bold bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+              class="px-3 py-1 text-sm font-bold bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
               title="Bold"
             >
               B
@@ -199,7 +199,7 @@ onMounted(() => {
             <button
               type="button"
               @click="formatText('italic')"
-              class="px-3 py-1 text-sm italic bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+              class="px-3 py-1 text-sm italic bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
               title="Italic"
             >
               I
@@ -207,7 +207,7 @@ onMounted(() => {
             <button
               type="button"
               @click="formatText('code')"
-              class="px-3 py-1 text-sm font-mono bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+              class="px-3 py-1 text-sm font-mono bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
               title="Code"
             >
               &lt;/&gt;
@@ -215,7 +215,7 @@ onMounted(() => {
             <button
               type="button"
               @click="formatText('quote')"
-              class="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+              class="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
               title="Quote"
             >
               "
@@ -226,7 +226,7 @@ onMounted(() => {
             <button
               type="button"
               @click="insertHeading(1)"
-              class="px-3 py-1 text-sm font-bold bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+              class="px-3 py-1 text-sm font-bold bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
               title="Heading 1"
             >
               H1
@@ -234,7 +234,7 @@ onMounted(() => {
             <button
               type="button"
               @click="insertHeading(2)"
-              class="px-3 py-1 text-sm font-bold bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+              class="px-3 py-1 text-sm font-bold bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
               title="Heading 2"
             >
               H2
@@ -242,7 +242,7 @@ onMounted(() => {
             <button
               type="button"
               @click="insertList(false)"
-              class="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+              class="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
               title="Bullet List"
             >
               •
@@ -250,7 +250,7 @@ onMounted(() => {
             <button
               type="button"
               @click="insertList(true)"
-              class="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+              class="px-3 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
               title="Numbered List"
             >
               1.
