@@ -12,6 +12,7 @@
             v-model="searchTerm"
             @input="performSearch"
             type="text"
+            ref="searchInputRef"
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
             placeholder="Enter text to search for..."
           />
@@ -150,7 +151,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Modal from './Modal.vue'
 import HighlightedText from './HighlightedText.vue'
@@ -179,6 +180,7 @@ const searchTerm = ref('')
 const replaceTerm = ref('')
 const isSearching = ref(false)
 const replacingItemId = ref<string | null>(null) // Track which specific item is being replaced
+const searchInputRef = ref<HTMLInputElement | null>(null)
 const searchResults = ref<{
   chapters: Array<{
     id: string
@@ -280,8 +282,11 @@ const getTextPreview = (text: string): string => {
   return (start > 0 ? '...' : '') + preview + (end < text.length ? '...' : '')
 }
 
-watch(() => props.show, (newValue) => {
-  if (!newValue) {
+watch(() => props.show, async (newValue) => {
+  if (newValue) {
+    await nextTick()
+    searchInputRef.value?.focus()
+  } else {
     searchTerm.value = ''
     replaceTerm.value = ''
     searchResults.value = { chapters: [], wikiPages: [] }
