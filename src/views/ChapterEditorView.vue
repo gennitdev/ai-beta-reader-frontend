@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import TextEditor from '@/components/TextEditor.vue'
 import { ArrowLeftIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import type { BookPart } from '@/lib/database'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,7 +14,7 @@ const chapterId = route.params.chapterId as string
 const isEditing = !!chapterId
 
 // Use local database
-const { chapters, loadChapters, saveChapter: dbSaveChapter } = useDatabase()
+const { chapters, loadChapters, saveChapter: dbSaveChapter, getParts } = useDatabase()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -23,6 +24,26 @@ const chapter = ref({
   text: ''
 })
 const generatedSuffix = ref(Date.now().toString(36).slice(-6))
+const parts = ref<BookPart[]>([])
+const selectedPartId = ref(
+  !isEditing && typeof route.query.partId === 'string' ? (route.query.partId as string) : ''
+)
+
+const loadParts = async () => {
+  try {
+    const fetchedParts = await getParts(bookId)
+    parts.value = fetchedParts
+
+    if (!isEditing && selectedPartId.value) {
+      const partExists = fetchedParts.some((part) => part.id === selectedPartId.value)
+      if (!partExists) {
+        selectedPartId.value = ''
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load parts:', error)
+  }
+}
 
 const loadChapter = async () => {
   if (!isEditing) return
@@ -41,6 +62,7 @@ const loadChapter = async () => {
         title: chapterData.title || '',
         text: chapterData.text
       }
+      selectedPartId.value = chapterData.part_id || ''
     } else {
       console.error('Chapter not found')
       router.push(`/books/${bookId}`)
@@ -84,6 +106,7 @@ const saveChapter = async () => {
     await dbSaveChapter({
       id: chapter.value.id,
       book_id: bookId,
+      part_id: selectedPartId.value || null,
       title: chapter.value.title,
       text: chapter.value.text,
       word_count: wordCount,
@@ -104,6 +127,7 @@ const goBack = () => {
 }
 
 onMounted(() => {
+  loadParts()
   loadChapter()
 })
 
@@ -168,7 +192,7 @@ watch(
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="p-6 space-y-6">
           <!-- Chapter Title -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Chapter Title
@@ -197,6 +221,25 @@ watch(
               />
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {{ isEditing ? 'ID cannot be changed when editing.' : 'Auto-generated and updates with the title. Copy only if you need it elsewhere.' }}
+              </p>
+            </div>
+
+            <div>
+              <label for="part" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Part
+              </label>
+              <select
+                id="part"
+                v-model="selectedPartId"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Uncategorized</option>
+                <option v-for="part in parts" :key="part.id" :value="part.id">
+                  {{ part.name }}
+                </option>
+              </select>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Choose the part this chapter belongs to, or leave it uncategorized.
               </p>
             </div>
           </div>

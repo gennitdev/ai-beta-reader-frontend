@@ -284,6 +284,13 @@ const createNewChapter = () => {
   router.push(`/books/${bookId}/chapter-editor`);
 };
 
+const createNewChapterInPart = (partId: string) => {
+  router.push({
+    path: `/books/${bookId}/chapter-editor`,
+    query: { partId },
+  });
+};
+
 const editChapter = (chapterId: string) => {
   router.push(`/books/${bookId}/chapter-editor/${chapterId}`);
 };
@@ -1186,6 +1193,15 @@ onUnmounted(() => {
                   v-if="expandedParts.has(part.id) || shouldExpandPart(part.id)"
                   class="bg-white dark:bg-gray-800"
                 >
+                  <div class="px-4 pt-3 pb-2 flex justify-end border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      @click.prevent.stop="createNewChapterInPart(part.id)"
+                      class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      <PlusIcon class="w-4 h-4 mr-1" />
+                      Add Chapter in Part
+                    </button>
+                  </div>
                   <draggable
                     v-model="part.chapters"
                     item-key="id"
