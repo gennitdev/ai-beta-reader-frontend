@@ -67,6 +67,7 @@ const {
   loadBooks,
   loadChapters,
   saveChapter: dbSaveChapter,
+  deleteChapter: dbDeleteChapter,
   saveSummary: dbSaveSummary,
   getSummary,
   createWikiPage,
@@ -95,6 +96,8 @@ const savedReviews = ref<Review[]>([]);
 const loadingReviews = ref(false);
 const deletingReviewId = ref<string | null>(null);
 const characters = ref<Character[]>([]);
+const showDeleteModal = ref(false);
+const deletingChapter = ref(false);
 
 // Summary editing state
 const isEditingSummary = ref(false);
@@ -570,6 +573,32 @@ const startEdit = () => {
   isEditing.value = true;
 };
 
+const requestDeleteChapter = () => {
+  if (!chapter.value) return;
+  showDeleteModal.value = true;
+};
+
+const cancelDeleteChapter = () => {
+  if (deletingChapter.value) return;
+  showDeleteModal.value = false;
+};
+
+const handleDeleteChapter = async () => {
+  if (!chapter.value) return;
+
+  try {
+    deletingChapter.value = true;
+    await dbDeleteChapter(chapter.value.id, bookId.value);
+    showDeleteModal.value = false;
+    isEditing.value = false;
+    router.push(bookUrl.value);
+  } catch (error) {
+    console.error("Failed to delete chapter:", error);
+  } finally {
+    deletingChapter.value = false;
+  }
+};
+
 const goBack = () => {
   router.push(backButtonUrl.value);
 };
@@ -643,6 +672,7 @@ onMounted(async () => {
       @start-edit="startEdit"
       @cancel-edit="cancelEdit"
       @save-chapter="saveChapter"
+      @delete-chapter="requestDeleteChapter"
     />
 
     <div class="w-full max-w-6xl mx-0 md:mx-auto px-0 sm:px-4 lg:px-8 ">
@@ -723,4 +753,45 @@ onMounted(async () => {
       </div>
     </div>
   </div>
+
+  <teleport to="body">
+    <div
+      v-if="showDeleteModal"
+      class="fixed inset-0 z-50 flex items-center justify-center px-4"
+    >
+      <div class="absolute inset-0 bg-gray-900/70" @click="cancelDeleteChapter"></div>
+      <div
+        class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800"
+      >
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Delete chapter?</h2>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          This will permanently delete
+          <span class="font-medium text-gray-900 dark:text-gray-200">
+            {{ chapter?.title || chapterId }}
+          </span>
+          along with its summaries and reviews. This action cannot be undone.
+        </p>
+        <div class="mt-6 flex justify-end space-x-3">
+          <button
+            @click="cancelDeleteChapter"
+            :disabled="deletingChapter"
+            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleDeleteChapter"
+            :disabled="deletingChapter"
+            class="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span
+              v-if="deletingChapter"
+              class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+            ></span>
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </teleport>
 </template>

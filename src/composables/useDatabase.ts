@@ -95,6 +95,22 @@ export function useDatabase() {
     }
   }
 
+  async function deleteChapter(chapterId: string, bookId: string) {
+    try {
+      loading.value = true
+      error.value = null
+      await initializeDatabase()
+      await db.deleteChapter(chapterId, bookId)
+      await loadChapters(bookId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete chapter'
+      console.error('Delete chapter error:', e)
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   // Cloud sync operations
   async function backupToCloud(password: string) {
     if (!cloudSync.value) {
@@ -467,6 +483,7 @@ export function useDatabase() {
     // Chapter operations
     loadChapters,
     saveChapter,
+    deleteChapter,
 
     // Summary operations
     saveSummary,

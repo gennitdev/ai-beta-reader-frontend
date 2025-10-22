@@ -334,6 +334,109 @@ export class AppDatabase {
     }
   }
 
+  async deleteChapter(chapterId: string, bookId: string): Promise<void> {
+    // Lookup part assignment before deletion
+    let partId: string | null = null;
+    const getPartQuery = `SELECT part_id FROM chapters WHERE id = ? LIMIT 1`;
+
+    if (this.isNative) {
+      const result = await this.db.query(getPartQuery, [chapterId]);
+      if (result.values && result.values[0]) {
+        partId = result.values[0].part_id || null;
+      }
+    } else {
+      const result = this.db.exec(getPartQuery, [chapterId]);
+      if (result.length > 0 && result[0].values && result[0].values[0]) {
+        const row = result[0].values[0];
+        partId = (row[0] as string) || null;
+      }
+    }
+
+    // Remove dependent records
+    const cleanupStatements = [
+      { query: "DELETE FROM chapter_summaries WHERE chapter_id = ?", params: [chapterId] },
+      { query: "DELETE FROM chapter_reviews WHERE chapter_id = ?", params: [chapterId] },
+      { query: "DELETE FROM chapter_wiki_mentions WHERE chapter_id = ?", params: [chapterId] },
+      { query: "DELETE FROM wiki_updates WHERE chapter_id = ?", params: [chapterId] },
+    ];
+
+    for (const statement of cleanupStatements) {
+      if (this.isNative) {
+        await this.db.run(statement.query, statement.params);
+      } else {
+        this.db.run(statement.query, statement.params);
+      }
+    }
+
+    // Delete the chapter itself
+    const deleteChapterQuery = `DELETE FROM chapters WHERE id = ?`;
+    if (this.isNative) {
+      await this.db.run(deleteChapterQuery, [chapterId]);
+    } else {
+      this.db.run(deleteChapterQuery, [chapterId]);
+    }
+
+    // Update book chapter order
+    const getBookOrderQuery = `SELECT chapter_order FROM books WHERE id = ?`;
+    let bookOrder: string[] = [];
+
+    if (this.isNative) {
+      const result = await this.db.query(getBookOrderQuery, [bookId]);
+      if (result.values && result.values[0]) {
+        const orderStr = result.values[0].chapter_order || "[]";
+        bookOrder = JSON.parse(orderStr);
+      }
+    } else {
+      const result = this.db.exec(getBookOrderQuery, [bookId]);
+      if (result.length > 0 && result[0].values && result[0].values[0]) {
+        const orderStr = (result[0].values[0][0] as string) || "[]";
+        bookOrder = JSON.parse(orderStr);
+      }
+    }
+
+    const updatedBookOrder = bookOrder.filter((id) => id !== chapterId);
+    const updateBookOrderQuery = `UPDATE books SET chapter_order = ? WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(updateBookOrderQuery, [JSON.stringify(updatedBookOrder), bookId]);
+    } else {
+      this.db.run(updateBookOrderQuery, [JSON.stringify(updatedBookOrder), bookId]);
+    }
+
+    // Update part order if needed
+    if (partId) {
+      const getPartOrderQuery = `SELECT chapter_order FROM book_parts WHERE id = ?`;
+      let partOrder: string[] = [];
+
+      if (this.isNative) {
+        const result = await this.db.query(getPartOrderQuery, [partId]);
+        if (result.values && result.values[0]) {
+          const orderStr = result.values[0].chapter_order || "[]";
+          partOrder = JSON.parse(orderStr);
+        }
+      } else {
+        const result = this.db.exec(getPartOrderQuery, [partId]);
+        if (result.length > 0 && result[0].values && result[0].values[0]) {
+          const orderStr = (result[0].values[0][0] as string) || "[]";
+          partOrder = JSON.parse(orderStr);
+        }
+      }
+
+      const updatedPartOrder = partOrder.filter((id) => id !== chapterId);
+      const updatePartOrderQuery = `UPDATE book_parts SET chapter_order = ? WHERE id = ?`;
+
+      if (this.isNative) {
+        await this.db.run(updatePartOrderQuery, [JSON.stringify(updatedPartOrder), partId]);
+      } else {
+        this.db.run(updatePartOrderQuery, [JSON.stringify(updatedPartOrder), partId]);
+      }
+    }
+
+    if (!this.isNative) {
+      this.saveToLocalStorage();
+    }
+  }
+
   // Helper method to add chapter to book's chapter_order
   private async addChapterToBookOrder(bookId: string, chapterId: string) {
     // Get current chapter order
