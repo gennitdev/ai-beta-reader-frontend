@@ -1,225 +1,259 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useDatabase } from '@/composables/useDatabase'
-import { PlusIcon, DocumentTextIcon, PencilIcon, BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon, Cog6ToothIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
-import { CheckCircleIcon } from '@heroicons/vue/24/solid'
-import draggable from 'vuedraggable'
-import SearchModal from '@/components/SearchModal.vue'
+import { ref, onMounted, onUnmounted, computed, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useDatabase } from "@/composables/useDatabase";
+import {
+  PlusIcon,
+  DocumentTextIcon,
+  PencilIcon,
+  BookOpenIcon,
+  UserIcon,
+  MapPinIcon,
+  LightBulbIcon,
+  Cog6ToothIcon,
+  TrashIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  MagnifyingGlassIcon,
+} from "@heroicons/vue/24/outline";
+import { CheckCircleIcon } from "@heroicons/vue/24/solid";
+import draggable from "vuedraggable";
+import SearchModal from "@/components/SearchModal.vue";
 
 interface Chapter {
-  id: string
-  title: string | null
-  word_count: number
-  has_summary: boolean
-  summary: string | null
-  position: number
-  position_in_part: number | null
-  part_id: string | null
-  part_name: string | null
+  id: string;
+  title: string | null;
+  word_count: number;
+  has_summary: boolean;
+  summary: string | null;
+  position: number;
+  position_in_part: number | null;
+  part_id: string | null;
+  part_name: string | null;
 }
 
 interface Part {
-  id: string
-  name: string
-  book_id: string
-  created_at: string
-  updated_at: string
+  id: string;
+  name: string;
+  book_id: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface WikiPage {
-  id: string
-  page_name: string
-  page_type: 'character' | 'location' | 'concept' | 'other'
-  summary: string | null
-  aliases: string[]
-  tags: string[]
-  is_major: boolean
-  created_by_ai: boolean
-  created_at: string
-  updated_at: string
-  content_length: number
+  id: string;
+  page_name: string;
+  page_type: "character" | "location" | "concept" | "other";
+  summary: string | null;
+  aliases: string[];
+  tags: string[];
+  is_major: boolean;
+  created_by_ai: boolean;
+  created_at: string;
+  updated_at: string;
+  content_length: number;
 }
 
-const route = useRoute()
-const router = useRouter()
-const bookId = route.params.id as string
+const route = useRoute();
+const router = useRouter();
+const bookId = route.params.id as string;
 
 // Use local database
-const { books, chapters: dbChapters, loadBooks, loadChapters, getWikiPages, getSummary, saveBook, createPart, getParts, updatePart, deletePart, updateChapterOrders, searchBook, replaceInChapter, replaceInWikiPage } = useDatabase()
+const {
+  books,
+  chapters: dbChapters,
+  loadBooks,
+  loadChapters,
+  getWikiPages,
+  getSummary,
+  saveBook,
+  createPart,
+  getParts,
+  updatePart,
+  deletePart,
+  updateChapterOrders,
+  searchBook,
+  replaceInChapter,
+  replaceInWikiPage,
+} = useDatabase();
 
-const book = ref<{ id: string; title: string } | null>(null)
-const chapters = ref<Chapter[]>([])
-const parts = ref<Part[]>([])
-const wikiPages = ref<WikiPage[]>([])
-const loading = ref(false)
-const loadingWiki = ref(false)
-const expandedSummaries = ref<Set<string>>(new Set())
-const routerViewKey = ref(0)
+const book = ref<{ id: string; title: string } | null>(null);
+const chapters = ref<Chapter[]>([]);
+const parts = ref<Part[]>([]);
+const wikiPages = ref<WikiPage[]>([]);
+const loading = ref(false);
+const loadingWiki = ref(false);
+const expandedSummaries = ref<Set<string>>(new Set());
+const routerViewKey = ref(0);
 
 // Book editing state
-const isEditingBookTitle = ref(false)
-const editingBookTitle = ref('')
+const isEditingBookTitle = ref(false);
+const editingBookTitle = ref("");
 
 // Parts state
-const expandedParts = ref<Set<string>>(new Set())
-const editingPartId = ref<string | null>(null)
-const editingPartName = ref('')
-const creatingPart = ref(false)
-const creatingPartLoading = ref(false)
-const newPartName = ref('')
+const expandedParts = ref<Set<string>>(new Set());
+const editingPartId = ref<string | null>(null);
+const editingPartName = ref("");
+const creatingPart = ref(false);
+const creatingPartLoading = ref(false);
+const newPartName = ref("");
 
 // Search service using local database
 const searchService = {
   searchBook: async (bookId: string, query: string) => {
-    return await searchBook(bookId, query)
+    return await searchBook(bookId, query);
   },
   replaceInChapter: async (chapterId: string, searchText: string, replaceText: string) => {
-    await replaceInChapter(chapterId, searchText, replaceText)
+    await replaceInChapter(chapterId, searchText, replaceText);
   },
   replaceInWikiPage: async (wikiPageId: string, searchText: string, replaceText: string) => {
-    await replaceInWikiPage(wikiPageId, searchText, replaceText)
-  }
-}
+    await replaceInWikiPage(wikiPageId, searchText, replaceText);
+  },
+};
 
 // Drag and drop state
-const isDragging = ref(false)
-const isDraggingInSidebar = ref(false)
-const showOrganizeModal = ref(false)
-const showSearchModal = ref(false)
-const draggableChapters = ref<Chapter[]>([])
+const isDragging = ref(false);
+const isDraggingInSidebar = ref(false);
+const showOrganizeModal = ref(false);
+const showSearchModal = ref(false);
+const draggableChapters = ref<Chapter[]>([]);
 
 const currentTab = computed(() => {
   // Check if we're on a wiki page child route
-  if (route.path.includes('/wiki/')) {
-    return 'wiki'
+  if (route.path.includes("/wiki/")) {
+    return "wiki";
   }
   // Check query parameter
-  return route.query.tab === 'wiki' ? 'wiki' : 'chapters'
-})
+  return route.query.tab === "wiki" ? "wiki" : "chapters";
+});
 
 const isOnBookOnly = computed(() => {
   // Check if we're on the book route but no child route (chapter or wiki page) is active
-  return route.name === 'book' && !route.params.chapterId && !route.params.wikiPageId
-})
+  return route.name === "book" && !route.params.chapterId && !route.params.wikiPageId;
+});
 
 const sortedChapters = computed(() => {
   // Backend returns chapters in correct order based on array positions
-  return chapters.value.slice().sort((a, b) => (a.position || 0) - (b.position || 0))
-})
+  return chapters.value.slice().sort((a, b) => (a.position || 0) - (b.position || 0));
+});
 
 const totalWordCount = computed(() => {
   return chapters.value.reduce((total, chapter) => {
-    return total + (chapter.word_count || 0)
-  }, 0)
-})
+    return total + (chapter.word_count || 0);
+  }, 0);
+});
 
 // Organize chapters by parts
 const chaptersByPart = computed(() => {
-  const sortedParts = parts.value.slice().sort((a, b) =>
-    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  )
-  const uncategorizedChapters = sortedChapters.value.filter(chapter => !chapter.part_id)
+  const sortedParts = parts.value
+    .slice()
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const uncategorizedChapters = sortedChapters.value.filter((chapter) => !chapter.part_id);
 
-  const organizedParts = sortedParts.map(part => {
-    const partChapters = sortedChapters.value.filter(chapter => chapter.part_id === part.id)
-    const wordCount = partChapters.reduce((total, chapter) => total + (chapter.word_count || 0), 0)
+  const organizedParts = sortedParts.map((part) => {
+    const partChapters = sortedChapters.value.filter((chapter) => chapter.part_id === part.id);
+    const wordCount = partChapters.reduce((total, chapter) => total + (chapter.word_count || 0), 0);
 
     return {
       ...part,
       chapters: partChapters,
-      wordCount
-    }
-  })
+      wordCount,
+    };
+  });
 
-  const uncategorizedWordCount = uncategorizedChapters.reduce((total, chapter) => total + (chapter.word_count || 0), 0)
+  const uncategorizedWordCount = uncategorizedChapters.reduce(
+    (total, chapter) => total + (chapter.word_count || 0),
+    0
+  );
 
   return {
     parts: organizedParts,
     uncategorized: uncategorizedChapters,
-    uncategorizedWordCount
-  }
-})
+    uncategorizedWordCount,
+  };
+});
 
 // Check if a part should be expanded by default (contains active chapter)
 const shouldExpandPart = (partId: string) => {
-  const activeChapterId = route.params.chapterId
-  if (!activeChapterId) return false
+  const activeChapterId = route.params.chapterId;
+  if (!activeChapterId) return false;
 
-  return chaptersByPart.value.parts
-    .find(part => part.id === partId)
-    ?.chapters.some(chapter => chapter.id === activeChapterId) || false
-}
+  return (
+    chaptersByPart.value.parts
+      .find((part) => part.id === partId)
+      ?.chapters.some((chapter) => chapter.id === activeChapterId) || false
+  );
+};
 
 const formatWordCount = (count: number) => {
-  if (count < 1000) return count.toString()
-  return (count / 1000).toFixed(1) + 'k'
-}
+  if (count < 1000) return count.toString();
+  return (count / 1000).toFixed(1) + "k";
+};
 
 const startEditingBookTitle = () => {
-  if (!book.value) return
-  editingBookTitle.value = book.value.title
-  isEditingBookTitle.value = true
-}
+  if (!book.value) return;
+  editingBookTitle.value = book.value.title;
+  isEditingBookTitle.value = true;
+};
 
 const cancelEditingBookTitle = () => {
-  isEditingBookTitle.value = false
-  editingBookTitle.value = ''
-}
+  isEditingBookTitle.value = false;
+  editingBookTitle.value = "";
+};
 
 const saveBookTitle = async () => {
-  if (!book.value || !editingBookTitle.value.trim()) return
+  if (!book.value || !editingBookTitle.value.trim()) return;
 
   try {
     // Update book with new title
     await saveBook({
       id: book.value.id,
       title: editingBookTitle.value.trim(),
-      chapter_order: (book.value as any).chapter_order || '[]',
-      created_at: (book.value as any).created_at || new Date().toISOString()
-    })
+      chapter_order: (book.value as any).chapter_order || "[]",
+      created_at: (book.value as any).created_at || new Date().toISOString(),
+    });
 
     // Update local ref
-    book.value.title = editingBookTitle.value.trim()
+    book.value.title = editingBookTitle.value.trim();
 
     // Close editor
-    isEditingBookTitle.value = false
-    editingBookTitle.value = ''
+    isEditingBookTitle.value = false;
+    editingBookTitle.value = "";
   } catch (error) {
-    console.error('Failed to update book title:', error)
+    console.error("Failed to update book title:", error);
   }
-}
+};
 
 const loadBook = async () => {
   try {
-    loading.value = true
+    loading.value = true;
 
     // Load books from database
-    await loadBooks()
+    await loadBooks();
 
     // Find the current book
-    book.value = books.value.find((b: any) => b.id === bookId) || null
+    book.value = books.value.find((b: any) => b.id === bookId) || null;
 
     if (!book.value) {
-      router.push('/books')
-      return
+      router.push("/books");
+      return;
     }
 
     // Load chapters from local database
-    await loadChapters(bookId)
+    await loadChapters(bookId);
 
     // Load parts from database first
-    parts.value = await getParts(bookId)
+    parts.value = await getParts(bookId);
 
     // Create a map of part IDs to part names for quick lookup
-    const partNameMap = new Map<string, string>()
-    parts.value.forEach(part => {
-      partNameMap.set(part.id, part.name)
-    })
+    const partNameMap = new Map<string, string>();
+    parts.value.forEach((part) => {
+      partNameMap.set(part.id, part.name);
+    });
 
     // Map database chapters to BookView chapter format and check for summaries
     const chapterPromises = dbChapters.value.map(async (ch: any, index: number) => {
-      const summary = await getSummary(ch.id)
+      const summary = await getSummary(ch.id);
       return {
         id: ch.id,
         title: ch.title || null,
@@ -229,341 +263,359 @@ const loadBook = async () => {
         position: index,
         position_in_part: null,
         part_id: ch.part_id || null,
-        part_name: ch.part_id ? partNameMap.get(ch.part_id) || null : null
-      }
-    })
+        part_name: ch.part_id ? partNameMap.get(ch.part_id) || null : null,
+      };
+    });
 
-    chapters.value = await Promise.all(chapterPromises)
+    chapters.value = await Promise.all(chapterPromises);
   } catch (error) {
-    console.error('Failed to load book:', error)
+    console.error("Failed to load book:", error);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const refreshData = async () => {
-  await loadBook()
-  await loadWiki()
-}
+  await loadBook();
+  await loadWiki();
+};
 
 const createNewChapter = () => {
-  router.push(`/books/${bookId}/chapter-editor`)
-}
+  router.push(`/books/${bookId}/chapter-editor`);
+};
 
 const editChapter = (chapterId: string) => {
-  router.push(`/books/${bookId}/chapter-editor/${chapterId}`)
-}
+  router.push(`/books/${bookId}/chapter-editor/${chapterId}`);
+};
 
 // Parts management functions
 const togglePart = (partId: string) => {
   if (expandedParts.value.has(partId)) {
-    expandedParts.value.delete(partId)
+    expandedParts.value.delete(partId);
   } else {
-    expandedParts.value.add(partId)
+    expandedParts.value.add(partId);
   }
-}
+};
 
 const startCreatingPart = () => {
-  creatingPart.value = true
-  newPartName.value = ''
-}
+  creatingPart.value = true;
+  newPartName.value = "";
+};
 
 const cancelCreatePart = () => {
-  creatingPart.value = false
-  newPartName.value = ''
-}
+  creatingPart.value = false;
+  newPartName.value = "";
+};
 
 const createPartFunc = async () => {
-  if (!newPartName.value.trim() || creatingPartLoading.value) return
+  if (!newPartName.value.trim() || creatingPartLoading.value) return;
 
   try {
-    creatingPartLoading.value = true
-    const newPart = await createPart(bookId, newPartName.value.trim())
-    parts.value.push(newPart)
-    parts.value.sort((a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    )
+    creatingPartLoading.value = true;
+    const newPart = await createPart(bookId, newPartName.value.trim());
+    parts.value.push(newPart);
+    parts.value.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-    creatingPart.value = false
-    newPartName.value = ''
-    expandedParts.value.add(newPart.id)
+    creatingPart.value = false;
+    newPartName.value = "";
+    expandedParts.value.add(newPart.id);
   } catch (error) {
-    console.error('Failed to create part:', error)
+    console.error("Failed to create part:", error);
   } finally {
-    creatingPartLoading.value = false
+    creatingPartLoading.value = false;
   }
-}
+};
 
 const startEditingPart = (part: Part) => {
-  editingPartId.value = part.id
-  editingPartName.value = part.name
-}
+  editingPartId.value = part.id;
+  editingPartName.value = part.name;
+};
 
 const cancelEditPart = () => {
-  editingPartId.value = null
-  editingPartName.value = ''
-}
+  editingPartId.value = null;
+  editingPartName.value = "";
+};
 
 const savePart = async (partId: string) => {
-  if (!editingPartName.value.trim()) return
+  if (!editingPartName.value.trim()) return;
 
   try {
-    await updatePart(partId, editingPartName.value.trim())
+    await updatePart(partId, editingPartName.value.trim());
 
-    const part = parts.value.find(p => p.id === partId)
+    const part = parts.value.find((p) => p.id === partId);
     if (part) {
-      part.name = editingPartName.value.trim()
+      part.name = editingPartName.value.trim();
     }
 
-    editingPartId.value = null
-    editingPartName.value = ''
+    editingPartId.value = null;
+    editingPartName.value = "";
   } catch (error) {
-    console.error('Failed to update part:', error)
+    console.error("Failed to update part:", error);
   }
-}
+};
 
 const deletePartFunc = async (partId: string) => {
-  if (!confirm('Are you sure you want to delete this part? Chapters in this part will become uncategorized.')) {
-    return
+  if (
+    !confirm(
+      "Are you sure you want to delete this part? Chapters in this part will become uncategorized."
+    )
+  ) {
+    return;
   }
 
   try {
-    await deletePart(partId)
-    parts.value = parts.value.filter(p => p.id !== partId)
-    expandedParts.value.delete(partId)
+    await deletePart(partId);
+    parts.value = parts.value.filter((p) => p.id !== partId);
+    expandedParts.value.delete(partId);
 
     // Update chapters to remove part association
-    chapters.value.forEach(chapter => {
+    chapters.value.forEach((chapter) => {
       if (chapter.part_id === partId) {
-        chapter.part_id = null
-        chapter.part_name = null
+        chapter.part_id = null;
+        chapter.part_name = null;
       }
-    })
+    });
   } catch (error) {
-    console.error('Failed to delete part:', error)
+    console.error("Failed to delete part:", error);
   }
-}
+};
 
 const moveChapterToPart = async (chapterId: string, partId: string | null) => {
   try {
     // Build new chapter order and part assignments using arrays
-    const chapterOrder: string[] = []
-    const partUpdates: { [partId: string]: string[] } = {}
+    const chapterOrder: string[] = [];
+    const partUpdates: { [partId: string]: string[] } = {};
 
     // Initialize part arrays
-    parts.value.forEach(part => {
-      partUpdates[part.id] = []
-    })
-    partUpdates['null'] = [] // For uncategorized chapters
+    parts.value.forEach((part) => {
+      partUpdates[part.id] = [];
+    });
+    partUpdates["null"] = []; // For uncategorized chapters
 
     // Group chapters by their NEW part assignment
-    chapters.value.forEach(chapter => {
-      const targetPartId = chapter.id === chapterId ? partId : chapter.part_id
-      const partKey = targetPartId || 'null'
+    chapters.value.forEach((chapter) => {
+      const targetPartId = chapter.id === chapterId ? partId : chapter.part_id;
+      const partKey = targetPartId || "null";
 
       if (!partUpdates[partKey]) {
-        partUpdates[partKey] = []
+        partUpdates[partKey] = [];
       }
-      partUpdates[partKey].push(chapter.id)
-    })
+      partUpdates[partKey].push(chapter.id);
+    });
 
     // Build global chapter order: uncategorized first, then parts in order
-    chapterOrder.push(...partUpdates['null'])
+    chapterOrder.push(...partUpdates["null"]);
 
     parts.value
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      .forEach(part => {
-        chapterOrder.push(...(partUpdates[part.id] || []))
-      })
+      .forEach((part) => {
+        chapterOrder.push(...(partUpdates[part.id] || []));
+      });
 
     // Send the complete reordered list to database
-    console.log('Sending array-based reorder to database:', { chapterOrder, partUpdates })
-    await updateChapterOrders(bookId, chapterOrder, partUpdates)
+    console.log("Sending array-based reorder to database:", { chapterOrder, partUpdates });
+    await updateChapterOrders(bookId, chapterOrder, partUpdates);
 
     // Reload to get the correct updated state from database
-    await loadBook()
+    await loadBook();
   } catch (error) {
-    console.error('Failed to move chapter to part:', error)
+    console.error("Failed to move chapter to part:", error);
     // Reload on error to revert any UI changes
-    await loadBook()
+    await loadBook();
   }
-}
+};
 
-const onChapterMove = (event: { moved?: { element: Chapter; newIndex: number; oldIndex: number } }) => {
+const onChapterMove = (event: {
+  moved?: { element: Chapter; newIndex: number; oldIndex: number };
+}) => {
   // Handle drag and drop reordering in modal
-  console.log('Chapter moved:', event)
+  console.log("Chapter moved:", event);
   // This will be implemented with more sophisticated logic if needed
-}
+};
 
 const moveChapterUp = async (chapterList: Chapter[], index: number, partId: string | null) => {
-  if (index === 0) return // Can't move up if already at top
+  if (index === 0) return; // Can't move up if already at top
 
   // Swap positions in the array
-  const temp = chapterList[index]
-  chapterList[index] = chapterList[index - 1]
-  chapterList[index - 1] = temp
+  const temp = chapterList[index];
+  chapterList[index] = chapterList[index - 1];
+  chapterList[index - 1] = temp;
 
   // Save the new order with ALL chapters properly reindexed
-  await saveModalChapterOrder()
-}
+  await saveModalChapterOrder();
+};
 
 const moveChapterDown = async (chapterList: Chapter[], index: number, partId: string | null) => {
-  if (index >= chapterList.length - 1) return // Can't move down if already at bottom
+  if (index >= chapterList.length - 1) return; // Can't move down if already at bottom
 
   // Swap positions in the array
-  const temp = chapterList[index]
-  chapterList[index] = chapterList[index + 1]
-  chapterList[index + 1] = temp
+  const temp = chapterList[index];
+  chapterList[index] = chapterList[index + 1];
+  chapterList[index + 1] = temp;
 
   // Save the new order with ALL chapters properly reindexed
-  await saveModalChapterOrder()
-}
+  await saveModalChapterOrder();
+};
 
 const saveModalChapterOrder = async () => {
   try {
     // Build arrays from modal view state
-    const chapterOrder: string[] = []
-    const partUpdates: { [partId: string]: string[] } = {}
+    const chapterOrder: string[] = [];
+    const partUpdates: { [partId: string]: string[] } = {};
 
     // Initialize part arrays
-    partUpdates['null'] = chaptersByPart.value.uncategorized.map(c => c.id)
+    partUpdates["null"] = chaptersByPart.value.uncategorized.map((c) => c.id);
 
-    chaptersByPart.value.parts.forEach(part => {
-      partUpdates[part.id] = part.chapters.map(c => c.id)
-    })
+    chaptersByPart.value.parts.forEach((part) => {
+      partUpdates[part.id] = part.chapters.map((c) => c.id);
+    });
 
     // Build global chapter order: uncategorized first, then parts in order
-    chapterOrder.push(...partUpdates['null'])
+    chapterOrder.push(...partUpdates["null"]);
 
     chaptersByPart.value.parts
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      .forEach(part => {
-        chapterOrder.push(...partUpdates[part.id])
-      })
+      .forEach((part) => {
+        chapterOrder.push(...partUpdates[part.id]);
+      });
 
     // Send array-based reorder to database
-    await updateChapterOrders(bookId, chapterOrder, partUpdates)
+    await updateChapterOrders(bookId, chapterOrder, partUpdates);
 
     // Reload to get updated state
-    await loadBook()
+    await loadBook();
   } catch (error) {
-    console.error('Failed to save chapter order from modal:', error)
-    await loadBook() // Reload on error
+    console.error("Failed to save chapter order from modal:", error);
+    await loadBook(); // Reload on error
   }
-}
+};
 
-const onSidebarChapterMove = async (event: { added?: { element: Chapter; newIndex: number }; removed?: { element: Chapter; oldIndex: number } }, targetPartId: string | null) => {
+const onSidebarChapterMove = async (
+  event: {
+    added?: { element: Chapter; newIndex: number };
+    removed?: { element: Chapter; oldIndex: number };
+  },
+  targetPartId: string | null
+) => {
   // Handle drag and drop between parts in sidebar
-  console.log('Sidebar chapter moved:', event, 'to part:', targetPartId)
+  console.log("Sidebar chapter moved:", event, "to part:", targetPartId);
 
   if (event.added) {
     // Chapter was dropped into this part
-    const chapter = event.added.element
-    console.log('Moving chapter', chapter.id, 'from part', chapter.part_id, 'to part', targetPartId)
+    const chapter = event.added.element;
+    console.log(
+      "Moving chapter",
+      chapter.id,
+      "from part",
+      chapter.part_id,
+      "to part",
+      targetPartId
+    );
 
     if (targetPartId !== chapter.part_id) {
       try {
-        await moveChapterToPart(chapter.id, targetPartId)
-        console.log('Successfully moved chapter to part')
+        await moveChapterToPart(chapter.id, targetPartId);
+        console.log("Successfully moved chapter to part");
         // Reload data to ensure UI is in sync
-        await loadBook()
+        await loadBook();
       } catch (error) {
         // Revert the UI change if API call failed
-        console.error('Failed to move chapter:', error)
+        console.error("Failed to move chapter:", error);
         // Refresh the data to get the correct state
-        await loadBook()
+        await loadBook();
       }
     }
   }
-}
-
+};
 
 // Update draggable chapters when chapters change
-watch(chapters, (newChapters) => {
-  draggableChapters.value = [...newChapters].sort((a, b) => {
-    const aPartPos = a.position_in_part ?? 999999
-    const bPartPos = b.position_in_part ?? 999999
-    if (aPartPos !== bPartPos) {
-      return aPartPos - bPartPos
-    }
-    return (a.position || 0) - (b.position || 0)
-  })
-}, { immediate: true })
+watch(
+  chapters,
+  (newChapters) => {
+    draggableChapters.value = [...newChapters].sort((a, b) => {
+      const aPartPos = a.position_in_part ?? 999999;
+      const bPartPos = b.position_in_part ?? 999999;
+      if (aPartPos !== bPartPos) {
+        return aPartPos - bPartPos;
+      }
+      return (a.position || 0) - (b.position || 0);
+    });
+  },
+  { immediate: true }
+);
 
 // Drag and drop handlers for modal
 
 // Sidebar-specific drag handlers
 const onSidebarDragStart = () => {
-  isDragging.value = true
-  isDraggingInSidebar.value = true
-}
+  isDragging.value = true;
+  isDraggingInSidebar.value = true;
+};
 
 const onSidebarDragEnd = async () => {
-  isDragging.value = false
+  isDragging.value = false;
   // For sidebar, we want to save the order after drag ends
   // This handles reordering within the same part/uncategorized section
-  await saveSidebarChapterOrder()
-  isDraggingInSidebar.value = false
-}
+  await saveSidebarChapterOrder();
+  isDraggingInSidebar.value = false;
+};
 
 const saveSidebarChapterOrder = async () => {
   try {
     // Build arrays from sidebar state
-    const chapterOrder: string[] = []
-    const partUpdates: { [partId: string]: string[] } = {}
+    const chapterOrder: string[] = [];
+    const partUpdates: { [partId: string]: string[] } = {};
 
     // Initialize part arrays
-    partUpdates['null'] = chaptersByPart.value.uncategorized.map(c => c.id)
+    partUpdates["null"] = chaptersByPart.value.uncategorized.map((c) => c.id);
 
-    chaptersByPart.value.parts.forEach(part => {
-      partUpdates[part.id] = part.chapters.map(c => c.id)
-    })
+    chaptersByPart.value.parts.forEach((part) => {
+      partUpdates[part.id] = part.chapters.map((c) => c.id);
+    });
 
     // Build global chapter order: uncategorized first, then parts in order
-    chapterOrder.push(...partUpdates['null'])
+    chapterOrder.push(...partUpdates["null"]);
 
     chaptersByPart.value.parts
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      .forEach(part => {
-        chapterOrder.push(...partUpdates[part.id])
-      })
+      .forEach((part) => {
+        chapterOrder.push(...partUpdates[part.id]);
+      });
 
     // Send array-based reorder to backend
-    await updateChapterOrders(bookId, chapterOrder, partUpdates)
+    await updateChapterOrders(bookId, chapterOrder, partUpdates);
 
-    console.log('Saved sidebar chapter order with arrays:', { chapterOrder, partUpdates })
+    console.log("Saved sidebar chapter order with arrays:", { chapterOrder, partUpdates });
 
     // Reload to ensure UI reflects the saved state
-    await loadBook()
+    await loadBook();
   } catch (error) {
-    console.error('Failed to save sidebar chapter order:', error)
+    console.error("Failed to save sidebar chapter order:", error);
     // Reload on error to revert UI to correct state
-    await loadBook()
+    await loadBook();
   }
-}
-
-
+};
 
 const loadWiki = async () => {
-  if (!bookId) return
+  if (!bookId) return;
 
   try {
-    loadingWiki.value = true
+    loadingWiki.value = true;
     const safeParseArray = (value: string | null) => {
-      if (!value) return []
+      if (!value) return [];
       try {
-        const parsed = JSON.parse(value)
-        return Array.isArray(parsed) ? parsed : []
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
       } catch {
-        return []
+        return [];
       }
-    }
+    };
 
-    const pages = await getWikiPages(bookId)
+    const pages = await getWikiPages(bookId);
     wikiPages.value = pages.map((page: any) => ({
       id: page.id,
       page_name: page.page_name,
-      page_type: (page.page_type || 'character') as WikiPage['page_type'],
+      page_type: (page.page_type || "character") as WikiPage["page_type"],
       summary: page.summary ?? null,
       aliases: safeParseArray(page.aliases),
       tags: safeParseArray(page.tags),
@@ -571,125 +623,132 @@ const loadWiki = async () => {
       created_by_ai: Boolean(page.created_by_ai),
       created_at: page.created_at,
       updated_at: page.updated_at,
-      content_length: typeof page.content === 'string' ? page.content.length : 0
-    }))
+      content_length: typeof page.content === "string" ? page.content.length : 0,
+    }));
   } catch (error) {
-    console.error('Failed to load wiki pages:', error)
-    wikiPages.value = []
+    console.error("Failed to load wiki pages:", error);
+    wikiPages.value = [];
   } finally {
-    loadingWiki.value = false
+    loadingWiki.value = false;
   }
-}
+};
 
 const wikiPagesByType = computed(() => {
   const grouped = wikiPages.value.reduce((acc, page) => {
     if (!acc[page.page_type]) {
-      acc[page.page_type] = []
+      acc[page.page_type] = [];
     }
-    acc[page.page_type].push(page)
-    return acc
-  }, {} as Record<string, WikiPage[]>)
+    acc[page.page_type].push(page);
+    return acc;
+  }, {} as Record<string, WikiPage[]>);
 
   // Sort each group: major pages first, then alphabetical
-  Object.keys(grouped).forEach(type => {
+  Object.keys(grouped).forEach((type) => {
     grouped[type].sort((a, b) => {
       if (a.is_major !== b.is_major) {
-        return b.is_major ? 1 : -1
+        return b.is_major ? 1 : -1;
       }
-      return a.page_name.localeCompare(b.page_name)
-    })
-  })
+      return a.page_name.localeCompare(b.page_name);
+    });
+  });
 
-  return grouped
-})
+  return grouped;
+});
 
 const getTypeIcon = (type: string) => {
   switch (type) {
-    case 'character': return UserIcon
-    case 'location': return MapPinIcon
-    case 'concept': return LightBulbIcon
-    default: return BookOpenIcon
+    case "character":
+      return UserIcon;
+    case "location":
+      return MapPinIcon;
+    case "concept":
+      return LightBulbIcon;
+    default:
+      return BookOpenIcon;
   }
-}
+};
 
 const getTypeColor = (type: string) => {
   switch (type) {
-    case 'character': return 'text-blue-600'
-    case 'location': return 'text-green-600'
-    case 'concept': return 'text-purple-600'
-    default: return 'text-gray-600'
+    case "character":
+      return "text-blue-600";
+    case "location":
+      return "text-green-600";
+    case "concept":
+      return "text-purple-600";
+    default:
+      return "text-gray-600";
   }
-}
+};
 
 const toggleSummary = (chapterId: string) => {
   if (expandedSummaries.value.has(chapterId)) {
-    expandedSummaries.value.delete(chapterId)
+    expandedSummaries.value.delete(chapterId);
   } else {
-    expandedSummaries.value.add(chapterId)
+    expandedSummaries.value.add(chapterId);
   }
-}
+};
 
 const getSummaryPreview = (summary: string, maxLength: number = 100) => {
-  if (!summary) return ''
-  if (summary.length <= maxLength) return summary
+  if (!summary) return "";
+  if (summary.length <= maxLength) return summary;
 
   // Find the last complete sentence within the limit
-  const truncated = summary.substring(0, maxLength)
-  const lastSentence = truncated.lastIndexOf('.')
+  const truncated = summary.substring(0, maxLength);
+  const lastSentence = truncated.lastIndexOf(".");
 
   if (lastSentence > 0 && lastSentence > maxLength * 0.6) {
-    return truncated.substring(0, lastSentence + 1)
+    return truncated.substring(0, lastSentence + 1);
   }
 
   // If no good sentence break, just truncate at word boundary
-  const lastSpace = truncated.lastIndexOf(' ')
-  return lastSpace > 0 ? truncated.substring(0, lastSpace) + '...' : truncated + '...'
-}
-
+  const lastSpace = truncated.lastIndexOf(" ");
+  return lastSpace > 0 ? truncated.substring(0, lastSpace) + "..." : truncated + "...";
+};
 
 // Watch for route changes to trigger router-view rerender
 watch(
   () => route.fullPath,
   () => {
-    routerViewKey.value++
+    routerViewKey.value++;
   }
-)
+);
 
 const checkAndRedirectToFirstChapter = () => {
-  const isDesktop = window.innerWidth >= 1024 // lg breakpoint
-  const hasChapterInRoute = route.path.includes('/chapters/') || route.path.includes('/wiki/')
+  const isDesktop = window.innerWidth >= 1024; // lg breakpoint
+  const hasChapterInRoute = route.path.includes("/chapters/") || route.path.includes("/wiki/");
 
   if (isDesktop && !hasChapterInRoute && sortedChapters.value.length > 0) {
-    const firstChapter = sortedChapters.value[0]
-    router.replace(`/books/${bookId}/chapters/${firstChapter.id}`)
+    const firstChapter = sortedChapters.value[0];
+    router.replace(`/books/${bookId}/chapters/${firstChapter.id}`);
   }
-}
+};
 
 const handleResize = () => {
-  checkAndRedirectToFirstChapter()
-}
+  checkAndRedirectToFirstChapter();
+};
 
 // Watch for tab changes to reload wiki pages
 watch(currentTab, async (newTab) => {
-  if (newTab === 'wiki') {
-    await loadWiki()
+  if (newTab === "wiki") {
+    await loadWiki();
   }
-})
+});
 
 onMounted(async () => {
-  await loadBook()
-  await loadWiki()
+  await loadBook();
+  await loadWiki();
 
   // Check if we need to redirect to first chapter
-  checkAndRedirectToFirstChapter()
+  checkAndRedirectToFirstChapter();
 
   // Add resize listener
-  window.addEventListener('resize', handleResize)
-})
+  window.addEventListener("resize", handleResize);
+});
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-})
+  window.removeEventListener("resize", handleResize);
+});
 </script>
 
 <template>
@@ -758,7 +817,7 @@ onUnmounted(() => {
           'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
           currentTab === 'chapters'
             ? 'bg-white text-blue-700 shadow'
-            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white',
         ]"
       >
         <DocumentTextIcon class="w-5 h-5 inline mr-2" />
@@ -770,7 +829,7 @@ onUnmounted(() => {
           'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
           currentTab === 'wiki'
             ? 'bg-white text-blue-700 shadow'
-            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white',
         ]"
       >
         <BookOpenIcon class="w-5 h-5 inline mr-2" />
@@ -786,20 +845,18 @@ onUnmounted(() => {
       </div>
 
       <!-- Chapters list -->
-      <div v-else-if="chapters.length > 0" class=" divide-gray-200 dark:divide-gray-700 sm:space-y-4 sm:divide-y-0">
+      <div v-else-if="chapters.length > 0" class="py-4 dark:bg-gray-900 sm:space-y-4 sm:divide-y-0">
         <div
           v-for="chapter in sortedChapters"
           :key="chapter.id"
           class="sm:border-gray-200 sm:dark:border-gray-700 sm:shadow-md sm:hover:shadow-lg sm:transition-shadow"
         >
-
-            <div class="flex items-start gap-3 px-4">
-              <router-link
-            :to="`/m/books/${bookId}/chapters/${chapter.id}`"
-            class="block"
-          >
-              <div class="flex-1">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          <div class="flex space-between gap-3 px-4">
+            <router-link :to="`/m/books/${bookId}/chapters/${chapter.id}`" class="block flex-1">
+              <div>
+                <h3
+                  class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                >
                   {{ chapter.title || chapter.id }}
                 </h3>
                 <div class="mt-1 flex flex-wrap items-center gap-4">
@@ -818,7 +875,7 @@ onUnmounted(() => {
                       :class="chapter.has_summary ? 'text-green-600' : 'text-gray-500'"
                       class="text-sm"
                     >
-                      {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
+                      {{ chapter.has_summary ? "Summarized" : "Not summarized" }}
                     </span>
                   </div>
                   <button
@@ -854,21 +911,18 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
-              </router-link>
-                <!-- Action buttons outside router-link -->
-          <div class="mt-3 hidden justify-end space-x-2 sm:flex sm:px-6 sm:pb-4">
-            <button
-              @click="editChapter(chapter.id)"
-              class="inline-flex items-center px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-            >
-              <PencilIcon class="w-4 h-4 mr-1" />
-              Edit
-            </button>
-          </div>
+            </router-link>
+            <!-- Action buttons outside router-link -->
+            <div class="mt-3 hidden justify-end space-x-2 sm:flex sm:px-6 sm:pb-4">
+              <button
+                @click="editChapter(chapter.id)"
+                class="inline-flex h-10 items-center px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+              >
+                <PencilIcon class="w-4 h-4 mr-1" />
+                Edit
+              </button>
             </div>
-
-
-
+          </div>
         </div>
       </div>
 
@@ -899,7 +953,9 @@ onUnmounted(() => {
         <div v-for="(pages, type) in wikiPagesByType" :key="type" class="space-y-4">
           <div class="flex items-center space-x-2">
             <component :is="getTypeIcon(type)" :class="['w-6 h-6', getTypeColor(type)]" />
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white capitalize">{{ type }}s</h2>
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white capitalize">
+              {{ type }}s
+            </h2>
             <span class="text-sm text-gray-500 dark:text-gray-400">({{ pages.length }})</span>
           </div>
 
@@ -913,18 +969,28 @@ onUnmounted(() => {
               <div class="flex items-start justify-between mb-2">
                 <div class="flex items-center space-x-2">
                   <h3 class="font-semibold text-gray-900 dark:text-white">{{ page.page_name }}</h3>
-                  <span v-if="page.is_major" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                  <span
+                    v-if="page.is_major"
+                    class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full"
+                  >
                     Major
                   </span>
                 </div>
               </div>
 
-              <p v-if="page.summary" class="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+              <p
+                v-if="page.summary"
+                class="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2"
+              >
                 {{ page.summary }}
               </p>
 
-              <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                <span>{{ page.content_length ? `${page.content_length} chars` : 'No content' }}</span>
+              <div
+                class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400"
+              >
+                <span>{{
+                  page.content_length ? `${page.content_length} chars` : "No content"
+                }}</span>
                 <span>Updated {{ new Date(page.updated_at).toLocaleDateString() }}</span>
               </div>
 
@@ -950,7 +1016,8 @@ onUnmounted(() => {
         <BookOpenIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No wiki pages yet</h3>
         <p class="text-gray-600 dark:text-gray-400 mb-6">
-          Wiki pages will be automatically created when you generate chapter summaries with character mentions.
+          Wiki pages will be automatically created when you generate chapter summaries with
+          character mentions.
         </p>
         <div class="text-sm text-gray-500 dark:text-gray-400">
           💡 Try generating a summary for a chapter to see the wiki in action!
@@ -964,7 +1031,9 @@ onUnmounted(() => {
     <!-- Split view -->
     <div class="flex flex-1 overflow-hidden">
       <!-- Left sidebar: Compact list -->
-      <div class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto relative">
+      <div
+        class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto relative"
+      >
         <div class="p-4 pb-16">
           <!-- Book header -->
           <div class="mb-6">
@@ -997,7 +1066,9 @@ onUnmounted(() => {
 
             <!-- Display mode -->
             <div v-else class="flex items-center space-x-2">
-              <h1 class="text-xl font-bold text-gray-900 dark:text-white flex-1">{{ book?.title }}</h1>
+              <h1 class="text-xl font-bold text-gray-900 dark:text-white flex-1">
+                {{ book?.title }}
+              </h1>
               <button
                 @click="startEditingBookTitle"
                 class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -1044,7 +1115,7 @@ onUnmounted(() => {
                 'px-4 py-2 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center rounded-lg transition-colors',
                 currentTab === 'chapters'
                   ? 'bg-white text-blue-700 shadow'
-                  : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+                  : 'text-blue-100 hover:bg-white/[0.12] hover:text-white',
               ]"
             >
               <DocumentTextIcon class="w-4 h-4 inline mr-2" />
@@ -1056,7 +1127,7 @@ onUnmounted(() => {
                 'px-4 py-2 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center rounded-lg transition-colors',
                 currentTab === 'wiki'
                   ? 'bg-white text-blue-700 shadow'
-                  : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+                  : 'text-blue-100 hover:bg-white/[0.12] hover:text-white',
               ]"
             >
               <BookOpenIcon class="w-4 h-4 inline mr-2" />
@@ -1073,7 +1144,11 @@ onUnmounted(() => {
             <!-- Parts and Chapters -->
             <div v-else-if="chapters.length > 0" class="space-y-3">
               <!-- Parts accordion -->
-              <div v-for="part in chaptersByPart.parts" :key="part.id" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div
+                v-for="part in chaptersByPart.parts"
+                :key="part.id"
+                class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+              >
                 <!-- Part header -->
                 <button
                   @click="togglePart(part.id)"
@@ -1082,22 +1157,35 @@ onUnmounted(() => {
                   <div>
                     <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }} · {{ formatWordCount(part.wordCount) }} words
+                      {{ part.chapters.length }} chapter{{
+                        part.chapters.length !== 1 ? "s" : ""
+                      }}
+                      · {{ formatWordCount(part.wordCount) }} words
                     </p>
                   </div>
                   <svg
-                    :class="expandedParts.has(part.id) || shouldExpandPart(part.id) ? 'rotate-180' : ''"
+                    :class="
+                      expandedParts.has(part.id) || shouldExpandPart(part.id) ? 'rotate-180' : ''
+                    "
                     class="w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 9l-7 7-7-7"
+                    ></path>
                   </svg>
                 </button>
 
                 <!-- Part chapters -->
-                <div v-if="expandedParts.has(part.id) || shouldExpandPart(part.id)" class="bg-white dark:bg-gray-800">
+                <div
+                  v-if="expandedParts.has(part.id) || shouldExpandPart(part.id)"
+                  class="bg-white dark:bg-gray-800"
+                >
                   <draggable
                     v-model="part.chapters"
                     item-key="id"
@@ -1115,9 +1203,11 @@ onUnmounted(() => {
                       <router-link
                         :to="`/books/${bookId}/chapters/${chapter.id}`"
                         class="block p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer border-l-4"
-                        :class="route.params.chapterId === chapter.id
-                          ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
-                          : 'border-l-transparent hover:border-l-gray-300 dark:hover:border-l-gray-600'"
+                        :class="
+                          route.params.chapterId === chapter.id
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
+                            : 'border-l-transparent hover:border-l-gray-300 dark:hover:border-l-gray-600'
+                        "
                       >
                         <div class="flex items-center justify-between">
                           <div
@@ -1125,7 +1215,9 @@ onUnmounted(() => {
                             @click.prevent.stop
                           >
                             <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"></path>
+                              <path
+                                d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
+                              ></path>
                             </svg>
                           </div>
                           <div class="flex-1 min-w-0">
@@ -1159,11 +1251,17 @@ onUnmounted(() => {
               </div>
 
               <!-- Uncategorized chapters -->
-              <div v-if="chaptersByPart.uncategorized.length > 0" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div
+                v-if="chaptersByPart.uncategorized.length > 0"
+                class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+              >
                 <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700">
                   <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized</h4>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ chaptersByPart.uncategorized.length }} chapter{{ chaptersByPart.uncategorized.length !== 1 ? 's' : '' }} · {{ formatWordCount(chaptersByPart.uncategorizedWordCount) }} words
+                    {{ chaptersByPart.uncategorized.length }} chapter{{
+                      chaptersByPart.uncategorized.length !== 1 ? "s" : ""
+                    }}
+                    · {{ formatWordCount(chaptersByPart.uncategorizedWordCount) }} words
                   </p>
                 </div>
                 <div class="bg-white dark:bg-gray-800">
@@ -1184,9 +1282,11 @@ onUnmounted(() => {
                       <router-link
                         :to="`/books/${bookId}/chapters/${chapter.id}`"
                         class="block p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer border-l-4"
-                        :class="route.params.chapterId === chapter.id
-                          ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
-                          : 'border-l-transparent hover:border-l-gray-300 dark:hover:border-l-gray-600'"
+                        :class="
+                          route.params.chapterId === chapter.id
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
+                            : 'border-l-transparent hover:border-l-gray-300 dark:hover:border-l-gray-600'
+                        "
                       >
                         <div class="flex items-center justify-between">
                           <div
@@ -1194,7 +1294,9 @@ onUnmounted(() => {
                             @click.prevent.stop
                           >
                             <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"></path>
+                              <path
+                                d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
+                              ></path>
                             </svg>
                           </div>
                           <div class="flex-1 min-w-0">
@@ -1231,7 +1333,9 @@ onUnmounted(() => {
             <!-- Empty state -->
             <div v-else class="text-center py-8">
               <DocumentTextIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
-              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">No chapters yet</h3>
+              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                No chapters yet
+              </h3>
               <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
                 Add your first chapter to get started.
               </p>
@@ -1248,7 +1352,9 @@ onUnmounted(() => {
               <div v-for="(pages, type) in wikiPagesByType" :key="type" class="space-y-2">
                 <div class="flex items-center space-x-2">
                   <component :is="getTypeIcon(type)" :class="['w-4 h-4', getTypeColor(type)]" />
-                  <h3 class="text-sm font-semibold text-gray-900 dark:text-white capitalize">{{ type }}s</h3>
+                  <h3 class="text-sm font-semibold text-gray-900 dark:text-white capitalize">
+                    {{ type }}s
+                  </h3>
                   <span class="text-xs text-gray-500 dark:text-gray-400">({{ pages.length }})</span>
                 </div>
 
@@ -1258,18 +1364,34 @@ onUnmounted(() => {
                     :key="page.id"
                     :to="`/books/${bookId}/wiki/${page.id}`"
                     class="block p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    :class="route.params.wikiPageId === page.id ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600' : ''"
+                    :class="
+                      route.params.wikiPageId === page.id
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600'
+                        : ''
+                    "
                   >
                     <div class="flex items-center justify-between">
                       <div class="flex items-center space-x-2 min-w-0">
-                        <h4 class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ page.page_name }}</h4>
-                        <span v-if="page.is_major" class="px-1 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {{ page.page_name }}
+                        </h4>
+                        <span
+                          v-if="page.is_major"
+                          class="px-1 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded"
+                        >
                           Major
                         </span>
                       </div>
                     </div>
-                    <p v-if="page.summary" class="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
-                      {{ page.summary.length > 60 ? page.summary.substring(0, 60) + '...' : page.summary }}
+                    <p
+                      v-if="page.summary"
+                      class="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2"
+                    >
+                      {{
+                        page.summary.length > 60
+                          ? page.summary.substring(0, 60) + "..."
+                          : page.summary
+                      }}
                     </p>
                   </router-link>
                 </div>
@@ -1279,7 +1401,9 @@ onUnmounted(() => {
             <!-- Empty wiki state -->
             <div v-else class="text-center py-8">
               <BookOpenIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
-              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">No wiki pages yet</h3>
+              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                No wiki pages yet
+              </h3>
               <p class="text-xs text-gray-600 dark:text-gray-400">
                 Generate chapter summaries to create wiki pages.
               </p>
@@ -1306,9 +1430,12 @@ onUnmounted(() => {
         <div v-if="isOnBookOnly" class="flex items-center justify-center h-full">
           <div class="text-center">
             <DocumentTextIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">Please select a chapter</h3>
+            <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">
+              Please select a chapter
+            </h3>
             <p class="text-gray-600 dark:text-gray-400 max-w-md">
-              Choose a chapter from the sidebar to view and edit its content, or create a new chapter to get started.
+              Choose a chapter from the sidebar to view and edit its content, or create a new
+              chapter to get started.
             </p>
           </div>
         </div>
@@ -1319,8 +1446,15 @@ onUnmounted(() => {
   </div>
 
   <!-- Organize Chapters Modal -->
-  <div v-if="showOrganizeModal" @click="showOrganizeModal = false" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div @click.stop class="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+  <div
+    v-if="showOrganizeModal"
+    @click="showOrganizeModal = false"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+  >
+    <div
+      @click.stop
+      class="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden"
+    >
       <div class="p-6 border-b border-gray-200 dark:border-gray-700">
         <div class="flex justify-between items-center">
           <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Organize Chapters</h2>
@@ -1329,7 +1463,12 @@ onUnmounted(() => {
             class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-md"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
             </svg>
           </button>
         </div>
@@ -1338,10 +1477,15 @@ onUnmounted(() => {
       <div class="p-6 overflow-y-auto max-h-[70vh]">
         <div class="space-y-6">
           <!-- Instructions -->
-          <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
-            <h3 class="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">How to organize chapters</h3>
+          <div
+            class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700"
+          >
+            <h3 class="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
+              How to organize chapters
+            </h3>
             <p class="text-sm text-blue-800 dark:text-blue-300">
-              Use the dropdown next to each chapter to assign it to a part. Create new parts as needed to organize your chapters into logical sections.
+              Use the dropdown next to each chapter to assign it to a part. Create new parts as
+              needed to organize your chapters into logical sections.
             </p>
           </div>
 
@@ -1375,8 +1519,11 @@ onUnmounted(() => {
                 :disabled="!newPartName.trim() || creatingPartLoading"
                 class="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm inline-flex items-center"
               >
-                <div v-if="creatingPartLoading" class="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent mr-2"></div>
-                {{ creatingPartLoading ? 'Creating...' : 'Create' }}
+                <div
+                  v-if="creatingPartLoading"
+                  class="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent mr-2"
+                ></div>
+                {{ creatingPartLoading ? "Creating..." : "Create" }}
               </button>
               <button
                 @click="cancelCreatePart"
@@ -1394,7 +1541,9 @@ onUnmounted(() => {
               <div class="px-0 py-3">
                 <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized Chapters</h4>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {{ chaptersByPart.uncategorized.length }} chapter{{ chaptersByPart.uncategorized.length !== 1 ? 's' : '' }}
+                  {{ chaptersByPart.uncategorized.length }} chapter{{
+                    chaptersByPart.uncategorized.length !== 1 ? "s" : ""
+                  }}
                 </p>
               </div>
               <div class="px-0 py-1">
@@ -1408,8 +1557,12 @@ onUnmounted(() => {
                   <template #item="{ element: chapter, index }">
                     <div class="flex items-center justify-between gap-3 py-3 px-0">
                       <div class="flex-1">
-                        <h5 class="text-sm font-medium text-gray-900 dark:text-white">{{ chapter.title || chapter.id }}</h5>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ chapter.word_count?.toLocaleString() || 0 }} words</p>
+                        <h5 class="text-sm font-medium text-gray-900 dark:text-white">
+                          {{ chapter.title || chapter.id }}
+                        </h5>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                          {{ chapter.word_count?.toLocaleString() || 0 }} words
+                        </p>
                       </div>
                       <div class="flex items-center space-x-2">
                         <div class="flex flex-col">
@@ -1433,13 +1586,22 @@ onUnmounted(() => {
                         <div class="relative">
                           <select
                             :value="chapter.part_id || ''"
-                            @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
+                            @change="
+                              moveChapterToPart(
+                                chapter.id,
+                                ($event.target as HTMLSelectElement)?.value || null
+                              )
+                            "
                             class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                           >
                             <option value="">Uncategorized</option>
-                            <option v-for="part in parts" :key="part.id" :value="part.id">{{ part.name }}</option>
+                            <option v-for="part in parts" :key="part.id" :value="part.id">
+                              {{ part.name }}
+                            </option>
                           </select>
-                          <ChevronDownIcon class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300" />
+                          <ChevronDownIcon
+                            class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300"
+                          />
                         </div>
                       </div>
                     </div>
@@ -1462,9 +1624,11 @@ onUnmounted(() => {
                       class="font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm w-full"
                       autofocus
                     />
-                    <h4 v-else class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
+                    <h4 v-else class="font-medium text-gray-900 dark:text-white">
+                      {{ part.name }}
+                    </h4>
                     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }}
+                      {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? "s" : "" }}
                     </p>
                   </div>
                   <div class="flex items-center space-x-2">
@@ -1475,7 +1639,12 @@ onUnmounted(() => {
                         title="Save"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M5 13l4 4L19 7"
+                          ></path>
                         </svg>
                       </button>
                       <button
@@ -1484,7 +1653,12 @@ onUnmounted(() => {
                         title="Cancel"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12"
+                          ></path>
                         </svg>
                       </button>
                     </template>
@@ -1518,8 +1692,12 @@ onUnmounted(() => {
                   <template #item="{ element: chapter, index }">
                     <div class="flex items-center justify-between gap-3 py-3 px-0">
                       <div class="flex-1">
-                        <h5 class="text-sm font-medium text-gray-900 dark:text-white">{{ chapter.title || chapter.id }}</h5>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ chapter.word_count?.toLocaleString() || 0 }} words</p>
+                        <h5 class="text-sm font-medium text-gray-900 dark:text-white">
+                          {{ chapter.title || chapter.id }}
+                        </h5>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                          {{ chapter.word_count?.toLocaleString() || 0 }} words
+                        </p>
                       </div>
                       <div class="flex items-center space-x-2">
                         <div class="flex flex-col">
@@ -1543,13 +1721,22 @@ onUnmounted(() => {
                         <div class="relative">
                           <select
                             :value="chapter.part_id || ''"
-                            @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
+                            @change="
+                              moveChapterToPart(
+                                chapter.id,
+                                ($event.target as HTMLSelectElement)?.value || null
+                              )
+                            "
                             class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                           >
                             <option value="">Uncategorized</option>
-                            <option v-for="p in parts" :key="p.id" :value="p.id">{{ p.name }}</option>
+                            <option v-for="p in parts" :key="p.id" :value="p.id">
+                              {{ p.name }}
+                            </option>
                           </select>
-                          <ChevronDownIcon class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300" />
+                          <ChevronDownIcon
+                            class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300"
+                          />
                         </div>
                       </div>
                     </div>
@@ -1559,9 +1746,14 @@ onUnmounted(() => {
             </div>
 
             <!-- Empty state -->
-            <div v-if="parts.length === 0 && chaptersByPart.uncategorized.length === 0" class="text-center py-8">
+            <div
+              v-if="parts.length === 0 && chaptersByPart.uncategorized.length === 0"
+              class="text-center py-8"
+            >
               <Cog6ToothIcon class="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No chapters to organize</h3>
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                No chapters to organize
+              </h3>
               <p class="text-gray-600 dark:text-gray-400">
                 Create some chapters first, then organize them into parts.
               </p>
