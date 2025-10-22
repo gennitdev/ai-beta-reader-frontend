@@ -424,13 +424,29 @@ export function useDatabase() {
     }
   }
 
-  async function updateChapterOrders(bookId: string, chapterOrder: string[], partUpdates: { [partId: string]: string[] }) {
+  async function updateChapterOrders(
+    bookId: string,
+    chapterOrder: string[],
+    partUpdates: { [partId: string]: string[] },
+    partOrder?: string[]
+  ) {
     try {
       await initializeDatabase()
-      await db.updateChapterOrders(bookId, chapterOrder, partUpdates)
+      await db.updateChapterOrders(bookId, chapterOrder, partUpdates, partOrder)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to update chapter orders'
       console.error('Update chapter orders error:', e)
+      throw e
+    }
+  }
+
+  async function updatePartOrder(bookId: string, partOrder: string[]) {
+    try {
+      await initializeDatabase()
+      await db.updatePartOrder(bookId, partOrder)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update part order'
+      console.error('Update part order error:', e)
       throw e
     }
   }
@@ -515,6 +531,7 @@ export function useDatabase() {
     updatePart,
     deletePart,
     updateChapterOrders,
+    updatePartOrder,
 
     // Search and Replace operations
     searchBook,

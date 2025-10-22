@@ -6,6 +6,7 @@ export interface Book {
   id: string;
   title: string;
   chapter_order: string; // JSON array of chapter IDs
+  part_order: string; // JSON array of part IDs
   created_at: string;
 }
 
@@ -95,6 +96,7 @@ export class AppDatabase {
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         chapter_order TEXT DEFAULT '[]',
+        part_order TEXT DEFAULT '[]',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -225,6 +227,8 @@ export class AppDatabase {
     const migrations = [
       // Add chapter_order to books if not exists
       `ALTER TABLE books ADD COLUMN chapter_order TEXT DEFAULT '[]'`,
+      // Add part_order to books if not exists
+      `ALTER TABLE books ADD COLUMN part_order TEXT DEFAULT '[]'`,
       // Add part_id to chapters if not exists
       `ALTER TABLE chapters ADD COLUMN part_id TEXT`,
       // Add chapter_order to book_parts if not exists
@@ -250,23 +254,32 @@ export class AppDatabase {
   }
 
   async saveBook(book: Book) {
-    const query = `INSERT OR REPLACE INTO books (id, title, chapter_order, created_at) VALUES (?, ?, ?, ?)`;
+    const query = `INSERT OR REPLACE INTO books (id, title, chapter_order, part_order, created_at) VALUES (?, ?, ?, ?, ?)`;
     const chapterOrder = book.chapter_order || '[]';
+    const partOrder = book.part_order || '[]';
 
     if (this.isNative) {
-      await this.db.run(query, [book.id, book.title, chapterOrder, book.created_at]);
+      await this.db.run(query, [book.id, book.title, chapterOrder, partOrder, book.created_at]);
     } else {
-      this.db.run(query, [book.id, book.title, chapterOrder, book.created_at]);
+      this.db.run(query, [book.id, book.title, chapterOrder, partOrder, book.created_at]);
       this.saveToLocalStorage();
     }
   }
 
   async getBooks(): Promise<Book[]> {
-    const query = `SELECT id, title, chapter_order, created_at FROM books ORDER BY created_at DESC`;
+    const query = `SELECT id, title, chapter_order, part_order, created_at FROM books ORDER BY created_at DESC`;
 
     if (this.isNative) {
       const result = await this.db.query(query);
-      return result.values || [];
+      if (!result.values) return [];
+
+      return result.values.map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        chapter_order: row.chapter_order || '[]',
+        part_order: row.part_order || '[]',
+        created_at: row.created_at
+      }));
     } else {
       const result = this.db.exec(query);
       if (result.length === 0) return [];
@@ -274,8 +287,9 @@ export class AppDatabase {
       return result[0].values.map((row: any[]) => ({
         id: row[0],
         title: row[1],
-        chapter_order: row[2],
-        created_at: row[3]
+        chapter_order: (row[2] as string) || '[]',
+        part_order: (row[3] as string) || '[]',
+        created_at: row[4]
       }));
     }
   }
@@ -485,6 +499,11 @@ export class AppDatabase {
       this.saveToLocalStorage();
     }
 
+    const currentOrder = await this.getBookPartOrder(part.book_id);
+    if (!currentOrder.includes(id)) {
+      await this.saveBookPartOrder(part.book_id, [...currentOrder, id]);
+    }
+
     return {
       id,
       book_id: part.book_id,
@@ -528,7 +547,75 @@ export class AppDatabase {
     }
   }
 
+  private async getBookPartOrder(bookId: string): Promise<string[]> {
+    const query = `SELECT part_order FROM books WHERE id = ?`;
+    let partOrder: string[] = [];
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [bookId]);
+      if (result.values && result.values[0]) {
+        const orderStr = result.values[0].part_order || '[]';
+        try {
+          const parsed = JSON.parse(orderStr);
+          if (Array.isArray(parsed)) {
+            partOrder = parsed;
+          }
+        } catch (error) {
+          console.warn('Failed to parse part order for book', bookId, error);
+        }
+      }
+    } else {
+      const result = this.db.exec(query, [bookId]);
+      if (result.length > 0 && result[0].values && result[0].values[0]) {
+        const orderStr = (result[0].values[0][0] as string) || '[]';
+        try {
+          const parsed = JSON.parse(orderStr);
+          if (Array.isArray(parsed)) {
+            partOrder = parsed;
+          }
+        } catch (error) {
+          console.warn('Failed to parse part order for book', bookId, error);
+        }
+      }
+    }
+
+    return partOrder;
+  }
+
+  private async saveBookPartOrder(bookId: string, partOrder: string[]) {
+    const uniqueOrder = Array.from(new Set(partOrder));
+    const query = `UPDATE books SET part_order = ? WHERE id = ?`;
+    const serialized = JSON.stringify(uniqueOrder);
+
+    if (this.isNative) {
+      await this.db.run(query, [serialized, bookId]);
+    } else {
+      this.db.run(query, [serialized, bookId]);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async updatePartOrder(bookId: string, partOrder: string[]) {
+    await this.saveBookPartOrder(bookId, partOrder);
+  }
+
   async deletePart(partId: string) {
+    let bookId: string | null = null;
+    const getBookIdQuery = `SELECT book_id FROM book_parts WHERE id = ? LIMIT 1`;
+
+    if (this.isNative) {
+      const result = await this.db.query(getBookIdQuery, [partId]);
+      if (result.values && result.values[0]) {
+        bookId = result.values[0].book_id as string;
+      }
+    } else {
+      const result = this.db.exec(getBookIdQuery, [partId]);
+      if (result.length > 0 && result[0].values && result[0].values[0]) {
+        const row = result[0].values[0];
+        bookId = (row[0] as string) || null;
+      }
+    }
+
     // Remove part reference from chapters
     const updateChaptersQuery = `UPDATE chapters SET part_id = NULL WHERE part_id = ?`;
     const deleteQuery = `DELETE FROM book_parts WHERE id = ?`;
@@ -541,9 +628,20 @@ export class AppDatabase {
       this.db.run(deleteQuery, [partId]);
       this.saveToLocalStorage();
     }
+
+    if (bookId) {
+      const currentOrder = await this.getBookPartOrder(bookId);
+      const updatedOrder = currentOrder.filter((id) => id !== partId);
+      await this.saveBookPartOrder(bookId, updatedOrder);
+    }
   }
 
-  async updateChapterOrders(bookId: string, chapterOrder: string[], partUpdates: Record<string, string[]>) {
+  async updateChapterOrders(
+    bookId: string,
+    chapterOrder: string[],
+    partUpdates: Record<string, string[]>,
+    partOrder?: string[]
+  ) {
     // Update book's chapter_order
     const updateBookQuery = `UPDATE books SET chapter_order = ? WHERE id = ?`;
 
@@ -569,6 +667,10 @@ export class AppDatabase {
           }
         }
       }
+
+      if (partOrder) {
+        await this.saveBookPartOrder(bookId, partOrder);
+      }
     } else {
       this.db.run(updateBookQuery, [JSON.stringify(chapterOrder), bookId]);
 
@@ -590,6 +692,10 @@ export class AppDatabase {
             this.db.run('UPDATE chapters SET part_id = ? WHERE id = ?', [partId, chapterId]);
           }
         }
+      }
+
+      if (partOrder) {
+        await this.saveBookPartOrder(bookId, partOrder);
       }
 
       this.saveToLocalStorage();

@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
+import type { Book as DatabaseBook, BookPart } from "@/lib/database";
 import {
   PlusIcon,
   DocumentTextIcon,
@@ -32,12 +33,9 @@ interface Chapter {
   part_name: string | null;
 }
 
-interface Part {
-  id: string;
-  name: string;
-  book_id: string;
-  created_at: string;
-  updated_at: string;
+interface OrganizedPart extends BookPart {
+  chapters: Chapter[];
+  wordCount: number;
 }
 
 interface WikiPage {
@@ -72,14 +70,16 @@ const {
   updatePart,
   deletePart,
   updateChapterOrders,
+  updatePartOrder,
   searchBook,
   replaceInChapter,
   replaceInWikiPage,
 } = useDatabase();
 
-const book = ref<{ id: string; title: string } | null>(null);
+const book = ref<DatabaseBook | null>(null);
 const chapters = ref<Chapter[]>([]);
-const parts = ref<Part[]>([]);
+const parts = ref<BookPart[]>([]);
+const partOrder = ref<string[]>([]);
 const wikiPages = ref<WikiPage[]>([]);
 const loading = ref(false);
 const loadingWiki = ref(false);
@@ -143,14 +143,37 @@ const totalWordCount = computed(() => {
   }, 0);
 });
 
+const orderedParts = computed(() => {
+  const partMap = new Map(parts.value.map((part) => [part.id, part]));
+  const orderedList: BookPart[] = [];
+
+  partOrder.value.forEach((partId) => {
+    const part = partMap.get(partId);
+    if (part) {
+      orderedList.push(part);
+      partMap.delete(partId);
+    }
+  });
+
+  if (partMap.size > 0) {
+    const remaining = Array.from(partMap.values()).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    orderedList.push(...remaining);
+  }
+
+  return orderedList;
+});
+
 // Organize chapters by parts
 const chaptersByPart = computed(() => {
-  const sortedParts = parts.value
-    .slice()
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  const uncategorizedChapters = sortedChapters.value.filter((chapter) => !chapter.part_id);
+  const partList = orderedParts.value;
+  const partIdSet = new Set(partList.map((part) => part.id));
+  const uncategorizedChapters = sortedChapters.value.filter(
+    (chapter) => !chapter.part_id || !partIdSet.has(chapter.part_id)
+  );
 
-  const organizedParts = sortedParts.map((part) => {
+  const organizedParts: OrganizedPart[] = partList.map((part) => {
     const partChapters = sortedChapters.value.filter((chapter) => chapter.part_id === part.id);
     const wordCount = partChapters.reduce((total, chapter) => total + (chapter.word_count || 0), 0);
 
@@ -172,6 +195,94 @@ const chaptersByPart = computed(() => {
     uncategorizedWordCount,
   };
 });
+
+const parseIdArray = (value: string | null | undefined): string[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const arraysEqual = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
+
+const setPartOrderState = (newOrder: string[]) => {
+  const uniqueOrder = Array.from(new Set(newOrder));
+  partOrder.value = uniqueOrder;
+  if (book.value) {
+    book.value.part_order = JSON.stringify(uniqueOrder);
+  }
+};
+
+const syncPartOrderWithParts = async () => {
+  if (!book.value) {
+    partOrder.value = [];
+    return;
+  }
+
+  const storedOrder = parseIdArray(book.value.part_order);
+  const partIds = parts.value.map((part) => part.id);
+  const sanitized = storedOrder.filter((id) => partIds.includes(id));
+  const missing = parts.value
+    .filter((part) => !sanitized.includes(part.id))
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .map((part) => part.id);
+
+  const updatedOrder = [...sanitized, ...missing];
+
+  if (!arraysEqual(updatedOrder, storedOrder)) {
+    try {
+      await updatePartOrder(bookId, updatedOrder);
+    } catch (error) {
+      console.error("Failed to synchronize part order:", error);
+    }
+  }
+
+  setPartOrderState(updatedOrder);
+};
+
+const persistPartOrder = async (newOrder: string[]) => {
+  const uniqueOrder = Array.from(new Set(newOrder));
+  if (arraysEqual(uniqueOrder, partOrder.value)) {
+    return true;
+  }
+
+  try {
+    await updatePartOrder(bookId, uniqueOrder);
+    setPartOrderState(uniqueOrder);
+    return true;
+  } catch (error) {
+    console.error("Failed to update part order:", error);
+    return false;
+  }
+};
+
+const buildChapterOrder = (partUpdates: Record<string, string[]>) => {
+  const chapterOrder: string[] = [];
+
+  if (partUpdates["null"]) {
+    chapterOrder.push(...partUpdates["null"]);
+  }
+
+  const visited = new Set<string>();
+  partOrder.value.forEach((partId) => {
+    visited.add(partId);
+    if (partUpdates[partId]) {
+      chapterOrder.push(...partUpdates[partId]);
+    }
+  });
+
+  Object.entries(partUpdates).forEach(([partId, chapterIds]) => {
+    if (partId !== "null" && !visited.has(partId)) {
+      chapterOrder.push(...chapterIds);
+    }
+  });
+
+  return chapterOrder;
+};
 
 // Check if a part should be expanded by default (contains active chapter)
 const shouldExpandPart = (partId: string) => {
@@ -209,8 +320,9 @@ const saveBookTitle = async () => {
     await saveBook({
       id: book.value.id,
       title: editingBookTitle.value.trim(),
-      chapter_order: (book.value as any).chapter_order || "[]",
-      created_at: (book.value as any).created_at || new Date().toISOString(),
+      chapter_order: book.value.chapter_order || "[]",
+      part_order: book.value.part_order || "[]",
+      created_at: book.value.created_at || new Date().toISOString(),
     });
 
     // Update local ref
@@ -232,10 +344,11 @@ const loadBook = async () => {
     await loadBooks();
 
     // Find the current book
-    book.value = books.value.find((b: any) => b.id === bookId) || null;
+    book.value = (books.value.find((b) => b.id === bookId) as DatabaseBook | undefined) || null;
 
     if (!book.value) {
       router.push("/books");
+      partOrder.value = [];
       return;
     }
 
@@ -244,6 +357,8 @@ const loadBook = async () => {
 
     // Load parts from database first
     parts.value = await getParts(bookId);
+
+    await syncPartOrderWithParts();
 
     // Create a map of part IDs to part names for quick lookup
     const partNameMap = new Map<string, string>();
@@ -321,7 +436,7 @@ const createPartFunc = async () => {
     creatingPartLoading.value = true;
     const newPart = await createPart(bookId, newPartName.value.trim());
     parts.value.push(newPart);
-    parts.value.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    setPartOrderState([...partOrder.value, newPart.id]);
 
     creatingPart.value = false;
     newPartName.value = "";
@@ -333,7 +448,7 @@ const createPartFunc = async () => {
   }
 };
 
-const startEditingPart = (part: Part) => {
+const startEditingPart = (part: BookPart) => {
   editingPartId.value = part.id;
   editingPartName.value = part.name;
 };
@@ -373,6 +488,7 @@ const deletePartFunc = async (partId: string) => {
   try {
     await deletePart(partId);
     parts.value = parts.value.filter((p) => p.id !== partId);
+    setPartOrderState(partOrder.value.filter((id) => id !== partId));
     expandedParts.value.delete(partId);
 
     // Update chapters to remove part association
@@ -387,19 +503,41 @@ const deletePartFunc = async (partId: string) => {
   }
 };
 
+const movePart = async (partId: string, direction: "up" | "down") => {
+  const currentIndex = partOrder.value.indexOf(partId);
+  if (currentIndex === -1) return;
+
+  const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (newIndex < 0 || newIndex >= partOrder.value.length) return;
+
+  const newOrder = [...partOrder.value];
+  [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
+
+  const success = await persistPartOrder(newOrder);
+  if (!success) {
+    return;
+  }
+
+  await saveModalChapterOrder();
+};
+
+const movePartUp = async (partId: string) => {
+  await movePart(partId, "up");
+};
+
+const movePartDown = async (partId: string) => {
+  await movePart(partId, "down");
+};
+
 const moveChapterToPart = async (chapterId: string, partId: string | null) => {
   try {
-    // Build new chapter order and part assignments using arrays
-    const chapterOrder: string[] = [];
     const partUpdates: { [partId: string]: string[] } = {};
+    partUpdates["null"] = [];
 
-    // Initialize part arrays
-    parts.value.forEach((part) => {
+    orderedParts.value.forEach((part) => {
       partUpdates[part.id] = [];
     });
-    partUpdates["null"] = []; // For uncategorized chapters
 
-    // Group chapters by their NEW part assignment
     chapters.value.forEach((chapter) => {
       const targetPartId = chapter.id === chapterId ? partId : chapter.part_id;
       const partKey = targetPartId || "null";
@@ -410,18 +548,11 @@ const moveChapterToPart = async (chapterId: string, partId: string | null) => {
       partUpdates[partKey].push(chapter.id);
     });
 
-    // Build global chapter order: uncategorized first, then parts in order
-    chapterOrder.push(...partUpdates["null"]);
-
-    parts.value
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      .forEach((part) => {
-        chapterOrder.push(...(partUpdates[part.id] || []));
-      });
+    const chapterOrder = buildChapterOrder(partUpdates);
 
     // Send the complete reordered list to database
     console.log("Sending array-based reorder to database:", { chapterOrder, partUpdates });
-    await updateChapterOrders(bookId, chapterOrder, partUpdates);
+    await updateChapterOrders(bookId, chapterOrder, partUpdates, partOrder.value);
 
     // Reload to get the correct updated state from database
     await loadBook();
@@ -467,7 +598,6 @@ const moveChapterDown = async (chapterList: Chapter[], index: number, partId: st
 const saveModalChapterOrder = async () => {
   try {
     // Build arrays from modal view state
-    const chapterOrder: string[] = [];
     const partUpdates: { [partId: string]: string[] } = {};
 
     // Initialize part arrays
@@ -477,17 +607,10 @@ const saveModalChapterOrder = async () => {
       partUpdates[part.id] = part.chapters.map((c) => c.id);
     });
 
-    // Build global chapter order: uncategorized first, then parts in order
-    chapterOrder.push(...partUpdates["null"]);
-
-    chaptersByPart.value.parts
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      .forEach((part) => {
-        chapterOrder.push(...partUpdates[part.id]);
-      });
+    const chapterOrder = buildChapterOrder(partUpdates);
 
     // Send array-based reorder to database
-    await updateChapterOrders(bookId, chapterOrder, partUpdates);
+    await updateChapterOrders(bookId, chapterOrder, partUpdates, partOrder.value);
 
     // Reload to get updated state
     await loadBook();
@@ -570,7 +693,6 @@ const onSidebarDragEnd = async () => {
 const saveSidebarChapterOrder = async () => {
   try {
     // Build arrays from sidebar state
-    const chapterOrder: string[] = [];
     const partUpdates: { [partId: string]: string[] } = {};
 
     // Initialize part arrays
@@ -580,17 +702,10 @@ const saveSidebarChapterOrder = async () => {
       partUpdates[part.id] = part.chapters.map((c) => c.id);
     });
 
-    // Build global chapter order: uncategorized first, then parts in order
-    chapterOrder.push(...partUpdates["null"]);
-
-    chaptersByPart.value.parts
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      .forEach((part) => {
-        chapterOrder.push(...partUpdates[part.id]);
-      });
+    const chapterOrder = buildChapterOrder(partUpdates);
 
     // Send array-based reorder to backend
-    await updateChapterOrders(bookId, chapterOrder, partUpdates);
+    await updateChapterOrders(bookId, chapterOrder, partUpdates, partOrder.value);
 
     console.log("Saved sidebar chapter order with arrays:", { chapterOrder, partUpdates });
 
@@ -1620,7 +1735,7 @@ onUnmounted(() => {
                             class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                           >
                             <option value="">Uncategorized</option>
-                            <option v-for="part in parts" :key="part.id" :value="part.id">
+                            <option v-for="part in orderedParts" :key="part.id" :value="part.id">
                               {{ part.name }}
                             </option>
                           </select>
@@ -1689,6 +1804,22 @@ onUnmounted(() => {
                     </template>
                     <template v-else>
                       <button
+                        @click="movePartUp(part.id)"
+                        :disabled="partOrder.indexOf(part.id) === 0"
+                        class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move part up"
+                      >
+                        <ChevronUpIcon class="w-4 h-4" />
+                      </button>
+                      <button
+                        @click="movePartDown(part.id)"
+                        :disabled="partOrder.indexOf(part.id) === partOrder.length - 1"
+                        class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move part down"
+                      >
+                        <ChevronDownIcon class="w-4 h-4" />
+                      </button>
+                      <button
                         @click="startEditingPart(part)"
                         class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                         title="Edit name"
@@ -1755,7 +1886,7 @@ onUnmounted(() => {
                             class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                           >
                             <option value="">Uncategorized</option>
-                            <option v-for="p in parts" :key="p.id" :value="p.id">
+                            <option v-for="p in orderedParts" :key="p.id" :value="p.id">
                               {{ p.name }}
                             </option>
                           </select>

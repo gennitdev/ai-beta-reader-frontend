@@ -18,6 +18,7 @@ export function useBooks() {
     const newBook: DatabaseBook = {
       ...book,
       chapter_order: '[]',
+      part_order: '[]',
       created_at: new Date().toISOString()
     }
     await saveBook(newBook)
