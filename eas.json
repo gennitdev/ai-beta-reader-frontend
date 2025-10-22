@@ -11,14 +11,18 @@
     "preview": {
       "distribution": "internal",
       "android": {
-        "image": "latest"
+        "image": "latest",
+        "buildType": "apk"
       },
       "env": {
         "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
