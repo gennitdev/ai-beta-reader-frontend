@@ -763,7 +763,7 @@ onUnmounted(() => {
   <div class="lg:hidden max-w-6xl mx-auto p-6">
     <!-- Header -->
     <div class="mb-8">
-      <div class="flex justify-between items-center">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div class="flex-1">
           <!-- Editing mode -->
           <div v-if="isEditingBookTitle" class="flex items-center space-x-2">
@@ -806,13 +806,22 @@ onUnmounted(() => {
             {{ chapters.length }} chapters · {{ formatWordCount(totalWordCount) }} words total
           </p>
         </div>
-        <button
-          @click="createNewChapter"
-          class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <PlusIcon class="w-5 h-5 mr-2" />
-          New Chapter
-        </button>
+        <div class="flex flex-wrap justify-end gap-2">
+          <button
+            @click="createNewChapter"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <PlusIcon class="w-5 h-5 mr-2" />
+            New Chapter
+          </button>
+          <button
+            @click="showOrganizeModal = true"
+            class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            <Cog6ToothIcon class="w-5 h-5 mr-2" />
+            Organize Chapters
+          </button>
+        </div>
       </div>
     </div>
 
@@ -858,7 +867,7 @@ onUnmounted(() => {
           :key="chapter.id"
           class="sm:border-gray-200 sm:dark:border-gray-700 sm:shadow-md sm:hover:shadow-lg sm:transition-shadow"
         >
-          <div class="flex space-between gap-3 px-4">
+          <div class="flex space-between gap-3 px-4 border-b py-2">
             <router-link :to="`/m/books/${bookId}/chapters/${chapter.id}`" class="block flex-1">
               <div>
                 <h3
