@@ -4,6 +4,7 @@ import { UserIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outli
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
+import AppSideNav from '@/components/AppSideNav.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -125,10 +126,13 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
 </script>
 
 <template>
-  <div class="h-screen bg-gray-50 dark:bg-gray-900">
-    <!-- Header -->
-    <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-      <div class="px-4 sm:px-6">
+  <div class="h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <AppSideNav />
+
+    <div class="flex-1 flex flex-col min-w-0">
+      <!-- Header -->
+      <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="px-4 sm:px-6">
         <!-- Desktop layout -->
         <div
           class="hidden md:flex md:w-full md:flex-wrap md:items-start md:justify-between md:gap-y-2 md:py-3 lg:flex-nowrap lg:items-center lg:justify-between lg:h-16 lg:py-0"
@@ -334,21 +338,22 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
           </nav>
         </div>
       </div>
-    </header>
+      </header>
 
-    <!-- Main content -->
-    <main class="flex-1">
-      <RouterView />
-    </main>
+      <!-- Main content -->
+      <main class="flex-1 overflow-y-auto">
+        <RouterView />
+      </main>
 
-    <!-- Search Modal -->
-    <SearchModal
-      v-if="currentBookId"
-      :show="showSearchModal"
-      :book-id="currentBookId"
-      :search-service="searchService as any"
-      @close="showSearchModal = false"
-    />
+      <!-- Search Modal -->
+      <SearchModal
+        v-if="currentBookId"
+        :show="showSearchModal"
+        :book-id="currentBookId"
+        :search-service="searchService as any"
+        @close="showSearchModal = false"
+      />
+    </div>
   </div>
 </template>
 

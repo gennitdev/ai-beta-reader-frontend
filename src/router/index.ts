@@ -83,6 +83,11 @@ const router = createRouter({
       meta: { mobile: true }
     },
     {
+      path: '/ai-profiles',
+      name: 'ai-profiles',
+      component: () => import('../views/AIProfilesView.vue')
+    },
+    {
       path: '/ai-profiles/:id',
       name: 'ai-profile',
       component: () => import('../views/AIProfileView.vue')
@@ -91,6 +96,11 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('../views/UserSettingsView.vue')
+    },
+    {
+      path: '/challenges',
+      name: 'challenges',
+      component: () => import('../views/ChallengesView.vue')
     }
   ]
 })
