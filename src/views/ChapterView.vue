@@ -613,7 +613,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="max-w-6xl mx-auto p-6">
+  <div class="w-full max-w-6xl mx-0 md:mx-auto px-0 sm:px-4 lg:px-8 py-6">
     <!-- Header -->
     <div class="mb-8">
       <div class="flex justify-between items-start">
