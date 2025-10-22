@@ -3,51 +3,20 @@ import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import type { Book as DatabaseBook, BookPart } from "@/lib/database";
-import {
-  PlusIcon,
-  DocumentTextIcon,
-  PencilIcon,
-  BookOpenIcon,
-  UserIcon,
-  MapPinIcon,
-  LightBulbIcon,
-  Cog6ToothIcon,
-  MagnifyingGlassIcon,
-} from "@heroicons/vue/24/outline";
-import { CheckCircleIcon } from "@heroicons/vue/24/solid";
-import draggable from "vuedraggable";
+import type {
+  BookChapter,
+  BookOrganizedPart,
+  BookChaptersByPart,
+  BookWikiPage,
+} from "@/types/bookView";
+
+type Chapter = BookChapter;
+type OrganizedPart = BookOrganizedPart;
+type WikiPage = BookWikiPage;
+import { BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon } from "@heroicons/vue/24/outline";
 import SearchModal from "@/components/SearchModal.vue";
-
-interface Chapter {
-  id: string;
-  title: string | null;
-  word_count: number;
-  has_summary: boolean;
-  summary: string | null;
-  position: number;
-  position_in_part: number | null;
-  part_id: string | null;
-  part_name: string | null;
-}
-
-interface OrganizedPart extends BookPart {
-  chapters: Chapter[];
-  wordCount: number;
-}
-
-interface WikiPage {
-  id: string;
-  page_name: string;
-  page_type: "character" | "location" | "concept" | "other";
-  summary: string | null;
-  aliases: string[];
-  tags: string[];
-  is_major: boolean;
-  created_by_ai: boolean;
-  created_at: string;
-  updated_at: string;
-  content_length: number;
-}
+import BookMobileSection from "@/components/book/BookMobileSection.vue";
+import BookDesktopLayout from "@/components/book/BookDesktopLayout.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -71,10 +40,11 @@ const {
 } = useDatabase();
 
 const book = ref<DatabaseBook | null>(null);
-const chapters = ref<Chapter[]>([]);
+const chapters = ref<BookChapter[]>([]);
 const parts = ref<BookPart[]>([]);
 const partOrder = ref<string[]>([]);
-const wikiPages = ref<WikiPage[]>([]);
+const wikiPages = ref<BookWikiPage[]>([]);
+const hasWikiPages = computed(() => wikiPages.value.length > 0);
 const loading = ref(false);
 const loadingWiki = ref(false);
 const expandedSummaries = ref<Set<string>>(new Set());
@@ -119,6 +89,9 @@ const isOnBookOnly = computed(() => {
   return route.name === "book" && !route.params.chapterId && !route.params.wikiPageId;
 });
 
+const activeChapterId = computed(() => route.params.chapterId as string | undefined);
+const activeWikiPageId = computed(() => route.params.wikiPageId as string | undefined);
+
 const sortedChapters = computed(() => {
   // Backend returns chapters in correct order based on array positions
   return chapters.value.slice().sort((a, b) => (a.position || 0) - (b.position || 0));
@@ -129,6 +102,9 @@ const totalWordCount = computed(() => {
     return total + (chapter.word_count || 0);
   }, 0);
 });
+
+const chapterCount = computed(() => chapters.value.length);
+const hasChapters = computed(() => chapterCount.value > 0);
 
 const orderedParts = computed(() => {
   const partMap = new Map(parts.value.map((part) => [part.id, part]));
@@ -153,14 +129,14 @@ const orderedParts = computed(() => {
 });
 
 // Organize chapters by parts
-const chaptersByPart = computed(() => {
+const chaptersByPart = computed<BookChaptersByPart>(() => {
   const partList = orderedParts.value;
   const partIdSet = new Set(partList.map((part) => part.id));
   const uncategorizedChapters = sortedChapters.value.filter(
     (chapter) => !chapter.part_id || !partIdSet.has(chapter.part_id)
   );
 
-  const organizedParts: OrganizedPart[] = partList.map((part) => {
+  const organizedParts: BookOrganizedPart[] = partList.map((part) => {
     const partChapters = sortedChapters.value.filter((chapter) => chapter.part_id === part.id);
     const wordCount = partChapters.reduce((total, chapter) => total + (chapter.word_count || 0), 0);
 
@@ -183,8 +159,8 @@ const chaptersByPart = computed(() => {
   };
 });
 
-const sidebarPartLists = ref<Record<string, Chapter[]>>({});
-const sidebarUncategorized = ref<Chapter[]>([]);
+const sidebarPartLists = ref<Record<string, BookChapter[]>>({});
+const sidebarUncategorized = ref<BookChapter[]>([]);
 
 const syncSidebarLists = () => {
   const nextParts: Record<string, Chapter[]> = {};
@@ -333,6 +309,10 @@ const cancelEditingBookTitle = () => {
   editingBookTitle.value = "";
 };
 
+const updateEditingBookTitle = (value: string) => {
+  editingBookTitle.value = value;
+};
+
 const saveBookTitle = async () => {
   if (!book.value || !editingBookTitle.value.trim()) return;
 
@@ -462,6 +442,10 @@ const createNewChapter = () => {
 
 const goToOrganizeChapters = () => {
   router.push(`/books/${bookId}/organize`);
+};
+
+const openSearchModal = () => {
+  showSearchModal.value = true;
 };
 
 const createNewChapterInPart = (partId: string) => {
@@ -693,904 +677,76 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- Mobile layout: Keep the exact same behavior as before -->
-  <div class="lg:hidden max-w-6xl mx-auto p-6">
-    <!-- Header -->
-    <div class="mb-8">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div class="flex-1">
-          <!-- Editing mode -->
-          <div v-if="isEditingBookTitle" class="flex items-center space-x-2">
-            <input
-              v-model="editingBookTitle"
-              @keyup.enter="saveBookTitle"
-              @keyup.esc="cancelEditingBookTitle"
-              type="text"
-              class="text-3xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Book title"
-              autofocus
-            />
-            <button
-              @click="saveBookTitle"
-              class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Save
-            </button>
-            <button
-              @click="cancelEditingBookTitle"
-              class="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
+  <BookMobileSection
+    :book="book"
+    :book-id="bookId"
+    :is-editing-book-title="isEditingBookTitle"
+    :editing-book-title="editingBookTitle"
+    :current-tab="currentTab"
+    :loading="loading"
+    :loading-wiki="loadingWiki"
+    :sorted-chapters="sortedChapters"
+    :chapters-by-part="chaptersByPart"
+    :chapter-count="chapterCount"
+    :total-word-count="totalWordCount"
+    :expanded-summaries="expandedSummaries"
+    :wiki-pages-by-type="wikiPagesByType"
+    :format-word-count="formatWordCount"
+    :word-count-for-chapters="wordCountForChapters"
+    :get-summary-preview="getSummaryPreview"
+    :toggle-summary="toggleSummary"
+    :create-new-chapter="createNewChapter"
+    :go-to-organize-chapters="goToOrganizeChapters"
+    :create-new-chapter-in-part="createNewChapterInPart"
+    :edit-chapter="editChapter"
+    :start-editing-book-title="startEditingBookTitle"
+    :save-book-title="saveBookTitle"
+    :cancel-editing-book-title="cancelEditingBookTitle"
+    :update-editing-book-title="updateEditingBookTitle"
+    :get-type-icon="getTypeIcon"
+    :get-type-color="getTypeColor"
+  />
 
-          <!-- Display mode -->
-          <div v-else class="flex items-center space-x-2 group">
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ book?.title }}</h1>
-            <button
-              @click="startEditingBookTitle"
-              class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Rename book"
-            >
-              <PencilIcon class="w-5 h-5" />
-            </button>
-          </div>
+  <BookDesktopLayout
+    :book="book"
+    :book-id="bookId"
+    :is-editing-book-title="isEditingBookTitle"
+    :editing-book-title="editingBookTitle"
+    :chapter-count="chapterCount"
+    :total-word-count="totalWordCount"
+    :current-tab="currentTab"
+    :has-chapters="hasChapters"
+    :loading-chapters="loading"
+    :chapters-by-part="chaptersByPart"
+    :sidebar-part-lists="sidebarPartLists"
+    :sidebar-uncategorized="sidebarUncategorized"
+    :expanded-parts="expandedParts"
+    :should-expand-part="shouldExpandPart"
+    :toggle-part="togglePart"
+    :create-new-chapter="createNewChapter"
+    :create-new-chapter-in-part="createNewChapterInPart"
+    :go-to-organize-chapters="goToOrganizeChapters"
+    :open-search-modal="openSearchModal"
+    :on-sidebar-drag-start="onSidebarDragStart"
+    :on-sidebar-drag-end="onSidebarDragEnd"
+    :edit-chapter="editChapter"
+    :format-word-count="formatWordCount"
+    :word-count-for-chapters="wordCountForChapters"
+    :loading-wiki="loadingWiki"
+    :has-wiki-pages="hasWikiPages"
+    :wiki-pages-by-type="wikiPagesByType"
+    :get-type-icon="getTypeIcon"
+    :get-type-color="getTypeColor"
+    :active-chapter-id="activeChapterId"
+    :active-wiki-page-id="activeWikiPageId"
+    :is-on-book-only="isOnBookOnly"
+    :router-view-key="routerViewKey"
+    :start-editing-book-title="startEditingBookTitle"
+    :save-book-title="saveBookTitle"
+    :cancel-editing-book-title="cancelEditingBookTitle"
+    :update-editing-book-title="updateEditingBookTitle"
+  />
 
-          <p class="text-gray-600 dark:text-gray-400 mt-1">
-            {{ chapters.length }} chapters · {{ formatWordCount(totalWordCount) }} words total
-          </p>
-        </div>
-        <div class="flex flex-wrap justify-end gap-2">
-          <button
-            @click="createNewChapter"
-            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <PlusIcon class="w-5 h-5 mr-2" />
-            New Chapter
-          </button>
-          <button
-            @click="goToOrganizeChapters"
-            class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-          >
-            <Cog6ToothIcon class="w-5 h-5 mr-2" />
-            Organize
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tabs -->
-    <div class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-6">
-      <router-link
-        :to="`/books/${bookId}`"
-        :class="[
-          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
-          currentTab === 'chapters'
-            ? 'bg-white text-blue-700 shadow'
-            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white',
-        ]"
-      >
-        <DocumentTextIcon class="w-5 h-5 inline mr-2" />
-        Chapters
-      </router-link>
-      <router-link
-        :to="`/books/${bookId}?tab=wiki`"
-        :class="[
-          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
-          currentTab === 'wiki'
-            ? 'bg-white text-blue-700 shadow'
-            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white',
-        ]"
-      >
-        <BookOpenIcon class="w-5 h-5 inline mr-2" />
-        Characters
-      </router-link>
-    </div>
-
-    <!-- Mobile Tab Content -->
-    <div v-if="currentTab === 'chapters'">
-      <!-- Loading state -->
-      <div v-if="loading" class="flex justify-center items-center h-64">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-
-      <!-- Chapters list -->
-    <div v-else-if="chapters.length > 0" class="space-y-6">
-      <!-- Parts -->
-      <div v-if="chaptersByPart.parts.length > 0" class="space-y-6">
-        <section
-          v-for="part in chaptersByPart.parts"
-          :key="part.id"
-          class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
-        >
-          <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ part.name }}</h2>
-              <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }} ·
-                {{ formatWordCount(part.wordCount) }} words
-              </p>
-            </div>
-            <button
-              @click="createNewChapterInPart(part.id)"
-              class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <PlusIcon class="w-4 h-4 mr-2" />
-              Add Chapter
-            </button>
-          </div>
-
-          <div class="divide-y divide-gray-200 dark:divide-gray-700">
-            <div
-              v-for="chapter in part.chapters"
-              :key="chapter.id"
-              class="px-4 py-4"
-            >
-              <div class="flex items-start gap-3">
-                <router-link
-                  :to="`/m/books/${bookId}/chapters/${chapter.id}`"
-                  class="flex-1"
-                >
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                    {{ chapter.title || chapter.id }}
-                  </h3>
-                  <div class="mt-1 flex flex-wrap items-center gap-4">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ chapter.word_count?.toLocaleString() || 0 }} words
-                    </span>
-                    <div
-                      class="flex items-center"
-                      :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
-                    >
-                      <CheckCircleIcon
-                        :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
-                        class="w-4 h-4 mr-1"
-                      />
-                      <span
-                        :class="chapter.has_summary ? 'text-green-600' : 'text-gray-500'"
-                        class="text-sm"
-                      >
-                        {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div v-if="chapter.has_summary && chapter.summary" class="mt-3">
-                    <div class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                      <span v-if="!expandedSummaries.has(chapter.id)">
-                        {{ getSummaryPreview(chapter.summary) }}
-                        <button
-                          @click.stop.prevent="toggleSummary(chapter.id)"
-                          class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                        >
-                          See more
-                        </button>
-                      </span>
-                      <span v-else>
-                        {{ chapter.summary }}
-                        <button
-                          @click.stop.prevent="toggleSummary(chapter.id)"
-                          class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                        >
-                          Show less
-                        </button>
-                      </span>
-                    </div>
-                  </div>
-                </router-link>
-
-                <button
-                  @click="editChapter(chapter.id)"
-                  class="mt-1 inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-                >
-                  <PencilIcon class="w-4 h-4 mr-1" />
-                  Edit
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <!-- Uncategorized chapters -->
-      <div
-        v-if="chaptersByPart.uncategorized.length > 0"
-        class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
-      >
-        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Uncategorized</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {{ chaptersByPart.uncategorized.length }} chapter{{
-                chaptersByPart.uncategorized.length !== 1 ? 's' : ''
-              }}
-            </p>
-          </div>
-          <button
-            @click="createNewChapter"
-            class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <PlusIcon class="w-4 h-4 mr-2" />
-            Add Chapter
-          </button>
-        </div>
-
-        <div class="divide-y divide-gray-200 dark:divide-gray-700">
-          <div
-            v-for="chapter in chaptersByPart.uncategorized"
-            :key="chapter.id"
-            class="px-4 py-4"
-          >
-            <div class="flex items-start gap-3">
-              <router-link
-                :to="`/m/books/${bookId}/chapters/${chapter.id}`"
-                class="flex-1"
-              >
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                  {{ chapter.title || chapter.id }}
-                </h3>
-                <div class="mt-1 flex flex-wrap items-center gap-4">
-                  <span class="text-sm text-gray-500 dark:text-gray-400">
-                    {{ chapter.word_count?.toLocaleString() || 0 }} words
-                  </span>
-                  <div
-                    class="flex items-center"
-                    :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
-                  >
-                    <CheckCircleIcon
-                      :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
-                      class="w-4 h-4 mr-1"
-                    />
-                    <span
-                      :class="chapter.has_summary ? 'text-green-600' : 'text-gray-500'"
-                      class="text-sm"
-                    >
-                      {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
-                    </span>
-                  </div>
-                </div>
-
-                <div v-if="chapter.has_summary && chapter.summary" class="mt-3">
-                  <div class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                    <span v-if="!expandedSummaries.has(chapter.id)">
-                      {{ getSummaryPreview(chapter.summary) }}
-                      <button
-                        @click.stop.prevent="toggleSummary(chapter.id)"
-                        class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                      >
-                        See more
-                      </button>
-                    </span>
-                    <span v-else>
-                      {{ chapter.summary }}
-                      <button
-                        @click.stop.prevent="toggleSummary(chapter.id)"
-                        class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                      >
-                        Show less
-                      </button>
-                    </span>
-                  </div>
-                </div>
-              </router-link>
-
-              <button
-                @click="editChapter(chapter.id)"
-                class="mt-1 inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-              >
-                <PencilIcon class="w-4 h-4 mr-1" />
-                Edit
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Fallback list when there are no parts -->
-      <div
-        v-if="chaptersByPart.parts.length === 0"
-        class="space-y-4"
-      >
-        <div
-          v-for="chapter in sortedChapters"
-          :key="chapter.id"
-          class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm px-4 py-4"
-        >
-          <div class="flex items-start gap-3">
-            <router-link
-              :to="`/m/books/${bookId}/chapters/${chapter.id}`"
-              class="flex-1"
-            >
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                {{ chapter.title || chapter.id }}
-              </h3>
-              <div class="mt-1 flex flex-wrap items-center gap-4">
-                <span class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ chapter.word_count?.toLocaleString() || 0 }} words
-                </span>
-                <div
-                  class="flex items-center"
-                  :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
-                >
-                  <CheckCircleIcon
-                    :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
-                    class="w-4 h-4 mr-1"
-                  />
-                  <span
-                    :class="chapter.has_summary ? 'text-green-600' : 'text-gray-500'"
-                    class="text-sm"
-                  >
-                    {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
-                  </span>
-                </div>
-              </div>
-
-              <div v-if="chapter.has_summary && chapter.summary" class="mt-3">
-                <div class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  <span v-if="!expandedSummaries.has(chapter.id)">
-                    {{ getSummaryPreview(chapter.summary) }}
-                    <button
-                      @click.stop.prevent="toggleSummary(chapter.id)"
-                      class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                    >
-                      See more
-                    </button>
-                  </span>
-                  <span v-else>
-                    {{ chapter.summary }}
-                    <button
-                      @click.stop.prevent="toggleSummary(chapter.id)"
-                      class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                    >
-                      Show less
-                    </button>
-                  </span>
-                </div>
-              </div>
-            </router-link>
-
-            <button
-              @click="editChapter(chapter.id)"
-              class="mt-1 inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-            >
-              <PencilIcon class="w-4 h-4 mr-1" />
-              Edit
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-      <!-- Empty state -->
-      <div v-else class="text-center py-16">
-        <DocumentTextIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No chapters yet</h3>
-        <p class="text-gray-600 dark:text-gray-400 mb-6">
-          Add your first chapter to start getting AI feedback.
-        </p>
-        <button
-          @click="createNewChapter"
-          class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <PlusIcon class="w-5 h-5 mr-2" />
-          Add First Chapter
-        </button>
-      </div>
-    </div>
-
-    <div v-else-if="currentTab === 'wiki'">
-      <!-- Mobile Wiki Content -->
-      <div v-if="loadingWiki" class="flex justify-center items-center h-64">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-
-      <div v-else-if="wikiPages.length > 0" class="space-y-8">
-        <div v-for="(pages, type) in wikiPagesByType" :key="type" class="space-y-4">
-          <div class="flex items-center space-x-2">
-            <component :is="getTypeIcon(type)" :class="['w-6 h-6', getTypeColor(type)]" />
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white capitalize">
-              {{ type }}s
-            </h2>
-            <span class="text-sm text-gray-500 dark:text-gray-400">({{ pages.length }})</span>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <router-link
-              v-for="page in pages"
-              :key="page.id"
-              :to="`/m/books/${bookId}/wiki/${page.id}`"
-              class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 p-4 block hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
-            >
-              <div class="flex items-start justify-between mb-2">
-                <div class="flex items-center space-x-2">
-                  <h3 class="font-semibold text-gray-900 dark:text-white">{{ page.page_name }}</h3>
-                  <span
-                    v-if="page.is_major"
-                    class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full"
-                  >
-                    Major
-                  </span>
-                </div>
-              </div>
-
-              <p
-                v-if="page.summary"
-                class="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2"
-              >
-                {{ page.summary }}
-              </p>
-
-              <div
-                class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400"
-              >
-                <span>{{
-                  page.content_length ? `${page.content_length} chars` : "No content"
-                }}</span>
-                <span>Updated {{ new Date(page.updated_at).toLocaleDateString() }}</span>
-              </div>
-
-              <div v-if="page.tags && page.tags.length > 0" class="flex flex-wrap gap-1 mt-2">
-                <span
-                  v-for="tag in page.tags.slice(0, 3)"
-                  :key="tag"
-                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
-                >
-                  {{ tag }}
-                </span>
-                <span v-if="page.tags.length > 3" class="text-xs text-gray-500">
-                  +{{ page.tags.length - 3 }} more
-                </span>
-              </div>
-            </router-link>
-          </div>
-        </div>
-      </div>
-
-      <!-- Empty wiki state -->
-      <div v-else class="text-center py-16">
-        <BookOpenIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No wiki pages yet</h3>
-        <p class="text-gray-600 dark:text-gray-400 mb-6">
-          Wiki pages will be automatically created when you generate chapter summaries with
-          character mentions.
-        </p>
-        <div class="text-sm text-gray-500 dark:text-gray-400">
-          💡 Try generating a summary for a chapter to see the wiki in action!
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Desktop layout: Full screen split view -->
-  <div class="hidden lg:flex h-[calc(100vh-4rem-1px)]">
-    <!-- Split view -->
-    <div class="flex flex-1 overflow-hidden">
-      <!-- Left sidebar: Compact list -->
-      <div
-        class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto relative"
-      >
-        <div class="p-4 pb-16">
-          <!-- Book header -->
-          <div class="mb-6">
-            <!-- Editing mode -->
-            <div v-if="isEditingBookTitle" class="flex flex-col space-y-2">
-              <input
-                v-model="editingBookTitle"
-                @keyup.enter="saveBookTitle"
-                @keyup.esc="cancelEditingBookTitle"
-                type="text"
-                class="text-xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Book title"
-                autofocus
-              />
-              <div class="flex space-x-2">
-                <button
-                  @click="saveBookTitle"
-                  class="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                >
-                  Save
-                </button>
-                <button
-                  @click="cancelEditingBookTitle"
-                  class="flex-1 px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-
-            <!-- Display mode -->
-            <div v-else class="flex items-center space-x-2">
-              <h1 class="text-xl font-bold text-gray-900 dark:text-white flex-1">
-                {{ book?.title }}
-              </h1>
-              <button
-                @click="startEditingBookTitle"
-                class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                title="Rename book"
-              >
-                <PencilIcon class="w-5 h-5" />
-              </button>
-            </div>
-
-            <p class="text-gray-600 dark:text-gray-400 mt-1">
-              {{ chapters.length }} chapters · {{ formatWordCount(totalWordCount) }} words total
-            </p>
-          </div>
-
-          <!-- Action Buttons -->
-          <div class="space-y-3 mb-6 flex space-x-2">
-            <button
-              @click="createNewChapter"
-              class="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <PlusIcon class="w-5 h-5" />
-            </button>
-            <button
-              @click="goToOrganizeChapters"
-              class="inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            >
-              <Cog6ToothIcon class="w-5 h-5" />
-            </button>
-            <button
-              @click="showSearchModal = true"
-              class="inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            >
-              <MagnifyingGlassIcon class="w-5 h-5" />
-            </button>
-          </div>
-
-          <div class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-2">
-            <router-link
-              :to="`/books/${bookId}`"
-              :class="[
-                'px-4 py-2 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center rounded-lg transition-colors',
-                currentTab === 'chapters'
-                  ? 'bg-white text-blue-700 shadow'
-                  : 'text-blue-100 hover:bg-white/[0.12] hover:text-white',
-              ]"
-            >
-              <DocumentTextIcon class="w-4 h-4 inline mr-2" />
-              Chapters
-            </router-link>
-            <router-link
-              :to="`/books/${bookId}?tab=wiki`"
-              :class="[
-                'px-4 py-2 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center rounded-lg transition-colors',
-                currentTab === 'wiki'
-                  ? 'bg-white text-blue-700 shadow'
-                  : 'text-blue-100 hover:bg-white/[0.12] hover:text-white',
-              ]"
-            >
-              <BookOpenIcon class="w-4 h-4 inline mr-2" />
-              Characters
-            </router-link>
-          </div>
-          <!-- Chapters tab content -->
-          <div v-if="currentTab === 'chapters'">
-            <!-- Loading state -->
-            <div v-if="loading" class="flex justify-center items-center h-32">
-              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            </div>
-
-            <!-- Parts and Chapters -->
-            <div v-else-if="chapters.length > 0" class="space-y-3">
-              <!-- Parts accordion -->
-              <div
-                v-for="part in chaptersByPart.parts"
-                :key="part.id"
-                class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-              >
-                <!-- Part header -->
-                <button
-                  @click="togglePart(part.id)"
-                  class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-between text-left transition-colors"
-                >
-                  <div>
-                    <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ (sidebarPartLists[part.id]?.length || 0) }} chapter{{
-                        (sidebarPartLists[part.id]?.length || 0) !== 1 ? "s" : ""
-                      }}
-                      ·
-                      {{
-                        formatWordCount(
-                          wordCountForChapters(sidebarPartLists[part.id] || [])
-                        )
-                      }}
-                      words
-                    </p>
-                  </div>
-                  <svg
-                    :class="
-                      expandedParts.has(part.id) || shouldExpandPart(part.id) ? 'rotate-180' : ''
-                    "
-                    class="w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 9l-7 7-7-7"
-                    ></path>
-                  </svg>
-                </button>
-
-                <!-- Part chapters -->
-                <div
-                  v-if="expandedParts.has(part.id) || shouldExpandPart(part.id)"
-                  class="bg-white dark:bg-gray-800"
-                >
-                  <div class="px-4 pt-3 pb-2 flex justify-end border-t border-gray-200 dark:border-gray-700">
-                    <button
-                      @click.prevent.stop="createNewChapterInPart(part.id)"
-                      class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      <PlusIcon class="w-4 h-4 mr-1" />
-                      Add Chapter in Part
-                    </button>
-                  </div>
-                  <draggable
-                    v-model="sidebarPartLists[part.id]"
-                    item-key="id"
-                    group="sidebar-chapters"
-                    class="space-y-1"
-                    @start="onSidebarDragStart"
-                    @end="onSidebarDragEnd"
-                    :disabled="false"
-                    ghost-class="opacity-50"
-                    drag-class="rotate-1"
-                    handle=".drag-handle"
-                  >
-                    <template #item="{ element: chapter }">
-                      <router-link
-                        :to="`/books/${bookId}/chapters/${chapter.id}`"
-                        class="block p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer border-l-4"
-                        :class="
-                          route.params.chapterId === chapter.id
-                            ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
-                            : 'border-l-transparent hover:border-l-gray-300 dark:hover:border-l-gray-600'
-                        "
-                      >
-                        <div class="flex items-center justify-between">
-                          <div
-                            class="drag-handle mr-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
-                            @click.prevent.stop
-                          >
-                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path
-                                d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
-                              ></path>
-                            </svg>
-                          </div>
-                          <div class="flex-1 min-w-0">
-                            <h3 class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {{ chapter.title || chapter.id }}
-                            </h3>
-                            <div class="flex items-center space-x-3 mt-1">
-                              <span class="text-xs text-gray-500 dark:text-gray-400">
-                                {{ chapter.word_count?.toLocaleString() || 0 }} words
-                              </span>
-                              <CheckCircleIcon
-                                :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
-                                class="w-3 h-3"
-                                :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
-                              />
-                            </div>
-                          </div>
-                          <div class="flex items-center space-x-1 ml-2">
-                            <button
-                              @click.prevent.stop="editChapter(chapter.id)"
-                              class="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                            >
-                              <PencilIcon class="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      </router-link>
-                    </template>
-                  </draggable>
-                </div>
-              </div>
-
-              <!-- Uncategorized chapters -->
-              <div
-                v-if="sidebarUncategorized.length > 0"
-                class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-              >
-                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700">
-                  <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized</h4>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ sidebarUncategorized.length }} chapter{{
-                      sidebarUncategorized.length !== 1 ? "s" : ""
-                    }}
-                    · {{ formatWordCount(wordCountForChapters(sidebarUncategorized)) }} words
-                  </p>
-                </div>
-                <div class="bg-white dark:bg-gray-800">
-                  <draggable
-                    v-model="sidebarUncategorized"
-                    item-key="id"
-                    group="sidebar-chapters"
-                    class="space-y-1"
-                    @start="onSidebarDragStart"
-                    @end="onSidebarDragEnd"
-                    :disabled="false"
-                    ghost-class="opacity-50"
-                    drag-class="rotate-1"
-                    handle=".drag-handle"
-                  >
-                    <template #item="{ element: chapter }">
-                      <router-link
-                        :to="`/books/${bookId}/chapters/${chapter.id}`"
-                        class="block p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer border-l-4"
-                        :class="
-                          route.params.chapterId === chapter.id
-                            ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
-                            : 'border-l-transparent hover:border-l-gray-300 dark:hover:border-l-gray-600'
-                        "
-                      >
-                        <div class="flex items-center justify-between">
-                          <div
-                            class="drag-handle mr-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
-                            @click.prevent.stop
-                          >
-                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path
-                                d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
-                              ></path>
-                            </svg>
-                          </div>
-                          <div class="flex-1 min-w-0">
-                            <h3 class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {{ chapter.title || chapter.id }}
-                            </h3>
-                            <div class="flex items-center space-x-3 mt-1">
-                              <span class="text-xs text-gray-500 dark:text-gray-400">
-                                {{ chapter.word_count?.toLocaleString() || 0 }} words
-                              </span>
-                              <CheckCircleIcon
-                                :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
-                                class="w-3 h-3"
-                                :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
-                              />
-                            </div>
-                          </div>
-                          <div class="flex items-center space-x-1 ml-2">
-                            <button
-                              @click.prevent.stop="editChapter(chapter.id)"
-                              class="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                            >
-                              <PencilIcon class="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      </router-link>
-                    </template>
-                  </draggable>
-                </div>
-              </div>
-            </div>
-
-            <!-- Empty state -->
-            <div v-else class="text-center py-8">
-              <DocumentTextIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
-              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                No chapters yet
-              </h3>
-              <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                Add your first chapter to get started.
-              </p>
-            </div>
-          </div>
-
-          <!-- Wiki tab content -->
-          <div v-else-if="currentTab === 'wiki'">
-            <div v-if="loadingWiki" class="flex justify-center items-center h-32">
-              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            </div>
-
-            <div v-else-if="wikiPages.length > 0" class="space-y-4">
-              <div v-for="(pages, type) in wikiPagesByType" :key="type" class="space-y-2">
-                <div class="flex items-center space-x-2">
-                  <component :is="getTypeIcon(type)" :class="['w-4 h-4', getTypeColor(type)]" />
-                  <h3 class="text-sm font-semibold text-gray-900 dark:text-white capitalize">
-                    {{ type }}s
-                  </h3>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">({{ pages.length }})</span>
-                </div>
-
-                <div class="space-y-1">
-                  <router-link
-                    v-for="page in pages"
-                    :key="page.id"
-                    :to="`/books/${bookId}/wiki/${page.id}`"
-                    class="block p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    :class="
-                      route.params.wikiPageId === page.id
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600'
-                        : ''
-                    "
-                  >
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center space-x-2 min-w-0">
-                        <h4 class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {{ page.page_name }}
-                        </h4>
-                        <span
-                          v-if="page.is_major"
-                          class="px-1 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded"
-                        >
-                          Major
-                        </span>
-                      </div>
-                    </div>
-                    <p
-                      v-if="page.summary"
-                      class="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2"
-                    >
-                      {{
-                        page.summary.length > 60
-                          ? page.summary.substring(0, 60) + "..."
-                          : page.summary
-                      }}
-                    </p>
-                  </router-link>
-                </div>
-              </div>
-            </div>
-
-            <!-- Empty wiki state -->
-            <div v-else class="text-center py-8">
-              <BookOpenIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
-              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                No wiki pages yet
-              </h3>
-              <p class="text-xs text-gray-600 dark:text-gray-400">
-                Generate chapter summaries to create wiki pages.
-              </p>
-            </div>
-          </div>
-
-          <!-- Settings link at bottom of sidebar -->
-          <div class="fixed bottom-4 left-4 z-10">
-            <router-link
-              to="/settings"
-              class="inline-flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-700"
-              title="User Settings"
-            >
-              <Cog6ToothIcon class="w-5 h-5 mr-2" />
-              Settings
-            </router-link>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right content area: router-view -->
-      <div class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
-        <!-- Show placeholder when no chapter is selected -->
-        <div v-if="isOnBookOnly" class="flex items-center justify-center h-full">
-          <div class="text-center">
-            <DocumentTextIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">
-              Please select a chapter
-            </h3>
-            <p class="text-gray-600 dark:text-gray-400 max-w-md">
-              Choose a chapter from the sidebar to view and edit its content, or create a new
-              chapter to get started.
-            </p>
-          </div>
-        </div>
-        <!-- Regular router view when chapter/wiki page is selected -->
-        <router-view v-else :key="routerViewKey" />
-      </div>
-    </div>
-  </div>
-
-  <!-- Search Modal -->
   <SearchModal
     :show="showSearchModal"
     :book-id="bookId"
