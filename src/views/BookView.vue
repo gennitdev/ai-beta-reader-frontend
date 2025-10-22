@@ -403,7 +403,46 @@ const loadBook = async () => {
       };
     });
 
-    chapters.value = await Promise.all(chapterPromises);
+    const chapterList = await Promise.all(chapterPromises);
+
+    const applyOrder = (items: Chapter[], orderIds: string[]) => {
+      if (!orderIds.length) return items;
+      const chapterMap = new Map(items.map((chapter) => [chapter.id, chapter]));
+      const ordered: Chapter[] = [];
+
+      orderIds.forEach((id) => {
+        const chapter = chapterMap.get(id);
+        if (chapter) {
+          ordered.push(chapter);
+          chapterMap.delete(id);
+        }
+      });
+
+      chapterMap.forEach((chapter) => {
+        ordered.push(chapter);
+      });
+
+      return ordered.map((chapter, index) => ({
+        ...chapter,
+        position: index,
+      }));
+    };
+
+    const chapterOrderIds = parseIdArray(book.value?.chapter_order);
+    chapters.value = applyOrder(chapterList, chapterOrderIds);
+
+    // Respect part-specific chapter ordering
+    const partOrderMap = new Map(
+      parts.value.map((part) => [part.id, parseIdArray(part.chapter_order)])
+    );
+
+    chapters.value.forEach((chapter) => {
+      if (!chapter.part_id) return;
+      const orderIds = partOrderMap.get(chapter.part_id);
+      if (!orderIds?.length) return;
+      chapter.position_in_part = orderIds.indexOf(chapter.id);
+    });
+
     syncSidebarLists();
   } catch (error) {
     console.error("Failed to load book:", error);
@@ -714,7 +753,7 @@ onUnmounted(() => {
             class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
             <Cog6ToothIcon class="w-5 h-5 mr-2" />
-            Organize Chapters
+            Organize
           </button>
         </div>
       </div>
@@ -1180,27 +1219,24 @@ onUnmounted(() => {
           </div>
 
           <!-- Action Buttons -->
-          <div class="space-y-3 mb-6">
+          <div class="space-y-3 mb-6 flex space-x-2">
             <button
               @click="createNewChapter"
-              class="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              class="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <PlusIcon class="w-5 h-5 mr-2" />
-              New Chapter
+              <PlusIcon class="w-5 h-5" />
             </button>
             <button
               @click="goToOrganizeChapters"
-              class="w-full inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              class="inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              <Cog6ToothIcon class="w-5 h-5 mr-2" />
-              Organize Chapters
+              <Cog6ToothIcon class="w-5 h-5" />
             </button>
             <button
               @click="showSearchModal = true"
-              class="w-full inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              class="inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              <MagnifyingGlassIcon class="w-5 h-5 mr-2" />
-              Search & Replace
+              <MagnifyingGlassIcon class="w-5 h-5" />
             </button>
           </div>
 

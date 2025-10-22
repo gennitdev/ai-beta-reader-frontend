@@ -263,7 +263,44 @@ const loadData = async () => {
       }
     })
 
-    chapters.value = await Promise.all(chapterPromises)
+    const chapterList = await Promise.all(chapterPromises)
+
+    const applyOrder = (items: Chapter[], orderIds: string[]) => {
+      if (!orderIds.length) return items
+      const chapterMap = new Map(items.map((chapter) => [chapter.id, chapter]))
+      const ordered: Chapter[] = []
+
+      orderIds.forEach((id) => {
+        const chapter = chapterMap.get(id)
+        if (chapter) {
+          ordered.push(chapter)
+          chapterMap.delete(id)
+        }
+      })
+
+      chapterMap.forEach((chapter) => {
+        ordered.push(chapter)
+      })
+
+      return ordered.map((chapter, index) => ({
+        ...chapter,
+        position: index,
+      }))
+    }
+
+    const chapterOrderIds = parseIdArray(book.value?.chapter_order)
+    chapters.value = applyOrder(chapterList, chapterOrderIds)
+
+    const partOrderMap = new Map(
+      parts.value.map((part) => [part.id, parseIdArray(part.chapter_order)])
+    )
+
+    chapters.value.forEach((chapter) => {
+      if (!chapter.part_id) return
+      const orderIds = partOrderMap.get(chapter.part_id)
+      if (!orderIds?.length) return
+      chapter.position_in_part = orderIds.indexOf(chapter.id)
+    })
     syncBoardLists()
   } catch (error) {
     console.error('Failed to load organize chapters data:', error)

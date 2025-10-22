@@ -45,7 +45,7 @@ const handleTitleInput = (event: Event) => {
         </button>
 
         <div class="flex flex-1 items-center">
-          <div v-if="isEditing" class="space-y-2">
+          <div v-if="isEditing" class="space-y-2 flex flex-1">
             <input
               :value="editedTitle"
               type="text"
