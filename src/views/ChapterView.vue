@@ -690,7 +690,7 @@ onMounted(async () => {
           </span>
         </div>
         <button
-          @click="$emit('toggle-summary-panel')"
+          @click="showSummaryPanel = !showSummaryPanel"
           class="font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           {{ showSummaryPanel ? "Hide Summary Panel" : "Show Summary Panel" }}

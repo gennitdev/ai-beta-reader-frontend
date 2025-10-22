@@ -183,6 +183,36 @@ const chaptersByPart = computed(() => {
   };
 });
 
+const sidebarPartLists = ref<Record<string, Chapter[]>>({});
+const sidebarUncategorized = ref<Chapter[]>([]);
+
+const syncSidebarLists = () => {
+  const nextParts: Record<string, Chapter[]> = {};
+
+  orderedParts.value.forEach((part) => {
+    nextParts[part.id] = chapters.value
+      .filter((chapter) => chapter.part_id === part.id)
+      .map((chapter) => chapter);
+  });
+
+  sidebarPartLists.value = nextParts;
+
+  const partIdSet = new Set(Object.keys(nextParts));
+
+  sidebarUncategorized.value = chapters.value
+    .filter((chapter) => !chapter.part_id || !partIdSet.has(chapter.part_id))
+    .map((chapter) => chapter);
+};
+
+watch(
+  () => [chapters.value, orderedParts.value],
+  () => {
+    if (isDraggingInSidebar.value) return;
+    syncSidebarLists();
+  },
+  { immediate: true, deep: true }
+);
+
 const parseIdArray = (value: string | null | undefined): string[] => {
   if (!value) return [];
   try {
@@ -288,6 +318,10 @@ const formatWordCount = (count: number) => {
   return (count / 1000).toFixed(1) + "k";
 };
 
+const wordCountForChapters = (chapterList: Chapter[]) => {
+  return chapterList.reduce((total, chapter) => total + (chapter.word_count || 0), 0);
+};
+
 const startEditingBookTitle = () => {
   if (!book.value) return;
   editingBookTitle.value = book.value.title;
@@ -370,6 +404,7 @@ const loadBook = async () => {
     });
 
     chapters.value = await Promise.all(chapterPromises);
+    syncSidebarLists();
   } catch (error) {
     console.error("Failed to load book:", error);
   } finally {
@@ -410,78 +445,6 @@ const togglePart = (partId: string) => {
   }
 };
 
-const moveChapterToPart = async (chapterId: string, partId: string | null) => {
-  try {
-    const partUpdates: { [partId: string]: string[] } = {};
-    partUpdates["null"] = [];
-
-    orderedParts.value.forEach((part) => {
-      partUpdates[part.id] = [];
-    });
-
-    chapters.value.forEach((chapter) => {
-      const targetPartId = chapter.id === chapterId ? partId : chapter.part_id;
-      const partKey = targetPartId || "null";
-
-      if (!partUpdates[partKey]) {
-        partUpdates[partKey] = [];
-      }
-      partUpdates[partKey].push(chapter.id);
-    });
-
-    const chapterOrder = buildChapterOrder(partUpdates);
-
-    // Send the complete reordered list to database
-    console.log("Sending array-based reorder to database:", { chapterOrder, partUpdates });
-    await updateChapterOrders(bookId, chapterOrder, partUpdates, partOrder.value);
-
-    // Reload to get the correct updated state from database
-    await loadBook();
-  } catch (error) {
-    console.error("Failed to move chapter to part:", error);
-    // Reload on error to revert any UI changes
-    await loadBook();
-  }
-};
-
-const onSidebarChapterMove = async (
-  event: {
-    added?: { element: Chapter; newIndex: number };
-    removed?: { element: Chapter; oldIndex: number };
-  },
-  targetPartId: string | null
-) => {
-  // Handle drag and drop between parts in sidebar
-  console.log("Sidebar chapter moved:", event, "to part:", targetPartId);
-
-  if (event.added) {
-    // Chapter was dropped into this part
-    const chapter = event.added.element;
-    console.log(
-      "Moving chapter",
-      chapter.id,
-      "from part",
-      chapter.part_id,
-      "to part",
-      targetPartId
-    );
-
-    if (targetPartId !== chapter.part_id) {
-      try {
-        await moveChapterToPart(chapter.id, targetPartId);
-        console.log("Successfully moved chapter to part");
-        // Reload data to ensure UI is in sync
-        await loadBook();
-      } catch (error) {
-        // Revert the UI change if API call failed
-        console.error("Failed to move chapter:", error);
-        // Refresh the data to get the correct state
-        await loadBook();
-      }
-    }
-  }
-};
-
 // Sidebar-specific drag handlers
 const onSidebarDragStart = () => {
   isDragging.value = true;
@@ -496,17 +459,28 @@ const onSidebarDragEnd = async () => {
   isDraggingInSidebar.value = false;
 };
 
+const buildSidebarPartUpdates = () => {
+  const partUpdates: Record<string, string[]> = {};
+
+  partUpdates["null"] = sidebarUncategorized.value.map((c) => c.id);
+
+  orderedParts.value.forEach((part) => {
+    const list = sidebarPartLists.value[part.id] || [];
+    partUpdates[part.id] = list.map((c) => c.id);
+  });
+
+  Object.entries(sidebarPartLists.value).forEach(([partId, list]) => {
+    if (!(partId in partUpdates)) {
+      partUpdates[partId] = list.map((c) => c.id);
+    }
+  });
+
+  return partUpdates;
+};
+
 const saveSidebarChapterOrder = async () => {
   try {
-    // Build arrays from sidebar state
-    const partUpdates: { [partId: string]: string[] } = {};
-
-    // Initialize part arrays
-    partUpdates["null"] = chaptersByPart.value.uncategorized.map((c) => c.id);
-
-    chaptersByPart.value.parts.forEach((part) => {
-      partUpdates[part.id] = part.chapters.map((c) => c.id);
-    });
+    const partUpdates = buildSidebarPartUpdates();
 
     const chapterOrder = buildChapterOrder(partUpdates);
 
@@ -1279,10 +1253,16 @@ onUnmounted(() => {
                   <div>
                     <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ part.chapters.length }} chapter{{
-                        part.chapters.length !== 1 ? "s" : ""
+                      {{ (sidebarPartLists[part.id]?.length || 0) }} chapter{{
+                        (sidebarPartLists[part.id]?.length || 0) !== 1 ? "s" : ""
                       }}
-                      · {{ formatWordCount(part.wordCount) }} words
+                      ·
+                      {{
+                        formatWordCount(
+                          wordCountForChapters(sidebarPartLists[part.id] || [])
+                        )
+                      }}
+                      words
                     </p>
                   </div>
                   <svg
@@ -1318,13 +1298,12 @@ onUnmounted(() => {
                     </button>
                   </div>
                   <draggable
-                    v-model="part.chapters"
+                    v-model="sidebarPartLists[part.id]"
                     item-key="id"
                     group="sidebar-chapters"
                     class="space-y-1"
                     @start="onSidebarDragStart"
                     @end="onSidebarDragEnd"
-                    @change="(event: { added?: { element: Chapter; newIndex: number }; removed?: { element: Chapter; oldIndex: number } }) => onSidebarChapterMove(event, part.id)"
                     :disabled="false"
                     ghost-class="opacity-50"
                     drag-class="rotate-1"
@@ -1383,27 +1362,26 @@ onUnmounted(() => {
 
               <!-- Uncategorized chapters -->
               <div
-                v-if="chaptersByPart.uncategorized.length > 0"
+                v-if="sidebarUncategorized.length > 0"
                 class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
               >
                 <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700">
                   <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized</h4>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ chaptersByPart.uncategorized.length }} chapter{{
-                      chaptersByPart.uncategorized.length !== 1 ? "s" : ""
+                    {{ sidebarUncategorized.length }} chapter{{
+                      sidebarUncategorized.length !== 1 ? "s" : ""
                     }}
-                    · {{ formatWordCount(chaptersByPart.uncategorizedWordCount) }} words
+                    · {{ formatWordCount(wordCountForChapters(sidebarUncategorized)) }} words
                   </p>
                 </div>
                 <div class="bg-white dark:bg-gray-800">
                   <draggable
-                    v-model="chaptersByPart.uncategorized"
+                    v-model="sidebarUncategorized"
                     item-key="id"
                     group="sidebar-chapters"
                     class="space-y-1"
                     @start="onSidebarDragStart"
                     @end="onSidebarDragEnd"
-                    @change="(event: { added?: { element: Chapter; newIndex: number }; removed?: { element: Chapter; oldIndex: number } }) => onSidebarChapterMove(event, null)"
                     :disabled="false"
                     ghost-class="opacity-50"
                     drag-class="rotate-1"

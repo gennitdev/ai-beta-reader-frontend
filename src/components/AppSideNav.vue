@@ -32,12 +32,12 @@ const navItems = computed<NavItem[]>(() => [
     icon: Cog6ToothIcon,
     isActive: (path: string) => path.startsWith('/settings')
   },
-  {
-    to: '/challenges',
-    label: 'Challenges',
-    icon: FlagIcon,
-    isActive: (path: string) => path.startsWith('/challenges')
-  }
+  // {
+  //   to: '/challenges',
+  //   label: 'Challenges',
+  //   icon: FlagIcon,
+  //   isActive: (path: string) => path.startsWith('/challenges')
+  // }
 ])
 
 const currentPath = computed(() => route.path)

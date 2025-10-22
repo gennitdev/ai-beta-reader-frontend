@@ -43,6 +43,8 @@ const newPartName = ref('')
 const editingPartId = ref<string | null>(null)
 const editingPartName = ref('')
 const errorMessage = ref('')
+const boardPartLists = ref<Record<string, Chapter[]>>({})
+const boardUncategorized = ref<Chapter[]>([])
 
 const sortedChapters = computed(() => {
   return chapters.value.slice().sort((a, b) => (a.position || 0) - (b.position || 0))
@@ -78,14 +80,13 @@ const orderedParts = computed(() => {
 
 const chaptersByPart = computed<ChaptersByPart>(() => {
   const partList = orderedParts.value
-  const partIdSet = new Set(partList.map((part) => part.id))
-  const uncategorizedChapters = sortedChapters.value.filter(
-    (chapter) => !chapter.part_id || !partIdSet.has(chapter.part_id)
-  )
 
   const organizedParts: OrganizedPart[] = partList.map((part) => {
-    const partChapters = sortedChapters.value.filter((chapter) => chapter.part_id === part.id)
-    const wordCount = partChapters.reduce((total, chapter) => total + (chapter.word_count || 0), 0)
+    const partChapters = boardPartLists.value[part.id] || []
+    const wordCount = partChapters.reduce(
+      (total, chapter) => total + (chapter.word_count || 0),
+      0
+    )
 
     return {
       ...part,
@@ -94,14 +95,14 @@ const chaptersByPart = computed<ChaptersByPart>(() => {
     }
   })
 
-  const uncategorizedWordCount = uncategorizedChapters.reduce(
+  const uncategorizedWordCount = boardUncategorized.value.reduce(
     (total, chapter) => total + (chapter.word_count || 0),
     0
   )
 
   return {
     parts: organizedParts,
-    uncategorized: uncategorizedChapters,
+    uncategorized: boardUncategorized.value,
     uncategorizedWordCount,
   }
 })
@@ -116,6 +117,24 @@ const parseIdArray = (value: string | null | undefined): string[] => {
   }
 }
 
+const syncBoardLists = () => {
+  const partIdSet = new Set<string>()
+  const nextPartLists: Record<string, Chapter[]> = {}
+
+  orderedParts.value.forEach((part) => {
+    partIdSet.add(part.id)
+    nextPartLists[part.id] = sortedChapters.value
+      .filter((chapter) => chapter.part_id === part.id)
+      .map((chapter) => chapter)
+  })
+
+  boardPartLists.value = nextPartLists
+
+  boardUncategorized.value = sortedChapters.value
+    .filter((chapter) => !chapter.part_id || !partIdSet.has(chapter.part_id))
+    .map((chapter) => chapter)
+}
+
 const arraysEqual = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index])
 
@@ -125,6 +144,7 @@ const setPartOrderState = (newOrder: string[]) => {
   if (book.value) {
     book.value.part_order = JSON.stringify(uniqueOrder)
   }
+  syncBoardLists()
 }
 
 const syncPartOrderWithParts = async () => {
@@ -244,6 +264,7 @@ const loadData = async () => {
     })
 
     chapters.value = await Promise.all(chapterPromises)
+    syncBoardLists()
   } catch (error) {
     console.error('Failed to load organize chapters data:', error)
     errorMessage.value = 'Unable to load chapters. Please try again.'
@@ -357,26 +378,39 @@ const saveChapterOrder = async () => {
 
 const moveChapterToPart = async (chapterId: string, partId: string | null) => {
   try {
-    const partUpdates: Record<string, string[]> = {}
-    partUpdates['null'] = []
+    let movedChapter: Chapter | undefined
 
-    orderedParts.value.forEach((part) => {
-      partUpdates[part.id] = []
-    })
-
-    chapters.value.forEach((chapter) => {
-      const targetPartId = chapter.id === chapterId ? partId : chapter.part_id
-      const partKey = targetPartId || 'null'
-
-      if (!partUpdates[partKey]) {
-        partUpdates[partKey] = []
+    // Remove from current list
+    const sourceEntry = Object.entries(boardPartLists.value).find(([, list]) => {
+      const index = list.findIndex((chapter) => chapter.id === chapterId)
+      if (index !== -1) {
+        movedChapter = list.splice(index, 1)[0]
+        return true
       }
-      partUpdates[partKey].push(chapter.id)
+      return false
     })
 
-    const chapterOrder = buildChapterOrder(partUpdates)
-    await updateChapterOrders(requireBookId(), chapterOrder, partUpdates, partOrder.value)
-    await loadData()
+    if (!movedChapter) {
+      const index = boardUncategorized.value.findIndex((chapter) => chapter.id === chapterId)
+      if (index !== -1) {
+        movedChapter = boardUncategorized.value.splice(index, 1)[0]
+      }
+    }
+
+    if (!movedChapter) {
+      console.warn('Chapter not found when attempting to move:', chapterId)
+      return
+    }
+
+    movedChapter.part_id = partId
+
+    const targetList = partId
+      ? (boardPartLists.value[partId] = boardPartLists.value[partId] || [])
+      : boardUncategorized.value
+
+    targetList.push(movedChapter)
+
+    await saveChapterOrder()
   } catch (error) {
     console.error('Failed to move chapter to part:', error)
     await loadData()
