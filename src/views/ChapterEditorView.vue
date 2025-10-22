@@ -192,7 +192,7 @@ watch(
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="p-6 space-y-6">
           <!-- Chapter Title -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Chapter Title
@@ -207,22 +207,6 @@ watch(
               />
             </div>
 
-            <div>
-              <label for="id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Chapter ID
-              </label>
-              <input
-                id="id"
-                v-model="chapter.id"
-                type="text"
-                readonly
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent opacity-75 cursor-not-allowed"
-                placeholder="unique-chapter-id"
-              />
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {{ isEditing ? 'ID cannot be changed when editing.' : 'Auto-generated and updates with the title. Copy only if you need it elsewhere.' }}
-              </p>
-            </div>
 
             <div>
               <label for="part" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

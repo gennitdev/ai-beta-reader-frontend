@@ -127,16 +127,24 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
     <!-- Header -->
     <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div class="px-4 sm:px-6">
-        <!-- Desktop layout: single row -->
-        <div class="hidden md:flex justify-between items-center h-16">
+        <!-- Desktop layout -->
+        <div
+          class="hidden md:flex md:w-full md:flex-wrap md:items-start md:justify-between md:gap-y-2 md:py-3 lg:flex-nowrap lg:items-center lg:justify-between lg:h-16 lg:py-0"
+        >
           <!-- Logo and Breadcrumbs / Navigation -->
-          <div class="flex items-center space-x-6">
-            <router-link to="/" class="flex items-center">
-              <h1 class="text-2xl font-bold text-gray-900 dark:text-white space-grotesk-logo">Beta-bot</h1>
+          <div
+            class="flex items-center gap-x-6 md:order-2 md:basis-full md:min-w-0 md:flex-wrap md:gap-y-2 lg:order-1 lg:flex-nowrap"
+          >
+            <router-link to="/" class="flex items-center flex-shrink-0">
+              <h1
+                class="text-2xl font-bold text-gray-900 dark:text-white space-grotesk-logo whitespace-nowrap"
+              >
+                Beta-bot
+              </h1>
             </router-link>
 
             <!-- Show breadcrumbs if available, otherwise show main nav -->
-            <nav v-if="showBreadcrumbs" class="flex items-center text-sm">
+            <nav v-if="showBreadcrumbs" class="flex items-center text-sm whitespace-nowrap">
               <template v-for="(crumb, index) in breadcrumbs" :key="index">
                 <router-link
                   v-if="crumb.to"
@@ -159,7 +167,7 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
                 </span>
               </template>
             </nav>
-            <nav v-else class="flex items-center space-x-6">
+            <nav v-else class="flex items-center space-x-6 whitespace-nowrap">
               <router-link
                 to="/books"
                 class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
@@ -171,7 +179,7 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
           </div>
 
           <!-- Right side menu -->
-          <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-4 md:order-1 md:w-full md:justify-end lg:order-2 lg:w-auto">
             <button
               v-if="currentBookId"
               @click="goToNewChapter"
@@ -188,7 +196,15 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
               class="hidden md:flex items-center px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md border border-gray-300 dark:border-gray-600 transition-colors"
             >
               <MagnifyingGlassIcon class="w-4 h-4 mr-2" />
-              <span>Type <kbd class="px-1 py-0.5 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded">/</kbd> to search</span>
+              <span class="whitespace-nowrap">
+                Type
+                <kbd
+                  class="px-1 py-0.5 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded"
+                >
+                  /
+                </kbd>
+                to search
+              </span>
             </button>
 
             <!-- Search button (mobile) -->
