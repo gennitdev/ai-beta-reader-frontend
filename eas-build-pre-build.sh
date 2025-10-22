@@ -37,11 +37,6 @@ fi
 
 echo "===== Patching Gradle files ====="
 
-# Patch Java version from 21 to 17 for EAS Build compatibility
-echo "Downgrading Java version from 21 to 17..."
-find android -name "*.gradle" -type f -exec sed -i.bak 's/VERSION_21/VERSION_17/g' {} \;
-echo "✓ Updated Java version to 17"
-
 # Make the cordova.variables.gradle include conditional to prevent build failures
 if [ -f "android/app/capacitor.build.gradle" ]; then
   # Check if the file already has the conditional check
