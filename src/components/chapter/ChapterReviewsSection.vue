@@ -15,9 +15,9 @@ type Review = {
   prompt_used?: string | null
   created_at: string
   updated_at: string
-  profile_id: number
-  profile_name: string
-  tone_key: string
+  profile_id: number | null
+  profile_name: string | null
+  tone_key: string | null
 }
 
 type CustomProfile = {
@@ -28,7 +28,7 @@ type CustomProfile = {
   updated_at: string
 }
 
-const props = defineProps({
+defineProps({
   reviewTone: {
     type: String,
     default: 'fanficnet',
@@ -152,22 +152,34 @@ const emit = defineEmits<{
         >
           <div class="mb-3 flex items-start justify-between">
             <div class="flex items-center space-x-3">
-              <router-link
-                :to="`/ai-profiles/${review.profile_id}`"
+              <component
+                :is="review.profile_id ? 'router-link' : 'div'"
+                :to="review.profile_id ? `/ai-profiles/${review.profile_id}` : undefined"
                 class="block transition-opacity hover:opacity-80"
-                :title="`View ${review.profile_name} profile`"
+                :class="{ 'cursor-default hover:opacity-100': !review.profile_id }"
+                :title="
+                  review.profile_id && review.profile_name
+                    ? `View ${review.profile_name} profile`
+                    : undefined
+                "
               >
-                <AvatarComponent :text="review.profile_name" size="medium" />
-              </router-link>
+                <AvatarComponent :text="review.profile_name || 'AI Profile'" size="medium" />
+              </component>
 
               <div>
-                <router-link
-                  :to="`/ai-profiles/${review.profile_id}`"
+                <component
+                  :is="review.profile_id ? 'router-link' : 'span'"
+                  :to="review.profile_id ? `/ai-profiles/${review.profile_id}` : undefined"
                   class="font-medium text-gray-900 transition-colors hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
-                  :title="`View ${review.profile_name} profile`"
+                  :class="{ 'hover:text-blue-600 dark:hover:text-blue-400': !!review.profile_id }"
+                  :title="
+                    review.profile_id && review.profile_name
+                      ? `View ${review.profile_name} profile`
+                      : undefined
+                  "
                 >
-                  {{ review.profile_name }}
-                </router-link>
+                  {{ review.profile_name || 'Unknown profile' }}
+                </component>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
                   {{ formatDate(review.created_at) }}
                 </p>

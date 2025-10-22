@@ -1,9 +1,7 @@
+import type { Book as DatabaseBook } from '@/lib/database'
 import { useDatabase } from './useDatabase'
 
-export interface Book {
-  id: string
-  title: string
-  created_at: string
+export interface Book extends DatabaseBook {
   chapterCount?: number
 }
 
@@ -17,12 +15,16 @@ export function useBooks() {
   } = useDatabase()
 
   async function createBook(book: { id: string; title: string }) {
-    const newBook: Book = {
+    const newBook: DatabaseBook = {
       ...book,
+      chapter_order: '[]',
       created_at: new Date().toISOString()
     }
     await saveBook(newBook)
-    return newBook
+    return {
+      ...newBook,
+      chapterCount: 0
+    }
   }
 
   return {

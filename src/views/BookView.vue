@@ -529,7 +529,7 @@ const saveSidebarChapterOrder = async () => {
       })
 
     // Send array-based reorder to backend
-    await bookService.reorderChapters(bookId, chapterOrder, partUpdates)
+    await updateChapterOrders(bookId, chapterOrder, partUpdates)
 
     console.log('Saved sidebar chapter order with arrays:', { chapterOrder, partUpdates })
 
@@ -549,16 +549,29 @@ const loadWiki = async () => {
 
   try {
     loadingWiki.value = true
+    const safeParseArray = (value: string | null) => {
+      if (!value) return []
+      try {
+        const parsed = JSON.parse(value)
+        return Array.isArray(parsed) ? parsed : []
+      } catch {
+        return []
+      }
+    }
+
     const pages = await getWikiPages(bookId)
     wikiPages.value = pages.map((page: any) => ({
       id: page.id,
       page_name: page.page_name,
-      page_type: page.page_type || 'character',
-      summary: page.summary || '',
-      is_major: page.is_major || false,
-      created_by_ai: page.created_by_ai || false,
+      page_type: (page.page_type || 'character') as WikiPage['page_type'],
+      summary: page.summary ?? null,
+      aliases: safeParseArray(page.aliases),
+      tags: safeParseArray(page.tags),
+      is_major: Boolean(page.is_major),
+      created_by_ai: Boolean(page.created_by_ai),
+      created_at: page.created_at,
       updated_at: page.updated_at,
-      created_at: page.created_at
+      content_length: typeof page.content === 'string' ? page.content.length : 0
     }))
   } catch (error) {
     console.error('Failed to load wiki pages:', error)

@@ -4,13 +4,6 @@ import type { PropType } from 'vue'
 import { PencilIcon, SparklesIcon, ClockIcon } from '@heroicons/vue/24/outline'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
-type CharacterEntry =
-  | string
-  | {
-      name: string
-      role?: string | null
-    }
-
 type CharacterWikiInfo = {
   id: string
   character_name: string
@@ -24,11 +17,11 @@ const props = defineProps({
     default: '',
   },
   chapterPov: {
-    type: String,
-    default: null,
+    type: String as PropType<string | undefined>,
+    default: undefined,
   },
   chapterCharacters: {
-    type: Array as PropType<CharacterEntry[]>,
+    type: Array as PropType<string[]>,
     default: () => [],
   },
   chapterBeats: {
@@ -152,26 +145,20 @@ const hasBeats = computed(() => props.chapterBeats && props.chapterBeats.length 
             <div class="flex flex-wrap gap-1">
               <button
                 v-for="character in chapterCharacters"
-                :key="typeof character === 'string' ? character : character.name"
-                @click="emit('character-click', typeof character === 'string' ? character : character.name)"
+                :key="character"
+                @click="emit('character-click', character)"
                 :class="[
                   'inline-block rounded px-2 py-1 text-xs transition-colors',
-                  characterLookup(typeof character === 'string' ? character : character.name)?.has_wiki_page
+                  characterLookup(character)?.has_wiki_page
                     ? 'cursor-pointer bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800'
                     : 'cursor-default bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
                 ]"
-                :disabled="!characterLookup(typeof character === 'string' ? character : character.name)?.has_wiki_page"
-                :title="characterLookup(typeof character === 'string' ? character : character.name)?.has_wiki_page
-                  ? `View ${(typeof character === 'string' ? character : character.name)}'s wiki page`
-                  : `${typeof character === 'string' ? character : character.name} (no wiki page)`"
+                :disabled="!characterLookup(character)?.has_wiki_page"
+                :title="characterLookup(character)?.has_wiki_page
+                  ? `View ${character}'s wiki page`
+                  : `${character} (no wiki page)`"
               >
-                {{ typeof character === 'string' ? character : character.name }}
-                <span
-                  v-if="typeof character === 'object' && character.role"
-                  class="ml-1 text-gray-500 dark:text-gray-400"
-                >
-                  — {{ character.role }}
-                </span>
+                {{ character }}
               </button>
             </div>
           </div>

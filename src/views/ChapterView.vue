@@ -32,9 +32,9 @@ interface Review {
   prompt_used?: string | null;
   created_at: string;
   updated_at: string;
-  profile_id: number;
-  profile_name: string;
-  tone_key: string;
+  profile_id: number | null;
+  profile_name: string | null;
+  tone_key: string | null;
 }
 
 interface Character {
@@ -89,7 +89,6 @@ const editedTitle = ref("");
 const generatingReview = ref(false);
 const generatingSummary = ref(false);
 const reviewTone = ref<string>("fanficnet");
-const reviewText = ref("");
 const customProfiles = ref<CustomReviewerProfile[]>([]);
 const loadingProfiles = ref(false);
 const savedReviews = ref<Review[]>([]);
@@ -105,9 +104,28 @@ const showSummaryPanel = ref(false);
 
 // Text truncation state
 const showFullChapterText = ref(false);
-const showFullCurrentReview = ref(false);
 const expandedReviews = ref<Set<string>>(new Set());
 const expandedPrompts = ref<Set<string>>(new Set());
+
+function normalizeCharacterList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") {
+        return entry.trim();
+      }
+      if (
+        entry &&
+        typeof entry === "object" &&
+        "name" in entry &&
+        typeof (entry as Record<string, unknown>).name === "string"
+      ) {
+        return String((entry as Record<string, unknown>).name).trim();
+      }
+      return "";
+    })
+    .filter((name): name is string => name.length > 0);
+}
 
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true);
@@ -149,6 +167,12 @@ const loadChapter = async () => {
     if (chapterData) {
       // Load summary from database if exists
       const summaryData = await getSummary(chapterData.id);
+      const parsedCharacters = summaryData?.characters ? JSON.parse(summaryData.characters) : [];
+      const normalizedCharacters = normalizeCharacterList(parsedCharacters);
+      const parsedBeats = summaryData?.beats ? JSON.parse(summaryData.beats) : [];
+      const beatsArray = Array.isArray(parsedBeats)
+        ? parsedBeats.filter((beat: unknown): beat is string => typeof beat === "string" && beat.trim().length > 0)
+        : [];
 
       chapter.value = {
         id: chapterData.id,
@@ -158,8 +182,8 @@ const loadChapter = async () => {
         word_count: chapterData.word_count,
         summary: summaryData?.summary || null,
         pov: summaryData?.pov || null,
-        characters: summaryData?.characters ? JSON.parse(summaryData.characters) : null,
-        beats: summaryData?.beats ? JSON.parse(summaryData.beats) : null,
+        characters: normalizedCharacters.length ? normalizedCharacters : null,
+        beats: beatsArray.length ? beatsArray : null,
         spoilers_ok: summaryData?.spoilers_ok || null,
       };
       editedText.value = String(chapterData.text || "");
@@ -243,28 +267,31 @@ const generateSummary = async () => {
       isFirstChapter
     );
 
+    const generatedCharacters = normalizeCharacterList(result.characters);
+    const beatsArray = Array.isArray(result.beats) ? result.beats : [];
+
     // Save summary to database
     await dbSaveSummary({
       chapter_id: chapter.value.id,
       summary: result.summary,
       pov: result.pov,
-      characters: result.characters,
-      beats: result.beats,
+      characters: generatedCharacters,
+      beats: beatsArray,
       spoilers_ok: result.spoilers_ok,
     });
 
     // Update UI
     chapter.value.summary = result.summary;
     chapter.value.pov = result.pov;
-    chapter.value.characters = result.characters;
-    chapter.value.beats = result.beats;
+    chapter.value.characters = generatedCharacters.length ? generatedCharacters : null;
+    chapter.value.beats = beatsArray.length ? beatsArray : null;
     chapter.value.spoilers_ok = result.spoilers_ok;
 
     // Update summary editing state
     editedSummary.value = result.summary;
 
     // Auto-generate/update wiki pages for characters
-    if (result.characters && result.characters.length > 0) {
+    if (generatedCharacters.length > 0) {
       try {
         await updateWikiPagesFromChapter(
           apiKey,
@@ -272,14 +299,14 @@ const generateSummary = async () => {
           chapter.value.id,
           chapter.value.text,
           result.summary,
-          result.characters,
+          generatedCharacters,
           getWikiPage,
           createWikiPage,
           updateWikiPage,
           trackWikiUpdate,
           addChapterWikiMention
         );
-        console.log(`Updated wiki pages for ${result.characters.length} characters`);
+        console.log(`Updated wiki pages for ${generatedCharacters.length} characters`);
       } catch (wikiError: any) {
         console.error("Failed to update wiki pages:", wikiError);
         // Don't fail the whole operation if wiki update fails
@@ -422,8 +449,6 @@ const generateReview = async () => {
     });
 
     // Update UI
-    reviewText.value = result.reviewText;
-
     // Reload saved reviews
     await loadSavedReviews();
   } catch (error: any) {
@@ -443,7 +468,12 @@ const loadSavedReviews = async () => {
   try {
     loadingReviews.value = true;
     const reviews = await getReviews(chapter.value.id);
-    savedReviews.value = reviews;
+    savedReviews.value = reviews.map((review) => ({
+      ...review,
+      profile_id: review.profile_id ?? null,
+      profile_name: review.profile_name ?? null,
+      tone_key: review.tone_key ?? null,
+    }));
   } catch (error) {
     console.error("Failed to load reviews:", error);
     savedReviews.value = [];
@@ -478,9 +508,8 @@ const loadCharacters = async () => {
     const wikiPages = await getWikiPages(bookId.value);
 
     // Map chapter characters to include wiki page info
-    // Handle both string format and object format { name: "...", role: "..." }
     characters.value = chapter.value.characters.map((character) => {
-      const characterName = typeof character === "string" ? character : character.name;
+      const characterName = character;
       const wikiPage = wikiPages.find((page) => page.page_name === characterName);
       return {
         id: wikiPage?.id || `char-${characterName}`,
@@ -492,15 +521,12 @@ const loadCharacters = async () => {
   } catch (error) {
     console.error("Failed to load character wiki info:", error);
     // Fallback to just character names without wiki info
-    characters.value = chapter.value.characters.map((character) => {
-      const characterName = typeof character === "string" ? character : character.name;
-      return {
-        id: `char-${characterName}`,
-        character_name: characterName,
-        wiki_page_id: null,
-        has_wiki_page: false,
-      };
-    });
+    characters.value = chapter.value.characters.map((character) => ({
+      id: `char-${character}`,
+      character_name: character,
+      wiki_page_id: null,
+      has_wiki_page: false,
+    }));
   }
 };
 
