@@ -12,6 +12,7 @@ import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterContentSection from "@/components/chapter/ChapterContentSection.vue";
 import ChapterReviewsSection from "@/components/chapter/ChapterReviewsSection.vue";
+import { CheckCircleIcon } from "@heroicons/vue/24/outline";
 
 interface Chapter {
   id: string;
@@ -90,7 +91,6 @@ const generatingReview = ref(false);
 const generatingSummary = ref(false);
 const reviewTone = ref<string>("fanficnet");
 const customProfiles = ref<CustomReviewerProfile[]>([]);
-const loadingProfiles = ref(false);
 const savedReviews = ref<Review[]>([]);
 const loadingReviews = ref(false);
 const deletingReviewId = ref<string | null>(null);
@@ -130,12 +130,6 @@ function normalizeCharacterList(value: unknown): string[] {
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true);
 
-// Computed book title from database
-const bookTitle = computed(() => {
-  const book = books.value.find((b: any) => b.id === bookId.value);
-  return book?.title || bookId.value;
-});
-
 const hasUnsavedChanges = computed(() => {
   if (!chapter.value) return false;
   return (
@@ -171,7 +165,9 @@ const loadChapter = async () => {
       const normalizedCharacters = normalizeCharacterList(parsedCharacters);
       const parsedBeats = summaryData?.beats ? JSON.parse(summaryData.beats) : [];
       const beatsArray = Array.isArray(parsedBeats)
-        ? parsedBeats.filter((beat: unknown): beat is string => typeof beat === "string" && beat.trim().length > 0)
+        ? parsedBeats.filter(
+            (beat: unknown): beat is string => typeof beat === "string" && beat.trim().length > 0
+          )
         : [];
 
       chapter.value = {
@@ -649,12 +645,35 @@ onMounted(async () => {
       @save-chapter="saveChapter"
     />
 
-    <div class="w-full max-w-6xl mx-0 md:mx-auto px-0 sm:px-4 lg:px-8 py-6">
+    <div class="w-full max-w-6xl mx-0 md:mx-auto px-0 sm:px-4 lg:px-8 ">
+      <div class="my-3 flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+        <span class="whitespace-nowrap"
+          >{{ (chapter?.word_count || 0).toLocaleString() }} words</span
+        >
+        <div class="flex items-center whitespace-nowrap">
+          <CheckCircleIcon
+            :class="Boolean(chapter?.summary) ? 'text-green-500' : 'text-gray-300'"
+            class="mr-1 h-4 w-4"
+          />
+          <span :class="Boolean(chapter?.summary) ? 'text-green-600' : 'text-gray-500'">
+            {{ Boolean(chapter?.summary) ? "Summarized" : "Not summarized" }}
+          </span>
+        </div>
+        <button
+          @click="$emit('toggle-summary-panel')"
+          class="font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+        >
+          {{ showSummaryPanel ? "Hide Summary Panel" : "Show Summary Panel" }}
+        </button>
+      </div>
       <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
         <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
       </div>
 
-      <div v-else-if="chapter" class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-6 sm:divide-y-0">
+      <div
+        v-else-if="chapter"
+        class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-6 sm:divide-y-0"
+      >
         <ChapterSummaryPanel
           v-if="showSummaryPanel"
           :chapter-summary="chapter.summary || ''"
