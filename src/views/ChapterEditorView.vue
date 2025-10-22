@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import TextEditor from '@/components/TextEditor.vue'
@@ -22,6 +22,7 @@ const chapter = ref({
   title: '',
   text: ''
 })
+const generatedSuffix = ref(Date.now().toString(36).slice(-6))
 
 const loadChapter = async () => {
   if (!isEditing) return
@@ -51,13 +52,20 @@ const loadChapter = async () => {
   }
 }
 
-const generateChapterId = () => {
-  const title = chapter.value.title.toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
+const createSlug = (value: string) => {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
     .replace(/\s+/g, '-')
-    .substring(0, 20)
+    .replace(/-+/g, '-')
+    .slice(0, 40)
+}
 
-  chapter.value.id = title + '-' + Date.now().toString(36)
+const generateChapterId = () => {
+  const slug = createSlug(chapter.value.title)
+  const fallback = `chapter-${Date.now().toString(36).slice(-6)}`
+  chapter.value.id = slug ? `${slug}-${Date.now().toString(36).slice(-6)}` : fallback
 }
 
 const saveChapter = async () => {
@@ -98,6 +106,16 @@ const goBack = () => {
 onMounted(() => {
   loadChapter()
 })
+
+watch(
+  () => chapter.value.title,
+  (newTitle) => {
+    if (isEditing) return
+
+    const slug = createSlug(newTitle)
+    chapter.value.id = slug ? `${slug}-${generatedSuffix.value}` : ''
+  },
+)
 </script>
 
 <template>
@@ -173,13 +191,12 @@ onMounted(() => {
                 id="id"
                 v-model="chapter.id"
                 type="text"
-                :readonly="isEditing"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                :class="{ 'opacity-50 cursor-not-allowed': isEditing }"
+                readonly
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent opacity-75 cursor-not-allowed"
                 placeholder="unique-chapter-id"
               />
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {{ isEditing ? 'ID cannot be changed when editing' : 'Auto-generated from title. Must be unique.' }}
+                {{ isEditing ? 'ID cannot be changed when editing.' : 'Auto-generated and updates with the title. Copy only if you need it elsewhere.' }}
               </p>
             </div>
           </div>

@@ -1410,14 +1410,17 @@ onUnmounted(() => {
                             <ChevronDownIcon class="w-4 h-4" />
                           </button>
                         </div>
-                        <select
-                          :value="chapter.part_id || ''"
-                          @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
-                          class="text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-32 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="">Uncategorized</option>
-                          <option v-for="part in parts" :key="part.id" :value="part.id">{{ part.name }}</option>
-                        </select>
+                        <div class="relative">
+                          <select
+                            :value="chapter.part_id || ''"
+                            @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
+                            class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                          >
+                            <option value="">Uncategorized</option>
+                            <option v-for="part in parts" :key="part.id" :value="part.id">{{ part.name }}</option>
+                          </select>
+                          <ChevronDownIcon class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300" />
+                        </div>
                       </div>
                     </div>
                   </template>
@@ -1517,14 +1520,17 @@ onUnmounted(() => {
                             <ChevronDownIcon class="w-4 h-4" />
                           </button>
                         </div>
-                        <select
-                          :value="chapter.part_id || ''"
-                        @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
-                        class="text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-32 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Uncategorized</option>
-                        <option v-for="p in parts" :key="p.id" :value="p.id">{{ p.name }}</option>
-                      </select>
+                        <div class="relative">
+                          <select
+                            :value="chapter.part_id || ''"
+                            @change="moveChapterToPart(chapter.id, ($event.target as HTMLSelectElement)?.value || null)"
+                            class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                          >
+                            <option value="">Uncategorized</option>
+                            <option v-for="p in parts" :key="p.id" :value="p.id">{{ p.name }}</option>
+                          </select>
+                          <ChevronDownIcon class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300" />
+                        </div>
                       </div>
                     </div>
                   </template>
