@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "lint": "eslint . --fix"
+    "lint": "eslint . --fix",
+    "postinstall": "npm run build && npx cap sync android"
   },
   "dependencies": {
     "@auth0/auth0-vue": "^2.4.0",
