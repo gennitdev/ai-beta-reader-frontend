@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { PropType } from 'vue'
+import { ref, watch, onUnmounted, type PropType } from 'vue'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import { ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
   isEditing: {
@@ -38,11 +39,62 @@ const emit = defineEmits<{
 const toggleFullChapter = (value: boolean) => {
   emit('toggle-full-chapter', value)
 }
+
+const isFullscreen = ref(false)
+let previousBodyOverflow: string | null = null
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    isFullscreen.value = false
+  }
+}
+
+const enableFullscreenEffects = () => {
+  if (typeof document === 'undefined') return
+  previousBodyOverflow = document.body.style.overflow
+  document.body.style.overflow = 'hidden'
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', handleKeydown)
+  }
+}
+
+const disableFullscreenEffects = () => {
+  if (typeof document === 'undefined') return
+  document.body.style.overflow = previousBodyOverflow ?? ''
+  previousBodyOverflow = null
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('keydown', handleKeydown)
+  }
+}
+
+watch(isFullscreen, (value) => {
+  if (value) {
+    enableFullscreenEffects()
+  } else {
+    disableFullscreenEffects()
+  }
+})
+
+onUnmounted(() => {
+  if (isFullscreen.value) {
+    disableFullscreenEffects()
+  }
+})
 </script>
 
 <template>
-  <div class="py-4 sm:rounded-lg sm:border sm:border-gray-200 sm:bg-white sm:shadow-md sm:dark:border-gray-700 sm:dark:bg-gray-800">
+  <div class="relative py-4 sm:rounded-lg sm:border sm:border-gray-200 sm:bg-white sm:shadow-md sm:dark:border-gray-700 sm:dark:bg-gray-800">
     <div class="px-0 sm:px-6">
+      <button
+        v-if="!isEditing"
+        type="button"
+        class="absolute right-4 top-4 z-10 inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+        @click.stop="isFullscreen = true"
+      >
+        <ArrowsPointingOutIcon class="h-4 w-4" />
+        <span class="hidden sm:inline">Fullscreen</span>
+        <span class="sr-only">Enter fullscreen reading mode</span>
+      </button>
 
       <div v-if="isEditing">
         <TextEditor
@@ -81,4 +133,36 @@ const toggleFullChapter = (value: boolean) => {
       </div>
     </div>
   </div>
+
+  <Teleport to="body">
+    <div
+      v-if="isFullscreen"
+      class="fixed inset-0 z-50"
+    >
+      <div
+        class="absolute inset-0 bg-gray-900/80 backdrop-blur-sm"
+        @click="isFullscreen = false"
+      ></div>
+      <div class="relative z-10 flex h-full flex-col">
+        <div class="flex-1 overflow-y-auto px-4 py-8 sm:px-8">
+          <div class="mx-auto max-w-4xl">
+            <div class="relative rounded-lg bg-white p-6 shadow-2xl dark:bg-gray-900">
+              <button
+                type="button"
+                class="absolute right-4 top-4 inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+                @click.stop="isFullscreen = false"
+              >
+                <ArrowsPointingInIcon class="h-4 w-4" />
+                <span class="hidden sm:inline">Exit fullscreen</span>
+                <span class="sr-only">Exit fullscreen reading mode</span>
+              </button>
+              <div class="prose prose-lg max-w-none dark:prose-invert">
+                <MarkdownRenderer :text="chapterText" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
