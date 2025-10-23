@@ -1,7 +1,9 @@
 #!/bin/sh
 set -euxo pipefail
 
-echo "===== EAS Pre-Build Hook ====="
+echo "=========================================="
+echo "EAS POST-INSTALL HOOK - Building Vue App"
+echo "=========================================="
 echo "Current directory: $(pwd)"
 echo "Node version: $(node --version)"
 echo "NPM version: $(npm --version)"
@@ -188,4 +190,6 @@ EOF
   ls -la android/capacitor-cordova-android-plugins/
 fi
 
-echo "===== Pre-build hook complete ====="
+echo "=========================================="
+echo "EAS POST-INSTALL HOOK COMPLETE"
+echo "=========================================="
