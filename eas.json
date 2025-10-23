@@ -12,8 +12,10 @@
       "distribution": "internal",
       "android": {
         "image": "latest",
-        "buildType": "apk"
-      }
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "prebuildCommand": "npm run build && npx cap sync android"
     },
     "production": {
       "autoIncrement": true,
