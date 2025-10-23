@@ -144,8 +144,14 @@ onUnmounted(() => {
         @click="isFullscreen = false"
       ></div>
       <div class="relative z-10 flex h-full flex-col">
-        <div class="flex-1 overflow-y-auto px-4 py-8 sm:px-8">
-          <div class="mx-auto max-w-4xl">
+        <div
+          class="flex-1 overflow-y-auto px-4 py-8 sm:px-8"
+          @click="isFullscreen = false"
+        >
+          <div
+            class="mx-auto max-w-4xl"
+            @click.stop
+          >
             <div class="relative rounded-lg bg-white p-6 shadow-2xl dark:bg-gray-900">
               <button
                 type="button"
