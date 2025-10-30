@@ -32,7 +32,7 @@ const handleTitleInput = (event: Event) => {
 
 <template>
   <div
-    class="sticky top-0 z-30 border-b border-gray-200/60 bg-white/95 px-4 py-4 backdrop-blur dark:border-gray-700/60 dark:bg-gray-900/95 sm:px-6 lg:px-8"
+    class="z-30 border-b border-gray-200/60 bg-white/95 px-4 py-4 backdrop-blur dark:border-gray-700/60 dark:bg-gray-900/95 sm:px-6 lg:px-8"
   >
     <div class="flex items-center justify-between">
       <div class="flex flex-1 items-center">
