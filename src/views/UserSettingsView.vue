@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import JSZip from 'jszip'
 import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
-import CustomProfilesPanel from '@/components/CustomProfilesPanel.vue'
 
 const router = useRouter()
 
@@ -366,8 +365,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Custom Reviewer Profiles Section -->
-      <CustomProfilesPanel />
 
       <!-- Cloud Backup Section -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -471,7 +468,7 @@ onMounted(() => {
       <!-- Data Export Section -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-8">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div class="flex items-center justify-between">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Export Your Data</h2>
               <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -481,7 +478,7 @@ onMounted(() => {
             <button
               @click="exportUserData"
               :disabled="isExporting"
-              class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              class="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap w-full sm:w-auto"
             >
               <DocumentArrowDownIcon class="w-5 h-5 mr-2" />
               {{ isExporting ? 'Exporting...' : 'Export Data' }}

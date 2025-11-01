@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { RouterView, useRoute, useRouter } from 'vue-router'
-import { UserIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline'
+import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
+import { UserIcon, MagnifyingGlassIcon, PlusIcon, Bars3Icon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
 import AppSideNav from '@/components/AppSideNav.vue'
+import { primaryNavItems } from '@/config/navigation'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +25,17 @@ const searchService = {
   replaceInWikiPage: async (wikiPageId: string, searchText: string, replaceText: string) => {
     await replaceInWikiPage(wikiPageId, searchText, replaceText)
   }
+}
+
+const isMobileNavOpen = ref(false)
+const mobileNavItems = computed(() => primaryNavItems)
+
+const toggleMobileNav = () => {
+  isMobileNavOpen.value = !isMobileNavOpen.value
+}
+
+const closeMobileNav = () => {
+  isMobileNavOpen.value = false
 }
 
 // Keyboard shortcut for search
@@ -70,6 +82,13 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => route.path,
+  () => {
+    closeMobileNav()
+  }
 )
 
 // Breadcrumb computation
@@ -252,11 +271,23 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
 
         <!-- Mobile layout: two rows -->
         <div class="md:hidden py-3">
-          <!-- First row: Logo and right menu -->
-          <div class="flex justify-between items-center mb-2">
-            <router-link to="/" class="flex items-center">
-              <h1 class="text-2xl font-bold text-gray-900 dark:text-white space-grotesk-logo">Beta-bot</h1>
-            </router-link>
+          <!-- First row: menu toggle, logo, and quick actions -->
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center space-x-3">
+              <button
+                @click="toggleMobileNav"
+                :aria-expanded="isMobileNavOpen"
+                aria-controls="mobile-primary-nav"
+                class="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                aria-label="Toggle navigation"
+              >
+                <Bars3Icon v-if="!isMobileNavOpen" class="w-6 h-6" />
+                <XMarkIcon v-else class="w-6 h-6" />
+              </button>
+              <router-link to="/" class="flex items-center">
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white space-grotesk-logo">Beta-bot</h1>
+              </router-link>
+            </div>
 
             <div class="flex items-center space-x-2">
               <!-- Search button (mobile) -->
@@ -353,6 +384,56 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
         :search-service="searchService as any"
         @close="showSearchModal = false"
       />
+
+      <Teleport to="body">
+        <div v-if="isMobileNavOpen" class="fixed inset-0 z-40 md:hidden">
+          <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeMobileNav" />
+          <div
+            id="mobile-primary-nav"
+            class="absolute inset-y-0 left-0 flex h-full w-64 max-w-[80%] flex-col bg-white px-6 py-6 shadow-xl dark:bg-gray-900"
+          >
+            <div class="mb-6 flex items-center justify-between">
+              <router-link
+                to="/"
+                class="text-lg font-semibold text-gray-900 transition-colors dark:text-white"
+                @click="closeMobileNav"
+              >
+                Beta-bot
+              </router-link>
+              <button
+                @click="closeMobileNav"
+                class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                aria-label="Close navigation"
+              >
+                <XMarkIcon class="h-6 w-6" />
+              </button>
+            </div>
+
+            <nav class="flex-1 space-y-2 overflow-y-auto">
+              <RouterLink
+                v-for="item in mobileNavItems"
+                :key="item.to"
+                :to="item.to"
+                custom
+                v-slot="{ href, navigate, isActive }"
+              >
+                <a
+                  :href="href"
+                  class="flex items-center gap-3 rounded-lg px-3 py-2 text-base font-medium transition-colors"
+                  :class="isActive
+                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'"
+                  :aria-current="isActive ? 'page' : undefined"
+                  @click.prevent="navigate(); closeMobileNav()"
+                >
+                  <component :is="item.icon" class="h-5 w-5" />
+                  <span>{{ item.label }}</span>
+                </a>
+              </RouterLink>
+            </nav>
+          </div>
+        </div>
+      </Teleport>
     </div>
   </div>
 </template>

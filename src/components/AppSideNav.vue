@@ -1,45 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Component } from 'vue'
 import { useRoute } from 'vue-router'
-import { BookOpenIcon, SparklesIcon, Cog6ToothIcon, FlagIcon } from '@heroicons/vue/24/outline'
+import { primaryNavItems } from '@/config/navigation'
 
 const route = useRoute()
 
-interface NavItem {
-  to: string
-  label: string
-  icon: Component
-  isActive: (path: string) => boolean
-}
-
-const navItems = computed<NavItem[]>(() => [
-  {
-    to: '/books',
-    label: 'Books',
-    icon: BookOpenIcon,
-    isActive: (path: string) => path.startsWith('/books')
-  },
-  {
-    to: '/ai-profiles',
-    label: 'AI Profiles',
-    icon: SparklesIcon,
-    isActive: (path: string) => path.startsWith('/ai-profiles')
-  },
-  {
-    to: '/settings',
-    label: 'Settings',
-    icon: Cog6ToothIcon,
-    isActive: (path: string) => path.startsWith('/settings')
-  },
-  // {
-  //   to: '/challenges',
-  //   label: 'Challenges',
-  //   icon: FlagIcon,
-  //   isActive: (path: string) => path.startsWith('/challenges')
-  // }
-])
-
+const navItems = computed(() => primaryNavItems)
 const currentPath = computed(() => route.path)
 </script>
 
