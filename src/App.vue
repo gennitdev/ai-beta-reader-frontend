@@ -131,7 +131,7 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
 
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Header -->
-      <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 safe-area-top">
         <div class="px-4 sm:px-6">
         <!-- Desktop layout -->
         <div
@@ -363,5 +363,10 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
   font-optical-sizing: auto;
   font-weight: 600;
   font-style: normal;
+}
+
+.safe-area-top {
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
 }
 </style>
