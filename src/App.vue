@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
-import { UserIcon, MagnifyingGlassIcon, PlusIcon, Bars3Icon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { MagnifyingGlassIcon, PlusIcon, Bars3Icon, XMarkIcon, Cog6ToothIcon } from '@heroicons/vue/24/outline'
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
@@ -248,7 +248,7 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
               title="Settings"
             >
               <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <UserIcon class="w-5 h-5 text-white" />
+                <Cog6ToothIcon class="w-5 h-5 text-white" />
               </div>
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Settings
@@ -316,7 +316,7 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
                 title="Settings"
               >
                 <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <UserIcon class="w-5 h-5 text-white" />
+                  <Cog6ToothIcon class="w-5 h-5 text-white" />
                 </div>
               </router-link>
 
