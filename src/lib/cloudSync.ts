@@ -1,3 +1,4 @@
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { Encryption } from './encryption';
 import { db } from './database';
 
@@ -22,44 +23,50 @@ export class GoogleDriveProvider implements CloudProvider {
   private CLIENT_ID = ''; // Set this in your app
   private SCOPES = 'https://www.googleapis.com/auth/drive.file';
   private tokenClient: any = null;
+  private gisLoadingPromise: Promise<void> | null = null;
 
   constructor(clientId: string, _apiKey?: string) {
     this.CLIENT_ID = clientId;
   }
 
   async authenticate(): Promise<void> {
+    try {
+      await this.ensureGoogleIdentityServicesLoaded();
+    } catch (error) {
+      console.error('Failed to initialize Google Identity Services:', error);
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+
     return new Promise((resolve, reject) => {
-      // Load Google Identity Services library
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.onload = () => {
-        try {
-          // @ts-ignore - Google Identity Services global
-          this.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: this.CLIENT_ID,
-            scope: this.SCOPES,
-            callback: (response: any) => {
-              if (response.error) {
-                console.error('Auth error:', response);
-                reject(new Error(response.error));
-                return;
-              }
-
-              this.accessToken = response.access_token;
-              console.log('✅ Google Drive authenticated successfully');
-              resolve();
-            },
-          });
-
-          // Request access token
-          this.tokenClient.requestAccessToken({ prompt: 'consent' });
-        } catch (error) {
-          console.error('Authentication error:', error);
-          reject(error);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+        const googleAccounts: any = (window as any).google?.accounts;
+        if (!googleAccounts?.oauth2?.initTokenClient) {
+          reject(new Error('Google Identity Services is unavailable in this environment'));
+          return;
         }
-      };
-      script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
-      document.head.appendChild(script);
+
+        this.tokenClient = googleAccounts.oauth2.initTokenClient({
+          client_id: this.CLIENT_ID,
+          scope: this.SCOPES,
+          callback: (response: any) => {
+            if (response.error) {
+              console.error('Auth error:', response);
+              reject(new Error(response.error));
+              return;
+            }
+
+            this.accessToken = response.access_token;
+            console.log('✅ Google Drive authenticated successfully');
+            resolve();
+          },
+        });
+
+        this.tokenClient.requestAccessToken({ prompt: 'consent' });
+      } catch (error) {
+        console.error('Authentication error:', error);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 
@@ -151,6 +158,140 @@ export class GoogleDriveProvider implements CloudProvider {
 
   isAuthenticated(): boolean {
     return this.accessToken !== null;
+  }
+
+  /**
+   * Ensure Google Identity Services is available. Handles web and native environments.
+   */
+  private ensureGoogleIdentityServicesLoaded(): Promise<void> {
+    if (typeof window === 'undefined') {
+      return Promise.reject(new Error('Window is undefined'));
+    }
+
+    if ((window as any).google?.accounts?.oauth2) {
+      return Promise.resolve();
+    }
+
+    if (this.gisLoadingPromise) {
+      return this.gisLoadingPromise;
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      this.gisLoadingPromise = this.loadGisForNative();
+    } else {
+      this.gisLoadingPromise = this.loadGisForWeb();
+    }
+
+    return this.gisLoadingPromise;
+  }
+
+  private async loadGisForNative(): Promise<void> {
+    try {
+      const response = await CapacitorHttp.get({
+        url: 'https://accounts.google.com/gsi/client',
+        responseType: 'text',
+      });
+
+      const scriptSource = typeof response.data === 'string' ? response.data : null;
+
+      if (!scriptSource) {
+        throw new Error('Empty Google Identity Services payload');
+      }
+
+      const script = document.createElement('script');
+      script.type = 'text/javascript';
+      script.dataset.googleIdentity = 'true';
+      script.text = scriptSource;
+
+      script.onload = () => {
+        const oauth2 = (window as any).google?.accounts?.oauth2;
+        if (oauth2 && oauth2._default && !oauth2.default) {
+          oauth2.default = oauth2._default;
+        }
+      };
+
+      document.head.appendChild(script);
+
+      await new Promise<void>((resolve, reject) => {
+        const checkReady = () => {
+          const oauth2 = (window as any).google?.accounts?.oauth2;
+          if (oauth2 && (oauth2.initTokenClient || oauth2.default?.initTokenClient)) {
+            if (!oauth2.initTokenClient && oauth2.default?.initTokenClient) {
+              oauth2.initTokenClient = oauth2.default.initTokenClient.bind(oauth2.default);
+            }
+            resolve();
+            return;
+          }
+          setTimeout(checkReady, 50);
+        };
+
+        const timeoutId = setTimeout(() => {
+          reject(new Error('Google Identity Services failed to initialize'));
+        }, 5000);
+
+        const wrappedResolve = () => {
+          clearTimeout(timeoutId);
+          resolve();
+        };
+
+        const wrappedReject = (error: Error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        };
+
+        script.addEventListener('error', () => wrappedReject(new Error('Failed to load Google Identity Services')));
+
+        const checkLoop = () => {
+          const oauth2 = (window as any).google?.accounts?.oauth2;
+          if (oauth2 && (oauth2.initTokenClient || oauth2.default?.initTokenClient)) {
+            if (!oauth2.initTokenClient && oauth2.default?.initTokenClient) {
+              oauth2.initTokenClient = oauth2.default.initTokenClient.bind(oauth2.default);
+            }
+            wrappedResolve();
+            return;
+          }
+          setTimeout(checkLoop, 50);
+        };
+
+        checkLoop();
+      });
+    } catch (error) {
+      this.gisLoadingPromise = null;
+      throw error instanceof Error ? error : new Error('Failed to load Google Identity Services');
+    }
+  }
+
+  private loadGisForWeb(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const existingScript = document.querySelector<HTMLScriptElement>('script[data-google-identity]');
+
+      if (existingScript) {
+        if ((window as any).google?.accounts?.oauth2) {
+          resolve();
+          return;
+        }
+
+        existingScript.addEventListener('load', () => resolve(), { once: true });
+        existingScript.addEventListener('error', () => {
+          this.gisLoadingPromise = null;
+          reject(new Error('Failed to load Google Identity Services'));
+        }, { once: true });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.dataset.googleIdentity = 'true';
+      script.onload = () => resolve();
+      script.onerror = () => {
+        this.gisLoadingPromise = null;
+        reject(new Error('Failed to load Google Identity Services'));
+      };
+
+      document.head.appendChild(script);
+    });
   }
 }
 
