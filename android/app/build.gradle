@@ -3,6 +3,7 @@ apply plugin: 'com.android.application'
 android {
     namespace "com.betareader.app"
     compileSdk rootProject.ext.compileSdkVersion
+
     defaultConfig {
         applicationId "com.betareader.app"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -16,8 +17,19 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("BETABOT_KEYSTORE_PATH"))
+            storePassword System.getenv("BETABOT_KEYSTORE_PASSWORD")
+            keyAlias "betabot-release"
+            keyPassword System.getenv("BETABOT_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
