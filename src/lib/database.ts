@@ -745,59 +745,83 @@ export class AppDatabase {
     const jsonString = new TextDecoder().decode(data);
     const importData = JSON.parse(jsonString);
 
-    if (this.isNative) {
+    const appearsToBeCapacitorJson =
+      typeof importData === 'object' &&
+      importData !== null &&
+      'database' in importData &&
+      'tables' in importData;
+
+    if (this.isNative && typeof this.db.importFromJson === 'function' && appearsToBeCapacitorJson) {
       await this.db.importFromJson(importData);
-    } else {
-      // Clear existing database in reverse order of dependencies
-      this.db.run('DELETE FROM chapter_wiki_mentions');
-      this.db.run('DELETE FROM wiki_updates');
-      this.db.run('DELETE FROM chapter_reviews');
-      this.db.run('DELETE FROM book_characters');
-      this.db.run('DELETE FROM chapter_summaries');
-      this.db.run('DELETE FROM wiki_pages');
-      this.db.run('DELETE FROM chapters');
-      this.db.run('DELETE FROM book_parts');
-      this.db.run('DELETE FROM books');
-      this.db.run('DELETE FROM custom_reviewer_profiles');
-      this.db.run('DELETE FROM ai_profiles');
+      return;
+    }
 
-      // Import books
-      if (importData.books) {
-        for (const book of importData.books) {
-          await this.saveBook(book);
-        }
+    const run = async (sql: string, params: any[] = []) => {
+      if (this.isNative) {
+        await this.db.run(sql, params);
+      } else {
+        this.db.run(sql, params);
       }
+    };
 
-      // Import chapters
-      if (importData.chapters) {
-        for (const chapter of importData.chapters) {
-          await this.saveChapter(chapter);
-        }
+    await run('PRAGMA foreign_keys = OFF');
+
+    const tablesToClear = [
+      'chapter_wiki_mentions',
+      'wiki_updates',
+      'chapter_reviews',
+      'book_characters',
+      'chapter_summaries',
+      'wiki_pages',
+      'chapters',
+      'book_parts',
+      'books',
+      'custom_reviewer_profiles',
+      'ai_profiles'
+    ];
+
+    for (const table of tablesToClear) {
+      await run(`DELETE FROM ${table}`);
+    }
+
+    const importTable = async (tableName: string, rows: any[]) => {
+      if (!rows || rows.length === 0) return;
+
+      for (const row of rows) {
+        const columns = Array.isArray(row) ? row : Object.values(row);
+        const placeholders = columns.map(() => '?').join(', ');
+        await run(`INSERT OR REPLACE INTO ${tableName} VALUES (${placeholders})`, columns);
       }
+    };
 
-      // Import other tables
-      const importTable = (tableName: string, rows: any[]) => {
-        if (!rows || rows.length === 0) return;
+    if (importData.books) {
+      for (const book of importData.books) {
+        await this.saveBook(book);
+      }
+    }
 
-        for (const row of rows) {
-          const columns = Array.isArray(row) ? row : Object.values(row);
-          const placeholders = columns.map(() => '?').join(', ');
-          this.db.run(`INSERT OR REPLACE INTO ${tableName} VALUES (${placeholders})`, columns);
-        }
-      };
+    await importTable('book_parts', importData.book_parts);
 
-      importTable('book_parts', importData.book_parts);
-      importTable('chapter_summaries', importData.chapter_summaries);
-      importTable('wiki_pages', importData.wiki_pages);
-      importTable('book_characters', importData.book_characters);
-      importTable('chapter_reviews', importData.chapter_reviews);
-      importTable('custom_reviewer_profiles', importData.custom_reviewer_profiles);
-      importTable('ai_profiles', importData.ai_profiles);
-      importTable('wiki_updates', importData.wiki_updates);
-      importTable('chapter_wiki_mentions', importData.chapter_wiki_mentions);
+    if (importData.chapters) {
+      for (const chapter of importData.chapters) {
+        await this.saveChapter(chapter);
+      }
+    }
 
+    await importTable('wiki_pages', importData.wiki_pages);
+    await importTable('custom_reviewer_profiles', importData.custom_reviewer_profiles);
+    await importTable('ai_profiles', importData.ai_profiles);
+    await importTable('chapter_summaries', importData.chapter_summaries);
+    await importTable('chapter_reviews', importData.chapter_reviews);
+    await importTable('book_characters', importData.book_characters);
+    await importTable('wiki_updates', importData.wiki_updates);
+    await importTable('chapter_wiki_mentions', importData.chapter_wiki_mentions);
+
+    if (!this.isNative) {
       this.saveToLocalStorage();
     }
+
+    await run('PRAGMA foreign_keys = ON');
   }
 
   async importFromNeonExport(jsonData: any): Promise<void> {
