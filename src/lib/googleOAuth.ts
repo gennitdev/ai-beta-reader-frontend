@@ -1,5 +1,6 @@
 import { App } from '@capacitor/app';
-import { CapacitorHttp } from '@capacitor/core';
+import { AppLauncher } from '@capacitor/app-launcher';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 
@@ -138,6 +139,8 @@ async function launchAuthBrowser(authUrl: string, redirectUri: string, expectedS
   let urlListener: PluginListenerHandle | undefined;
   let browserListener: PluginListenerHandle | undefined;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const platform = Capacitor.getPlatform();
+  const useBrowserPlugin = platform !== 'android';
 
   const cleanup = async () => {
     if (timeoutId) {
@@ -163,7 +166,13 @@ async function launchAuthBrowser(authUrl: string, redirectUri: string, expectedS
       }
       fulfilled = true;
       await cleanup();
-      await Browser.close();
+      if (useBrowserPlugin) {
+        try {
+          await Browser.close();
+        } catch {
+          // Ignore close failures; browser may already be dismissed.
+        }
+      }
       resolve(code);
     };
 
@@ -173,7 +182,13 @@ async function launchAuthBrowser(authUrl: string, redirectUri: string, expectedS
       }
       fulfilled = true;
       await cleanup();
-      await Browser.close();
+      if (useBrowserPlugin) {
+        try {
+          await Browser.close();
+        } catch {
+          // Ignore close failures; browser may already be dismissed.
+        }
+      }
       reject(error);
     };
 
@@ -215,15 +230,25 @@ async function launchAuthBrowser(authUrl: string, redirectUri: string, expectedS
         }
       });
 
-      browserListener = await Browser.addListener('browserFinished', async () => {
-        await rejectOnce(new Error('User cancelled sign-in.'));
-      });
+      if (useBrowserPlugin) {
+        browserListener = await Browser.addListener('browserFinished', async () => {
+          await rejectOnce(new Error('User cancelled sign-in.'));
+        });
+      }
 
       timeoutId = setTimeout(async () => {
         await rejectOnce(new Error('Timed out while waiting for authorization response.'));
       }, AUTH_TIMEOUT_MS);
 
-      await Browser.open({ url: authUrl, windowName: '_blank' });
+      if (useBrowserPlugin) {
+        await Browser.open({ url: authUrl, windowName: '_blank' });
+      } else {
+        const result = await AppLauncher.openUrl({ url: authUrl });
+        if (!result.completed) {
+          await rejectOnce(new Error('Failed to open system browser for authentication.'));
+          return;
+        }
+      }
     } catch (error) {
       await rejectOnce(error instanceof Error ? error : new Error(String(error)));
     }
