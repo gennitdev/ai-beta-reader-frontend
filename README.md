@@ -6,14 +6,13 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 
 - **Frontend:** Vue.js 3 + TypeScript + Tailwind CSS
 - **AI:** Powered by the ChatGPT API (GPT-4o Mini)
-- **Authentication:** Auth0
+- **Sync:** Google Drive (PKCE with App Links)
 - **Backend Repository:** [ai-beta-reader-backend](https://github.com/gennitdev/ai-beta-reader-backend)
 
 ## Features
 
 ### Core Writing Tools
 
-- **Auth0 Authentication**: Secure login and user management
 - **Book Management**: Create and organize your writing projects with support for parts/sections
 - **Chapter Editor**: Rich markdown editor with live preview and word count tracking
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
@@ -96,7 +95,7 @@ Find and replace text across all chapters and wiki pages to maintain consistency
 ## Prerequisites for Self Hosting Beta-bot
 
 - Node.js 18+
-- Auth0 account configured
+- Google Cloud project with Drive API enabled and OAuth clients (web + Android)
 - AI Beta Reader Express backend running
 
 ## Setup
@@ -108,17 +107,7 @@ Find and replace text across all chapters and wiki pages to maintain consistency
    ```
 
 2. **Configure environment variables:**
-   Create a `.env.local` file in the project root with the following variables:
-
-   ```bash
-   # Auth0 Configuration
-   VITE_AUTH0_DOMAIN=your-auth0-domain.auth0.com
-   VITE_AUTH0_CLIENT_ID=your-auth0-client-id
-   VITE_AUTH0_AUDIENCE=your-auth0-audience
-
-   # Backend API URL
-   VITE_API_BASE_URL=http://localhost:3001
-   ```
+   Copy `.env.example` to `.env.local` and supply your Google OAuth web + Android client IDs. Adjust `VITE_API_BASE_URL` if you run a different backend origin.
 
 3. **Start development server:**
 
@@ -126,51 +115,31 @@ Find and replace text across all chapters and wiki pages to maintain consistency
    npm run dev
    ```
 
-## Auth0 Configuration
-
-In your Auth0 dashboard:
-
-1. **Create a Single Page Application**
-2. **Configure URLs:**
-   - Allowed Callback URLs: `http://localhost:5173/callback`
-   - Allowed Logout URLs: `http://localhost:5173`
-   - Allowed Web Origins: `http://localhost:5173`
-
-3. **Enable grants:**
-   - Authorization Code
-   - Refresh Token
-
 ## Environment Variables
 
-Create a `.env.local` file in the project root and configure the following variables:
+Create a `.env.local` file (or copy the example) and configure the following variables:
 
-### Required Variables
+### Google OAuth (Drive sync)
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `VITE_AUTH0_DOMAIN` | Your Auth0 domain | `your-domain.auth0.com` |
-| `VITE_AUTH0_CLIENT_ID` | Your Auth0 application client ID | `abc123def456ghi789` |
-| `VITE_AUTH0_AUDIENCE` | Auth0 API audience (usually your domain + /api/v2/) | `https://your-domain.auth0.com/api/v2/` |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth *web* client ID (used for browser GIS flow) | `302250506015-du7cd7e5g469dd74cs2fnq8luksiuutb.apps.googleusercontent.com` |
+| `VITE_GOOGLE_CLIENT_ID_WEB` | Optional alias for the web client (defaults to `VITE_GOOGLE_CLIENT_ID`) | same as above |
+| `VITE_GOOGLE_REDIRECT_URI` | Hosted redirect used by the web build | `https://www.beta-bot.net/oauth2redirect` |
+| `VITE_GOOGLE_CLIENT_ID_NATIVE` | Android OAuth client ID (PKCE/native flow) | `…hmm4hpdloehtuodde00pu2irqkpm1inp.apps.googleusercontent.com` |
+| `VITE_GOOGLE_REDIRECT_URI_NATIVE` | Custom redirect scheme from the Android client | `com.googleusercontent.apps.…:/oauth2redirect` |
+| `VITE_GOOGLE_CLIENT_SECRET` | **Optional** – only required if you re-use the web client in native builds (not recommended) | `super-secret` |
+
+### Backend API
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `VITE_API_BASE_URL` | Backend API base URL | `http://localhost:3001` |
-
-### Example Configuration
-
-```bash
-# Auth0 Configuration
-VITE_AUTH0_DOMAIN=my-app.auth0.com
-VITE_AUTH0_CLIENT_ID=abc123def456ghi789jkl012
-VITE_AUTH0_AUDIENCE=https://my-app.auth0.com/api/v2/
-
-# Backend API
-VITE_API_BASE_URL=http://localhost:3001
-```
 
 ### Notes
 
-- All frontend environment variables must be prefixed with `VITE_` to be accessible in the browser
-- Never commit `.env.local` to version control - it's already in `.gitignore`
-- For production deployment, set these variables in your hosting platform's environment configuration
-- The Auth0 values come from your Auth0 dashboard under Applications > [Your App] > Settings
+- All frontend environment variables must be prefixed with `VITE_`.
+- `.env.local` is git-ignored; configure the same values in your hosting provider for production.
 
 ## How It Works
 

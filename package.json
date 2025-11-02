@@ -16,7 +16,6 @@
     "postinstall": "npm run build && npx cap sync android"
   },
   "dependencies": {
-    "@auth0/auth0-vue": "^2.4.0",
     "@capacitor-community/sqlite": "^7.0.1",
     "@capacitor/android": "^7.4.4",
     "@capacitor/app": "^7.1.0",

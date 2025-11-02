@@ -1,7 +1,7 @@
 # AI Beta Reader Vue Frontend - Claude Development Guide
 
 ## Project Overview
-Vue.js 3 frontend for AI Beta Reader with Auth0 authentication, rich text editing, and AI-powered writing feedback.
+Vue.js 3 frontend for AI Beta Reader with local-first storage, Google Drive backup/restore, rich text editing, and AI-powered writing feedback.
 
 ## Quick Start Commands
 ```bash
@@ -24,21 +24,20 @@ npm run lint
 ## Project Structure
 ```
 src/
-├── auth/
-│   └── index.ts              # Auth0 configuration
 ├── components/
 │   ├── TextEditor.vue        # Rich markdown editor with toolbar
 │   └── MarkdownRenderer.vue  # Syntax-highlighted markdown display
+├── composables/
+│   └── useDatabase.ts        # Local database + cloud sync orchestration
 ├── services/
 │   └── api.ts               # Backend API client with auto JWT tokens
 ├── views/
 │   ├── BooksView.vue        # Books listing and management
 │   ├── BookView.vue         # Chapter listing for a book
 │   ├── ChapterView.vue      # Chapter editing and AI review
-│   └── CallbackView.vue     # Auth0 callback handler
 ├── router/
-│   └── index.ts             # Vue Router with auth guards
-├── App.vue                  # Main app with Auth0 integration
+│   └── index.ts             # Vue Router setup
+├── App.vue                  # Main shell layout, navigation, search, etc.
 └── main.ts                  # App initialization
 ```
 
@@ -47,7 +46,6 @@ src/
 - **TypeScript** - Type safety
 - **Vue Router** - Client-side routing
 - **Pinia** - State management
-- **Auth0 Vue** - Authentication
 - **Tailwind CSS** - Styling
 - **Headless UI** - Unstyled components
 - **Heroicons** - Icon library
@@ -57,21 +55,15 @@ src/
 
 ## Environment Variables
 ```bash
-# Auth0 Configuration
-VITE_AUTH0_DOMAIN=your-domain.auth0.com
-VITE_AUTH0_CLIENT_ID=your-client-id
-VITE_AUTH0_AUDIENCE=https://your-domain.auth0.com/api/v2/
+# Google Drive sync (web + native)
+VITE_GOOGLE_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID_NATIVE=your-google-android-client-id.apps.googleusercontent.com
+VITE_GOOGLE_REDIRECT_URI=https://www.beta-bot.net/oauth2redirect
+VITE_GOOGLE_REDIRECT_URI_NATIVE=com.googleusercontent.apps.your-google-android-client-id:/oauth2redirect
 
-# Backend API
+# Optional: backend API base URL (defaults to http://localhost:3001)
 VITE_API_BASE_URL=http://localhost:3001
 ```
-
-## Auth0 Setup
-Configure in Auth0 dashboard:
-- **Application Type**: Single Page Application
-- **Allowed Callback URLs**: `http://localhost:5173/callback`
-- **Allowed Logout URLs**: `http://localhost:5173`
-- **Allowed Web Origins**: `http://localhost:5173`
 
 ## Key Components
 
@@ -88,22 +80,12 @@ Configure in Auth0 dashboard:
 - Dark mode support
 
 ### API Service (services/api.ts)
-- Automatic JWT token attachment
-- Axios interceptors for auth
+- Axios-based REST client for backend calls
 - Typed service functions for backend
-
-## Routing & Auth Guards
-- `/` - Redirects to `/books`
-- `/books` - Books listing (protected)
-- `/books/:id` - Chapter management (protected)
-- `/books/:bookId/chapters/:chapterId` - Chapter editing (protected)
-- `/callback` - Auth0 callback handler
-
-All protected routes require authentication and redirect to Auth0 login.
+- Includes Google Drive sync helpers in `src/lib/`
 
 ## State Management
 - **Books**: Stored in localStorage (temporary solution)
-- **User**: Managed by Auth0 Vue plugin
 - **API Data**: Fetched on-demand from backend
 
 ## Key Features
@@ -119,23 +101,6 @@ All protected routes require authentication and redirect to Auth0 login.
 - Word count tracking
 - Auto-save capability
 
-### AI Features
-- Generate chapter summaries with structured data
-- Request AI reviews with different tones:
-  - **FanFiction.net style**: Enthusiastic reader feedback
-  - **Editorial**: Developmental editor notes
-  - **Line notes**: Concrete line-level suggestions
-
-## Common Tasks
-
-### Adding New Views
-1. Create Vue component in `src/views/`
-2. Add route to `src/router/index.ts`
-3. Use `meta: { requiresAuth: true }` for protected routes
-
-### API Integration
-```typescript
-// Use existing services
 import { bookService, chapterService, reviewService } from '@/services/api'
 
 // Create book
@@ -162,11 +127,11 @@ await reviewService.generateReview({
 2. Start frontend: `npm run dev`
 3. Navigate to `http://localhost:5173`
 
-### Testing Auth Flow
-1. Click "Login" to authenticate with Auth0
-2. Create a book and chapters
-3. Generate summaries and reviews
-4. Test different review tones
+### Testing Cloud Sync
+1. Connect Android device with USB debugging enabled
+2. Run `npm run build && npx cap sync android`
+3. Launch the app and trigger a Google Drive backup & restore
+4. Confirm AI summaries/reviews still function afterwards
 
 ## Component Communication
 - **Props down**: Parent to child data flow
@@ -175,7 +140,7 @@ await reviewService.generateReview({
 - **API**: Persist data to backend
 
 ## Error Handling
-- Auth errors redirect to login
+- Drive sync errors surface in the UI and console
 - API errors show user-friendly messages
 - Form validation with real-time feedback
 - Loading states for async operations
@@ -194,7 +159,7 @@ await reviewService.generateReview({
 - **Dark Mode**: Full support throughout app
 
 ## Recent Changes
-- Integrated Auth0 authentication
+- Added Google Drive PKCE authentication for native builds
 - Added rich text editor with live preview
 - Implemented AI review system with multiple tones
 - Created responsive book and chapter management
