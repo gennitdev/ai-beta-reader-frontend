@@ -278,7 +278,13 @@ async function exchangeAuthCodeForTokens(args: {
   });
 
   if (response.status < 200 || response.status >= 300) {
-    throw new Error(`Token exchange failed with status ${response.status}`);
+    const details =
+      typeof response.data === 'string'
+        ? response.data
+        : response.data
+          ? JSON.stringify(response.data)
+          : 'No response body';
+    throw new Error(`Token exchange failed with status ${response.status}: ${details}`);
   }
 
   if (!response.data?.access_token) {
