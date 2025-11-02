@@ -764,7 +764,13 @@ export class AppDatabase {
       }
     };
 
-    await run('PRAGMA foreign_keys = OFF');
+    // Disable foreign key constraints during import
+    // Use execute() on native platforms for PRAGMA commands
+    if (this.isNative) {
+      await this.db.execute('PRAGMA foreign_keys = OFF');
+    } else {
+      this.db.run('PRAGMA foreign_keys = OFF');
+    }
 
     const tablesToClear = [
       'chapter_wiki_mentions',
@@ -821,7 +827,13 @@ export class AppDatabase {
       this.saveToLocalStorage();
     }
 
-    await run('PRAGMA foreign_keys = ON');
+    // Re-enable foreign key constraints after import
+    // Use execute() on native platforms for PRAGMA commands
+    if (this.isNative) {
+      await this.db.execute('PRAGMA foreign_keys = ON');
+    } else {
+      this.db.run('PRAGMA foreign_keys = ON');
+    }
   }
 
   async importFromNeonExport(jsonData: any): Promise<void> {

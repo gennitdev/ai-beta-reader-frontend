@@ -637,18 +637,24 @@ export class CloudSync {
     }
 
     console.log('Decrypting database...');
+    let decrypted: Uint8Array;
     try {
-      const decrypted = Encryption.decrypt(encrypted, password);
-      console.log('Importing database...', decrypted.length, 'bytes');
+      decrypted = Encryption.decrypt(encrypted, password);
+      console.log('Decryption successful, importing database...', decrypted.length, 'bytes');
+    } catch (error) {
+      console.error('Failed to decrypt - wrong password?', error);
+      return false;
+    }
 
+    try {
       // Import the decrypted data back into the database
       await db.importDatabase(decrypted);
 
       console.log('✅ Database restored successfully!');
       return true;
     } catch (error) {
-      console.error('Failed to decrypt - wrong password?', error);
-      return false;
+      console.error('Failed to import database after decryption:', error);
+      throw error; // Re-throw to show the actual error
     }
   }
 
