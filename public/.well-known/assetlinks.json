@@ -1,0 +1,26 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+        "namespace": "android_app",
+        "package_name": "com.betareader.app",
+        "sha256_cert_fingerprints": [
+          "F4:0F:E5:5F:5C:C6:32:E8:F2:91:82:A5:7C:57:29:58:B7:96:48:6F:6C:FC:1F:47:9C:83:C5:2B:86:B3:CC:37"
+        ]
+      }
+    },
+    {
+      "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+        "namespace": "android_app",
+        "package_name": "com.betareader.app",
+        "sha256_cert_fingerprints": [
+          "6C:C0:5A:DA:2A:E9:BE:0F:6B:10:05:F5:C0:3E:61:A9:06:7B:CA:01:58:2B:B1:61:70:A3:D7:DC:61:06:21:2A"
+        ]
+      }
+    }
+  ]
