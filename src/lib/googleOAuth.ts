@@ -275,6 +275,12 @@ async function exchangeAuthCodeForTokens(args: {
     params.append('client_secret', clientSecret);
   }
 
+  console.log('[GoogleOAuth] exchanging authorization code', {
+    clientId: args.clientId,
+    redirectUri: args.redirectUri,
+    hasClientSecret: Boolean(clientSecret),
+  });
+
   const response = await CapacitorHttp.post({
     url: GOOGLE_TOKEN_URL,
     headers: {

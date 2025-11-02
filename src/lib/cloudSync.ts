@@ -278,9 +278,17 @@ export class GoogleDriveProvider implements CloudProvider {
 
       this.debug('authenticateNative() starting OAuth flow');
       const clientId = this.getNativeClientId();
+      const redirectUri = this.getNativeRedirectUri();
+      this.debug('authenticateNative() using OAuth config', {
+        clientId,
+        redirectUri,
+        hasClientSecret: Boolean(
+          typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_SECRET : undefined
+        ),
+      });
       const tokens = await performNativeGoogleOAuth({
         clientId,
-        redirectUri: this.getNativeRedirectUri(),
+        redirectUri,
         scope: this.SCOPES,
         prompt: 'consent',
       });
