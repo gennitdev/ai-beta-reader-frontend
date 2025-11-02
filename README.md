@@ -4,9 +4,12 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 
 ## Tech Stack
 
-- **Frontend:** Vue.js 3 + TypeScript + Tailwind CSS
-- **AI:** Powered by the ChatGPT API (GPT-4o Mini)
-- **Sync:** Google Drive (PKCE with App Links)
+- **Frontend:** Vue 3 (Composition API) + TypeScript + Vite
+- **Styling:** Tailwind CSS + Headless UI + Heroicons
+- **State & Data:** Pinia, @tanstack/vue-query
+- **Local Storage:** `sql.js` (browser) / `@capacitor-community/sqlite` (native)
+- **Cloud Sync:** Google Drive via OAuth 2.0 (GIS for web, PKCE + App Links for native)
+- **AI Services:** OpenAI (GPT‑4o Mini) for summaries & reviews
 - **Backend Repository:** [ai-beta-reader-backend](https://github.com/gennitdev/ai-beta-reader-backend)
 
 ## Features
@@ -30,13 +33,14 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
   - Line editor (concrete, actionable suggestions)
 - **Custom AI Profiles**: Create personalized reviewer profiles with custom prompts to get the exact type of feedback you need
 
-### Continuity Management
+### Continuity Management & Storage
 
-- **Interactive Character Sheets**: Auto-generated character profiles with smart linking between related characters
-- **Wiki System**: Build a comprehensive story bible with interconnected pages for characters, locations, and concepts
-- **Cross-Document Search**: Search across all chapters and wiki pages simultaneously
-- **Find and Replace**: Make consistent changes across your entire manuscript with one click
-- **Chapter Organization**: Drag-and-drop reordering with support for parts and uncategorized sections
+- **Local-first data**: Every project lives in a local SQLite database (browser or device). Nothing leaves the device unless you explicitly back up.
+- **Encrypted backups**: `ai-beta-reader-backup.enc` is AES-encrypted with your password before uploading to Google Drive.
+- **Drive restore**: Restore the same encrypted blob from any device (web or Android). Native uses PKCE OAuth and App Links to re-enter the app after Google consent.
+- **Story bible**: Character sheets, wiki pages, change history, and cross-document search keep continuity intact.
+- **Find & replace**: Rename characters/places everywhere in one shot.
+- **Drag & drop parts**: Reorder chapters and group them into parts.
 
 ## Screenshots
 
@@ -117,7 +121,9 @@ Find and replace text across all chapters and wiki pages to maintain consistency
 
 ## Environment Variables
 
-Create a `.env.local` file (or copy the example) and configure the following variables:
+Create a `.env.local` file (or copy [.env.example](.env.example)) and configure the following variables.
+
+> Full walkthrough (OAuth clients, SHA‑1s, troubleshooting): see [`docs/cloud-sync.md`](docs/cloud-sync.md).
 
 ### Google OAuth (Drive sync)
 
@@ -128,7 +134,7 @@ Create a `.env.local` file (or copy the example) and configure the following var
 | `VITE_GOOGLE_REDIRECT_URI` | Hosted redirect used by the web build | `https://www.beta-bot.net/oauth2redirect` |
 | `VITE_GOOGLE_CLIENT_ID_NATIVE` | Android OAuth client ID (PKCE/native flow) | `…hmm4hpdloehtuodde00pu2irqkpm1inp.apps.googleusercontent.com` |
 | `VITE_GOOGLE_REDIRECT_URI_NATIVE` | Custom redirect scheme from the Android client | `com.googleusercontent.apps.…:/oauth2redirect` |
-| `VITE_GOOGLE_CLIENT_SECRET` | **Optional** – only required if you re-use the web client in native builds (not recommended) | `super-secret` |
+| `VITE_GOOGLE_CLIENT_SECRET` | **Optional** – only required if you re-use the web client in native builds (not recommended) | |
 
 ### Backend API
 
@@ -138,39 +144,94 @@ Create a `.env.local` file (or copy the example) and configure the following var
 
 ### Notes
 
-- All frontend environment variables must be prefixed with `VITE_`.
-- `.env.local` is git-ignored; configure the same values in your hosting provider for production.
+- All frontend environment variables must be prefixed `VITE_`.
+- `.env.local` is git-ignored; replicate values in Vercel → Project → Environment Variables for production/preview builds.
 
-## How It Works
+## How the App Works
 
-### Getting Started
+### Local-first Database
 
-1. **Create Your Book**: Start a new project and give it a title
-2. **Write Your First Chapter**: Add content using the markdown editor
-3. **Generate AI Summary**: Click "Generate Summary" to create a structured overview that tracks characters, plot points, and key events
+- **Browser builds** load `sql.js` (WASM SQLite). The database is cached in `localStorage` (`sqliteDb` key).
+- **Native builds** use `@capacitor-community/sqlite`. Data lives in the device sandbox at `ai-beta-reader`.
+- All user actions (adding books, editing chapters, creating wiki entries) mutate the local DB immediately.
+- When you export/import, the app serialises the entire database to JSON for portability.
 
-### The Magic of Context
+### Google Drive Backup & Restore
 
-4. **Add More Chapters**: Continue writing your story
-5. **Get Contextual Reviews**: When you generate a review for a new chapter, the AI automatically receives:
-   - The full text of your current chapter
-   - Summaries of all previous chapters
-   - Character and plot information
+1. **Backup** (`User Settings → Back up to Drive`)
+   - Prompts for a password (used to encrypt the JSON dump via `CryptoJS.AES`).
+   - Uploads `ai-beta-reader-backup.enc` with Drive scope `drive.file`.
+   - Re-running backup overwrites the same file id (Drive `files.update`).
 
-   This means the AI understands your story's context without you having to explain anything!
+2. **Restore** (`User Settings → Restore from Drive`)
+   - Auth flow differs by platform:
+     - **Web**: Google Identity Services token client (`response_type=token`).
+     - **Android**: Custom PKCE helper opens Chrome via App Launcher, listens for App Link redirect (`com.googleusercontent.apps...:/oauth2redirect`), exchanges code for tokens, caches refresh token with `@capacitor/preferences`.
+   - Downloads the encrypted blob, decrypts with the password you provide, and hydrates the local DB.
+   - Foreign key constraints are disabled temporarily during import to avoid ordering errors.
+   - Nothing gets uploaded automatically—restore only reads from Drive. You decide when to back up.
 
-6. **Maintain Continuity**: As your manuscript grows, the system efficiently manages context using summaries, preventing token limits while maintaining story awareness
+3. **Security**
+   - Backups stay in your Google Drive. Only the authenticated account (or anyone you explicitly share the file with) can download it.
+   - The encryption password is never stored; losing it makes the backup unreadable.
+  - Native access tokens are stored using Capacitor Preferences; revoke them via Android’s Developer Options if needed.
 
-### Advanced Features
+See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secrets, SHA‑1 mismatches, status bar overlays, etc.).
 
-7. **Custom AI Profiles**: Create personalized reviewer profiles with specific prompts tailored to your needs
-8. **Build Your Story Bible**: Create wiki pages for characters, locations, and concepts
-9. **Search and Replace**: Find names, places, or any text across all chapters and make consistent changes
-10. **Organize with Parts**: Group chapters into parts or sections for better manuscript organization
+### AI Summaries & Reviews
 
-## Available Scripts
+- Every chapter can generate a “structured summary” capturing POV, characters, beats, spoilers.
+- When requesting feedback, the prompt includes:
+  - Current chapter text
+  - Summaries of previous chapters
+  - Relevant metadata (characters, wiki info)
+- Multiple reviewer tones (fan, editorial, line edit) + custom profiles stored in the local DB.
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
+### Search, Wiki, and Story Bible
+
+- Wiki pages track concepts/characters with update history.
+- Cross-document search covers chapters + wiki entries.
+- Find/replace spans every chapter to keep continuity.
+- Chapters can be grouped into parts; reorder via drag & drop (Pinia stores keep UI state in sync).
+
+## Development Workflow
+
+```bash
+npm install          # install deps
+npm run dev          # local dev server (Vite)
+npm run build        # type-check + production bundle (outputs to dist/)
+npx cap sync android # sync Capacitor plugins & web assets (run after build)
+npx cap run android --target <serial>  # deploy to device/emulator
+npm run preview      # serve production bundle locally
+npm run lint         # eslint --fix
+npm run type-check   # vue-tsc --build
+```
+
+## Hosting & Deployment
+
+- **Web (beta-bot.net)**: Vercel builds from `main`. Make sure the env vars above are set in Vercel before deploying.
+- **Android**: Use `npx cap sync android` after every `npm run build`. Launch via Android Studio or the `npx cap run` helper.
+  - The Android OAuth client must include:
+    - Package name `com.betareader.app`
+    - SHA‑1 fingerprint from `./gradlew signingReport`
+    - Custom URI scheme enabled (`com.googleusercontent.apps.<client-id>:/oauth2redirect`)
+  - Status bar height is handled via `@capacitor/status-bar` to avoid UI overlap.
+
+## Troubleshooting Cheat Sheet
+
+| Problem | Fix |
+|---------|-----|
+| `client_secret is missing` on restore | The native build is still using the web OAuth client. Ensure Vercel + local envs define `VITE_GOOGLE_CLIENT_ID_NATIVE` and `VITE_GOOGLE_REDIRECT_URI_NATIVE`; redeploy. |
+| `Access blocked: request invalid` (custom URI scheme) | Enable “Custom URI scheme” on the Android OAuth client. |
+| `Access blocked: invalid_request` after redirect fix | Add the SHA‑1 fingerprint from `./gradlew signingReport` to the Android OAuth client. |
+| `No backup found in cloud storage` | The Drive file doesn’t exist. Run a backup from the browser or ensure the file name matches `ai-beta-reader-backup.enc`. |
+| `Failed to decrypt - wrong password? TypeError: this.db.importFromJson is not a function` | Fixed in native import logic (manual inserts). Update to latest build. |
+| `FOREIGN KEY constraint failed (code 787)` | Latest build disables/re-enables foreign keys during import. Rebuild and redeploy. |
+| `adb` can’t find the device | Reconnect cable, enable File Transfer mode, rerun `adb kill-server && adb start-server`, accept the trust prompt. |
+
+## Need More Detail?
+
+- [docs/cloud-sync.md](docs/cloud-sync.md) – end-to-end Google Drive setup, OAuth nuances, debugging steps.
+- [ai-beta-reader-backend](https://github.com/gennitdev/ai-beta-reader-backend) – REST endpoints and AI worker integration.
+
+Happy writing! ✍️📚
