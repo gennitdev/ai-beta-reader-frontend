@@ -83,8 +83,8 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="py-4 sm:rounded-lg sm:border sm:border-gray-200 sm:bg-white sm:shadow-md sm:dark:border-gray-700 sm:dark:bg-gray-800">
-    <div class="px-0 sm:px-6">
+  <div class="py-4">
+    <div>
       <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">AI Reviews</h2>
 

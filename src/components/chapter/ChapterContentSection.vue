@@ -83,12 +83,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative py-4 sm:rounded-lg sm:border sm:border-gray-200 sm:bg-white sm:shadow-md sm:dark:border-gray-700 sm:dark:bg-gray-800">
-    <div class="px-0 sm:px-6">
+  <div class="relative py-4 ">
+    <div>
       <button
         v-if="!isEditing"
         type="button"
-        class="absolute right-4 top-4 z-10 inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+        class="z-10 inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
         @click.stop="isFullscreen = true"
       >
         <ArrowsPointingOutIcon class="h-4 w-4" />

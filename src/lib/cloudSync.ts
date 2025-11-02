@@ -176,7 +176,9 @@ export class GoogleDriveProvider implements CloudProvider {
       return this.gisLoadingPromise;
     }
 
-    if (Capacitor.isNativePlatform()) {
+    const isHostedHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+
+    if (Capacitor.isNativePlatform() && !isHostedHttps) {
       this.gisLoadingPromise = this.loadGisForNative();
     } else {
       this.gisLoadingPromise = this.loadGisForWeb();
