@@ -150,3 +150,6 @@ blob-report/
 # Auto-generated files
 auto-imports.d.ts
 components.d.ts
+
+# keystore
+android/app/betabot-release.keystore

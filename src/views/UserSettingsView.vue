@@ -227,7 +227,9 @@ const handleCloudRestore = async () => {
   try {
     isRestoring.value = true
     cloudMessage.value = ''
+    console.log('[CloudSync] handleCloudRestore triggered')
     const success = await restoreFromCloud(cloudPassword.value)
+    console.log('[CloudSync] handleCloudRestore result', { success })
     if (success) {
       showCloudMessage('Backup restored from Google Drive.', 'success')
     } else {

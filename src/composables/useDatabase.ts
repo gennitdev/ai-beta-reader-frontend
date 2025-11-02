@@ -120,7 +120,9 @@ export function useDatabase() {
     try {
       loading.value = true
       error.value = null
+      console.log('[CloudSync] backupToCloud invoked')
       await cloudSync.value.backup(password)
+      console.log('[CloudSync] backupToCloud completed')
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Backup failed'
       console.error('Backup error:', e)
@@ -138,7 +140,9 @@ export function useDatabase() {
     try {
       loading.value = true
       error.value = null
+      console.log('[CloudSync] restoreFromCloud invoked')
       const success = await cloudSync.value.restore(password)
+      console.log('[CloudSync] restoreFromCloud finished', { success })
       if (success) {
         await loadBooks() // Refresh after restore
       }

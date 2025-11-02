@@ -24,14 +24,27 @@ export class GoogleDriveProvider implements CloudProvider {
   private SCOPES = 'https://www.googleapis.com/auth/drive.file';
   private tokenClient: any = null;
   private gisLoadingPromise: Promise<void> | null = null;
+  private debugLog: string[] = [];
 
   constructor(clientId: string, _apiKey?: string) {
     this.CLIENT_ID = clientId;
   }
 
+  private debug(message: string, extra?: unknown) {
+    const entry = extra !== undefined ? `${message} ${JSON.stringify(extra)}` : message;
+    console.log(`[CloudSync] ${entry}`);
+    this.debugLog = [...this.debugLog, entry].slice(-200);
+    if (typeof window !== 'undefined') {
+      (window as any).CloudSyncDebug = this.debugLog;
+      window.dispatchEvent(new CustomEvent('cloud-sync-debug', { detail: entry }));
+    }
+  }
+
   async authenticate(): Promise<void> {
+    this.debug('authenticate() called');
     try {
       await this.ensureGoogleIdentityServicesLoaded();
+      this.debug('GIS ready, creating token client');
     } catch (error) {
       console.error('Failed to initialize Google Identity Services:', error);
       throw error instanceof Error ? error : new Error(String(error));
@@ -46,10 +59,12 @@ export class GoogleDriveProvider implements CloudProvider {
           return;
         }
 
+        this.debug('Initializing google.accounts.oauth2.initTokenClient');
         this.tokenClient = googleAccounts.oauth2.initTokenClient({
           client_id: this.CLIENT_ID,
           scope: this.SCOPES,
           callback: (response: any) => {
+            this.debug('Token client callback', response);
             if (response.error) {
               console.error('Auth error:', response);
               reject(new Error(response.error));
@@ -57,11 +72,12 @@ export class GoogleDriveProvider implements CloudProvider {
             }
 
             this.accessToken = response.access_token;
-            console.log('✅ Google Drive authenticated successfully');
+            this.debug('Google Drive authenticated successfully');
             resolve();
           },
         });
 
+        this.debug('Requesting access token with prompt=consent');
         this.tokenClient.requestAccessToken({ prompt: 'consent' });
       } catch (error) {
         console.error('Authentication error:', error);
@@ -113,8 +129,10 @@ export class GoogleDriveProvider implements CloudProvider {
       throw new Error('Not authenticated');
     }
 
+    this.debug(`download() called for ${fileName}`);
     const fileId = await this.findFile(fileName);
     if (!fileId) {
+      this.debug(`No Drive file found for ${fileName}`);
       return null;
     }
 
@@ -139,6 +157,7 @@ export class GoogleDriveProvider implements CloudProvider {
       throw new Error('Not authenticated');
     }
 
+    this.debug(`findFile() searching for ${fileName}`);
     const response = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false&fields=files(id,name)`,
       {
@@ -164,24 +183,41 @@ export class GoogleDriveProvider implements CloudProvider {
    * Ensure Google Identity Services is available. Handles web and native environments.
    */
   private ensureGoogleIdentityServicesLoaded(): Promise<void> {
+    this.debug('Ensuring GIS loaded');
+
     if (typeof window === 'undefined') {
       return Promise.reject(new Error('Window is undefined'));
     }
 
     if ((window as any).google?.accounts?.oauth2) {
+      this.debug('GIS already present');
       return Promise.resolve();
     }
 
     if (this.gisLoadingPromise) {
+      this.debug('Reusing existing GIS promise');
       return this.gisLoadingPromise;
     }
 
     const isHostedHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    this.debug(`ensureGoogleIdentityServicesLoaded native=${Capacitor.isNativePlatform()} hostedHttps=${isHostedHttps} scriptPresent=${Boolean(document.querySelector('script[data-google-identity]'))}`);
 
-    if (Capacitor.isNativePlatform() && !isHostedHttps) {
-      this.gisLoadingPromise = this.loadGisForNative();
+    if (Capacitor.isNativePlatform()) {
+      if (isHostedHttps) {
+        this.gisLoadingPromise = this.loadGisForWeb()
+          .then(() => this.debug('GIS loaded via web script'))
+          .catch(async (err) => {
+            console.warn('[CloudSync] Web GIS load failed on native platform, falling back to native loader.', err);
+            this.debug(`Web GIS load failed on native platform: ${String(err)}`);
+            await this.loadGisForNative();
+            this.debug('GIS loaded via native fetch fallback');
+          });
+      } else {
+        this.gisLoadingPromise = this.loadGisForNative();
+        this.debug('Using native GIS loader (non-HTTPS origin)');
+      }
     } else {
-      this.gisLoadingPromise = this.loadGisForWeb();
+      this.gisLoadingPromise = this.loadGisForWeb().then(() => this.debug('GIS loaded via web script'));
     }
 
     return this.gisLoadingPromise;
@@ -189,6 +225,7 @@ export class GoogleDriveProvider implements CloudProvider {
 
   private async loadGisForNative(): Promise<void> {
     try {
+      this.debug('loadGisForNative: fetching script');
       const response = await CapacitorHttp.get({
         url: 'https://accounts.google.com/gsi/client',
         responseType: 'text',
@@ -206,6 +243,7 @@ export class GoogleDriveProvider implements CloudProvider {
       script.text = scriptSource;
 
       script.onload = () => {
+        this.debug('loadGisForNative: script onload');
         const oauth2 = (window as any).google?.accounts?.oauth2;
         if (oauth2 && oauth2._default && !oauth2.default) {
           oauth2.default = oauth2._default;
@@ -213,6 +251,7 @@ export class GoogleDriveProvider implements CloudProvider {
       };
 
       document.head.appendChild(script);
+      this.debug('loadGisForNative: script appended, waiting for readiness');
 
       await new Promise<void>((resolve, reject) => {
         const checkReady = () => {
@@ -228,16 +267,20 @@ export class GoogleDriveProvider implements CloudProvider {
         };
 
         const timeoutId = setTimeout(() => {
+          console.error('[CloudSync] loadGisForNative: timeout waiting for GIS readiness');
+          this.debug('loadGisForNative: timeout waiting for readiness');
           reject(new Error('Google Identity Services failed to initialize'));
         }, 5000);
 
         const wrappedResolve = () => {
           clearTimeout(timeoutId);
+          this.debug('loadGisForNative: GIS ready');
           resolve();
         };
 
         const wrappedReject = (error: Error) => {
           clearTimeout(timeoutId);
+          this.debug(`loadGisForNative error: ${String(error)}`);
           reject(error);
         };
 
@@ -259,6 +302,8 @@ export class GoogleDriveProvider implements CloudProvider {
       });
     } catch (error) {
       this.gisLoadingPromise = null;
+      console.error('[CloudSync] loadGisForNative failed', error);
+      this.debug(`loadGisForNative failed: ${String(error)}`);
       throw error instanceof Error ? error : new Error('Failed to load Google Identity Services');
     }
   }
@@ -269,11 +314,15 @@ export class GoogleDriveProvider implements CloudProvider {
 
       if (existingScript) {
         if ((window as any).google?.accounts?.oauth2) {
+          this.debug('loadGisForWeb: existing GIS present');
           resolve();
           return;
         }
 
-        existingScript.addEventListener('load', () => resolve(), { once: true });
+        existingScript.addEventListener('load', () => {
+          this.debug('loadGisForWeb: existing script load event');
+          resolve();
+        }, { once: true });
         existingScript.addEventListener('error', () => {
           this.gisLoadingPromise = null;
           reject(new Error('Failed to load Google Identity Services'));
@@ -286,8 +335,12 @@ export class GoogleDriveProvider implements CloudProvider {
       script.async = true;
       script.defer = true;
       script.dataset.googleIdentity = 'true';
-      script.onload = () => resolve();
+      script.onload = () => {
+        this.debug('loadGisForWeb: script load event');
+        resolve();
+      };
       script.onerror = () => {
+        console.error('[CloudSync] Failed to load Google Identity Services script via <script> element.');
         this.gisLoadingPromise = null;
         reject(new Error('Failed to load Google Identity Services'));
       };
@@ -336,6 +389,7 @@ export class CloudSync {
       await this.provider.authenticate();
     }
 
+    console.log('[CloudSync] Starting restore workflow');
     console.log(`Downloading from ${this.provider.name}...`);
     const encrypted = await this.provider.download(this.backupFileName);
 

@@ -21,6 +21,8 @@ public class MainActivity extends BridgeActivity {
             webSettings.setDomStorageEnabled(true);
             webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
             webSettings.setSupportMultipleWindows(true);
+
+            bridge.getWebView().setWebChromeClient(new CapacitorPopupChromeClient(bridge));
         }
     }
 }
