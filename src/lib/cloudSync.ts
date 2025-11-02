@@ -1,6 +1,11 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { Encryption } from './encryption';
 import { db } from './database';
+import { performNativeGoogleOAuth } from './googleOAuth';
+import type { GoogleOAuthTokens } from './googleOAuth';
+import { loadTokens, saveTokens, clearTokens } from './tokenStorage';
+
+const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
 /**
  * Cloud sync interface - can be implemented for Google Drive, Dropbox, etc.
@@ -20,11 +25,16 @@ export interface CloudProvider {
 export class GoogleDriveProvider implements CloudProvider {
   name = 'Google Drive';
   private accessToken: string | null = null;
+  private refreshToken: string | null = null;
+  private accessTokenExpiresAt: number | null = null;
   private CLIENT_ID = ''; // Set this in your app
   private SCOPES = 'https://www.googleapis.com/auth/drive.file';
   private tokenClient: any = null;
   private gisLoadingPromise: Promise<void> | null = null;
   private debugLog: string[] = [];
+  private readonly redirectUri =
+    import.meta.env.VITE_GOOGLE_REDIRECT_URI ?? 'https://www.beta-bot.net/oauth2redirect';
+  private readonly tokenExpiryLeewayMs = 60 * 1000;
 
   constructor(clientId: string, _apiKey?: string) {
     this.CLIENT_ID = clientId;
@@ -42,52 +52,24 @@ export class GoogleDriveProvider implements CloudProvider {
 
   async authenticate(): Promise<void> {
     this.debug('authenticate() called');
-    try {
-      await this.ensureGoogleIdentityServicesLoaded();
-      this.debug('GIS ready, creating token client');
-    } catch (error) {
-      console.error('Failed to initialize Google Identity Services:', error);
-      throw error instanceof Error ? error : new Error(String(error));
+
+    if (!this.CLIENT_ID) {
+      throw new Error('Google Drive client ID is not configured.');
     }
 
-    return new Promise((resolve, reject) => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-        const googleAccounts: any = (window as any).google?.accounts;
-        if (!googleAccounts?.oauth2?.initTokenClient) {
-          reject(new Error('Google Identity Services is unavailable in this environment'));
-          return;
-        }
+    if (Capacitor.isNativePlatform()) {
+      await this.authenticateNative();
+      return;
+    }
 
-        this.debug('Initializing google.accounts.oauth2.initTokenClient');
-        this.tokenClient = googleAccounts.oauth2.initTokenClient({
-          client_id: this.CLIENT_ID,
-          scope: this.SCOPES,
-          callback: (response: any) => {
-            this.debug('Token client callback', response);
-            if (response.error) {
-              console.error('Auth error:', response);
-              reject(new Error(response.error));
-              return;
-            }
-
-            this.accessToken = response.access_token;
-            this.debug('Google Drive authenticated successfully');
-            resolve();
-          },
-        });
-
-        this.debug('Requesting access token with prompt=consent');
-        this.tokenClient.requestAccessToken({ prompt: 'consent' });
-      } catch (error) {
-        console.error('Authentication error:', error);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      }
-    });
+    await this.authenticateWeb();
   }
 
   async upload(fileName: string, data: string): Promise<void> {
-    if (!this.accessToken) {
+    await this.ensureValidAccessToken();
+
+    const accessToken = this.accessToken;
+    if (!accessToken) {
       throw new Error('Not authenticated');
     }
 
@@ -112,7 +94,7 @@ export class GoogleDriveProvider implements CloudProvider {
     const response = await fetch(url, {
       method,
       headers: {
-        Authorization: `Bearer ${this.accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: form,
     });
@@ -125,7 +107,10 @@ export class GoogleDriveProvider implements CloudProvider {
   }
 
   async download(fileName: string): Promise<string | null> {
-    if (!this.accessToken) {
+    await this.ensureValidAccessToken();
+
+    const accessToken = this.accessToken;
+    if (!accessToken) {
       throw new Error('Not authenticated');
     }
 
@@ -140,7 +125,7 @@ export class GoogleDriveProvider implements CloudProvider {
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
       {
         headers: {
-          Authorization: `Bearer ${this.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       }
     );
@@ -153,7 +138,10 @@ export class GoogleDriveProvider implements CloudProvider {
   }
 
   private async findFile(fileName: string): Promise<string | null> {
-    if (!this.accessToken) {
+    await this.ensureValidAccessToken();
+
+    const accessToken = this.accessToken;
+    if (!accessToken) {
       throw new Error('Not authenticated');
     }
 
@@ -162,7 +150,7 @@ export class GoogleDriveProvider implements CloudProvider {
       `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false&fields=files(id,name)`,
       {
         headers: {
-          Authorization: `Bearer ${this.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       }
     );
@@ -176,7 +164,209 @@ export class GoogleDriveProvider implements CloudProvider {
   }
 
   isAuthenticated(): boolean {
-    return this.accessToken !== null;
+    if (!this.accessToken) {
+      return false;
+    }
+
+    if (!Capacitor.isNativePlatform()) {
+      return true;
+    }
+
+    if (!this.accessTokenExpiresAt) {
+      return true;
+    }
+
+    return this.accessTokenExpiresAt > Date.now() + this.tokenExpiryLeewayMs;
+  }
+
+  private async authenticateWeb(): Promise<void> {
+    try {
+      await this.ensureGoogleIdentityServicesLoaded();
+      this.debug('GIS ready, creating token client');
+    } catch (error) {
+      console.error('Failed to initialize Google Identity Services:', error);
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+        const googleAccounts: any = (window as any).google?.accounts;
+        if (!googleAccounts?.oauth2?.initTokenClient) {
+          reject(new Error('Google Identity Services is unavailable in this environment'));
+          return;
+        }
+
+        this.debug('Initializing google.accounts.oauth2.initTokenClient');
+        this.tokenClient = googleAccounts.oauth2.initTokenClient({
+          client_id: this.CLIENT_ID,
+          scope: this.SCOPES,
+          callback: (response: any) => {
+            this.debug('Token client callback', response);
+            if (response.error) {
+              console.error('Auth error:', response);
+              reject(new Error(response.error));
+              return;
+            }
+
+            this.accessToken = response.access_token;
+            this.refreshToken = null;
+            this.accessTokenExpiresAt = null;
+            this.debug('Google Drive authenticated successfully (web)');
+            resolve();
+          },
+        });
+
+        this.debug('Requesting access token with prompt=consent');
+        this.tokenClient.requestAccessToken({ prompt: 'consent' });
+      } catch (error) {
+        console.error('Authentication error:', error);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  private async authenticateNative(): Promise<void> {
+    this.debug('authenticateNative() invoked');
+
+    try {
+      const cached = await loadTokens();
+      if (cached) {
+        this.debug('authenticateNative() found cached tokens');
+        this.accessToken = cached.accessToken;
+        this.refreshToken = cached.refreshToken ?? null;
+        this.accessTokenExpiresAt = cached.expiresAt;
+
+        if (this.accessTokenExpiresAt && this.accessTokenExpiresAt > Date.now() + this.tokenExpiryLeewayMs) {
+          this.debug('authenticateNative() using cached access token');
+          return;
+        }
+
+        if (this.refreshToken) {
+          this.debug('authenticateNative() refreshing expired token');
+          try {
+            await this.refreshAccessToken();
+            return;
+          } catch (error) {
+            console.warn('[CloudSync] Failed to refresh cached Google token', error);
+            this.debug('authenticateNative() refresh failed, clearing cache');
+            await this.wipeStoredTokens();
+          }
+        } else {
+          this.debug('authenticateNative() cached token expired with no refresh token');
+          await this.wipeStoredTokens();
+        }
+      }
+
+      this.debug('authenticateNative() starting OAuth flow');
+      const tokens = await performNativeGoogleOAuth({
+        clientId: this.CLIENT_ID,
+        redirectUri: this.redirectUri,
+        scope: this.SCOPES,
+        prompt: 'consent',
+      });
+      await this.applyNativeTokenResponse(tokens);
+      this.debug('authenticateNative() obtained new tokens');
+    } catch (error) {
+      console.error('[CloudSync] Native authentication failed', error);
+      await this.wipeStoredTokens();
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  async refreshAccessToken(): Promise<void> {
+    if (!Capacitor.isNativePlatform()) {
+      throw new Error('refreshAccessToken is only supported on native platforms.');
+    }
+
+    if (!this.refreshToken) {
+      throw new Error('No refresh token available.');
+    }
+
+    const params = new URLSearchParams({
+      client_id: this.CLIENT_ID,
+      grant_type: 'refresh_token',
+      refresh_token: this.refreshToken,
+    });
+
+    const response = await CapacitorHttp.post({
+      url: GOOGLE_TOKEN_ENDPOINT,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      data: params.toString(),
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Token refresh failed with status ${response.status}`);
+    }
+
+    if (!response.data?.access_token) {
+      throw new Error('Token refresh response missing access_token.');
+    }
+
+    await this.applyNativeTokenResponse(response.data as GoogleOAuthTokens);
+    this.debug('refreshAccessToken() succeeded');
+  }
+
+  private async ensureValidAccessToken(): Promise<void> {
+    if (!this.accessToken) {
+      this.debug('ensureValidAccessToken(): no token loaded, authenticating');
+      await this.authenticate();
+    }
+
+    if (!this.accessToken) {
+      throw new Error('Not authenticated');
+    }
+
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+
+    if (this.accessTokenExpiresAt && this.accessTokenExpiresAt > Date.now() + this.tokenExpiryLeewayMs) {
+      return;
+    }
+
+    if (this.refreshToken) {
+      try {
+        this.debug('ensureValidAccessToken(): refreshing token');
+        await this.refreshAccessToken();
+        return;
+      } catch (error) {
+        console.warn('[CloudSync] Access token refresh failed', error);
+        this.debug('ensureValidAccessToken(): refresh failed, wiping tokens');
+        await this.wipeStoredTokens();
+      }
+    } else {
+      await this.wipeStoredTokens();
+    }
+
+    throw new Error('Access token expired; please sign in again.');
+  }
+
+  private async applyNativeTokenResponse(tokens: GoogleOAuthTokens): Promise<void> {
+    const expiresInRaw = tokens.expires_in ?? 0;
+    const expiresIn = Number.isFinite(Number(expiresInRaw)) ? Number(expiresInRaw) : 0;
+    const expiresAt = Date.now() + expiresIn * 1000;
+    const refreshToken = tokens.refresh_token ?? this.refreshToken ?? null;
+
+    this.accessToken = tokens.access_token;
+    this.refreshToken = refreshToken;
+    this.accessTokenExpiresAt = expiresAt;
+
+    await saveTokens({
+      accessToken: this.accessToken,
+      refreshToken: this.refreshToken,
+      expiresAt: this.accessTokenExpiresAt,
+    });
+    this.debug('applyNativeTokenResponse(): tokens persisted');
+  }
+
+  private async wipeStoredTokens(): Promise<void> {
+    this.accessToken = null;
+    this.refreshToken = null;
+    this.accessTokenExpiresAt = null;
+    await clearTokens();
   }
 
   /**
