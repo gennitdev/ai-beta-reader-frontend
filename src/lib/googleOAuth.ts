@@ -269,6 +269,12 @@ async function exchangeAuthCodeForTokens(args: {
     grant_type: 'authorization_code',
   });
 
+  const clientSecret =
+    typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? undefined : undefined;
+  if (clientSecret && clientSecret.length > 0) {
+    params.append('client_secret', clientSecret);
+  }
+
   const response = await CapacitorHttp.post({
     url: GOOGLE_TOKEN_URL,
     headers: {

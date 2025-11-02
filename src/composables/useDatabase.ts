@@ -12,9 +12,12 @@ export async function initializeDatabase() {
   await db.init()
 
   // Initialize Google Drive sync if credentials are available
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-  if (clientId) {
-    const provider = new GoogleDriveProvider(clientId)
+  const webClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID_WEB ?? import.meta.env.VITE_GOOGLE_CLIENT_ID
+  if (webClientId) {
+    const provider = new GoogleDriveProvider(webClientId, {
+      nativeClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID_NATIVE,
+      nativeRedirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI_NATIVE,
+    })
     cloudSync.value = new CloudSync(provider)
   }
 

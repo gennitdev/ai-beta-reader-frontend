@@ -6,6 +6,12 @@ import type { GoogleOAuthTokens } from './googleOAuth';
 import { loadTokens, saveTokens, clearTokens } from './tokenStorage';
 
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+const DEFAULT_REDIRECT_URI = 'https://www.beta-bot.net/oauth2redirect';
+
+export interface GoogleDriveProviderOptions {
+  nativeClientId?: string | null;
+  nativeRedirectUri?: string | null;
+}
 
 /**
  * Cloud sync interface - can be implemented for Google Drive, Dropbox, etc.
@@ -28,16 +34,28 @@ export class GoogleDriveProvider implements CloudProvider {
   private refreshToken: string | null = null;
   private accessTokenExpiresAt: number | null = null;
   private CLIENT_ID = ''; // Set this in your app
+  private readonly nativeClientId: string | null;
   private SCOPES = 'https://www.googleapis.com/auth/drive.file';
   private tokenClient: any = null;
   private gisLoadingPromise: Promise<void> | null = null;
   private debugLog: string[] = [];
-  private readonly redirectUri =
-    import.meta.env.VITE_GOOGLE_REDIRECT_URI ?? 'https://www.beta-bot.net/oauth2redirect';
+  private readonly webRedirectUri: string;
+  private readonly nativeRedirectUri: string;
   private readonly tokenExpiryLeewayMs = 60 * 1000;
 
-  constructor(clientId: string, _apiKey?: string) {
+  constructor(clientId: string, options?: GoogleDriveProviderOptions) {
     this.CLIENT_ID = clientId;
+    const envNativeClientId =
+      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_ID_NATIVE ?? null : null;
+    this.nativeClientId = options?.nativeClientId ?? envNativeClientId;
+
+    const envWebRedirect =
+      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_REDIRECT_URI ?? DEFAULT_REDIRECT_URI : DEFAULT_REDIRECT_URI;
+    const envNativeRedirect =
+      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_REDIRECT_URI_NATIVE ?? null : null;
+
+    this.webRedirectUri = envWebRedirect;
+    this.nativeRedirectUri = options?.nativeRedirectUri ?? envNativeRedirect ?? envWebRedirect;
   }
 
   private debug(message: string, extra?: unknown) {
@@ -259,12 +277,14 @@ export class GoogleDriveProvider implements CloudProvider {
       }
 
       this.debug('authenticateNative() starting OAuth flow');
+      const clientId = this.getNativeClientId();
       const tokens = await performNativeGoogleOAuth({
-        clientId: this.CLIENT_ID,
-        redirectUri: this.redirectUri,
+        clientId,
+        redirectUri: this.getNativeRedirectUri(),
         scope: this.SCOPES,
         prompt: 'consent',
       });
+      this.debug('authenticateNative() token response received', { hasRefresh: Boolean(tokens.refresh_token), clientId });
       await this.applyNativeTokenResponse(tokens);
       this.debug('authenticateNative() obtained new tokens');
     } catch (error) {
@@ -284,10 +304,11 @@ export class GoogleDriveProvider implements CloudProvider {
     }
 
     const params = new URLSearchParams({
-      client_id: this.CLIENT_ID,
+      client_id: this.getNativeClientId(),
       grant_type: 'refresh_token',
       refresh_token: this.refreshToken,
     });
+    this.appendClientSecret(params);
 
     const response = await CapacitorHttp.post({
       url: GOOGLE_TOKEN_ENDPOINT,
@@ -367,6 +388,25 @@ export class GoogleDriveProvider implements CloudProvider {
     this.refreshToken = null;
     this.accessTokenExpiresAt = null;
     await clearTokens();
+  }
+
+  private getNativeClientId(): string {
+    if (this.nativeClientId && this.nativeClientId.length > 0) {
+      return this.nativeClientId;
+    }
+    return this.CLIENT_ID;
+  }
+
+  private getNativeRedirectUri(): string {
+    return this.nativeRedirectUri;
+  }
+
+  private appendClientSecret(params: URLSearchParams): void {
+    const clientSecret =
+      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? undefined : undefined;
+    if (clientSecret && clientSecret.length > 0) {
+      params.append('client_secret', clientSecret);
+    }
   }
 
   /**
