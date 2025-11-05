@@ -208,7 +208,7 @@ export class GoogleDriveProvider implements CloudProvider {
 
     await new Promise<void>((resolve, reject) => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const googleAccounts: any = (window as any).google?.accounts;
         if (!googleAccounts?.oauth2?.initTokenClient) {
           reject(new Error('Google Identity Services is unavailable in this environment'));

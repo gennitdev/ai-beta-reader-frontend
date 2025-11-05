@@ -282,15 +282,15 @@ const {
               <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             </div>
 
-            <div v-else-if="hasChapters" class="space-y-3">
+            <div v-else-if="hasChapters" class="divide-y divide-gray-200 dark:divide-gray-800">
               <div
                 v-for="part in chaptersByPart.parts"
                 :key="part.id"
-                class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+                class="overflow-hidden"
               >
                 <button
                   @click="togglePart(part.id)"
-                  class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-between text-left transition-colors"
+                  class="w-full pr-2 py-3 flex items-center justify-between text-left transition-colors"
                 >
                   <div>
                     <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
@@ -329,7 +329,7 @@ const {
                   v-if="expandedParts.has(part.id) || shouldExpandPart(part.id)"
                   class="bg-white dark:bg-gray-800"
                 >
-                  <div class="px-4 pt-3 pb-2 flex justify-end border-t border-gray-200 dark:border-gray-700">
+                  <div class="pr-2 pt-3 pb-2 flex justify-end border-t border-gray-200 dark:border-gray-700">
                     <button
                       @click.prevent.stop="createNewChapterInPart(part.id)"
                       class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -366,7 +366,7 @@ const {
                 v-if="sidebarUncategorized.length > 0"
                 class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
               >
-                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700">
+                <div class="pr-2 py-3 bg-gray-50 dark:bg-gray-700">
                   <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized</h4>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {{ sidebarUncategorized.length }} chapter{{
