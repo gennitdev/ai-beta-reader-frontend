@@ -79,8 +79,15 @@ export class AppDatabase {
       // Try to load existing database from localStorage
       const savedDb = localStorage.getItem('sqliteDb');
       if (savedDb) {
-        const arr = new Uint8Array(JSON.parse(savedDb));
-        this.db = new SQL.Database(arr);
+        try {
+          const arr = savedDb.startsWith('[')
+            ? new Uint8Array(JSON.parse(savedDb))
+            : this.base64ToUint8Array(savedDb);
+          this.db = new SQL.Database(arr);
+        } catch (error) {
+          console.warn('[AppDatabase] Failed to restore DB from localStorage, starting fresh.', error);
+          this.db = new SQL.Database();
+        }
       } else {
         this.db = new SQL.Database();
       }
@@ -1524,10 +1531,45 @@ export class AppDatabase {
 
   private saveToLocalStorage() {
     if (!this.isNative) {
-      const data = this.db.export();
-      const arr = Array.from(data);
-      localStorage.setItem('sqliteDb', JSON.stringify(arr));
+      try {
+        const data = this.db.export();
+        const base64 = this.uint8ArrayToBase64(data);
+        localStorage.setItem('sqliteDb', base64);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+          const message = 'Offline storage quota exceeded. Please clear saved data or enable a cloud backup.';
+          console.error('[AppDatabase] Failed to persist DB:', message, error);
+          throw new Error(message);
+        }
+
+        console.error('[AppDatabase] Failed to persist DB to localStorage.', error);
+        throw error;
+      }
     }
+  }
+
+  private uint8ArrayToBase64(arr: Uint8Array): string {
+    const chunkSize = 0x8000;
+    let binary = '';
+
+    for (let i = 0; i < arr.length; i += chunkSize) {
+      const chunk = arr.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+
+    return btoa(binary);
+  }
+
+  private base64ToUint8Array(base64: string): Uint8Array {
+    const binary = atob(base64);
+    const length = binary.length;
+    const bytes = new Uint8Array(length);
+
+    for (let i = 0; i < length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    return bytes;
   }
 
   async close() {
