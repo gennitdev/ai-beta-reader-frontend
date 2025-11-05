@@ -83,11 +83,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative py-4 ">
-    <div class="flex justify-between">
+  <div class="relative py-4 w-full ">
+    <div class="flex justify-between w-full">
 
 
-      <div v-if="isEditing">
+      <div v-if="isEditing" class="w-full">
         <TextEditor
           :model-value="editedText"
           :max-length="maxLength"

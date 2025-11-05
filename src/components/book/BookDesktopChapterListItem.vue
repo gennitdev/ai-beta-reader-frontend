@@ -29,7 +29,7 @@ const chapterLink = `/books/${props.bookId}/chapters/${props.chapter.id}`
 <template>
   <router-link
     :to="chapterLink"
-    class="block py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer border-l-4"
+    class="block py-2 pr-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer border-l-4"
     :class="
       activeChapterId === chapter.id
         ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
