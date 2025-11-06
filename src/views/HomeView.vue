@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, PencilIcon, LightBulbIcon, UserGroupIcon, CogIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
+import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, LightBulbIcon, CogIcon } from '@heroicons/vue/24/outline'
 import heroImage from '@/assets/art-attack-RpSTMkZGKyE-unsplash.jpg'
 
 const router = useRouter()
@@ -19,12 +19,93 @@ const coreFeatures = [
   { icon: ChatBubbleLeftRightIcon, text: 'Character & World Building Wikis' },
 ]
 
-// Concise steps for the 'How It Works' quick view
 const quickSteps = [
-  { step: '1', title: 'Write Chapter', description: 'Use the rich editor' },
-  { step: '2', title: 'AI Summarizes', description: 'Tracks plot & characters' },
-  { step: '3', title: 'Add More', description: 'Grow your manuscript' },
-  { step: '4', title: 'Review!', description: 'AI knows your whole story' },
+  { step: '1', title: 'Write Chapter', description: 'Use the rich editor', highlight: false },
+  { step: '2', title: 'AI Summarizes', description: 'Tracks plot & characters', highlight: false },
+  { step: '3', title: 'Add More', description: 'Grow your manuscript', highlight: false },
+  { step: '4', title: 'Review!', description: 'AI knows your whole story', highlight: true },
+]
+
+const privacyHighlights = [
+  {
+    icon: DocumentTextIcon,
+    title: 'Local Storage',
+    description: 'Works offline. Your data never leaves your device',
+  },
+  {
+    icon: SparklesIcon,
+    title: 'Your OpenAI Key',
+    description: 'Use your own API key. Full control over costs',
+  },
+  {
+    icon: ChatBubbleLeftRightIcon,
+    title: 'Encrypted Backups',
+    description: 'Optional sync to your Google Drive, encrypted',
+  },
+  {
+    icon: CogIcon,
+    title: 'Full Privacy',
+    description: 'No servers storing your creative work',
+  },
+]
+
+const quickOverviewSteps = [
+  {
+    number: '1',
+    title: 'Create Book',
+    description: 'Start your project',
+    wrapperClass: 'bg-blue-50 dark:bg-gray-800',
+    badgeClass: 'bg-blue-600',
+  },
+  {
+    number: '2',
+    title: 'Write',
+    description: 'Add chapters',
+    wrapperClass: 'bg-blue-50 dark:bg-gray-800',
+    badgeClass: 'bg-blue-600',
+  },
+  {
+    number: '3',
+    title: 'Summarize',
+    description: 'AI tracks story',
+    wrapperClass: 'bg-blue-50 dark:bg-gray-800',
+    badgeClass: 'bg-blue-600',
+  },
+  {
+    number: '4',
+    title: '✨ Review',
+    description: 'Get feedback',
+    wrapperClass: 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700',
+    badgeClass: 'bg-indigo-600',
+  },
+]
+
+const detailedSteps = [
+  {
+    number: '1',
+    title: 'Write & Summarize Chapters',
+    description:
+      'Organize your manuscript. The AI creates structured summaries (tracking characters, plot points) for each chapter as you go.',
+    wrapperClass: 'bg-blue-50 dark:bg-gray-800',
+    badgeClass: 'bg-blue-600',
+  },
+  {
+    number: '2',
+    title: '✨ Get Contextual Reviews',
+    description:
+      'The AI uses the summaries of **all previous chapters** to provide feedback. It already knows your backstory, character arcs, and world rules!',
+    wrapperClass:
+      'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 shadow-md',
+    badgeClass: 'bg-indigo-600',
+  },
+  {
+    number: '3',
+    title: 'Advanced Tools',
+    description:
+      'Includes: **Character & World Wikis**, custom AI reviewer profiles, manuscript-wide search & replace, and more.',
+    wrapperClass: 'bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700',
+    badgeClass: 'bg-purple-600',
+  },
 ]
 
 </script>
@@ -92,15 +173,23 @@ const quickSteps = [
           </h2>
 
           <div class="grid grid-cols-2 gap-3 mb-10">
-              <div v-for="(step, index) in quickSteps" :key="index" :class="[
+              <div
+                v-for="step in quickSteps"
+                :key="step.step"
+                :class="[
                   'rounded-lg p-3 text-left shadow-sm',
-                  index === 3 ? 'bg-indigo-100 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-700' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
-              ]">
-                <span :class="[
+                  step.highlight
+                    ? 'bg-indigo-100 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-700'
+                    : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+                ]"
+              >
+                <span
+                  :class="[
                     'font-bold text-lg',
-                    index === 3 ? 'text-indigo-600 dark:text-indigo-400' : 'text-blue-600 dark:text-blue-400'
-                ]">
-                    {{ step.step }}. {{ step.title }}
+                    step.highlight ? 'text-indigo-600 dark:text-indigo-400' : 'text-blue-600 dark:text-blue-400'
+                  ]"
+                >
+                  {{ step.step }}. {{ step.title }}
                 </span>
                 <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{{ step.description }}</p>
               </div>
@@ -127,35 +216,23 @@ const quickSteps = [
             </button>
 
             <div v-if="showDetailedSteps" class="space-y-4 text-left pt-4">
-
-              <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-4">
+              <div
+                v-for="detail in detailedSteps"
+                :key="detail.number"
+                :class="['rounded-lg p-4', detail.wrapperClass]"
+              >
                 <div class="flex items-start space-x-3">
-                  <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                  <span
+                    :class="[
+                      'flex-shrink-0 w-6 h-6 text-white rounded-full flex items-center justify-center text-sm font-bold',
+                      detail.badgeClass
+                    ]"
+                  >
+                    {{ detail.number }}
+                  </span>
                   <div>
-                    <h3 class="font-semibold text-gray-900 dark:text-white mb-1">Write & Summarize Chapters</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-300">Organize your manuscript. The AI creates structured summaries (tracking characters, plot points) for each chapter as you go.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 border border-indigo-200 dark:border-indigo-700 shadow-md">
-                <div class="flex items-start space-x-3">
-                  <span class="flex-shrink-0 w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
-                  <div>
-                    <h3 class="font-semibold text-gray-900 dark:text-white mb-1">✨ Get Contextual Reviews</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-300">The AI uses the summaries of **all previous chapters** to provide feedback. It already knows your backstory, character arcs, and world rules!</p>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
-                <div class="flex items-start space-x-3">
-                  <span class="flex-shrink-0 w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
-                  <div>
-                    <h3 class="font-semibold text-gray-900 dark:text-white mb-1">Advanced Tools</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                      Includes: **Character & World Wikis**, custom AI reviewer profiles, manuscript-wide search & replace, and more.
-                    </p>
+                    <h3 class="font-semibold text-gray-900 dark:text-white mb-1">{{ detail.title }}</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-300">{{ detail.description }}</p>
                   </div>
                 </div>
               </div>
@@ -215,32 +292,15 @@ const quickSteps = [
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-              <div class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg">
-                <DocumentTextIcon class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div
+                v-for="feature in privacyHighlights"
+                :key="feature.title"
+                class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg"
+              >
+                <component :is="feature.icon" class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">Local Storage</h3>
-                  <p class="text-gray-600 dark:text-gray-300 text-xs">Works offline. Your data never leaves your device</p>
-                </div>
-              </div>
-              <div class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg">
-                <SparklesIcon class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">Your OpenAI Key</h3>
-                  <p class="text-gray-600 dark:text-gray-300 text-xs">Use your own API key. Full control over costs</p>
-                </div>
-              </div>
-              <div class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg">
-                <ChatBubbleLeftRightIcon class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">Encrypted Backups</h3>
-                  <p class="text-gray-600 dark:text-gray-300 text-xs">Optional sync to your Google Drive, encrypted</p>
-                </div>
-              </div>
-              <div class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg">
-                <CogIcon class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">Full Privacy</h3>
-                  <p class="text-gray-600 dark:text-gray-300 text-xs">No servers storing your creative work</p>
+                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">{{ feature.title }}</h3>
+                  <p class="text-gray-600 dark:text-gray-300 text-xs">{{ feature.description }}</p>
                 </div>
               </div>
             </div>
@@ -260,42 +320,23 @@ const quickSteps = [
               </div>
 
               <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
+                <div
+                  v-for="step in quickOverviewSteps"
+                  :key="step.number"
+                  :class="['rounded-lg p-3', step.wrapperClass]"
+                >
                   <div class="flex items-start space-x-2">
-                    <span class="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                    <span
+                      :class="[
+                        'flex-shrink-0 w-5 h-5 text-white rounded-full flex items-center justify-center text-xs font-bold',
+                        step.badgeClass
+                      ]"
+                    >
+                      {{ step.number }}
+                    </span>
                     <div>
-                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Create Book</h3>
-                      <p class="text-xs text-gray-600 dark:text-gray-300">Start your project</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
-                  <div class="flex items-start space-x-2">
-                    <span class="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                    <div>
-                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Write</h3>
-                      <p class="text-xs text-gray-600 dark:text-gray-300">Add chapters</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-3">
-                  <div class="flex items-start space-x-2">
-                    <span class="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                    <div>
-                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">Summarize</h3>
-                      <p class="text-xs text-gray-600 dark:text-gray-300">AI tracks story</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 border border-indigo-200 dark:border-indigo-700">
-                  <div class="flex items-start space-x-2">
-                    <span class="flex-shrink-0 w-5 h-5 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
-                    <div>
-                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">✨ Review</h3>
-                      <p class="text-xs text-gray-600 dark:text-gray-300">Get feedback</p>
+                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">{{ step.title }}</h3>
+                      <p class="text-xs text-gray-600 dark:text-gray-300">{{ step.description }}</p>
                     </div>
                   </div>
                 </div>
