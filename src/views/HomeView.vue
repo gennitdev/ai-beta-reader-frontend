@@ -130,7 +130,7 @@ const quickSteps = [
 
               <div class="bg-blue-50 dark:bg-gray-800 rounded-lg p-4">
                 <div class="flex items-start space-x-3">
-                  <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1-4</span>
+                  <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
                   <div>
                     <h3 class="font-semibold text-gray-900 dark:text-white mb-1">Write & Summarize Chapters</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-300">Organize your manuscript. The AI creates structured summaries (tracking characters, plot points) for each chapter as you go.</p>
@@ -140,7 +140,7 @@ const quickSteps = [
 
               <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 border border-indigo-200 dark:border-indigo-700 shadow-md">
                 <div class="flex items-start space-x-3">
-                  <span class="flex-shrink-0 w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-sm font-bold">5</span>
+                  <span class="flex-shrink-0 w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
                   <div>
                     <h3 class="font-semibold text-gray-900 dark:text-white mb-1">✨ Get Contextual Reviews</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-300">The AI uses the summaries of **all previous chapters** to provide feedback. It already knows your backstory, character arcs, and world rules!</p>
@@ -150,7 +150,7 @@ const quickSteps = [
 
               <div class="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
                 <div class="flex items-start space-x-3">
-                  <span class="flex-shrink-0 w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">6+</span>
+                  <span class="flex-shrink-0 w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
                   <div>
                     <h3 class="font-semibold text-gray-900 dark:text-white mb-1">Advanced Tools</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-300 space-y-1">

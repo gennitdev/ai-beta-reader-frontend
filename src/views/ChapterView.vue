@@ -20,6 +20,7 @@ interface Chapter {
   title: string | null;
   text: string;
   word_count: number;
+  part_id: string | null;
   summary: string | null;
   pov: string | null;
   characters: string[] | null;
@@ -179,6 +180,7 @@ const loadChapter = async () => {
         title: chapterData.title || null,
         text: String(chapterData.text || ""),
         word_count: chapterData.word_count,
+        part_id: chapterData.part_id ?? null,
         summary: summaryData?.summary || null,
         pov: summaryData?.pov || null,
         characters: normalizedCharacters.length ? normalizedCharacters : null,
@@ -219,6 +221,7 @@ const saveChapter = async () => {
     await dbSaveChapter({
       id: chapter.value.id,
       book_id: chapter.value.book_id,
+      part_id: chapter.value.part_id ?? null,
       title: editedTitle.value,
       text: editedText.value,
       word_count: wordCount,
