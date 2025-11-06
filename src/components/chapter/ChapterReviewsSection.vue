@@ -127,135 +127,146 @@ const emit = defineEmits<{
         </div>
       </div>
 
-      <div v-if="generatingReview" class="flex items-center justify-center py-8">
-        <div class="mr-3 h-6 w-6 animate-spin rounded-full border-b-2 border-purple-600"></div>
-        <span class="text-gray-600 dark:text-gray-400">AI is reviewing your chapter...</span>
+      <div v-if="generatingReview" class="flex items-center justify-center gap-3 rounded-md bg-purple-50 py-3 text-sm text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+        <div class="h-5 w-5 animate-spin rounded-full border-b-2 border-purple-600"></div>
+        <span>AI is reviewing your chapter...</span>
       </div>
 
-      <div
-        v-else-if="savedReviews.length === 0 && !loadingReviews"
-        class="py-8 text-center text-gray-500 dark:text-gray-400"
-      >
-        <ChatBubbleLeftRightIcon class="mx-auto mb-3 h-12 w-12 text-gray-300" />
-        <p>Click "Get Review" to receive AI feedback on this chapter.</p>
-      </div>
-
-      <div v-else-if="loadingReviews" class="flex justify-center py-4">
-        <div class="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600"></div>
-      </div>
-
-      <div v-else class="space-y-6">
+      <template v-if="savedReviews.length === 0">
+        <div v-if="loadingReviews" class="flex justify-center py-4">
+          <div class="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600"></div>
+        </div>
         <div
-          v-for="review in savedReviews"
-          :key="review.id"
-          class="transition-colors hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600"
+          v-else-if="!generatingReview"
+          class="py-8 text-center text-gray-500 dark:text-gray-400"
         >
-          <div class="mb-3 flex items-start justify-between">
-            <div class="flex items-center space-x-3">
-              <component
-                :is="review.profile_id ? 'router-link' : 'div'"
-                :to="review.profile_id ? `/ai-profiles/${review.profile_id}` : undefined"
-                class="block transition-opacity hover:opacity-80"
-                :class="{ 'cursor-default hover:opacity-100': !review.profile_id }"
-                :title="
-                  review.profile_id && review.profile_name
-                    ? `View ${review.profile_name} profile`
-                    : undefined
-                "
-              >
-                <AvatarComponent :text="review.profile_name || 'AI Profile'" size="medium" />
-              </component>
+          <ChatBubbleLeftRightIcon class="mx-auto mb-3 h-12 w-12 text-gray-300" />
+          <p>Click "Get Review" to receive AI feedback on this chapter.</p>
+        </div>
+      </template>
 
-              <div>
+      <template v-else>
+        <div
+          v-if="loadingReviews"
+          class="mb-4 flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400"
+        >
+          <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-blue-600"></div>
+          <span>Refreshing reviews...</span>
+        </div>
+
+        <div class="space-y-6">
+          <div
+            v-for="review in savedReviews"
+            :key="review.id"
+            class="transition-colors hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600"
+          >
+            <div class="mb-3 flex items-start justify-between">
+              <div class="flex items-center space-x-3">
                 <component
-                  :is="review.profile_id ? 'router-link' : 'span'"
+                  :is="review.profile_id ? 'router-link' : 'div'"
                   :to="review.profile_id ? `/ai-profiles/${review.profile_id}` : undefined"
-                  class="font-medium text-gray-900 transition-colors hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
-                  :class="{ 'hover:text-blue-600 dark:hover:text-blue-400': !!review.profile_id }"
+                  class="block transition-opacity hover:opacity-80"
+                  :class="{ 'cursor-default hover:opacity-100': !review.profile_id }"
                   :title="
                     review.profile_id && review.profile_name
                       ? `View ${review.profile_name} profile`
                       : undefined
                   "
                 >
-                  {{ review.profile_name || 'Unknown profile' }}
+                  <AvatarComponent :text="review.profile_name || 'AI Profile'" size="medium" />
                 </component>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ formatDate(review.created_at) }}
-                </p>
-              </div>
-            </div>
 
-            <button
-              @click="emit('delete-review', review.id)"
-              :disabled="deletingReviewId === review.id"
-              class="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-700 dark:hover:text-red-400"
-              title="Delete review"
-            >
-              <div
-                v-if="deletingReviewId === review.id"
-                class="h-4 w-4 animate-spin rounded-full border-b-2 border-red-500"
-              ></div>
-              <TrashIcon v-else class="h-4 w-4" />
-            </button>
-          </div>
-
-          <div class="prose prose-sm max-w-none dark:prose-invert">
-            <template
-              v-if="!expandedReviews.has(review.id) && getTruncatedText(review.review_text).needsTruncation"
-            >
-              <MarkdownRenderer :text="getTruncatedText(review.review_text).truncated" />
-              <div class="not-prose">
-                <span class="text-gray-500">...</span>
-                <button
-                  @click="emit('toggle-review', review.id)"
-                  class="ml-2 inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                >
-                  Show more
-                </button>
+                <div>
+                  <component
+                    :is="review.profile_id ? 'router-link' : 'span'"
+                    :to="review.profile_id ? `/ai-profiles/${review.profile_id}` : undefined"
+                    class="font-medium text-gray-900 transition-colors hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
+                    :class="{ 'hover:text-blue-600 dark:hover:text-blue-400': !!review.profile_id }"
+                    :title="
+                      review.profile_id && review.profile_name
+                        ? `View ${review.profile_name} profile`
+                        : undefined
+                    "
+                  >
+                    {{ review.profile_name || 'Unknown profile' }}
+                  </component>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ formatDate(review.created_at) }}
+                  </p>
+                </div>
               </div>
-            </template>
-            <template v-else>
-              <MarkdownRenderer :text="review.review_text" />
-              <div v-if="getTruncatedText(review.review_text).needsTruncation" class="not-prose">
-                <button
-                  @click="emit('toggle-review', review.id)"
-                  class="mt-3 inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                >
-                  Show less
-                </button>
-              </div>
-            </template>
-          </div>
 
-          <div v-if="review.prompt_used" class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-600">
-            <div v-if="!expandedPrompts.has(review.id)">
               <button
-                @click="emit('toggle-prompt', review.id)"
-                class="text-sm text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+                @click="emit('delete-review', review.id)"
+                :disabled="deletingReviewId === review.id"
+                class="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-700 dark:hover:text-red-400"
+                title="Delete review"
               >
-                Click here to see the prompt that was used to generate this review
+                <div
+                  v-if="deletingReviewId === review.id"
+                  class="h-4 w-4 animate-spin rounded-full border-b-2 border-red-500"
+                ></div>
+                <TrashIcon v-else class="h-4 w-4" />
               </button>
             </div>
-            <div v-else class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Full Prompt Used:</span>
+
+            <div class="prose prose-sm max-w-none dark:prose-invert">
+              <template
+                v-if="!expandedReviews.has(review.id) && getTruncatedText(review.review_text).needsTruncation"
+              >
+                <MarkdownRenderer :text="getTruncatedText(review.review_text).truncated" />
+                <div class="not-prose">
+                  <span class="text-gray-500">...</span>
+                  <button
+                    @click="emit('toggle-review', review.id)"
+                    class="ml-2 inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    Show more
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <MarkdownRenderer :text="review.review_text" />
+                <div v-if="getTruncatedText(review.review_text).needsTruncation" class="not-prose">
+                  <button
+                    @click="emit('toggle-review', review.id)"
+                    class="mt-3 inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    Show less
+                  </button>
+                </div>
+              </template>
+            </div>
+
+            <div v-if="review.prompt_used" class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-600">
+              <div v-if="!expandedPrompts.has(review.id)">
                 <button
                   @click="emit('toggle-prompt', review.id)"
                   class="text-sm text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
                 >
-                  Hide prompt
+                  Click here to see the prompt that was used to generate this review
                 </button>
               </div>
-              <div class="rounded-lg bg-gray-50 p-4 text-sm dark:bg-gray-700">
-                <pre class="whitespace-pre-wrap text-xs font-mono leading-relaxed text-gray-800 dark:text-gray-200">
+              <div v-else class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Full Prompt Used:</span>
+                  <button
+                    @click="emit('toggle-prompt', review.id)"
+                    class="text-sm text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+                  >
+                    Hide prompt
+                  </button>
+                </div>
+                <div class="rounded-lg bg-gray-50 p-4 text-sm dark:bg-gray-700">
+                  <pre class="whitespace-pre-wrap text-xs font-mono leading-relaxed text-gray-800 dark:text-gray-200">
 {{ review.prompt_used }}
-                </pre>
+                  </pre>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </template>
     </div>
   </div>
 </template>
