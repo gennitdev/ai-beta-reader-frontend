@@ -29,7 +29,8 @@ export async function generateChapterSummary(
   chapterId: string,
   bookId: string,
   bookTitle: string,
-  isFirstChapter: boolean = false
+  isFirstChapter: boolean = false,
+  context: ChapterSummaryContext = {}
 ): Promise<{
   summary: string
   pov: string | null
@@ -40,14 +41,70 @@ export async function generateChapterSummary(
   const client = createOpenAIClient(apiKey)
 
   // Use same system prompt as Express backend
-  const systemPrompt = `You are an expert fiction editor. Produce a tight factual summary (150–250 words), include POV, main characters, and 4–8 bullet beats. No speculation. Return valid JSON only.${isFirstChapter ? ' IMPORTANT: This is the FIRST chapter of the book - there are no previous chapters to reference. Focus only on what happens in this opening chapter.' : ''}`
+  const systemPrompt = `You are an expert fiction editor. Produce a tight factual summary (150–250 words), include POV, main characters, and 4–8 bullet beats. No speculation. Return valid JSON only.${
+    isFirstChapter
+      ? ' IMPORTANT: This is the FIRST chapter of the book - there are no previous chapters to reference. Focus only on what happens in this opening chapter.'
+      : ''
+  }`
 
-  const userPrompt = `Book: ${bookTitle} (${bookId})
-Chapter: ${chapterId}${chapterTitle ? ` — ${chapterTitle}` : ''}${isFirstChapter ? ' (FIRST CHAPTER)' : ''}
+  const contextSections: string[] = []
 
-${isFirstChapter ? 'This is the opening chapter of the book. Summarize only what happens in this first chapter. Do not reference any previous events or chapters.\n\n' : ''}Return JSON only for this schema: {pov, characters[], beats[], spoilers_ok, summary}
+  if (context.priorPartSummaries?.length) {
+    const priorPartsText = context.priorPartSummaries
+      .map((entry) => {
+        const partLabel =
+          entry.partNumber != null
+            ? `Part ${entry.partNumber}${
+                entry.partTitle ? ` — ${entry.partTitle}` : ''
+              }`
+            : entry.partTitle || entry.partId
+        return `${partLabel}\n${entry.summary}`
+      })
+      .join('\n\n')
+    contextSections.push(`PREVIOUS PART OVERVIEWS:\n${priorPartsText}`)
+  }
 
-${chapterText}`
+  if (context.priorChapterSummaries?.length) {
+    const priorChaptersText = context.priorChapterSummaries
+      .map(
+        (chapter, index) =>
+          `${index + 1}. ${chapter.title} (${chapter.id})\n${chapter.summary}`,
+      )
+      .join('\n\n')
+    contextSections.push(`EARLIER CHAPTERS IN THIS PART:\n${priorChaptersText}`)
+  }
+
+  const partLine =
+    context.partName != null
+      ? `Part: ${context.partName}${
+          context.partNumber ? ` (Part ${context.partNumber})` : ''
+        }`
+      : null
+
+  const userPromptLines = [
+    `Book: ${bookTitle} (${bookId})`,
+    partLine,
+    `Chapter: ${chapterId}${chapterTitle ? ` — ${chapterTitle}` : ''}${
+      isFirstChapter ? ' (FIRST CHAPTER)' : ''
+    }`,
+  ].filter(Boolean)
+
+  if (contextSections.length) {
+    userPromptLines.push(contextSections.join('\n\n'))
+  }
+
+  if (isFirstChapter) {
+    userPromptLines.push(
+      'This is the opening chapter of the book. Summarize only what happens in this first chapter. Do not reference any previous events or chapters.',
+    )
+  }
+
+  userPromptLines.push(
+    'Return JSON only for this schema: {pov, characters[], beats[], spoilers_ok, summary}',
+  )
+  userPromptLines.push(chapterText)
+
+  const userPrompt = userPromptLines.join('\n\n')
 
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -71,6 +128,95 @@ ${chapterText}`
     characters: parsed.characters || [],
     beats: parsed.beats || [],
     spoilers_ok: !!parsed.spoilers_ok
+  }
+}
+
+export interface PartSummaryChapterInput {
+  id: string
+  title: string
+  summary: string
+}
+
+export interface PartSummaryOverview {
+  partId: string
+  partTitle: string
+  summary: string
+  partNumber?: number | null
+}
+
+export interface ChapterSummaryContext {
+  partName?: string | null
+  partNumber?: number | null
+  priorPartSummaries?: PartSummaryOverview[]
+  priorChapterSummaries?: PartSummaryChapterInput[]
+}
+
+export interface ReviewContext {
+  priorPartSummaries?: PartSummaryOverview[]
+  currentPartChapterSummaries?: PartSummaryChapterInput[]
+}
+
+/**
+ * Generate a higher-level summary for a part using existing chapter summaries
+ */
+export async function generatePartSummary(
+  apiKey: string,
+  bookTitle: string,
+  partTitle: string,
+  partId: string,
+  chapters: PartSummaryChapterInput[],
+  partNumber?: number
+): Promise<{
+  summary: string
+  characters: string[]
+  beats: string[]
+}> {
+  const client = createOpenAIClient(apiKey)
+
+  if (!chapters.length) {
+    throw new Error('At least one chapter summary is required to generate a part summary')
+  }
+
+  const chapterSummaryText = chapters
+    .map(
+      (chapter, index) =>
+        `### ${index + 1}. ${chapter.title} (${chapter.id})\n${chapter.summary}`,
+    )
+    .join('\n\n')
+
+  const systemPrompt =
+    'You are an expert fiction editor summarizing a multi-chapter story arc. Produce a cohesive summary (250–400 words) covering the major plot developments, character arcs, conflicts, and resolutions in this part. Avoid scene-level detail, focusing on narrative flow and stakes. Include key characters and 4–6 essential beats. Return valid JSON only.'
+
+  const partLabel = partNumber ? `Part ${partNumber}` : 'This part'
+  const userPrompt = `Book: ${bookTitle}
+Part: ${partId} — ${partTitle}
+
+${partLabel} contains the following chapter summaries:
+
+${chapterSummaryText}
+
+Return JSON only for this schema: {summary, characters[], beats[]}`
+
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.4,
+  })
+
+  const content = response.choices[0]?.message?.content
+  if (!content) {
+    throw new Error('No response from OpenAI')
+  }
+
+  const parsed = JSON.parse(content)
+  return {
+    summary: parsed.summary || '',
+    characters: parsed.characters || [],
+    beats: parsed.beats || [],
   }
 }
 
@@ -170,37 +316,65 @@ export async function generateReview(
   chapterTitle: string,
   chapterId: string,
   profile: AIProfile,
-  priorChapterSummaries?: string
+  context: ReviewContext = {}
 ): Promise<{
   reviewText: string
   promptUsed: string
 }> {
   const client = createOpenAIClient(apiKey)
 
-  // Build user prompt similar to Express backend
-  const priorSummariesText = priorChapterSummaries || 'No prior chapters.'
+  const contextSections: string[] = []
 
-  const userPrompt = `PRIOR CHAPTER SUMMARIES:\n${priorSummariesText}\n\n` +
+  if (context.priorPartSummaries?.length) {
+    const priorParts = context.priorPartSummaries
+      .map((entry) => {
+        const partLabel =
+          entry.partNumber != null
+            ? `Part ${entry.partNumber}${
+                entry.partTitle ? ` — ${entry.partTitle}` : ''
+              }`
+            : entry.partTitle || entry.partId
+        return `${partLabel}\n${entry.summary}`
+      })
+      .join('\n\n')
+    contextSections.push(`PREVIOUS PART SUMMARIES:\n${priorParts}`)
+  }
+
+  if (context.currentPartChapterSummaries?.length) {
+    const currentPart = context.currentPartChapterSummaries
+      .map(
+        (entry, index) =>
+          `${index + 1}. ${entry.title} (${entry.id})\n${entry.summary}`,
+      )
+      .join('\n\n')
+    contextSections.push(`CURRENT PART CONTEXT:\n${currentPart}`)
+  }
+
+  const priorSummariesText = contextSections.length
+    ? contextSections.join('\n\n')
+    : 'No prior story context.'
+
+  const userPrompt =
+    `PRIOR STORY CONTEXT:\n${priorSummariesText}\n\n` +
     `NEW CHAPTER: ${chapterId}${chapterTitle ? ` — ${chapterTitle}` : ''}\n${chapterText}\n\n` +
     'Write the review now.'
 
-  // Store the full prompt for transparency (matches Express backend)
   const fullPrompt = `SYSTEM PROMPT:\n${profile.system_prompt}\n\nUSER PROMPT:\n${userPrompt}`
 
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
       { role: 'system', content: profile.system_prompt },
-      { role: 'user', content: userPrompt }
+      { role: 'user', content: userPrompt },
     ],
-    temperature: 0.7
+    temperature: 0.7,
   })
 
   const reviewText = response.choices[0]?.message?.content || ''
 
   return {
     reviewText,
-    promptUsed: fullPrompt
+    promptUsed: fullPrompt,
   }
 }
 

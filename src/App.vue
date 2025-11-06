@@ -150,7 +150,7 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
 
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Header -->
-      <header class="lg:hidden bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 safe-area-top">
+      <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 safe-area-top">
         <div class="px-4 sm:px-6">
         <!-- Desktop layout -->
         <div
@@ -236,7 +236,7 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
             <button
               v-if="currentBookId"
               @click="showSearchModal = true"
-              class="md:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              class="md:hidden text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               title="Search"
             >
               <MagnifyingGlassIcon class="w-5 h-5" />

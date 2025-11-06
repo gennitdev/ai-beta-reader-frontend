@@ -148,7 +148,7 @@ const emit = defineEmits<{
         <div
           v-for="review in savedReviews"
           :key="review.id"
-          class="rounded-lg border border-gray-200 p-4 transition-colors hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600"
+          class="transition-colors hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600"
         >
           <div class="mb-3 flex items-start justify-between">
             <div class="flex items-center space-x-3">

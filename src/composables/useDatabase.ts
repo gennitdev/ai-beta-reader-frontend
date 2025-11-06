@@ -206,6 +206,33 @@ export function useDatabase() {
     }
   }
 
+  async function savePartSummary(summary: {
+    part_id: string;
+    summary: string;
+    characters: string[];
+    beats: string[];
+  }) {
+    try {
+      await initializeDatabase()
+      await db.savePartSummary(summary)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to save part summary'
+      console.error('Save part summary error:', e)
+      throw e
+    }
+  }
+
+  async function getPartSummary(partId: string) {
+    try {
+      await initializeDatabase()
+      return await db.getPartSummary(partId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get part summary'
+      console.error('Get part summary error:', e)
+      return null
+    }
+  }
+
   // Review operations
   async function saveReview(review: {
     chapter_id: string;
@@ -511,6 +538,8 @@ export function useDatabase() {
     // Summary operations
     saveSummary,
     getSummary,
+    savePartSummary,
+    getPartSummary,
 
     // Review operations
     saveReview,

@@ -41,6 +41,16 @@ export interface ChapterSummary {
   updated_at: string;
 }
 
+export interface PartSummary {
+  id: string;
+  part_id: string;
+  summary: string | null;
+  characters: string | null; // JSON array as string
+  beats: string | null; // JSON array as string
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ChapterReview {
   id: string;
   chapter_id: string;
@@ -140,6 +150,17 @@ export class AppDatabase {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (chapter_id) REFERENCES chapters(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS part_summaries (
+        id TEXT PRIMARY KEY,
+        part_id TEXT NOT NULL,
+        summary TEXT,
+        characters TEXT,
+        beats TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (part_id) REFERENCES book_parts(id)
       );
 
       CREATE TABLE IF NOT EXISTS wiki_pages (
@@ -630,9 +651,11 @@ export class AppDatabase {
     if (this.isNative) {
       await this.db.run(updateChaptersQuery, [partId]);
       await this.db.run(deleteQuery, [partId]);
+      await this.db.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId]);
     } else {
       this.db.run(updateChaptersQuery, [partId]);
       this.db.run(deleteQuery, [partId]);
+      this.db.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId]);
       this.saveToLocalStorage();
     }
 
@@ -735,6 +758,7 @@ export class AppDatabase {
         chapters: allChapters,
         book_parts: getAllFromTable('book_parts'),
         chapter_summaries: getAllFromTable('chapter_summaries'),
+        part_summaries: getAllFromTable('part_summaries'),
         wiki_pages: getAllFromTable('wiki_pages'),
         book_characters: getAllFromTable('book_characters'),
         chapter_reviews: getAllFromTable('chapter_reviews'),
@@ -785,6 +809,7 @@ export class AppDatabase {
       'chapter_reviews',
       'book_characters',
       'chapter_summaries',
+      'part_summaries',
       'wiki_pages',
       'chapters',
       'book_parts',
@@ -825,6 +850,7 @@ export class AppDatabase {
     await importTable('custom_reviewer_profiles', importData.custom_reviewer_profiles);
     await importTable('ai_profiles', importData.ai_profiles);
     await importTable('chapter_summaries', importData.chapter_summaries);
+    await importTable('part_summaries', importData.part_summaries);
     await importTable('chapter_reviews', importData.chapter_reviews);
     await importTable('book_characters', importData.book_characters);
     await importTable('wiki_updates', importData.wiki_updates);
@@ -852,6 +878,7 @@ export class AppDatabase {
       chapters: [],
       book_parts: [],
       chapter_summaries: [],
+      part_summaries: [],
       wiki_pages: [],
       book_characters: [],
       chapter_reviews: [],
@@ -884,6 +911,7 @@ export class AppDatabase {
     // Just pass through other tables as-is
     transformedData.book_parts = jsonData.book_parts || [];
     transformedData.chapter_summaries = jsonData.chapter_summaries || [];
+    transformedData.part_summaries = jsonData.part_summaries || [];
     transformedData.wiki_pages = jsonData.wiki_pages || [];
     transformedData.book_characters = jsonData.book_characters || [];
     transformedData.chapter_reviews = jsonData.chapter_reviews || [];
@@ -953,6 +981,71 @@ export class AppDatabase {
         created_at: row[7],
         updated_at: row[8]
       };
+    }
+  }
+
+  async savePartSummary(summary: {
+    part_id: string;
+    summary: string;
+    characters: string[];
+    beats: string[];
+  }) {
+    const id = `part-summary-${summary.part_id}`;
+    const now = new Date().toISOString();
+    const existing = await this.getPartSummary(summary.part_id);
+    const createdAt = existing?.created_at ?? now;
+    const query = `INSERT OR REPLACE INTO part_summaries (id, part_id, summary, characters, beats, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`;
+
+    const params = [
+      id,
+      summary.part_id,
+      summary.summary,
+      JSON.stringify(summary.characters),
+      JSON.stringify(summary.beats),
+      createdAt,
+      now
+    ];
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async getPartSummary(partId: string): Promise<PartSummary | null> {
+    const query = `SELECT * FROM part_summaries WHERE part_id = ? LIMIT 1`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [partId]);
+      return result.values?.[0] || null;
+    } else {
+      const result = this.db.exec(query, [partId]);
+      if (result.length === 0 || result[0].values.length === 0) return null;
+
+      const row = result[0].values[0];
+      return {
+        id: row[0],
+        part_id: row[1],
+        summary: row[2],
+        characters: row[3],
+        beats: row[4],
+        created_at: row[5],
+        updated_at: row[6]
+      };
+    }
+  }
+
+  async deletePartSummary(partId: string) {
+    const query = `DELETE FROM part_summaries WHERE part_id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(query, [partId]);
+    } else {
+      this.db.run(query, [partId]);
+      this.saveToLocalStorage();
     }
   }
 

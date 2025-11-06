@@ -7,7 +7,10 @@ import {
   updateWikiPagesFromChapter,
   generateReview as generateAIReview,
   BUILT_IN_PROFILES,
+  type PartSummaryChapterInput,
+  type PartSummaryOverview,
 } from "@/lib/openai";
+import type { BookPart, PartSummary, ChapterSummary } from "@/lib/database";
 import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterContentSection from "@/components/chapter/ChapterContentSection.vue";
@@ -67,10 +70,12 @@ const {
   chapters,
   loadBooks,
   loadChapters,
+  getParts,
   saveChapter: dbSaveChapter,
   deleteChapter: dbDeleteChapter,
   saveSummary: dbSaveSummary,
   getSummary,
+  getPartSummary,
   createWikiPage,
   updateWikiPage,
   getWikiPage,
@@ -99,6 +104,19 @@ const deletingReviewId = ref<string | null>(null);
 const characters = ref<Character[]>([]);
 const showDeleteModal = ref(false);
 const deletingChapter = ref(false);
+const parts = ref<BookPart[]>([]);
+
+const chapterSummaryCache = new Map<string, ChapterSummary | null>();
+const partSummaryCache = new Map<string, PartSummary | null>();
+
+const currentBook = computed(
+  () => books.value.find((b: any) => b.id === bookId.value) || null
+);
+const currentPart = computed(() => {
+  if (!chapter.value?.part_id) return null;
+  return parts.value.find((part) => part.id === chapter.value?.part_id) || null;
+});
+const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ?? null));
 
 // Summary editing state
 const isEditingSummary = ref(false);
@@ -131,6 +149,169 @@ function normalizeCharacterList(value: unknown): string[] {
     .filter((name): name is string => name.length > 0);
 }
 
+function parseIdArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((entry): entry is string => typeof entry === "string");
+    }
+  } catch {
+    // Ignore parse errors and fall back to empty array
+  }
+  return [];
+}
+
+function getPartNumber(partId: string | null): number | null {
+  if (!partId) return null;
+  const order = parseIdArray(currentBook.value?.part_order);
+  const index = order.indexOf(partId);
+  return index >= 0 ? index + 1 : null;
+}
+
+async function fetchChapterSummary(chapterId: string) {
+  if (chapterSummaryCache.has(chapterId)) {
+    return chapterSummaryCache.get(chapterId) || null;
+  }
+  const summary = await getSummary(chapterId);
+  chapterSummaryCache.set(chapterId, summary || null);
+  return summary || null;
+}
+
+async function fetchPartSummaryById(partId: string) {
+  if (partSummaryCache.has(partId)) {
+    return partSummaryCache.get(partId) || null;
+  }
+  const summary = await getPartSummary(partId);
+  partSummaryCache.set(partId, summary || null);
+  return summary || null;
+}
+
+async function buildChapterSummariesForPart(
+  partId: string,
+  partMetaOverride?: BookPart
+): Promise<PartSummaryChapterInput[]> {
+  const partMeta = partMetaOverride ?? parts.value.find((part) => part.id === partId);
+  if (!partMeta) return [];
+
+  const order = parseIdArray(partMeta.chapter_order);
+  const chapterList = chapters.value.filter((ch: any) => ch.part_id === partMeta.id);
+  const chapterMap = new Map(chapterList.map((ch: any) => [ch.id, ch]));
+
+  let orderedIds = order.filter((id) => chapterMap.has(id));
+  if (!orderedIds.length) {
+    const bookOrder = parseIdArray(currentBook.value?.chapter_order);
+    orderedIds = bookOrder.filter((id) => chapterMap.has(id));
+  }
+  if (!orderedIds.length) {
+    orderedIds = chapterList
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+      .map((ch: any) => ch.id);
+  }
+
+  const summaries: PartSummaryChapterInput[] = [];
+  for (const id of orderedIds) {
+    const summaryData = await fetchChapterSummary(id);
+    if (summaryData?.summary) {
+      const chapterInfo = chapterMap.get(id);
+      summaries.push({
+        id,
+        title: chapterInfo?.title || id,
+        summary: summaryData.summary
+      });
+    }
+  }
+  return summaries;
+}
+
+async function buildPriorPartSummaries(
+  currentPartId: string | null
+): Promise<PartSummaryOverview[]> {
+  const result: PartSummaryOverview[] = [];
+  const partOrder = parseIdArray(currentBook.value?.part_order);
+  if (!partOrder.length) return result;
+
+  const currentIndex = currentPartId ? partOrder.indexOf(currentPartId) : -1;
+  const targetIds =
+    currentIndex > 0 ? partOrder.slice(0, currentIndex) : currentIndex === -1 ? partOrder : [];
+
+  for (const partId of targetIds) {
+    const partMeta = parts.value.find((part) => part.id === partId);
+    if (!partMeta) continue;
+
+    const summaryRecord = await fetchPartSummaryById(partId);
+    let summaryText = summaryRecord?.summary?.trim();
+
+    if (!summaryText) {
+      const chapterSummaries = await buildChapterSummariesForPart(partId, partMeta);
+      if (chapterSummaries.length) {
+        summaryText = chapterSummaries
+          .map((entry) => `${entry.title} (${entry.id})\n${entry.summary}`)
+          .join("\n\n");
+      }
+    }
+
+    if (summaryText) {
+      result.push({
+        partId,
+        partTitle: partMeta.name,
+        summary: summaryText,
+        partNumber: getPartNumber(partId)
+      });
+    }
+  }
+
+  return result;
+}
+
+async function buildPriorChapterSummariesInPart(
+  partMeta: BookPart | null,
+  currentChapterId: string
+): Promise<PartSummaryChapterInput[]> {
+  if (!partMeta) return [];
+
+  let order = parseIdArray(partMeta.chapter_order);
+  if (!order.includes(currentChapterId)) {
+    const bookOrder = parseIdArray(currentBook.value?.chapter_order);
+    order = bookOrder.filter((id) => {
+      const chapter = chapters.value.find((ch: any) => ch.id === id);
+      return chapter?.part_id === partMeta.id;
+    });
+  }
+
+  const priorIds: string[] = [];
+  for (const id of order) {
+    if (id === currentChapterId) break;
+    priorIds.push(id);
+  }
+
+  if (!priorIds.length) return [];
+
+  const chapterMap = new Map(
+    chapters.value
+      .filter((chapter: any) => chapter.part_id === partMeta.id)
+      .map((chapter: any) => [chapter.id, chapter])
+  );
+
+  const summaries: PartSummaryChapterInput[] = [];
+  for (const id of priorIds) {
+    const summaryData = await fetchChapterSummary(id);
+    if (summaryData?.summary) {
+      const chapterInfo = chapterMap.get(id);
+      summaries.push({
+        id,
+        title: chapterInfo?.title || id,
+        summary: summaryData.summary
+      });
+    }
+  }
+
+  return summaries;
+}
+
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true);
 
@@ -155,9 +336,13 @@ const backButtonUrl = computed(() => bookUrl.value);
 const loadChapter = async () => {
   loading.value = true;
   try {
+    chapterSummaryCache.clear();
+    partSummaryCache.clear();
+
     // Load books and chapters from database
     await loadBooks();
     await loadChapters(bookId.value);
+    parts.value = await getParts(bookId.value);
 
     // Find the current chapter
     const chapterData = chapters.value.find((ch: any) => ch.id === chapterId.value);
@@ -165,6 +350,7 @@ const loadChapter = async () => {
     if (chapterData) {
       // Load summary from database if exists
       const summaryData = await getSummary(chapterData.id);
+      chapterSummaryCache.set(chapterData.id, summaryData || null);
       const parsedCharacters = summaryData?.characters ? JSON.parse(summaryData.characters) : [];
       const normalizedCharacters = normalizeCharacterList(parsedCharacters);
       const parsedBeats = summaryData?.beats ? JSON.parse(summaryData.beats) : [];
@@ -254,9 +440,15 @@ const generateSummary = async () => {
     }
 
     // Check if this is the first chapter (position 0 in book's chapter order)
-    const book = books.value.find((b: any) => b.id === bookId.value);
-    const chapterOrder = book?.chapter_order ? JSON.parse(book.chapter_order) : [];
+    const book = currentBook.value;
+    const chapterOrder = parseIdArray(book?.chapter_order);
     const isFirstChapter = chapterOrder[0] === chapter.value.id;
+
+    const priorPartSummaries = await buildPriorPartSummaries(chapter.value.part_id ?? null);
+    const priorChapterSummaries = await buildPriorChapterSummariesInPart(
+      currentPart.value,
+      chapter.value.id
+    );
 
     // Generate summary using OpenAI
     const result = await generateChapterSummary(
@@ -266,7 +458,13 @@ const generateSummary = async () => {
       chapter.value.id,
       bookId.value,
       book?.title || bookId.value,
-      isFirstChapter
+      isFirstChapter,
+      {
+        partName: currentPart.value?.name ?? null,
+        partNumber: currentPartNumber.value,
+        priorPartSummaries,
+        priorChapterSummaries
+      }
     );
 
     const generatedCharacters = normalizeCharacterList(result.characters);
@@ -281,6 +479,7 @@ const generateSummary = async () => {
       beats: beatsArray,
       spoilers_ok: result.spoilers_ok,
     });
+    chapterSummaryCache.delete(chapter.value.id);
 
     // Update UI
     chapter.value.summary = result.summary;
@@ -411,23 +610,29 @@ const generateReview = async () => {
       profile = builtInProfile;
     }
 
-    // Get prior chapter summaries
-    const book = books.value.find((b: any) => b.id === bookId.value);
-    const chapterOrder = book?.chapter_order ? JSON.parse(book.chapter_order) : [];
+    const priorPartSummaries =
+      await buildPriorPartSummaries(chapter.value.part_id ?? null);
+    let currentPartChapterSummaries = await buildPriorChapterSummariesInPart(
+      currentPart.value,
+      chapter.value.id
+    );
 
-    let priorSummaries = "";
-    for (const chId of chapterOrder) {
-      if (chId === chapter.value.id) break;
-
-      const chData = chapters.value.find((c: any) => c.id === chId);
-      if (chData) {
-        const summary = await getSummary(chId);
-        if (summary) {
-          priorSummaries += `# ${chId}${chData.title ? ` — ${chData.title}` : ""}\n${
-            summary.summary
-          }\n\n`;
+    if (!chapter.value.part_id) {
+      const fallbackSummaries: PartSummaryChapterInput[] = [];
+      const chapterOrder = parseIdArray(currentBook.value?.chapter_order);
+      for (const chId of chapterOrder) {
+        if (chId === chapter.value.id) break;
+        const summary = await fetchChapterSummary(chId);
+        if (summary?.summary) {
+          const chData = chapters.value.find((c: any) => c.id === chId);
+          fallbackSummaries.push({
+            id: chId,
+            title: chData?.title || chId,
+            summary: summary.summary
+          });
         }
       }
+      currentPartChapterSummaries = fallbackSummaries;
     }
 
     // Generate review
@@ -437,7 +642,10 @@ const generateReview = async () => {
       chapter.value.title || chapter.value.id,
       chapter.value.id,
       profile,
-      priorSummaries || undefined
+      {
+        priorPartSummaries,
+        currentPartChapterSummaries
+      }
     );
 
     // Save to database
@@ -678,7 +886,7 @@ onMounted(async () => {
       @delete-chapter="requestDeleteChapter"
     />
 
-    <div class="w-full max-w-6xl mx-0 md:mx-auto px-0 sm:px-4 lg:px-8 ">
+    <div class="w-full max-w-6xl md:mx-auto px-4 lg:px-8">
       <div class="my-3 flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
         <span class="whitespace-nowrap"
           >{{ (chapter?.word_count || 0).toLocaleString() }} words</span

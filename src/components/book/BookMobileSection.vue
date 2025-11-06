@@ -222,9 +222,9 @@ const {
         <section
           v-for="part in chaptersByPart.parts"
           :key="part.id"
-          class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
+          class="bg-white dark:bg-gray-900"
         >
-          <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-gray-200 dark:border-gray-700">
             <div>
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ part.name }}</h2>
               <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -232,13 +232,24 @@ const {
                 {{ formatWordCount(part.wordCount) }} words
               </p>
             </div>
-            <button @click="createNewChapterInPart(part.id)" class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-              <PlusIcon class="w-4 h-4 mr-2" />
-              Add Chapter
-            </button>
+            <div class="flex items-center gap-2">
+              <router-link
+                :to="`/books/${bookId}/parts/${part.id}`"
+                class="inline-flex items-center rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-900/30"
+              >
+                View Part
+              </router-link>
+              <button
+                @click="createNewChapterInPart(part.id)"
+                class="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-700"
+              >
+                <PlusIcon class="mr-2 h-4 w-4" />
+                Add Chapter
+              </button>
+            </div>
           </div>
 
-          <div class="divide-y divide-gray-200 dark:divide-gray-700">
+          <div class="space-y-4">
             <BookMobileChapterCard
               v-for="chapter in part.chapters"
               :key="chapter.id"
@@ -395,4 +406,3 @@ const {
     </div>
   </div>
 </template>
-

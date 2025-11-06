@@ -20,7 +20,7 @@ import BookDesktopLayout from "@/components/book/BookDesktopLayout.vue";
 
 const route = useRoute();
 const router = useRouter();
-const bookId = route.params.id as string;
+const bookId = computed(() => route.params.id as string);
 
 // Use local database
 const {
@@ -228,7 +228,7 @@ const syncPartOrderWithParts = async () => {
 
   if (!arraysEqual(updatedOrder, storedOrder)) {
     try {
-      await updatePartOrder(bookId, updatedOrder);
+    await updatePartOrder(bookId.value, updatedOrder);
     } catch (error) {
       console.error("Failed to synchronize part order:", error);
     }
@@ -244,7 +244,7 @@ const persistPartOrder = async (newOrder: string[]) => {
   }
 
   try {
-    await updatePartOrder(bookId, uniqueOrder);
+    await updatePartOrder(bookId.value, uniqueOrder);
     setPartOrderState(uniqueOrder);
     return true;
   } catch (error) {
@@ -345,7 +345,7 @@ const loadBook = async () => {
     await loadBooks();
 
     // Find the current book
-    book.value = (books.value.find((b) => b.id === bookId) as DatabaseBook | undefined) || null;
+    book.value = (books.value.find((b) => b.id === bookId.value) as DatabaseBook | undefined) || null;
 
     if (!book.value) {
       router.push("/books");
@@ -354,10 +354,10 @@ const loadBook = async () => {
     }
 
     // Load chapters from local database
-    await loadChapters(bookId);
+    await loadChapters(bookId.value);
 
     // Load parts from database first
-    parts.value = await getParts(bookId);
+    parts.value = await getParts(bookId.value);
 
     await syncPartOrderWithParts();
 
@@ -437,11 +437,11 @@ const refreshData = async () => {
 };
 
 const createNewChapter = () => {
-  router.push(`/books/${bookId}/chapter-editor`);
+  router.push(`/books/${bookId.value}/chapter-editor`);
 };
 
 const goToOrganizeChapters = () => {
-  router.push(`/books/${bookId}/organize`);
+  router.push(`/books/${bookId.value}/organize`);
 };
 
 const openSearchModal = () => {
@@ -450,13 +450,13 @@ const openSearchModal = () => {
 
 const createNewChapterInPart = (partId: string) => {
   router.push({
-    path: `/books/${bookId}/chapter-editor`,
+    path: `/books/${bookId.value}/chapter-editor`,
     query: { partId },
   });
 };
 
 const editChapter = (chapterId: string) => {
-  router.push(`/books/${bookId}/chapter-editor/${chapterId}`);
+  router.push(`/books/${bookId.value}/chapter-editor/${chapterId}`);
 };
 
 // Parts management functions
@@ -508,7 +508,7 @@ const saveSidebarChapterOrder = async () => {
     const chapterOrder = buildChapterOrder(partUpdates);
 
     // Send array-based reorder to backend
-    await updateChapterOrders(bookId, chapterOrder, partUpdates, partOrder.value);
+    await updateChapterOrders(bookId.value, chapterOrder, partUpdates, partOrder.value);
 
     console.log("Saved sidebar chapter order with arrays:", { chapterOrder, partUpdates });
 
@@ -522,7 +522,7 @@ const saveSidebarChapterOrder = async () => {
 };
 
 const loadWiki = async () => {
-  if (!bookId) return;
+  if (!bookId.value) return;
 
   try {
     loadingWiki.value = true;
@@ -536,7 +536,7 @@ const loadWiki = async () => {
       }
     };
 
-    const pages = await getWikiPages(bookId);
+    const pages = await getWikiPages(bookId.value);
     wikiPages.value = pages.map((page: any) => ({
       id: page.id,
       page_name: page.page_name,
@@ -645,7 +645,7 @@ const checkAndRedirectToFirstChapter = () => {
 
   if (isDesktop && !hasChapterInRoute && sortedChapters.value.length > 0) {
     const firstChapter = sortedChapters.value[0];
-    router.replace(`/books/${bookId}/chapters/${firstChapter.id}`);
+    router.replace(`/books/${bookId.value}/chapters/${firstChapter.id}`);
   }
 };
 
@@ -659,6 +659,15 @@ watch(currentTab, async (newTab) => {
     await loadWiki();
   }
 });
+
+watch(
+  () => bookId.value,
+  async () => {
+    await loadBook();
+    await loadWiki();
+    checkAndRedirectToFirstChapter();
+  }
+);
 
 onMounted(async () => {
   await loadBook();

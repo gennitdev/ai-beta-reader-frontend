@@ -182,8 +182,8 @@ const {
       <div
         class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto relative"
       >
-        <div class="p-4 pb-16">
-          <div class="mb-6">
+        <div class="p-2 pt-4 pb-16">
+          <div>
             <div v-if="isEditingBookTitle" class="flex flex-col space-y-2">
               <input
                 :value="editingBookTitle"
@@ -229,18 +229,19 @@ const {
             </p>
           </div>
 
-          <div class="space-y-3 mb-6 flex space-x-2">
+          <div class="space-y-3 mb-4 flex space-x-2">
             <button
               @click="createNewChapter"
-              class="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              class="inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              <PlusIcon class="w-5 h-5" />
+              + Add Chapter
             </button>
             <button
               @click="goToOrganizeChapters"
               class="inline-flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              <Cog6ToothIcon class="w-5 h-5" />
+
+              Organize
             </button>
             <button
               @click="openSearchModal"
@@ -283,47 +284,51 @@ const {
             </div>
 
             <div v-else-if="hasChapters" class="divide-y divide-gray-200 dark:divide-gray-800">
-              <div
-                v-for="part in chaptersByPart.parts"
-                :key="part.id"
-                class="overflow-hidden"
-              >
-                <button
-                  @click="togglePart(part.id)"
-                  class="w-full pr-2 py-3 flex items-center justify-between text-left transition-colors"
-                >
-                  <div>
-                    <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ (sidebarPartLists[part.id]?.length || 0) }} chapter{{
-                        (sidebarPartLists[part.id]?.length || 0) !== 1 ? 's' : ''
-                      }}
-                      ·
-                      {{
-                        formatWordCount(
-                          wordCountForChapters(sidebarPartLists[part.id] || [])
-                        )
-                      }}
-                      words
-                    </p>
-                  </div>
-                  <svg
-                    :class="
-                      expandedParts.has(part.id) || shouldExpandPart(part.id) ? 'rotate-180' : ''
-                    "
-                    class="w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+              <div v-for="part in chaptersByPart.parts" :key="part.id" class="overflow-hidden">
+                <div class="flex items-start justify-between gap-2 pr-2 py-3">
+                  <button
+                    @click="togglePart(part.id)"
+                    class="flex px-2 flex-1 items-center justify-between text-left transition-colors focus:outline-none"
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 9l-7 7-7-7"
-                    ></path>
-                  </svg>
-                </button>
+                    <div>
+                      <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
+                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {{ (sidebarPartLists[part.id]?.length || 0) }} chapter{{
+                          (sidebarPartLists[part.id]?.length || 0) !== 1 ? 's' : ''
+                        }}
+                        ·
+                        {{
+                          formatWordCount(
+                            wordCountForChapters(sidebarPartLists[part.id] || [])
+                          )
+                        }}
+                        words
+                      </p>
+                    </div>
+                    <svg
+                      :class="
+                        expandedParts.has(part.id) || shouldExpandPart(part.id) ? 'rotate-180' : ''
+                      "
+                      class="h-4 w-4 text-gray-500 transition-transform dark:text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 9l-7 7-7-7"
+                      ></path>
+                    </svg>
+                  </button>
+                  <router-link
+                    :to="`/books/${bookId}/parts/${part.id}`"
+                    class="mt-0.5 inline-flex shrink-0 items-center rounded-md border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                  >
+                    View
+                  </router-link>
+                </div>
 
                 <div
                   v-if="expandedParts.has(part.id) || shouldExpandPart(part.id)"
@@ -332,7 +337,7 @@ const {
                   <div class="pr-2 pt-3 pb-2 flex justify-end border-t border-gray-200 dark:border-gray-700">
                     <button
                       @click.prevent.stop="createNewChapterInPart(part.id)"
-                      class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                      class="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
                     >
                       <PlusIcon class="w-4 h-4 mr-1" />
                       Add Chapter in Part
@@ -366,7 +371,7 @@ const {
                 v-if="sidebarUncategorized.length > 0"
                 class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
               >
-                <div class="pr-2 py-3 bg-gray-50 dark:bg-gray-700">
+                <div class="px-2 py-3 bg-gray-50 dark:bg-gray-700">
                   <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized</h4>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {{ sidebarUncategorized.length }} chapter{{

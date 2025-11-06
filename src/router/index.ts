@@ -29,6 +29,11 @@ const router = createRouter({
           component: () => import('../views/ChapterView.vue')
         },
         {
+          path: 'parts/:partId',
+          name: 'book-part',
+          component: () => import('../views/PartView.vue')
+        },
+        {
           path: 'wiki/:wikiPageId',
           name: 'book-wiki-page',
           component: () => import('../views/WikiPageView.vue')
@@ -39,6 +44,11 @@ const router = createRouter({
       path: '/books/:bookId/chapters/:chapterId',
       name: 'chapter-direct',
       component: () => import('../views/ChapterView.vue')
+    },
+    {
+      path: '/books/:bookId/parts/:partId',
+      name: 'part-direct',
+      component: () => import('../views/PartView.vue')
     },
     {
       path: '/books/:bookId/wiki/:wikiPageId',
@@ -66,6 +76,11 @@ const router = createRouter({
       component: () => import('../views/ChapterView.vue')
     },
     {
+      path: '/books/:bookId/parts/:partId',
+      name: 'standalone-part',
+      component: () => import('../views/PartView.vue')
+    },
+    {
       path: '/books/:bookId/wiki/:wikiPageId',
       name: 'standalone-wiki-page',
       component: () => import('../views/WikiPageView.vue')
@@ -74,6 +89,12 @@ const router = createRouter({
       path: '/m/books/:bookId/chapters/:chapterId',
       name: 'mobile-chapter',
       component: () => import('../views/ChapterView.vue'),
+      meta: { mobile: true }
+    },
+    {
+      path: '/m/books/:bookId/parts/:partId',
+      name: 'mobile-part',
+      component: () => import('../views/PartView.vue'),
       meta: { mobile: true }
     },
     {

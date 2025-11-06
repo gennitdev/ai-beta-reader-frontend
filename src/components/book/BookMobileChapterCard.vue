@@ -42,10 +42,10 @@ const chapterLink = computed(
 </script>
 
 <template>
-  <div class="px-4 py-4">
+  <div>
     <div class="flex items-start gap-3">
       <router-link :to="chapterLink" class="flex-1">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+        <h3 class="text-sm mt-1 font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
           {{ chapter.title || chapter.id }}
         </h3>
         <div class="mt-1 flex flex-wrap items-center gap-4">
