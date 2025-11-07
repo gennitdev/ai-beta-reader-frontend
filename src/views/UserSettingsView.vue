@@ -8,7 +8,7 @@ import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, C
 const router = useRouter()
 
 // Use local database
-const { books, chapters, loadBooks, loadChapters, backupToCloud, restoreFromCloud, hasCloudSync } = useDatabase()
+const { books, chapters, loadBooks, loadChapters, getParts, backupToCloud, restoreFromCloud, hasCloudSync } = useDatabase()
 
 // OpenAI API Key state
 const openaiApiKey = ref('')
@@ -111,7 +111,57 @@ const exportUserData = async () => {
       // Get chapters for this book from local database
       await loadChapters(book.id)
       const chaptersData = chapters.value
+      const partsData = await getParts(book.id)
       const chaptersFolder = bookFolder.folder('chapters')
+      const orderedPartIds = parseJsonArray(book.part_order)
+      const orderedParts = orderedPartIds
+        .map(partId => partsData.find(part => part.id === partId))
+        .filter((part): part is NonNullable<typeof part> => Boolean(part))
+      const remainingParts = partsData.filter(part => !orderedPartIds.includes(part.id))
+      const allParts = [...orderedParts, ...remainingParts]
+      const hasParts = allParts.length > 0
+      const partFolders = new Map<string, JSZip>()
+      let uncategorizedFolder: JSZip | null = null
+
+      if (hasParts && chaptersFolder) {
+        const partPaddingLength = allParts.length.toString().length
+        allParts.forEach((part, index) => {
+          const partNumber = (index + 1).toString().padStart(partPaddingLength, '0')
+          const partName = part.name || `Part ${index + 1}`
+          const partFolderName = `${partNumber} - ${sanitizeFileName(partName)}`
+          const partFolder = chaptersFolder.folder(partFolderName)
+          const partChapterIds = parseJsonArray(part.chapter_order)
+          const partInfoLines = [
+            `Name: ${partName}`,
+            `ID: ${part.id}`,
+            `Chapters: ${partChapterIds.length}`,
+            `Created: ${part.created_at || 'Unknown'}`,
+            `Updated: ${part.updated_at || 'Unknown'}`,
+          ]
+          if (partChapterIds.length) {
+            partInfoLines.push(`Chapter Order: ${partChapterIds.join(', ')}`)
+          }
+          partFolder.file('part-info.txt', `${partInfoLines.join('\n')}\n`)
+          partFolders.set(part.id, partFolder)
+        })
+      }
+
+      const getChapterParentFolder = (partId?: string | null): JSZip | undefined => {
+        if (!hasParts) {
+          return chaptersFolder || undefined
+        }
+
+        if (partId && partFolders.has(partId)) {
+          return partFolders.get(partId)
+        }
+
+        if (!uncategorizedFolder && chaptersFolder) {
+          uncategorizedFolder = chaptersFolder.folder('uncategorized')
+          uncategorizedFolder.file('readme.txt', 'Chapters without a part assignment\n')
+        }
+
+        return uncategorizedFolder || chaptersFolder || undefined
+      }
 
       // Calculate padding length based on total chapters
       const paddingLength = chaptersData.length.toString().length
@@ -123,7 +173,8 @@ const exportUserData = async () => {
         // Create zero-padded chapter number
         const chapterNumber = (chapterIndex + 1).toString().padStart(paddingLength, '0')
         const chapterFolderName = `${chapterNumber} - ${sanitizeFileName(chapter.title || chapter.id)}`
-        const chapterFolder = chaptersFolder?.folder(chapterFolderName)
+        const chapterParentFolder = getChapterParentFolder(chapter.part_id)
+        const chapterFolder = chapterParentFolder?.folder(chapterFolderName)
 
         if (chapterFolder) {
           // Add chapter content
@@ -171,6 +222,17 @@ const exportUserData = async () => {
 
 const sanitizeFileName = (name: string): string => {
   return name.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')
+}
+
+const parseJsonArray = (value?: string | null): string[] => {
+  if (!value) return []
+
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
 const showCloudMessage = (message: string, type: 'success' | 'error') => {
