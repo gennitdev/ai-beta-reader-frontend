@@ -121,7 +121,7 @@ const exportUserData = async () => {
       const allParts = [...orderedParts, ...remainingParts]
       const hasParts = allParts.length > 0
       const partFolders = new Map<string, JSZip>()
-      let uncategorizedFolder: JSZip | null = null
+      let uncategorizedFolder: JSZip | undefined
 
       if (hasParts && chaptersFolder) {
         const partPaddingLength = allParts.length.toString().length
@@ -129,7 +129,10 @@ const exportUserData = async () => {
           const partNumber = (index + 1).toString().padStart(partPaddingLength, '0')
           const partName = part.name || `Part ${index + 1}`
           const partFolderName = `${partNumber} - ${sanitizeFileName(partName)}`
-          const partFolder = chaptersFolder.folder(partFolderName)
+          const partFolder = chaptersFolder.folder(partFolderName) || undefined
+          if (!partFolder) {
+            return
+          }
           const partChapterIds = parseJsonArray(part.chapter_order)
           const partInfoLines = [
             `Name: ${partName}`,
@@ -156,8 +159,11 @@ const exportUserData = async () => {
         }
 
         if (!uncategorizedFolder && chaptersFolder) {
-          uncategorizedFolder = chaptersFolder.folder('uncategorized')
-          uncategorizedFolder.file('readme.txt', 'Chapters without a part assignment\n')
+          const newFolder = chaptersFolder.folder('uncategorized') || undefined
+          if (newFolder) {
+            newFolder.file('readme.txt', 'Chapters without a part assignment\n')
+            uncategorizedFolder = newFolder
+          }
         }
 
         return uncategorizedFolder || chaptersFolder || undefined

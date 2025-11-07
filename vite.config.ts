@@ -15,8 +15,14 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      fs: fileURLToPath(new URL('./src/shims/fs.ts', import.meta.url)),
+      path: fileURLToPath(new URL('./src/shims/path.ts', import.meta.url)),
+      crypto: fileURLToPath(new URL('./src/shims/crypto.ts', import.meta.url)),
     },
+  },
+  optimizeDeps: {
+    exclude: ['sql.js'],
   },
   publicDir: 'public',
   base: '/',
