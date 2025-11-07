@@ -49,6 +49,7 @@ const loading = ref(false);
 const loadingWiki = ref(false);
 const expandedSummaries = ref<Set<string>>(new Set());
 const routerViewKey = ref(0);
+let suppressDbChapterSync = false;
 
 // Book editing state
 const isEditingBookTitle = ref(false);
@@ -189,6 +190,62 @@ watch(
   { immediate: true, deep: true }
 );
 
+const syncChaptersFromDb = async () => {
+  if (!book.value) {
+    chapters.value = [];
+    sidebarPartLists.value = {};
+    sidebarUncategorized.value = [];
+    return;
+  }
+
+  const partNameMap = new Map(parts.value.map((part) => [part.id, part.name]));
+
+  const chapterPromises = dbChapters.value.map(async (ch: any, index: number) => {
+    const summary = await getSummary(ch.id);
+    return {
+      id: ch.id,
+      title: ch.title || null,
+      word_count: Number(ch.word_count) || 0,
+      has_summary: !!summary,
+      summary: summary?.summary || null,
+      position: index,
+      position_in_part: null,
+      part_id: ch.part_id || null,
+      part_name: ch.part_id ? partNameMap.get(ch.part_id) || null : null,
+    } as Chapter;
+  });
+
+  const chapterList = await Promise.all(chapterPromises);
+  const chapterOrderIds = parseIdArray(book.value?.chapter_order);
+  const orderedChapters = applyOrder(chapterList, chapterOrderIds);
+
+  const partOrderMap = new Map(
+    parts.value.map((part) => [part.id, parseIdArray(part.chapter_order)])
+  );
+
+  orderedChapters.forEach((chapter) => {
+    if (!chapter.part_id) return;
+    const orderIds = partOrderMap.get(chapter.part_id);
+    if (!orderIds?.length) return;
+    chapter.position_in_part = orderIds.indexOf(chapter.id);
+  });
+
+  chapters.value = orderedChapters;
+  syncSidebarLists();
+};
+
+watch(
+  () => dbChapters.value,
+  async () => {
+    if (suppressDbChapterSync) return;
+    try {
+      await syncChaptersFromDb();
+    } catch (error) {
+      console.error("Failed to synchronize chapters:", error);
+    }
+  }
+);
+
 const parseIdArray = (value: string | null | undefined): string[] => {
   if (!value) return [];
   try {
@@ -197,6 +254,29 @@ const parseIdArray = (value: string | null | undefined): string[] => {
   } catch {
     return [];
   }
+};
+
+const applyOrder = (items: Chapter[], orderIds: string[]) => {
+  if (!orderIds.length) return items;
+  const chapterMap = new Map(items.map((chapter) => [chapter.id, chapter]));
+  const ordered: Chapter[] = [];
+
+  orderIds.forEach((id) => {
+    const chapter = chapterMap.get(id);
+    if (chapter) {
+      ordered.push(chapter);
+      chapterMap.delete(id);
+    }
+  });
+
+  chapterMap.forEach((chapter) => {
+    ordered.push(chapter);
+  });
+
+  return ordered.map((chapter, index) => ({
+    ...chapter,
+    position: index,
+  }));
 };
 
 const arraysEqual = (a: string[], b: string[]) =>
@@ -340,6 +420,7 @@ const saveBookTitle = async () => {
 const loadBook = async () => {
   try {
     loading.value = true;
+    suppressDbChapterSync = true;
 
     // Load books from database
     await loadBooks();
@@ -360,73 +441,11 @@ const loadBook = async () => {
     parts.value = await getParts(bookId.value);
 
     await syncPartOrderWithParts();
-
-    // Create a map of part IDs to part names for quick lookup
-    const partNameMap = new Map<string, string>();
-    parts.value.forEach((part) => {
-      partNameMap.set(part.id, part.name);
-    });
-
-    // Map database chapters to BookView chapter format and check for summaries
-    const chapterPromises = dbChapters.value.map(async (ch: any, index: number) => {
-      const summary = await getSummary(ch.id);
-      return {
-        id: ch.id,
-        title: ch.title || null,
-        word_count: Number(ch.word_count) || 0,
-        has_summary: !!summary,
-        summary: summary?.summary || null,
-        position: index,
-        position_in_part: null,
-        part_id: ch.part_id || null,
-        part_name: ch.part_id ? partNameMap.get(ch.part_id) || null : null,
-      };
-    });
-
-    const chapterList = await Promise.all(chapterPromises);
-
-    const applyOrder = (items: Chapter[], orderIds: string[]) => {
-      if (!orderIds.length) return items;
-      const chapterMap = new Map(items.map((chapter) => [chapter.id, chapter]));
-      const ordered: Chapter[] = [];
-
-      orderIds.forEach((id) => {
-        const chapter = chapterMap.get(id);
-        if (chapter) {
-          ordered.push(chapter);
-          chapterMap.delete(id);
-        }
-      });
-
-      chapterMap.forEach((chapter) => {
-        ordered.push(chapter);
-      });
-
-      return ordered.map((chapter, index) => ({
-        ...chapter,
-        position: index,
-      }));
-    };
-
-    const chapterOrderIds = parseIdArray(book.value?.chapter_order);
-    chapters.value = applyOrder(chapterList, chapterOrderIds);
-
-    // Respect part-specific chapter ordering
-    const partOrderMap = new Map(
-      parts.value.map((part) => [part.id, parseIdArray(part.chapter_order)])
-    );
-
-    chapters.value.forEach((chapter) => {
-      if (!chapter.part_id) return;
-      const orderIds = partOrderMap.get(chapter.part_id);
-      if (!orderIds?.length) return;
-      chapter.position_in_part = orderIds.indexOf(chapter.id);
-    });
-
-    syncSidebarLists();
+    await syncChaptersFromDb();
   } catch (error) {
     console.error("Failed to load book:", error);
   } finally {
+    suppressDbChapterSync = false;
     loading.value = false;
   }
 };

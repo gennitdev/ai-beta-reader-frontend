@@ -4,6 +4,10 @@ import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 
 const isInitialized = ref(false)
 const cloudSync = ref<CloudSync | null>(null)
+const books = ref<Book[]>([])
+const chapters = ref<Chapter[]>([])
+const loading = ref(false)
+const error = ref<string | null>(null)
 
 // Initialize database once on app load
 export async function initializeDatabase() {
@@ -25,11 +29,6 @@ export async function initializeDatabase() {
 }
 
 export function useDatabase() {
-  const books = ref<Book[]>([])
-  const chapters = ref<Chapter[]>([])
-  const loading = ref(false)
-  const error = ref<string | null>(null)
-
   onMounted(async () => {
     await initializeDatabase()
   })
