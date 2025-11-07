@@ -142,6 +142,7 @@ const breadcrumbs = computed(() => {
 })
 
 const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
+const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
 </script>
 
 <template>
@@ -192,7 +193,7 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
                 </span>
               </template>
             </nav>
-            <nav v-else class="flex items-center space-x-6 whitespace-nowrap">
+            <nav v-else-if="!isSettingsRoute" class="flex items-center space-x-6 whitespace-nowrap">
               <router-link
                 to="/books"
                 class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
@@ -358,7 +359,7 @@ const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
               </span>
             </template>
           </nav>
-          <nav v-else class="flex items-center">
+          <nav v-else-if="!isSettingsRoute" class="flex items-center">
             <router-link
               to="/books"
               class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
