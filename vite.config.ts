@@ -21,9 +21,6 @@ export default defineConfig({
       crypto: fileURLToPath(new URL('./src/shims/crypto.ts', import.meta.url)),
     },
   },
-  optimizeDeps: {
-    exclude: ['sql.js'],
-  },
   publicDir: 'public',
   base: '/',
 })

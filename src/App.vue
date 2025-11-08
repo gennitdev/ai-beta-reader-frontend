@@ -155,7 +155,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
         <div class="px-4 sm:px-6">
         <!-- Desktop layout -->
         <div
-          class="hidden md:flex md:w-full md:flex-wrap md:items-start md:justify-between md:gap-y-2 md:py-3 lg:flex-nowrap lg:items-center lg:justify-between lg:h-16 lg:py-0"
+          class="hidden md:flex md:w-full md:flex-wrap md:items-start md:justify-between md:gap-y-2 md:py-3 lg:flex-nowrap lg:items-center lg:justify-between lg:h-12 lg:py-0"
         >
           <!-- Logo and Breadcrumbs / Navigation -->
           <div
@@ -163,9 +163,9 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
           >
             <router-link to="/" class="flex items-center flex-shrink-0">
               <h1
-                class="text-2xl font-bold text-gray-900 dark:text-white space-grotesk-logo whitespace-nowrap"
+                class="text-md text-gray-900 dark:text-white space-grotesk-logo whitespace-nowrap"
               >
-                Beta-bot
+                BETABOT
               </h1>
             </router-link>
 
