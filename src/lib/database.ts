@@ -67,6 +67,7 @@ export class AppDatabase {
   private db: any;
   private sqlite: SQLiteConnection | null = null;
   private isNative = Capacitor.isNativePlatform();
+  private tableColumnCache = new Map<string, string[]>();
 
   async init() {
     if (this.isNative) {
@@ -816,10 +817,23 @@ export class AppDatabase {
     const importTable = async (tableName: string, rows: any[]) => {
       if (!rows || rows.length === 0) return;
 
+      const expectedColumns = await this.getTableColumns(tableName);
+      if (!expectedColumns.length) return;
+
+      const placeholders = expectedColumns.map(() => '?').join(', ');
+      const columnList = expectedColumns.map((col) => `"${col}"`).join(', ');
+      const insertSql = `INSERT OR REPLACE INTO ${tableName} (${columnList}) VALUES (${placeholders})`;
+
       for (const row of rows) {
-        const columns = Array.isArray(row) ? row : Object.values(row);
-        const placeholders = columns.map(() => '?').join(', ');
-        await run(`INSERT OR REPLACE INTO ${tableName} VALUES (${placeholders})`, columns);
+        const rowValues: Record<string, any> = Array.isArray(row)
+          ? expectedColumns.reduce((acc, column, index) => {
+              acc[column] = row[index] ?? null;
+              return acc;
+            }, {} as Record<string, any>)
+          : row ?? {};
+
+        const values = expectedColumns.map((column) => rowValues[column] ?? null);
+        await run(insertSql, values);
       }
     };
 
@@ -934,7 +948,9 @@ export class AppDatabase {
     tables.forEach((table: any) => {
       const columns =
         Array.isArray(table?.schema) && table.schema.length
-          ? table.schema.map((col: any) => col?.column)
+          ? table.schema
+              .map((col: any) => col?.column)
+              .filter((column: string | undefined) => Boolean(column && /^[A-Za-z_][A-Za-z0-9_]*$/.test(column as string)))
           : [];
       schemaMap.set(table.name, columns);
       valueMap.set(table.name, Array.isArray(table?.values) ? table.values : []);
@@ -967,6 +983,35 @@ export class AppDatabase {
       wiki_updates: rowsToObjects('wiki_updates'),
       chapter_wiki_mentions: rowsToObjects('chapter_wiki_mentions'),
     };
+  }
+
+  private async getTableColumns(tableName: string): Promise<string[]> {
+    if (this.tableColumnCache.has(tableName)) {
+      return this.tableColumnCache.get(tableName)!;
+    }
+
+    let columns: string[] = [];
+
+    if (this.isNative) {
+      const result = await this.db.query(`PRAGMA table_info(${tableName})`);
+      const rows = result?.values ?? [];
+      columns = rows
+        .map((row: any) => {
+          if (row?.name) return row.name;
+          if (Array.isArray(row)) return row[1];
+          return null;
+        })
+        .filter((name: string | null) => Boolean(name)) as string[];
+    } else {
+      const result = this.db.exec(`PRAGMA table_info(${tableName})`);
+      if (result.length > 0) {
+        const nameIndex = result[0].columns.indexOf('name');
+        columns = result[0].values.map((row: any[]) => row[nameIndex]);
+      }
+    }
+
+    this.tableColumnCache.set(tableName, columns);
+    return columns;
   }
 
   // Chapter Summary methods
