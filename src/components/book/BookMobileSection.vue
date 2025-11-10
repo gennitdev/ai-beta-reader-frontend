@@ -281,7 +281,7 @@ watch(
             </button>
             <div class="flex items-center gap-2">
               <router-link
-                :to="`/books/${bookId}/parts/${part.id}`"
+                :to="`/m/books/${bookId}/parts/${part.id}`"
                 class="inline-flex items-center rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-900/30"
               >
                 View Part
