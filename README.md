@@ -162,6 +162,8 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
    - Prompts for a password (used to encrypt the JSON dump via `CryptoJS.AES`).
    - Uploads `ai-beta-reader-backup.enc` with Drive scope `drive.file`.
    - Re-running backup overwrites the same file id (Drive `files.update`).
+   - Mobile + desktop both emit the exact same snapshot format; you can restore a phone backup on web and vice versa.
+   - Want to sanity-check a backup before restoring? See `docs/cloud-sync.md#verifying-a-backup-locally` for a tiny Node script that prints record counts.
 
 2. **Restore** (`User Settings → Restore from Drive`)
    - Auth flow differs by platform:

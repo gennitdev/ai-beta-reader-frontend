@@ -118,13 +118,65 @@ adb logcat | grep "using OAuth config"
 
 ## Database Import Notes
 
-- Browser exports run `exportDatabase()` → JSON. Native import now treats all JSON exports the same:
-  1. Disable foreign keys.
-  2. Clear tables in reverse dependency order.
-  3. Insert parents (books) then children (parts, chapters, wiki pages, etc.).
-  4. Re-enable foreign keys.
-- `importData` is considered a Capacitor JSON export only if it contains `database` + `tables` keys.
-- This logic lives in `src/lib/database.ts`.
+- Both **web** and **native** now produce the same normalized JSON payload (`{ version: 2, books: [], chapters: [], ... }`). Native first calls `CapacitorSQLite.exportToJson('full')`, then the app flattens the plugin’s `tables` array into the shared structure. Web builds continue to assemble the object directly.
+- Restores always run through the same importer (`src/lib/database.ts`):
+  1. Decrypt blob → JSON
+  2. Detect Capacitor-style exports (presence of `tables` or `export.tables`) and normalize them
+  3. Disable foreign keys
+  4. Delete existing rows (children before parents)
+  5. Insert rows table-by-table, using the live schema via `PRAGMA table_info` so constraint definitions aren’t mistaken for real columns
+  6. Re-enable foreign keys
+- Because we emit the exact same snapshot everywhere, a backup made on Android can be restored verbatim on web, and vice versa. If a restore fails, the DB stays untouched; re-running with the correct password/file is safe.
+
+### Verifying a Backup Locally
+
+If you want to double-check a `.enc` file before restoring:
+
+```bash
+node inspect-backup.mjs          # sample script below
+```
+
+```js
+// inspect-backup.mjs
+import fs from 'node:fs'
+import CryptoJS from 'crypto-js'
+
+const encrypted = fs.readFileSync('./ai-beta-reader-backup.enc', 'utf8')
+const password = process.env.BACKUP_PASSWORD ?? 'your-password'
+
+const decrypted = CryptoJS.AES.decrypt(encrypted, password).toString(CryptoJS.enc.Utf8)
+if (!decrypted) throw new Error('Wrong password or corrupted file')
+
+const raw = JSON.parse(decrypted)
+const payload = raw.export?.tables ? normalize(raw.export) : raw.tables ? normalize(raw) : raw
+
+function normalize(exportData) {
+  const toObjects = name => {
+    const table = exportData.tables.find(t => t.name === name)
+    if (!table) return []
+    const columns = table.schema?.map(col => col?.column).filter(Boolean) ?? []
+    return (table.values ?? []).map(row =>
+      columns.reduce((acc, column, idx) => ({ ...acc, [column]: row[idx] ?? null }), {})
+    )
+  }
+
+  return {
+    books: toObjects('books'),
+    chapters: toObjects('chapters'),
+    book_parts: toObjects('book_parts'),
+    wiki_pages: toObjects('wiki_pages'),
+  }
+}
+
+console.log({
+  books: payload.books?.length ?? 0,
+  chapters: payload.chapters?.length ?? 0,
+  book_parts: payload.book_parts?.length ?? 0,
+  wiki_pages: payload.wiki_pages?.length ?? 0,
+})
+```
+
+You should see non-zero counts when data is present. If everything is zero, the backup was taken from an empty DB (or the wrong password was supplied).
 
 ---
 
