@@ -139,8 +139,7 @@ async function launchAuthBrowser(authUrl: string, redirectUri: string, expectedS
   let urlListener: PluginListenerHandle | undefined;
   let browserListener: PluginListenerHandle | undefined;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const platform = Capacitor.getPlatform();
-  const useBrowserPlugin = platform !== 'android';
+  const useBrowserPlugin = Capacitor.isPluginAvailable?.('Browser') ?? true;
 
   const cleanup = async () => {
     if (timeoutId) {
