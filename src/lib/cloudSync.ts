@@ -22,6 +22,8 @@ export interface CloudProvider {
   upload(fileName: string, data: string): Promise<void>;
   download(fileName: string): Promise<string | null>;
   isAuthenticated(): boolean;
+  ensureWebSdkReady?(): Promise<void>;
+  isWebSdkReady?(): boolean;
 }
 
 /**
@@ -42,6 +44,7 @@ export class GoogleDriveProvider implements CloudProvider {
   private readonly webRedirectUri: string;
   private readonly nativeRedirectUri: string;
   private readonly tokenExpiryLeewayMs = 60 * 1000;
+  private webSdkReady = Capacitor.isNativePlatform();
 
   constructor(clientId: string, options?: GoogleDriveProviderOptions) {
     this.CLIENT_ID = clientId;
@@ -198,15 +201,11 @@ export class GoogleDriveProvider implements CloudProvider {
   }
 
   private async authenticateWeb(): Promise<void> {
-    try {
-      await this.ensureGoogleIdentityServicesLoaded();
-      this.debug('GIS ready, creating token client');
-    } catch (error) {
-      console.error('Failed to initialize Google Identity Services:', error);
-      throw error instanceof Error ? error : new Error(String(error));
+    if (!this.webSdkReady) {
+      await this.ensureWebSdkReady();
     }
 
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const googleAccounts: any = (window as any).google?.accounts;
@@ -458,7 +457,22 @@ export class GoogleDriveProvider implements CloudProvider {
       this.gisLoadingPromise = this.loadGisForWeb().then(() => this.debug('GIS loaded via web script'));
     }
 
+    this.gisLoadingPromise = this.gisLoadingPromise.then(() => {
+      this.webSdkReady = true;
+    });
+
     return this.gisLoadingPromise;
+  }
+
+  async ensureWebSdkReady(): Promise<void> {
+    if (Capacitor.isNativePlatform() || this.webSdkReady) {
+      return;
+    }
+    await this.ensureGoogleIdentityServicesLoaded();
+  }
+
+  isWebSdkReady(): boolean {
+    return Capacitor.isNativePlatform() || this.webSdkReady;
   }
 
   private async loadGisForNative(): Promise<void> {
@@ -674,5 +688,15 @@ export class CloudSync {
 
   stopAutoSync(intervalId: number): void {
     clearInterval(intervalId);
+  }
+
+  async ensureWebSdkReady(): Promise<void> {
+    if (this.provider.ensureWebSdkReady) {
+      await this.provider.ensureWebSdkReady();
+    }
+  }
+
+  isWebSdkReady(): boolean {
+    return this.provider.isWebSdkReady ? this.provider.isWebSdkReady() : true;
   }
 }

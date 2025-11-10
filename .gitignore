@@ -152,3 +152,8 @@ components.d.ts
 
 # keystore
 android/app/betabot-release.keystore
+
+# backup example
+ai-beta-reader-backup.enc
+inspect-backup.mjs
+fixtures/

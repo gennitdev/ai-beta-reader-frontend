@@ -8,7 +8,18 @@ import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, C
 const router = useRouter()
 
 // Use local database
-const { books, chapters, loadBooks, loadChapters, getParts, backupToCloud, restoreFromCloud, hasCloudSync } = useDatabase()
+const {
+  books,
+  chapters,
+  loadBooks,
+  loadChapters,
+  getParts,
+  backupToCloud,
+  restoreFromCloud,
+  hasCloudSync,
+  prepareCloudSync,
+  cloudSyncReady,
+} = useDatabase()
 
 // OpenAI API Key state
 const openaiApiKey = ref('')
@@ -263,6 +274,10 @@ const handleCloudBackup = async () => {
     showCloudMessage('Cloud sync is not configured. Add VITE_GOOGLE_CLIENT_ID to use Google Drive backups.', 'error')
     return
   }
+  if (!cloudSyncReady.value) {
+    showCloudMessage('Still preparing Google Drive services. Please wait a moment.', 'error')
+    return
+  }
 
   try {
     isBackingUp.value = true
@@ -285,6 +300,10 @@ const handleCloudRestore = async () => {
 
   if (!cloudSyncAvailable.value) {
     showCloudMessage('Cloud sync is not configured. Add VITE_GOOGLE_CLIENT_ID to use Google Drive backups.', 'error')
+    return
+  }
+  if (!cloudSyncReady.value) {
+    showCloudMessage('Still preparing Google Drive services. Please wait a moment.', 'error')
     return
   }
 
@@ -311,8 +330,15 @@ const handleCloudRestore = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadApiKey()
+  if (!cloudSyncReady.value) {
+    try {
+      await prepareCloudSync()
+    } catch (error) {
+      console.error('Failed to prepare cloud sync:', error)
+    }
+  }
 })
 </script>
 
@@ -487,7 +513,7 @@ onMounted(() => {
           <div class="flex flex-wrap gap-3">
             <button
               @click="handleCloudBackup"
-              :disabled="isBackingUp || !cloudPassword || !cloudSyncAvailable"
+              :disabled="isBackingUp || !cloudPassword || !cloudSyncAvailable || !cloudSyncReady"
               class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg
@@ -508,7 +534,7 @@ onMounted(() => {
 
             <button
               @click="handleCloudRestore"
-              :disabled="isRestoring || !cloudPassword || !cloudSyncAvailable"
+              :disabled="isRestoring || !cloudPassword || !cloudSyncAvailable || !cloudSyncReady"
               class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg
@@ -527,6 +553,13 @@ onMounted(() => {
               </span>
             </button>
           </div>
+
+          <p
+            v-if="!cloudSyncReady"
+            class="text-xs text-amber-600 dark:text-amber-400"
+          >
+            Preparing Google Drive services...
+          </p>
 
           <div
             v-if="cloudMessage"

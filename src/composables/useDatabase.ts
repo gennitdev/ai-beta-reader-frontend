@@ -8,6 +8,7 @@ const books = ref<Book[]>([])
 const chapters = ref<Chapter[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+const cloudSyncReady = ref(true)
 
 // Initialize database once on app load
 export async function initializeDatabase() {
@@ -23,6 +24,7 @@ export async function initializeDatabase() {
       nativeRedirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI_NATIVE,
     })
     cloudSync.value = new CloudSync(provider)
+    cloudSyncReady.value = cloudSync.value.isWebSdkReady()
   }
 
   isInitialized.value = true
@@ -114,6 +116,19 @@ export function useDatabase() {
   }
 
   // Cloud sync operations
+  async function prepareCloudSync() {
+    try {
+      await initializeDatabase()
+      if (cloudSync.value) {
+        await cloudSync.value.ensureWebSdkReady()
+        cloudSyncReady.value = cloudSync.value.isWebSdkReady()
+      }
+    } catch (e) {
+      console.error('Cloud sync initialization error:', e)
+      cloudSyncReady.value = false
+    }
+  }
+
   async function backupToCloud(password: string) {
     if (!cloudSync.value) {
       throw new Error('Cloud sync not initialized')
@@ -534,6 +549,12 @@ export function useDatabase() {
     saveChapter,
     deleteChapter,
 
+    // Cloud sync operations
+    cloudSyncReady,
+    prepareCloudSync,
+    backupToCloud,
+    restoreFromCloud,
+
     // Summary operations
     saveSummary,
     getSummary,
@@ -573,9 +594,6 @@ export function useDatabase() {
     replaceInChapter,
     replaceInWikiPage,
 
-    // Cloud sync
-    backupToCloud,
-    restoreFromCloud,
     hasCloudSync: () => cloudSync.value !== null,
 
     // Import/Export

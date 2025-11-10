@@ -735,7 +735,8 @@ export class AppDatabase {
   async exportDatabase(): Promise<Uint8Array> {
     if (this.isNative) {
       const jsonExport = await this.db.exportToJson('full');
-      return new TextEncoder().encode(JSON.stringify(jsonExport));
+      const normalized = this.normalizeCapacitorExport(jsonExport);
+      return new TextEncoder().encode(JSON.stringify(normalized));
     } else {
       // Export all tables as JSON
       const books = await this.getBooks();
@@ -774,18 +775,8 @@ export class AppDatabase {
 
   async importDatabase(data: Uint8Array): Promise<void> {
     const jsonString = new TextDecoder().decode(data);
-    const importData = JSON.parse(jsonString);
-
-    const appearsToBeCapacitorJson =
-      typeof importData === 'object' &&
-      importData !== null &&
-      'database' in importData &&
-      'tables' in importData;
-
-    if (this.isNative && typeof this.db.importFromJson === 'function' && appearsToBeCapacitorJson) {
-      await this.db.importFromJson(importData);
-      return;
-    }
+    let importData = JSON.parse(jsonString);
+    importData = this.normalizeCapacitorExport(importData);
 
     const run = async (sql: string, params: any[] = []) => {
       if (this.isNative) {
@@ -923,6 +914,59 @@ export class AppDatabase {
     // Use the standard import function
     const jsonString = JSON.stringify(transformedData);
     await this.importDatabase(new TextEncoder().encode(jsonString));
+  }
+
+  private normalizeCapacitorExport(raw: any) {
+    if (raw && typeof raw === 'object' && 'export' in raw && raw.export?.tables) {
+      return this.convertCapacitorExport(raw.export);
+    }
+    if (raw && typeof raw === 'object' && raw.tables) {
+      return this.convertCapacitorExport(raw);
+    }
+    return raw;
+  }
+
+  private convertCapacitorExport(exportData: any) {
+    const tables = Array.isArray(exportData?.tables) ? exportData.tables : [];
+    const schemaMap = new Map<string, string[]>();
+    const valueMap = new Map<string, any[][]>();
+
+    tables.forEach((table: any) => {
+      const columns =
+        Array.isArray(table?.schema) && table.schema.length
+          ? table.schema.map((col: any) => col?.column)
+          : [];
+      schemaMap.set(table.name, columns);
+      valueMap.set(table.name, Array.isArray(table?.values) ? table.values : []);
+    });
+
+    const rowsToObjects = (tableName: string) => {
+      const columns = schemaMap.get(tableName) ?? [];
+      const rows = valueMap.get(tableName) ?? [];
+      return rows.map((row) => {
+        const entry: Record<string, any> = {};
+        columns.forEach((column, index) => {
+          entry[column] = row?.[index] ?? null;
+        });
+        return entry;
+      });
+    };
+
+    return {
+      version: 2,
+      books: rowsToObjects('books'),
+      chapters: rowsToObjects('chapters'),
+      book_parts: rowsToObjects('book_parts'),
+      chapter_summaries: rowsToObjects('chapter_summaries'),
+      part_summaries: rowsToObjects('part_summaries'),
+      wiki_pages: rowsToObjects('wiki_pages'),
+      book_characters: rowsToObjects('book_characters'),
+      chapter_reviews: rowsToObjects('chapter_reviews'),
+      custom_reviewer_profiles: rowsToObjects('custom_reviewer_profiles'),
+      ai_profiles: rowsToObjects('ai_profiles'),
+      wiki_updates: rowsToObjects('wiki_updates'),
+      chapter_wiki_mentions: rowsToObjects('chapter_wiki_mentions'),
+    };
   }
 
   // Chapter Summary methods
