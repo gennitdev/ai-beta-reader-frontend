@@ -734,10 +734,7 @@ export class AppDatabase {
 
   async exportDatabase(): Promise<Uint8Array> {
     if (this.isNative) {
-      const jsonExport = await this.db.exportToJson({
-        database: 'ai-beta-reader',
-        jsonexportmode: 'full'
-      });
+      const jsonExport = await this.db.exportToJson('full');
       return new TextEncoder().encode(JSON.stringify(jsonExport));
     } else {
       // Export all tables as JSON
