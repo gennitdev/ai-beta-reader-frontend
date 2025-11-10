@@ -1523,11 +1523,15 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(chaptersQuery, [bookId]);
       result.values?.forEach((row: any, index: number) => {
+        const title = row[1] || '';
         const text = row[2] || '';
-        if (text.toLowerCase().includes(searchLower)) {
+        if (
+          (title && title.toLowerCase().includes(searchLower)) ||
+          text.toLowerCase().includes(searchLower)
+        ) {
           chapters.push({
             id: row[0],
-            title: row[1],
+            title: title,
             text: text,
             word_count: row[3],
             position: index
@@ -1540,11 +1544,15 @@ export class AppDatabase {
       let position = 0;
       while (stmt.step()) {
         const row = stmt.getAsObject();
+        const title = (row.title as string) || '';
         const text = (row.text as string) || '';
-        if (text.toLowerCase().includes(searchLower)) {
+        if (
+          (title && title.toLowerCase().includes(searchLower)) ||
+          text.toLowerCase().includes(searchLower)
+        ) {
           chapters.push({
             id: row.id,
-            title: row.title,
+            title: title,
             text: text,
             word_count: row.word_count,
             position: position
@@ -1604,19 +1612,22 @@ export class AppDatabase {
 
   async replaceInChapter(chapterId: string, searchTerm: string, replaceTerm: string): Promise<void> {
     // Get current chapter
-    const getQuery = `SELECT text FROM chapters WHERE id = ?`;
+    const getQuery = `SELECT title, text FROM chapters WHERE id = ?`;
+    let currentTitle: string | null = null;
     let currentText = '';
 
     if (this.isNative) {
       const result = await this.db.query(getQuery, [chapterId]);
       if (result.values && result.values.length > 0) {
-        currentText = result.values[0][0] || '';
+        currentTitle = (result.values[0][0] as string) ?? null;
+        currentText = result.values[0][1] || '';
       }
     } else {
       const stmt = this.db.prepare(getQuery);
       stmt.bind([chapterId]);
       if (stmt.step()) {
         const row = stmt.getAsObject();
+        currentTitle = (row.title as string) ?? null;
         currentText = (row.text as string) || '';
       }
       stmt.free();
@@ -1625,7 +1636,7 @@ export class AppDatabase {
     // Perform replacement (case-insensitive but preserves the case pattern of replacement)
     // This will match all case variations of the search term
     const regex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    const newText = currentText.replace(regex, (match) => {
+    const replaceWithCasePreservation = (text: string) => text.replace(regex, (match) => {
       // Preserve the case pattern of the matched text
       if (match === match.toUpperCase() && match.length > 1) {
         // All caps -> make replacement all caps
@@ -1638,15 +1649,17 @@ export class AppDatabase {
         return replaceTerm;
       }
     });
+    const newText = replaceWithCasePreservation(currentText);
+    const newTitle = currentTitle !== null ? replaceWithCasePreservation(currentTitle) : null;
 
     // Update chapter
-    const updateQuery = `UPDATE chapters SET text = ?, word_count = ? WHERE id = ?`;
+    const updateQuery = `UPDATE chapters SET title = ?, text = ?, word_count = ? WHERE id = ?`;
     const wordCount = newText.trim().split(/\s+/).length;
 
     if (this.isNative) {
-      await this.db.run(updateQuery, [newText, wordCount, chapterId]);
+      await this.db.run(updateQuery, [newTitle, newText, wordCount, chapterId]);
     } else {
-      this.db.run(updateQuery, [newText, wordCount, chapterId]);
+      this.db.run(updateQuery, [newTitle, newText, wordCount, chapterId]);
       this.saveToLocalStorage();
     }
   }

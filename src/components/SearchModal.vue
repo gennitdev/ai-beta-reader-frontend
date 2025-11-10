@@ -63,11 +63,20 @@
                       class="hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors text-left cursor-pointer"
                       title="Click to open chapter"
                     >
-                      {{ chapter.title || `Chapter ${chapter.position || 'Untitled'}` }}
+                      <HighlightedText
+                        :text="chapter.title || `Chapter ${chapter.position || 'Untitled'}`"
+                        :search-input="searchTerm"
+                      />
                     </button>
                   </h4>
                   <p class="text-sm text-gray-500 dark:text-gray-400">
                     {{ chapter.word_count || 0 }} words
+                  </p>
+                  <p
+                    v-if="includesSearchTerm(chapter.title) && !includesSearchTerm(chapter.text)"
+                    class="text-xs text-amber-600 dark:text-amber-400 mt-1"
+                  >
+                    Match found in title
                   </p>
                 </div>
                 <button
@@ -280,6 +289,11 @@ const getTextPreview = (text: string): string => {
   const preview = text.substring(start, end)
 
   return (start > 0 ? '...' : '') + preview + (end < text.length ? '...' : '')
+}
+
+const includesSearchTerm = (value?: string | null): boolean => {
+  if (!value || !searchTerm.value) return false
+  return value.toLowerCase().includes(searchTerm.value.toLowerCase())
 }
 
 watch(() => props.show, async (newValue) => {
