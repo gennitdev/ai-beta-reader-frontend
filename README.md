@@ -84,7 +84,7 @@ Create personalized reviewer profiles with custom prompts to get the exact type 
 
 ### Character Wiki System
 
-Automatically generated character sheets that track relationships and development, with full edit history.
+Automatically generated character sheets that track relationships and development..
 
 ![Auto-generated Character Sheet with Change History](./src/assets/screenshots/auto-generated-character-sheet-with-change-history.png)
 

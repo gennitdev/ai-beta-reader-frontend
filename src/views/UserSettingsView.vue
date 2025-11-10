@@ -370,7 +370,7 @@ onMounted(async () => {
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">OpenAI API Key</h2>
           </div>
           <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Your OpenAI API key is stored locally in your browser and used for AI-powered features like chapter summaries and reviews.
+            Your OpenAI API key is stored locally and used for AI-powered features like chapter summaries and reviews.
           </p>
         </div>
 
