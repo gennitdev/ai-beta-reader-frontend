@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { toRefs } from 'vue'
+import { ref, toRefs, watch } from 'vue'
 import { DocumentTextIcon, BookOpenIcon, PlusIcon, Cog6ToothIcon, PencilIcon } from '@heroicons/vue/24/outline'
 import type { Book } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
@@ -132,6 +132,33 @@ const {
   expandedSummaries,
   wikiPagesByType
 } = toRefs(props)
+
+const expandedMobileParts = ref<Set<string>>(new Set())
+
+const isPartExpanded = (partId: string) => expandedMobileParts.value.has(partId)
+
+const toggleMobilePart = (partId: string) => {
+  const next = new Set(expandedMobileParts.value)
+  if (next.has(partId)) {
+    next.delete(partId)
+  } else {
+    next.add(partId)
+  }
+  expandedMobileParts.value = next
+}
+
+watch(
+  () => chaptersByPart.value.parts.map(part => part.id),
+  ids => {
+    const next = new Set<string>()
+    ids.forEach(id => {
+      if (expandedMobileParts.value.has(id)) {
+        next.add(id)
+      }
+    })
+    expandedMobileParts.value = next
+  }
+)
 </script>
 
 <template>
@@ -222,16 +249,36 @@ const {
         <section
           v-for="part in chaptersByPart.parts"
           :key="part.id"
-          class="bg-white dark:bg-gray-900"
+          class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm"
         >
-          <div class="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-gray-200 dark:border-gray-700">
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ part.name }}</h2>
-              <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }} ·
-                {{ formatWordCount(part.wordCount) }} words
-              </p>
-            </div>
+          <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <button
+              type="button"
+              class="flex items-center justify-between gap-3 flex-1 text-left"
+              @click="toggleMobilePart(part.id)"
+              :aria-expanded="isPartExpanded(part.id)"
+              :aria-controls="`mobile-part-${part.id}`"
+            >
+              <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ part.name }}</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }} ·
+                  {{ formatWordCount(part.wordCount) }} words
+                </p>
+              </div>
+              <svg
+                class="h-5 w-5 text-gray-500 dark:text-gray-300 transition-transform duration-200"
+                :class="isPartExpanded(part.id) ? 'rotate-180' : ''"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
             <div class="flex items-center gap-2">
               <router-link
                 :to="`/books/${bookId}/parts/${part.id}`"
@@ -249,7 +296,11 @@ const {
             </div>
           </div>
 
-          <div class="space-y-4">
+          <div
+            v-if="isPartExpanded(part.id)"
+            :id="`mobile-part-${part.id}`"
+            class="space-y-4 px-4 py-4"
+          >
             <BookMobileChapterCard
               v-for="chapter in part.chapters"
               :key="chapter.id"
