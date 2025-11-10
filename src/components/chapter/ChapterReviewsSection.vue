@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import type { PropType } from 'vue'
+import { ref, onUnmounted, type PropType } from 'vue'
 import {
   SparklesIcon,
   ChevronDownIcon,
   ChatBubbleLeftRightIcon,
   TrashIcon,
+  DocumentDuplicateIcon,
+  CheckIcon,
 } from '@heroicons/vue/24/outline'
 import AvatarComponent from '@/components/AvatarComponent.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -80,6 +82,52 @@ const emit = defineEmits<{
   (e: 'toggle-review', id: string): void
   (e: 'toggle-prompt', id: string): void
 }>()
+
+const copiedReviewId = ref<string | null>(null)
+let reviewCopyTimeout: ReturnType<typeof setTimeout> | null = null
+
+const resetCopiedReview = () => {
+  if (reviewCopyTimeout) {
+    clearTimeout(reviewCopyTimeout)
+    reviewCopyTimeout = null
+  }
+  copiedReviewId.value = null
+}
+
+const fallbackCopy = (text: string) => {
+  if (typeof document === 'undefined') return
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+}
+
+const copyReviewText = async (review: Review) => {
+  if (!review.review_text) return
+  try {
+    resetCopiedReview()
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(review.review_text)
+    } else {
+      fallbackCopy(review.review_text)
+    }
+    copiedReviewId.value = review.id
+    reviewCopyTimeout = setTimeout(() => {
+      resetCopiedReview()
+    }, 2000)
+  } catch (error) {
+    console.error('Failed to copy review text:', error)
+  }
+}
+
+onUnmounted(() => {
+  resetCopiedReview()
+})
 </script>
 
 <template>
@@ -196,18 +244,32 @@ const emit = defineEmits<{
                 </div>
               </div>
 
-              <button
-                @click="emit('delete-review', review.id)"
-                :disabled="deletingReviewId === review.id"
-                class="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-700 dark:hover:text-red-400"
-                title="Delete review"
-              >
-                <div
-                  v-if="deletingReviewId === review.id"
-                  class="h-4 w-4 animate-spin rounded-full border-b-2 border-red-500"
-                ></div>
-                <TrashIcon v-else class="h-4 w-4" />
-              </button>
+              <div class="flex items-center gap-1">
+                <button
+                  @click="copyReviewText(review)"
+                  class="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-400"
+                  title="Copy review text"
+                >
+                  <component
+                    :is="copiedReviewId === review.id ? CheckIcon : DocumentDuplicateIcon"
+                    class="h-4 w-4"
+                  />
+                  <span class="sr-only">Copy review to clipboard</span>
+                </button>
+                <button
+                  @click="emit('delete-review', review.id)"
+                  :disabled="deletingReviewId === review.id"
+                  class="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-700 dark:hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Delete review"
+                >
+                  <div
+                    v-if="deletingReviewId === review.id"
+                    class="h-4 w-4 animate-spin rounded-full border-b-2 border-red-500"
+                  ></div>
+                  <TrashIcon v-else class="h-4 w-4" />
+                  <span class="sr-only">Delete review</span>
+                </button>
+              </div>
             </div>
 
             <div class="prose prose-sm max-w-none dark:prose-invert">

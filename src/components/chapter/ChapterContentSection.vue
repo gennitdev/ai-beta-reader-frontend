@@ -2,7 +2,12 @@
 import { ref, watch, onUnmounted, type PropType } from "vue";
 import TextEditor from "@/components/TextEditor.vue";
 import MarkdownRenderer from "@/components/MarkdownRenderer.vue";
-import { ArrowsPointingOutIcon, ArrowsPointingInIcon } from "@heroicons/vue/24/outline";
+import {
+  ArrowsPointingOutIcon,
+  ArrowsPointingInIcon,
+  DocumentDuplicateIcon,
+  CheckIcon,
+} from "@heroicons/vue/24/outline";
 
 const props = defineProps({
   isEditing: {
@@ -42,10 +47,52 @@ const toggleFullChapter = (value: boolean) => {
 
 const isFullscreen = ref(false);
 let previousBodyOverflow: string | null = null;
+const chapterCopied = ref(false);
+let chapterCopyTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.key === "Escape") {
     isFullscreen.value = false;
+  }
+};
+
+const resetChapterCopyState = () => {
+  if (chapterCopyTimeout) {
+    clearTimeout(chapterCopyTimeout);
+    chapterCopyTimeout = null;
+  }
+  chapterCopied.value = false;
+};
+
+const fallbackCopy = (text: string) => {
+  if (typeof document === "undefined") return;
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+};
+
+const copyChapterToClipboard = async () => {
+  if (!props.chapterText) return;
+  try {
+    resetChapterCopyState();
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(props.chapterText);
+    } else {
+      fallbackCopy(props.chapterText);
+    }
+    chapterCopied.value = true;
+    chapterCopyTimeout = setTimeout(() => {
+      chapterCopied.value = false;
+      chapterCopyTimeout = null;
+    }, 2000);
+  } catch (error) {
+    console.error("Failed to copy chapter text:", error);
   }
 };
 
@@ -79,21 +126,33 @@ onUnmounted(() => {
   if (isFullscreen.value) {
     disableFullscreenEffects();
   }
+  resetChapterCopyState();
 });
 </script>
 
 <template>
   <div class="relative w-full">
-    <button
-      v-if="!isEditing"
-      type="button"
-      class="h-10 float-right z-10 mb-2 inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
-      @click.stop="isFullscreen = true"
-    >
-      <ArrowsPointingOutIcon class="h-4 w-4" />
-      <span class="hidden sm:inline">Fullscreen</span>
-      <span class="sr-only">Enter fullscreen reading mode</span>
-    </button>
+    <div v-if="!isEditing" class="mb-2 flex justify-end gap-2">
+      <button
+        type="button"
+        class="inline-flex h-10 items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+        :disabled="!chapterText"
+        @click="copyChapterToClipboard"
+      >
+        <component :is="chapterCopied ? CheckIcon : DocumentDuplicateIcon" class="h-4 w-4" />
+        <span class="hidden sm:inline">{{ chapterCopied ? "Copied" : "Copy" }}</span>
+        <span class="sr-only">Copy chapter text</span>
+      </button>
+      <button
+        type="button"
+        class="inline-flex h-10 items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+        @click.stop="isFullscreen = true"
+      >
+        <ArrowsPointingOutIcon class="h-4 w-4" />
+        <span class="hidden sm:inline">Fullscreen</span>
+        <span class="sr-only">Enter fullscreen reading mode</span>
+      </button>
+    </div>
     <div class="flex w-full">
       <div v-if="isEditing" class="w-full">
         <TextEditor
