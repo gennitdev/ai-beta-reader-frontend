@@ -245,21 +245,21 @@ watch(
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
 
-      <div v-else-if="sortedChapters.length > 0" class="space-y-6">
+      <div v-else-if="sortedChapters.length > 0" >
         <section
           v-for="part in chaptersByPart.parts"
           :key="part.id"
-          class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm"
+          class="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 shadow-sm"
         >
           <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              class="flex items-center justify-between gap-3 flex-1 text-left"
+              class="w-full flex items-center justify-between gap-3 text-left"
               @click="toggleMobilePart(part.id)"
               :aria-expanded="isPartExpanded(part.id)"
               :aria-controls="`mobile-part-${part.id}`"
             >
-              <div>
+              <div class="w-full">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ part.name }}</h2>
                 <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }} ·
