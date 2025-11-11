@@ -1,5 +1,5 @@
 import { ref, onMounted } from 'vue'
-import { db, type Book, type Chapter, type ChapterSummary, type ChapterReview } from '@/lib/database'
+import { db, type Book, type Chapter, type ChapterSummary, type ChapterReview, type ImageAsset } from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 
 const isInitialized = ref(false)
@@ -532,6 +532,73 @@ export function useDatabase() {
     }
   }
 
+  // Image asset operations (Electron-only features)
+  async function saveImageAssetRecord(asset: ImageAsset) {
+    try {
+      await initializeDatabase()
+      await db.saveImageAsset(asset)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to save image'
+      console.error('Save image asset error:', e)
+      throw e
+    }
+  }
+
+  async function deleteImageAssetRecord(imageId: string) {
+    try {
+      await initializeDatabase()
+      await db.deleteImageAsset(imageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete image'
+      console.error('Delete image asset error:', e)
+      throw e
+    }
+  }
+
+  async function getChapterImageAssets(chapterId: string) {
+    try {
+      await initializeDatabase()
+      return await db.getChapterImages(chapterId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load images'
+      console.error('Get chapter images error:', e)
+      throw e
+    }
+  }
+
+  async function getPartImageAssets(partId: string) {
+    try {
+      await initializeDatabase()
+      return await db.getPartImages(partId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load part images'
+      console.error('Get part images error:', e)
+      throw e
+    }
+  }
+
+  async function getBookCoverImageAsset(bookId: string) {
+    try {
+      await initializeDatabase()
+      return await db.getBookCoverImage(bookId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load book cover'
+      console.error('Get book cover image error:', e)
+      throw e
+    }
+  }
+
+  async function setBookCoverImageId(bookId: string, imageId: string | null) {
+    try {
+      await initializeDatabase()
+      await db.setBookCoverImage(bookId, imageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update book cover'
+      console.error('Set book cover image error:', e)
+      throw e
+    }
+  }
+
   return {
     // State
     books,
@@ -593,6 +660,14 @@ export function useDatabase() {
     searchBook,
     replaceInChapter,
     replaceInWikiPage,
+
+    // Image assets
+    saveImageAssetRecord,
+    deleteImageAssetRecord,
+    getChapterImageAssets,
+    getPartImageAssets,
+    getBookCoverImageAsset,
+    setBookCoverImageId,
 
     hasCloudSync: () => cloudSync.value !== null,
 

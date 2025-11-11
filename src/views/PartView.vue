@@ -10,8 +10,10 @@ import {
 } from '@heroicons/vue/24/outline'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { useDatabase } from '@/composables/useDatabase'
+import { useImageLibrary } from '@/composables/useImageLibrary'
 import { generatePartSummary as generatePartSummaryAi, type PartSummaryChapterInput } from '@/lib/openai'
-import type { BookPart } from '@/lib/database'
+import type { BookPart, ImageAsset } from '@/lib/database'
+import ImageLightbox from '@/components/images/ImageLightbox.vue'
 
 interface PartSummaryState {
   summary: string
@@ -47,6 +49,12 @@ const {
   getSummary,
 } = useDatabase()
 
+const {
+  desktopImagesAvailable,
+  fetchPartImages,
+  getImageSource: getPartImageSource,
+} = useImageLibrary()
+
 const part = ref<BookPart | null>(null)
 const chapterEntries = ref<PartChapterEntry[]>([])
 const partSummary = ref<PartSummaryState>({
@@ -61,6 +69,12 @@ const generatingSummary = ref(false)
 const savingSummary = ref(false)
 const isEditingSummary = ref(false)
 const errorMessage = ref<string | null>(null)
+const partImages = ref<ImageAsset[]>([])
+const partImageSources = ref<Record<string, string>>({})
+const partImagesLoading = ref(false)
+const partImageError = ref<string | null>(null)
+const partImageModalOpen = ref(false)
+const partActiveImageId = ref<string | null>(null)
 
 const book = computed(() => books.value.find((b: any) => b.id === bookId.value) || null)
 const bookTitle = computed(() => book.value?.title ?? bookId.value)
@@ -109,6 +123,18 @@ const partLabel = computed(() => {
 const bookUrl = computed(() => `/books/${bookId.value}`)
 const organizeUrl = computed(() => `/books/${bookId.value}/organize`)
 
+const partActiveImageSource = computed(() => {
+  const id = partActiveImageId.value
+  if (!id) return null
+  return partImageSources.value[id] ?? null
+})
+
+const partActiveImageLabel = computed(() => {
+  if (!partActiveImageId.value) return ''
+  const image = partImages.value.find((entry) => entry.id === partActiveImageId.value)
+  return image?.file_name ?? ''
+})
+
 const totalWordCount = computed(() =>
   chapterEntries.value.reduce((sum, chapter) => sum + (chapter.wordCount || 0), 0),
 )
@@ -135,6 +161,14 @@ const availableChapterSummaries = computed<PartSummaryChapterInput[]>(() =>
 )
 
 const hasPartSummary = computed(() => partSummary.value.summary.trim().length > 0)
+
+const chapterTitleMap = computed(() => {
+  const map = new Map<string, string>()
+  chapterEntries.value.forEach((entry) => {
+    map.set(entry.id, entry.title ? entry.title : `Chapter ${entry.position}`)
+  })
+  return map
+})
 
 function truncateSummary(text: string, limit = 200) {
   if (text.length <= limit) return text
@@ -248,12 +282,59 @@ async function loadPart() {
     part.value = currentPart
     await hydrateChapterEntries(currentPart)
     await loadPartSummaryData(currentPart.id)
+    if (desktopImagesAvailable.value) {
+      await refreshPartImages(currentPart.id)
+    } else {
+      partImages.value = []
+      partImageSources.value = {}
+    }
   } catch (error) {
     console.error('Failed to load part data:', error)
     errorMessage.value = 'Failed to load part details.'
   } finally {
     loading.value = false
   }
+}
+
+const refreshPartImages = async (targetPartId?: string) => {
+  const resolvedPartId = targetPartId ?? partId.value
+  if (!desktopImagesAvailable.value || !resolvedPartId) {
+    partImages.value = []
+    partImageSources.value = {}
+    return
+  }
+
+  partImagesLoading.value = true
+  partImageError.value = null
+  try {
+    const images = await fetchPartImages(resolvedPartId)
+    partImages.value = images
+    const sources: Record<string, string> = {}
+    for (const image of images) {
+      try {
+        sources[image.id] = await getPartImageSource(image)
+      } catch (error) {
+        console.warn('Failed to load part illustration preview', error)
+      }
+    }
+    partImageSources.value = sources
+  } catch (error) {
+    partImageError.value =
+      error instanceof Error ? error.message : 'Failed to load part illustrations.'
+  } finally {
+    partImagesLoading.value = false
+  }
+}
+
+const openPartImageModal = (imageId: string) => {
+  if (!partImageSources.value[imageId]) return
+  partActiveImageId.value = imageId
+  partImageModalOpen.value = true
+}
+
+const closePartImageModal = () => {
+  partImageModalOpen.value = false
+  partActiveImageId.value = null
 }
 
 const goBack = () => {
@@ -344,6 +425,30 @@ const handleGeneratePartSummary = async () => {
 const openChapter = (chapterId: string) => {
   router.push(`/books/${bookId.value}/chapters/${chapterId}`)
 }
+
+watch(
+  () => desktopImagesAvailable.value,
+  async (available) => {
+    if (available && part.value) {
+      await refreshPartImages(part.value.id)
+    } else if (!available) {
+      partImages.value = []
+      partImageSources.value = {}
+    }
+  },
+)
+
+watch(
+  partId,
+  async () => {
+    if (desktopImagesAvailable.value) {
+      await refreshPartImages(partId.value)
+    } else {
+      partImages.value = []
+      partImageSources.value = {}
+    }
+  },
+)
 
 onMounted(async () => {
   await loadPart()
@@ -518,6 +623,70 @@ watch([bookId, partId], async () => {
             </div>
           </section>
 
+          <section
+            v-if="desktopImagesAvailable"
+            class="mb-10 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+          >
+            <div class="mb-4">
+              <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Part Illustrations</h2>
+              <p class="text-sm text-gray-500 dark:text-gray-400">
+                Every chapter illustration assigned to this part appears here.
+              </p>
+            </div>
+            <p v-if="partImageError" class="text-sm text-red-600 dark:text-red-400">
+              {{ partImageError }}
+            </p>
+            <div
+              v-if="partImagesLoading"
+              class="py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+            >
+              Loading images...
+            </div>
+            <div v-else>
+              <div
+                v-if="partImages.length"
+                class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+              >
+                <button
+                  v-for="image in partImages"
+                  :key="image.id"
+                  type="button"
+                  class="group overflow-hidden rounded-lg border border-gray-200 bg-gray-50 text-left transition hover:shadow dark:border-gray-700 dark:bg-gray-800"
+                  @click="openPartImageModal(image.id)"
+                >
+                  <div class="aspect-[4/3] w-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                    <img
+                      v-if="partImageSources[image.id]"
+                      :src="partImageSources[image.id]"
+                      class="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                      :alt="chapterTitleMap.get(image.chapter_id || '') || 'Part illustration'"
+                    />
+                    <div
+                      v-else
+                      class="flex h-full w-full items-center justify-center text-xs text-gray-500 dark:text-gray-300"
+                    >
+                      Loading...
+                    </div>
+                  </div>
+                  <div class="border-t border-gray-200 px-3 py-2 text-xs dark:border-gray-700">
+                    <p class="font-medium text-gray-900 dark:text-gray-100">
+                      {{ chapterTitleMap.get(image.chapter_id || '') || 'Unassigned chapter' }}
+                    </p>
+                    <p class="mt-1 truncate text-gray-500 dark:text-gray-400">
+                      {{ image.file_name }}
+                    </p>
+                  </div>
+                </button>
+              </div>
+              <div
+                v-else
+                class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300"
+              >
+                No chapter illustrations yet.
+              </div>
+            </div>
+          </section>
+
           <section>
             <div class="mb-4 flex items-center justify-between">
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
@@ -609,4 +778,11 @@ watch([bookId, partId], async () => {
       </div>
     </div>
   </div>
+
+  <ImageLightbox
+    :open="partImageModalOpen"
+    :image-src="partActiveImageSource"
+    :caption="partActiveImageLabel"
+    @close="closePartImageModal"
+  />
 </template>

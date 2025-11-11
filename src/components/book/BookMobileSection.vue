@@ -114,6 +114,26 @@ const props = defineProps({
   getTypeColor: {
     type: Function as PropType<(type: string) => string>,
     required: true
+  },
+  desktopImagesAvailable: {
+    type: Boolean,
+    default: false
+  },
+  coverImageSrc: {
+    type: String as PropType<string | null>,
+    default: null
+  },
+  coverLoading: {
+    type: Boolean,
+    default: false
+  },
+  coverError: {
+    type: String as PropType<string | null>,
+    default: null
+  },
+  selectBookCover: {
+    type: Function as PropType<() => void>,
+    required: true
   }
 })
 
@@ -130,8 +150,14 @@ const {
   chapterCount,
   totalWordCount,
   expandedSummaries,
-  wikiPagesByType
+  wikiPagesByType,
+  desktopImagesAvailable,
+  coverImageSrc,
+  coverLoading,
+  coverError
 } = toRefs(props)
+
+const selectBookCover = props.selectBookCover
 
 const expandedMobileParts = ref<Set<string>>(new Set())
 
@@ -209,6 +235,50 @@ watch(
             <Cog6ToothIcon class="w-5 h-5 mr-2" />
             Organize Chapters
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="desktopImagesAvailable"
+      class="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+    >
+      <div class="flex gap-4">
+        <div class="h-48 w-32 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+          <img
+            v-if="coverImageSrc"
+            :src="coverImageSrc"
+            class="h-full w-full object-cover"
+            alt="Book cover"
+          />
+          <div
+            v-else
+            class="flex h-full w-full items-center justify-center text-center text-xs text-gray-500 dark:text-gray-400"
+          >
+            No cover selected
+          </div>
+        </div>
+        <div class="flex flex-1 flex-col justify-between">
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            Covers stay on your device when you use the desktop app.
+          </p>
+          <div class="mt-2">
+            <button
+              type="button"
+              class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="coverLoading"
+              @click="selectBookCover"
+            >
+              <span
+                v-if="coverLoading"
+                class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+              ></span>
+              {{ coverImageSrc ? 'Replace cover' : 'Add cover' }}
+            </button>
+            <p v-if="coverError" class="mt-2 text-xs text-red-600 dark:text-red-400">
+              {{ coverError }}
+            </p>
+          </div>
         </div>
       </div>
     </div>

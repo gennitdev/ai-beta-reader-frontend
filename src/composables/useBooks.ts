@@ -19,6 +19,7 @@ export function useBooks() {
       ...book,
       chapter_order: '[]',
       part_order: '[]',
+      cover_image_id: null,
       created_at: new Date().toISOString()
     }
     await saveBook(newBook)

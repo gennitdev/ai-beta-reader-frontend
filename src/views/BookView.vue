@@ -2,7 +2,8 @@
 import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
-import type { Book as DatabaseBook, BookPart } from "@/lib/database";
+import { useImageLibrary } from "@/composables/useImageLibrary";
+import type { Book as DatabaseBook, BookPart, ImageAsset } from "@/lib/database";
 import type {
   BookChapter,
   BookOrganizedPart,
@@ -39,6 +40,13 @@ const {
   replaceInWikiPage,
 } = useDatabase();
 
+const {
+  desktopImagesAvailable,
+  fetchBookCover,
+  pickNewBookCover,
+  getImageSource: getCoverImageSource,
+} = useImageLibrary();
+
 const book = ref<DatabaseBook | null>(null);
 const chapters = ref<BookChapter[]>([]);
 const parts = ref<BookPart[]>([]);
@@ -50,6 +58,10 @@ const loadingWiki = ref(false);
 const expandedSummaries = ref<Set<string>>(new Set());
 const routerViewKey = ref(0);
 let suppressDbChapterSync = false;
+const bookCoverImage = ref<ImageAsset | null>(null);
+const bookCoverSrc = ref<string | null>(null);
+const coverLoading = ref(false);
+const coverError = ref<string | null>(null);
 
 // Book editing state
 const isEditingBookTitle = ref(false);
@@ -246,6 +258,27 @@ watch(
   }
 );
 
+watch(
+  () => desktopImagesAvailable.value,
+  (available) => {
+    if (available && book.value) {
+      loadBookCoverImage(book.value.id);
+    } else if (!available) {
+      bookCoverImage.value = null;
+      bookCoverSrc.value = null;
+    }
+  }
+);
+
+watch(
+  () => book.value?.id,
+  (nextId) => {
+    if (nextId && desktopImagesAvailable.value) {
+      loadBookCoverImage(nextId);
+    }
+  }
+);
+
 const parseIdArray = (value: string | null | undefined): string[] => {
   if (!value) return [];
   try {
@@ -403,6 +436,7 @@ const saveBookTitle = async () => {
       title: editingBookTitle.value.trim(),
       chapter_order: book.value.chapter_order || "[]",
       part_order: book.value.part_order || "[]",
+      cover_image_id: book.value.cover_image_id ?? null,
       created_at: book.value.created_at || new Date().toISOString(),
     });
 
@@ -442,11 +476,56 @@ const loadBook = async () => {
 
     await syncPartOrderWithParts();
     await syncChaptersFromDb();
+    if (desktopImagesAvailable.value) {
+      await loadBookCoverImage(bookId.value);
+    } else {
+      bookCoverImage.value = null;
+      bookCoverSrc.value = null;
+    }
   } catch (error) {
     console.error("Failed to load book:", error);
   } finally {
     suppressDbChapterSync = false;
     loading.value = false;
+  }
+};
+
+const loadBookCoverImage = async (targetBookId: string) => {
+  if (!desktopImagesAvailable.value) {
+    bookCoverImage.value = null;
+    bookCoverSrc.value = null;
+    return;
+  }
+
+  coverLoading.value = true;
+  coverError.value = null;
+  try {
+    const asset = await fetchBookCover(targetBookId);
+    bookCoverImage.value = asset;
+    bookCoverSrc.value = asset ? await getCoverImageSource(asset) : null;
+  } catch (error) {
+    coverError.value = error instanceof Error ? error.message : "Failed to load book cover";
+  } finally {
+    coverLoading.value = false;
+  }
+};
+
+const handleSelectBookCover = async () => {
+  if (!book.value) return;
+
+  coverLoading.value = true;
+  coverError.value = null;
+  try {
+    const asset = await pickNewBookCover(book.value.id);
+    if (asset) {
+      bookCoverImage.value = asset;
+      bookCoverSrc.value = await getCoverImageSource(asset);
+      book.value.cover_image_id = asset.id;
+    }
+  } catch (error) {
+    coverError.value = error instanceof Error ? error.message : "Failed to update book cover";
+  } finally {
+    coverLoading.value = false;
   }
 };
 
@@ -733,6 +812,11 @@ onUnmounted(() => {
     :update-editing-book-title="updateEditingBookTitle"
     :get-type-icon="getTypeIcon"
     :get-type-color="getTypeColor"
+    :desktop-images-available="desktopImagesAvailable"
+    :cover-image-src="bookCoverSrc"
+    :cover-loading="coverLoading"
+    :cover-error="coverError"
+    :select-book-cover="handleSelectBookCover"
   />
 
   <BookDesktopLayout
@@ -773,6 +857,11 @@ onUnmounted(() => {
     :save-book-title="saveBookTitle"
     :cancel-editing-book-title="cancelEditingBookTitle"
     :update-editing-book-title="updateEditingBookTitle"
+    :desktop-images-available="desktopImagesAvailable"
+    :cover-image-src="bookCoverSrc"
+    :cover-loading="coverLoading"
+    :cover-error="coverError"
+    :select-book-cover="handleSelectBookCover"
   />
 
   <SearchModal

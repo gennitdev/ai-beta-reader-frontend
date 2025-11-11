@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
+import { useImageLibrary } from "@/composables/useImageLibrary";
 import {
   generateChapterSummary,
   updateWikiPagesFromChapter,
@@ -10,11 +11,12 @@ import {
   type PartSummaryChapterInput,
   type PartSummaryOverview,
 } from "@/lib/openai";
-import type { BookPart, PartSummary, ChapterSummary } from "@/lib/database";
+import type { BookPart, PartSummary, ChapterSummary, ImageAsset } from "@/lib/database";
 import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterContentSection from "@/components/chapter/ChapterContentSection.vue";
 import ChapterReviewsSection from "@/components/chapter/ChapterReviewsSection.vue";
+import ImageLightbox from "@/components/images/ImageLightbox.vue";
 import { CheckCircleIcon } from "@heroicons/vue/24/outline";
 
 interface Chapter {
@@ -88,6 +90,14 @@ const {
   deleteReview: dbDeleteReview,
 } = useDatabase();
 
+const {
+  desktopImagesAvailable,
+  addImagesToChapter,
+  deleteImage: deleteChapterImageAsset,
+  fetchChapterImages,
+  getImageSource,
+} = useImageLibrary();
+
 const chapter = ref<Chapter | null>(null);
 const loading = ref(false);
 const savingChapter = ref(false);
@@ -105,6 +115,13 @@ const characters = ref<Character[]>([]);
 const showDeleteModal = ref(false);
 const deletingChapter = ref(false);
 const parts = ref<BookPart[]>([]);
+const chapterImages = ref<ImageAsset[]>([]);
+const chapterImagesLoading = ref(false);
+const addingChapterImages = ref(false);
+const chapterImageSources = ref<Record<string, string>>({});
+const chapterImageError = ref<string | null>(null);
+const showImageLightbox = ref(false);
+const activeImageId = ref<string | null>(null);
 
 const chapterSummaryCache = new Map<string, ChapterSummary | null>();
 const partSummaryCache = new Map<string, PartSummary | null>();
@@ -115,6 +132,18 @@ const currentBook = computed(
 const currentPart = computed(() => {
   if (!chapter.value?.part_id) return null;
   return parts.value.find((part) => part.id === chapter.value?.part_id) || null;
+});
+
+const activeImageSource = computed(() => {
+  const id = activeImageId.value;
+  if (!id) return null;
+  return chapterImageSources.value[id] ?? null;
+});
+
+const activeImageLabel = computed(() => {
+  if (!activeImageId.value) return "";
+  const image = chapterImages.value.find((item) => item.id === activeImageId.value);
+  return image?.file_name ?? "";
 });
 const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ?? null));
 
@@ -383,6 +412,13 @@ const loadChapter = async () => {
       // Load custom profiles and saved reviews
       await loadCustomProfiles();
       await loadSavedReviews();
+
+      if (desktopImagesAvailable.value) {
+        await refreshChapterImages();
+      } else {
+        chapterImages.value = [];
+        chapterImageSources.value = {};
+      }
     } else {
       console.error("Chapter not found");
       router.push(`/books/${bookId.value}`);
@@ -394,6 +430,117 @@ const loadChapter = async () => {
     loading.value = false;
   }
 };
+
+const refreshChapterImages = async () => {
+  if (!desktopImagesAvailable.value || !chapterId.value) {
+    chapterImages.value = [];
+    chapterImageSources.value = {};
+    return;
+  }
+
+  chapterImagesLoading.value = true;
+  chapterImageError.value = null;
+  try {
+    const images = await fetchChapterImages(chapterId.value);
+    chapterImages.value = images;
+    const sources: Record<string, string> = {};
+    for (const image of images) {
+      try {
+        sources[image.id] = await getImageSource(image);
+      } catch (error) {
+        console.warn("Failed to load illustration preview", error);
+      }
+    }
+    chapterImageSources.value = sources;
+  } catch (error) {
+    chapterImageError.value =
+      error instanceof Error ? error.message : "Failed to load chapter illustrations";
+  } finally {
+    chapterImagesLoading.value = false;
+  }
+};
+
+const handleAddIllustrations = async () => {
+  if (!chapter.value) return;
+  addingChapterImages.value = true;
+  chapterImageError.value = null;
+
+  try {
+    const newImages = await addImagesToChapter(chapter.value.book_id, chapter.value.id);
+    if (!newImages.length) return;
+
+    chapterImages.value = [...newImages, ...chapterImages.value];
+    const updatedSources: Record<string, string> = { ...chapterImageSources.value };
+    for (const image of newImages) {
+      try {
+        updatedSources[image.id] = await getImageSource(image);
+      } catch (error) {
+        console.warn("Failed to load preview for new illustration", error);
+      }
+    }
+    chapterImageSources.value = updatedSources;
+  } catch (error) {
+    chapterImageError.value =
+      error instanceof Error ? error.message : "Failed to add illustrations";
+  } finally {
+    addingChapterImages.value = false;
+  }
+};
+
+const handleDeleteIllustration = async (imageId: string) => {
+  const target = chapterImages.value.find((image) => image.id === imageId);
+  if (!target) return;
+
+  try {
+    await deleteChapterImageAsset(target);
+    chapterImages.value = chapterImages.value.filter((image) => image.id !== imageId);
+    const nextSources = { ...chapterImageSources.value };
+    delete nextSources[imageId];
+    chapterImageSources.value = nextSources;
+    if (activeImageId.value === imageId) {
+      showImageLightbox.value = false;
+      activeImageId.value = null;
+    }
+  } catch (error) {
+    chapterImageError.value =
+      error instanceof Error ? error.message : "Failed to delete illustration";
+  }
+};
+
+const openImageModal = (imageId: string) => {
+  if (!chapterImageSources.value[imageId]) return;
+  activeImageId.value = imageId;
+  showImageLightbox.value = true;
+};
+
+const closeImageModal = () => {
+  showImageLightbox.value = false;
+  activeImageId.value = null;
+};
+
+watch(
+  () => desktopImagesAvailable.value,
+  (available) => {
+    if (available) {
+      refreshChapterImages();
+    } else {
+      chapterImages.value = [];
+      chapterImageSources.value = {};
+    }
+  }
+);
+
+watch(
+  () => chapterId.value,
+  () => {
+    if (desktopImagesAvailable.value) {
+      refreshChapterImages();
+    } else {
+      chapterImages.value = [];
+      chapterImageSources.value = {};
+    }
+  }
+);
 
 const saveChapter = async () => {
   if (!chapter.value || !hasUnsavedChanges.value) return;
@@ -944,6 +1091,95 @@ onMounted(async () => {
           @toggle-full-chapter="showFullChapterText = $event"
         />
 
+        <section
+          v-if="desktopImagesAvailable"
+          class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900"
+        >
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                Chapter Illustrations
+              </h2>
+              <p class="text-sm text-gray-500 dark:text-gray-400">
+                Images live locally inside the desktop app.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="addingChapterImages"
+              @click="handleAddIllustrations"
+            >
+              <span
+                v-if="addingChapterImages"
+                class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+              ></span>
+              {{ addingChapterImages ? "Adding..." : "Add images" }}
+            </button>
+          </div>
+
+          <p v-if="chapterImageError" class="mt-4 text-sm text-red-600 dark:text-red-400">
+            {{ chapterImageError }}
+          </p>
+
+          <div
+            v-if="chapterImagesLoading"
+            class="py-10 text-center text-sm text-gray-500 dark:text-gray-400"
+          >
+            Loading illustrations...
+          </div>
+
+          <div v-else>
+            <div
+              v-if="chapterImages.length"
+              class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+            >
+              <div
+                v-for="image in chapterImages"
+                :key="image.id"
+                class="group relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
+              >
+                <button
+                  type="button"
+                  class="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100"
+                  @click.stop="handleDeleteIllustration(image.id)"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  class="block w-full"
+                  @click="openImageModal(image.id)"
+                >
+                  <div class="aspect-[4/3] w-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                    <img
+                      v-if="chapterImageSources[image.id]"
+                      :src="chapterImageSources[image.id]"
+                      class="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                      :alt="image.file_name || 'Chapter illustration'"
+                    />
+                    <div
+                      v-else
+                      class="flex h-full w-full items-center justify-center text-xs text-gray-500 dark:text-gray-300"
+                    >
+                      Loading...
+                    </div>
+                  </div>
+                </button>
+                <p class="truncate px-3 py-2 text-xs text-gray-600 dark:text-gray-300">
+                  {{ image.file_name }}
+                </p>
+              </div>
+            </div>
+            <div
+              v-else
+              class="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300"
+            >
+              No illustrations yet.
+            </div>
+          </div>
+        </section>
+
         <ChapterReviewsSection
           :review-tone="reviewTone"
           :custom-profiles="customProfiles"
@@ -964,6 +1200,13 @@ onMounted(async () => {
       </div>
     </div>
   </div>
+
+  <ImageLightbox
+    :open="showImageLightbox"
+    :image-src="activeImageSource"
+    :caption="activeImageLabel"
+    @close="closeImageModal"
+  />
 
   <teleport to="body">
     <div

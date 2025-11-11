@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBooks, type Book } from '@/composables/useBooks'
+import { useImageLibrary } from '@/composables/useImageLibrary'
 import { PlusIcon, BookOpenIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
@@ -10,6 +11,9 @@ const newBook = ref({ id: '', title: '' })
 
 // Use local database instead of API
 const { books, loading, error, loadBooks, createBook } = useBooks()
+const { desktopImagesAvailable, fetchBookCover, getImageSource } = useImageLibrary()
+const bookCoverSources = ref<Record<string, string>>({})
+const coverRefreshError = ref<string | null>(null)
 
 const createBookHandler = async () => {
   if (!newBook.value.id || !newBook.value.title) return
@@ -17,12 +21,36 @@ const createBookHandler = async () => {
   try {
     await createBook(newBook.value)
     await loadBooks() // Refresh the list
+    if (desktopImagesAvailable.value) {
+      await refreshCoverSources()
+    }
 
     newBook.value = { id: '', title: '' }
     showCreateModal.value = false
   } catch (error) {
     console.error('Failed to create book:', error)
   }
+}
+
+const refreshCoverSources = async () => {
+  if (!desktopImagesAvailable.value) {
+    bookCoverSources.value = {}
+    return
+  }
+  coverRefreshError.value = null
+  const nextSources: Record<string, string> = {}
+  for (const book of books.value) {
+    try {
+      const asset = await fetchBookCover(book.id)
+      if (asset) {
+        nextSources[book.id] = await getImageSource(asset)
+      }
+    } catch (err) {
+      console.warn('Failed to load cover for', book.id, err)
+      coverRefreshError.value = 'Some covers could not be loaded.'
+    }
+  }
+  bookCoverSources.value = nextSources
 }
 
 const viewBook = (bookId: string) => {
@@ -44,9 +72,32 @@ const formatWordCount = (count?: number) => {
   return (count / 1000).toFixed(1) + 'k'
 }
 
-onMounted(() => {
-  loadBooks()
+onMounted(async () => {
+  await loadBooks()
+  if (desktopImagesAvailable.value) {
+    await refreshCoverSources()
+  }
 })
+
+watch(
+  () => desktopImagesAvailable.value,
+  async (available) => {
+    if (available) {
+      await refreshCoverSources()
+    } else {
+      bookCoverSources.value = {}
+    }
+  }
+)
+
+watch(
+  () => books.value.map((book) => `${book.id}:${book.cover_image_id ?? ''}`).join('|'),
+  async () => {
+    if (desktopImagesAvailable.value) {
+      await refreshCoverSources()
+    }
+  }
+)
 </script>
 
 <template>
@@ -67,17 +118,46 @@ onMounted(() => {
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
     </div>
 
+    <p
+      v-if="desktopImagesAvailable && coverRefreshError"
+      class="mb-4 text-sm text-amber-600 dark:text-amber-400"
+    >
+      {{ coverRefreshError }}
+    </p>
+
     <!-- Books grid -->
     <div v-else-if="books.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div
         v-for="book in books"
         :key="book.id"
-        class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer border border-gray-200 dark:border-gray-700"
+        class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer border border-gray-200 dark:border-gray-700 overflow-hidden"
         @click="viewBook(book.id)"
       >
+        <div
+          v-if="desktopImagesAvailable"
+          class="h-40 w-full bg-gray-100 dark:bg-gray-900"
+        >
+          <img
+            v-if="bookCoverSources[book.id]"
+            :src="bookCoverSources[book.id]"
+            class="h-full w-full object-cover"
+            :alt="`${book.title} cover`"
+          />
+          <div
+            v-else
+            class="flex h-full items-center justify-center text-gray-400 dark:text-gray-600"
+          >
+            <BookOpenIcon class="w-10 h-10" />
+          </div>
+        </div>
         <div class="p-6">
-          <div class="flex items-center mb-4">
+          <div class="flex items-center mb-4" v-if="!desktopImagesAvailable">
             <BookOpenIcon class="w-8 h-8 text-blue-600 mr-3" />
+            <h3 class="text-xl font-semibold text-gray-900 dark:text-white truncate">
+              {{ book.title }}
+            </h3>
+          </div>
+          <div v-else>
             <h3 class="text-xl font-semibold text-gray-900 dark:text-white truncate">
               {{ book.title }}
             </h3>

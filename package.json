@@ -13,7 +13,9 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix",
-    "postinstall": "npm run build && npx cap sync android"
+    "postinstall": "npm run build && npx cap sync android @capacitor-community/electron",
+    "electron:dev": "npm run build && cd electron && npm run electron:start-live",
+    "electron:build": "cd electron && npm run electron:make"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^7.0.1",
@@ -48,6 +50,7 @@
     "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
+    "@capacitor-community/electron": "^5.0.1",
     "@tsconfig/node22": "^22.0.2",
     "@types/identicon.js": "^2.3.5",
     "@types/markdown-it": "^14.1.2",
