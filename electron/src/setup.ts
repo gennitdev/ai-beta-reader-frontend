@@ -219,13 +219,20 @@ export class ElectronCapacitorApp {
 // Set a CSP up for our application based on the custom scheme
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const defaultSrc = electronIsDev
+      ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' data:`
+      : `default-src ${customScheme}://* 'unsafe-inline' data:`;
+    const styleSrc = `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`;
+    const fontSrc = `font-src 'self' data: https://fonts.gstatic.com`;
+    const connectSrc = electronIsDev
+      ? `connect-src ${customScheme}://* devtools://* data:`
+      : `connect-src ${customScheme}://* data:`;
+
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          electronIsDev
-            ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' data:`
-            : `default-src ${customScheme}://* 'unsafe-inline' data:`,
+          [defaultSrc, styleSrc, fontSrc, connectSrc].join('; '),
         ],
       },
     });

@@ -78,11 +78,13 @@ export interface ImageAsset {
   updated_at: string;
 }
 
+const NATIVE_CAPACITOR_PLATFORMS = new Set(['ios', 'android']);
+
 export class AppDatabase {
   private db: any;
   private sqlite: SQLiteConnection | null = null;
   private platform: string = typeof Capacitor.getPlatform === 'function' ? Capacitor.getPlatform() : 'web';
-  private isNative = Capacitor.isNativePlatform() && this.platform !== 'electron';
+  private isNative = NATIVE_CAPACITOR_PLATFORMS.has(this.platform);
   private tableColumnCache = new Map<string, string[]>();
 
   async init() {
