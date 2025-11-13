@@ -81,7 +81,8 @@ export interface ImageAsset {
 export class AppDatabase {
   private db: any;
   private sqlite: SQLiteConnection | null = null;
-  private isNative = Capacitor.isNativePlatform();
+  private platform: string = typeof Capacitor.getPlatform === 'function' ? Capacitor.getPlatform() : 'web';
+  private isNative = Capacitor.isNativePlatform() && this.platform !== 'electron';
   private tableColumnCache = new Map<string, string[]>();
 
   async init() {
