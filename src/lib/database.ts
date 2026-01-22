@@ -80,6 +80,11 @@ export interface ImageAsset {
 
 const NATIVE_CAPACITOR_PLATFORMS = new Set(['ios', 'android']);
 
+// IndexedDB constants for web storage (much larger capacity than localStorage)
+const IDB_NAME = 'ai-beta-reader-db';
+const IDB_STORE = 'database';
+const IDB_KEY = 'sqliteDb';
+
 export class AppDatabase {
   private db: any;
   private sqlite: SQLiteConnection | null = null;
@@ -105,16 +110,37 @@ export class AppDatabase {
         locateFile: (file: string) => `https://sql.js.org/dist/${file}`
       });
 
-      // Try to load existing database from localStorage
-      const savedDb = localStorage.getItem('sqliteDb');
+      // Try to load existing database from IndexedDB first, then fall back to localStorage for migration
+      let savedDb = await this.loadFromIndexedDB();
+      let migratedFromLocalStorage = false;
+
+      // If no IndexedDB data, check localStorage for migration
+      if (!savedDb) {
+        const localStorageDb = localStorage.getItem('sqliteDb');
+        if (localStorageDb) {
+          console.log('[AppDatabase] Migrating database from localStorage to IndexedDB...');
+          try {
+            savedDb = localStorageDb.startsWith('[')
+              ? new Uint8Array(JSON.parse(localStorageDb))
+              : this.base64ToUint8Array(localStorageDb);
+            migratedFromLocalStorage = true;
+          } catch (error) {
+            console.warn('[AppDatabase] Failed to parse localStorage data:', error);
+          }
+        }
+      }
+
       if (savedDb) {
         try {
-          const arr = savedDb.startsWith('[')
-            ? new Uint8Array(JSON.parse(savedDb))
-            : this.base64ToUint8Array(savedDb);
-          this.db = new SQL.Database(arr);
+          this.db = new SQL.Database(savedDb);
+          // If we migrated from localStorage, save to IndexedDB and clear localStorage
+          if (migratedFromLocalStorage) {
+            await this.saveToIndexedDB();
+            localStorage.removeItem('sqliteDb');
+            console.log('[AppDatabase] Migration complete. localStorage cleared.');
+          }
         } catch (error) {
-          console.warn('[AppDatabase] Failed to restore DB from localStorage, starting fresh.', error);
+          console.warn('[AppDatabase] Failed to restore DB, starting fresh.', error);
           this.db = new SQL.Database();
         }
       } else {
@@ -1944,21 +1970,82 @@ export class AppDatabase {
 
   private saveToLocalStorage() {
     if (!this.isNative) {
-      try {
-        const data = this.db.export();
-        const base64 = this.uint8ArrayToBase64(data);
-        localStorage.setItem('sqliteDb', base64);
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-          const message = 'Offline storage quota exceeded. Please clear saved data or enable a cloud backup.';
-          console.error('[AppDatabase] Failed to persist DB:', message, error);
-          throw new Error(message);
-        }
-
-        console.error('[AppDatabase] Failed to persist DB to localStorage.', error);
-        throw error;
-      }
+      // Use IndexedDB for persistence (async, but we fire-and-forget for compatibility)
+      this.saveToIndexedDB().catch(error => {
+        console.error('[AppDatabase] Failed to persist DB to IndexedDB:', error);
+      });
     }
+  }
+
+  private async saveToIndexedDB(): Promise<void> {
+    if (this.isNative) return;
+
+    const data = this.db.export();
+    const idb = await this.openIndexedDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = idb.transaction(IDB_STORE, 'readwrite');
+      const store = transaction.objectStore(IDB_STORE);
+      const request = store.put(data, IDB_KEY);
+
+      request.onsuccess = () => {
+        idb.close();
+        resolve();
+      };
+      request.onerror = () => {
+        idb.close();
+        console.error('[AppDatabase] IndexedDB write failed:', request.error);
+        reject(new Error('Failed to save database to IndexedDB.'));
+      };
+    });
+  }
+
+  private async loadFromIndexedDB(): Promise<Uint8Array | null> {
+    try {
+      const idb = await this.openIndexedDB();
+
+      return new Promise((resolve, reject) => {
+        const transaction = idb.transaction(IDB_STORE, 'readonly');
+        const store = transaction.objectStore(IDB_STORE);
+        const request = store.get(IDB_KEY);
+
+        request.onsuccess = () => {
+          idb.close();
+          if (request.result instanceof Uint8Array) {
+            resolve(request.result);
+          } else if (request.result) {
+            // Handle ArrayBuffer case
+            resolve(new Uint8Array(request.result));
+          } else {
+            resolve(null);
+          }
+        };
+        request.onerror = () => {
+          idb.close();
+          console.error('[AppDatabase] IndexedDB read failed:', request.error);
+          reject(request.error);
+        };
+      });
+    } catch (error) {
+      console.warn('[AppDatabase] Failed to open IndexedDB:', error);
+      return null;
+    }
+  }
+
+  private openIndexedDB(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(IDB_NAME, 1);
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
   }
 
   private uint8ArrayToBase64(arr: Uint8Array): string {
