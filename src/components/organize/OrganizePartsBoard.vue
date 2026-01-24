@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import draggable from 'vuedraggable'
 import {
   PlusIcon,
   ChevronUpIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   PencilIcon,
   TrashIcon
 } from '@heroicons/vue/24/outline'
@@ -44,6 +45,17 @@ const emit = defineEmits<{
 const disableCreateSubmit = computed(
   () => !props.newPartName.trim() || props.creatingPartLoading
 )
+
+// Track which parts are expanded (empty = all collapsed, which is the default)
+const expandedPartIds = ref<Set<string>>(new Set())
+
+function togglePart(partId: string) {
+  if (expandedPartIds.value.has(partId)) {
+    expandedPartIds.value.delete(partId)
+  } else {
+    expandedPartIds.value.add(partId)
+  }
+}
 </script>
 
 <template>
@@ -218,24 +230,41 @@ const disableCreateSubmit = computed(
       >
         <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700">
           <div class="flex items-center justify-between">
-            <div class="flex-1">
-              <input
-                v-if="editingPartId === part.id"
-                :value="editingPartName"
-                type="text"
-                class="font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm w-full"
-                autofocus
-                @input="emit('update:editingPartName', ($event.target as HTMLInputElement).value)"
-                @keyup.enter="emit('save-part', part.id)"
-                @keyup.escape="emit('cancel-edit-part')"
-              />
-              <h4 v-else class="font-medium text-gray-900 dark:text-white">
-                {{ part.name }}
-              </h4>
-              <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }}
-                · {{ part.wordCount.toLocaleString() }} words
-              </p>
+            <div class="flex items-center gap-2 flex-1">
+              <button
+                class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-transform"
+                :title="expandedPartIds.has(part.id) ? 'Collapse' : 'Expand'"
+                @click="togglePart(part.id)"
+              >
+                <ChevronDownIcon
+                  v-if="expandedPartIds.has(part.id)"
+                  class="w-5 h-5"
+                />
+                <ChevronRightIcon v-else class="w-5 h-5" />
+              </button>
+              <div
+                class="flex-1 cursor-pointer"
+                @click="togglePart(part.id)"
+              >
+                <input
+                  v-if="editingPartId === part.id"
+                  :value="editingPartName"
+                  type="text"
+                  class="font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm w-full"
+                  autofocus
+                  @click.stop
+                  @input="emit('update:editingPartName', ($event.target as HTMLInputElement).value)"
+                  @keyup.enter="emit('save-part', part.id)"
+                  @keyup.escape="emit('cancel-edit-part')"
+                />
+                <h4 v-else class="font-medium text-gray-900 dark:text-white">
+                  {{ part.name }}
+                </h4>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }}
+                  · {{ part.wordCount.toLocaleString() }} words
+                </p>
+              </div>
             </div>
             <div class="flex items-center gap-1">
               <template v-if="editingPartId === part.id">
@@ -287,7 +316,7 @@ const disableCreateSubmit = computed(
             </div>
           </div>
         </div>
-        <div class="bg-white dark:bg-gray-800">
+        <div v-show="expandedPartIds.has(part.id)" class="bg-white dark:bg-gray-800">
           <draggable
             v-model="part.chapters"
             item-key="id"
