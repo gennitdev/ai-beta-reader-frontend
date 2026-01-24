@@ -10,60 +10,60 @@ const builtInProfiles = computed(() => Object.values(BUILT_IN_PROFILES))
 
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-      <header class="flex items-start justify-between flex-wrap gap-4">
+    <div class="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-8">
+      <header class="flex items-start justify-between flex-wrap gap-2 sm:gap-4">
         <div>
-          <div class="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900/40 px-3 py-1 text-sm text-blue-700 dark:text-blue-300 font-medium">
-            <SparklesIcon class="w-4 h-4 mr-2" />
+          <div class="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm text-blue-700 dark:text-blue-300 font-medium">
+            <SparklesIcon class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
             AI Profiles
           </div>
-          <h1 class="mt-3 text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 class="mt-2 sm:mt-3 text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
             Personalize Your AI Reviewers
           </h1>
-          <p class="mt-2 max-w-2xl text-gray-600 dark:text-gray-400">
+          <p class="mt-1 sm:mt-2 max-w-2xl text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Choose from our built-in reviewer personalities or craft your own custom profiles to shape how feedback is delivered.
           </p>
         </div>
         <RouterLink
           to="/books"
-          class="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors"
+          class="inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors"
         >
           Browse Books
-          <ArrowTopRightOnSquareIcon class="w-4 h-4 ml-2" />
+          <ArrowTopRightOnSquareIcon class="w-4 h-4 ml-1.5 sm:ml-2" />
         </RouterLink>
       </header>
 
       <section>
-        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+        <h2 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
           Built-in Profiles
         </h2>
-        <div class="grid gap-4 md:grid-cols-2">
+        <div class="grid gap-3 sm:gap-4 md:grid-cols-2">
           <article
             v-for="profile in builtInProfiles"
             :key="profile.id"
-            class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 flex flex-col justify-between shadow-sm hover:shadow transition-shadow"
+            class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 flex flex-col justify-between shadow-sm hover:shadow transition-shadow"
           >
             <div>
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
                 {{ profile.name }}
               </h3>
-              <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              <p class="mt-1.5 sm:mt-2 text-sm text-gray-600 dark:text-gray-400">
                 {{ profile.description }}
               </p>
             </div>
             <RouterLink
               :to="`/ai-profiles/${profile.id}`"
-              class="mt-6 inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors"
+              class="mt-4 sm:mt-6 inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors"
             >
               View profile details
-              <ArrowTopRightOnSquareIcon class="w-4 h-4 ml-2" />
+              <ArrowTopRightOnSquareIcon class="w-4 h-4 ml-1.5 sm:ml-2" />
             </RouterLink>
           </article>
         </div>
       </section>
 
       <section>
-        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+        <h2 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
           Your Custom Profiles
         </h2>
         <CustomProfilesPanel />
