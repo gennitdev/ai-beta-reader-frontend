@@ -1603,17 +1603,17 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(chaptersQuery, [bookId]);
       result.values?.forEach((row: any, index: number) => {
-        const title = row[1] || '';
-        const text = row[2] || '';
+        const title = row.title || '';
+        const text = row.text || '';
         if (
           (title && title.toLowerCase().includes(searchLower)) ||
           text.toLowerCase().includes(searchLower)
         ) {
           chapters.push({
-            id: row[0],
+            id: row.id,
             title: title,
             text: text,
-            word_count: row[3],
+            word_count: row.word_count,
             position: index
           });
         }
@@ -1649,18 +1649,18 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(wikiQuery, [bookId]);
       result.values?.forEach((row: any) => {
-        const pageName = row[1] || '';
-        const content = row[2] || '';
-        const summary = row[3] || '';
+        const pageName = row.page_name || '';
+        const content = row.content || '';
+        const summary = row.summary || '';
         if (pageName.toLowerCase().includes(searchLower) ||
             content.toLowerCase().includes(searchLower) ||
             summary.toLowerCase().includes(searchLower)) {
           wikiPages.push({
-            id: row[0],
+            id: row.id,
             page_name: pageName,
             content: content,
             summary: summary,
-            page_type: row[4]
+            page_type: row.page_type
           });
         }
       });

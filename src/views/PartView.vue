@@ -120,7 +120,9 @@ const partLabel = computed(() => {
   return partNumber.value ? `Part ${partNumber.value}` : 'Part'
 })
 
-const bookUrl = computed(() => `/books/${bookId.value}`)
+const isMobileRoute = computed(() => route.meta.mobile === true)
+const routePrefix = computed(() => isMobileRoute.value ? '/m/books' : '/books')
+const bookUrl = computed(() => `${routePrefix.value}/${bookId.value}`)
 const organizeUrl = computed(() => `/books/${bookId.value}/organize`)
 
 const partActiveImageSource = computed(() => {
@@ -423,7 +425,7 @@ const handleGeneratePartSummary = async () => {
 }
 
 const openChapter = (chapterId: string) => {
-  router.push(`/books/${bookId.value}/chapters/${chapterId}`)
+  router.push(`${routePrefix.value}/${bookId.value}/chapters/${chapterId}`)
 }
 
 watch(
