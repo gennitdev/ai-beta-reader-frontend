@@ -1603,17 +1603,20 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(chaptersQuery, [bookId]);
       result.values?.forEach((row: any, index: number) => {
-        const title = row.title || '';
-        const text = row.text || '';
+        // Handle both object and array formats from native SQLite
+        const title = (Array.isArray(row) ? row[1] : row.title) || '';
+        const text = (Array.isArray(row) ? row[2] : row.text) || '';
+        const id = Array.isArray(row) ? row[0] : row.id;
+        const wordCount = Array.isArray(row) ? row[3] : row.word_count;
         if (
           (title && title.toLowerCase().includes(searchLower)) ||
           text.toLowerCase().includes(searchLower)
         ) {
           chapters.push({
-            id: row.id,
+            id: id,
             title: title,
             text: text,
-            word_count: row.word_count,
+            word_count: wordCount,
             position: index
           });
         }
@@ -1649,18 +1652,21 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(wikiQuery, [bookId]);
       result.values?.forEach((row: any) => {
-        const pageName = row.page_name || '';
-        const content = row.content || '';
-        const summary = row.summary || '';
+        // Handle both object and array formats from native SQLite
+        const id = Array.isArray(row) ? row[0] : row.id;
+        const pageName = (Array.isArray(row) ? row[1] : row.page_name) || '';
+        const content = (Array.isArray(row) ? row[2] : row.content) || '';
+        const summary = (Array.isArray(row) ? row[3] : row.summary) || '';
+        const pageType = Array.isArray(row) ? row[4] : row.page_type;
         if (pageName.toLowerCase().includes(searchLower) ||
             content.toLowerCase().includes(searchLower) ||
             summary.toLowerCase().includes(searchLower)) {
           wikiPages.push({
-            id: row.id,
+            id: id,
             page_name: pageName,
             content: content,
             summary: summary,
-            page_type: row.page_type
+            page_type: pageType
           });
         }
       });
