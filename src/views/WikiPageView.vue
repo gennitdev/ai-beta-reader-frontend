@@ -66,6 +66,9 @@ const loading = ref(false)
 const loadingHistory = ref(false)
 const showHistory = ref(false)
 const isEditing = ref(false)
+
+// Feature flag for wiki history (disabled by default)
+const isHistoryFeatureEnabled = computed(() => import.meta.env.VITE_ENABLE_WIKI_HISTORY === 'true')
 const editedContent = ref('')
 const saving = ref(false)
 
@@ -328,6 +331,7 @@ onMounted(() => {
 
         <div v-if="wikiPage" class="flex items-center space-x-3">
           <button
+            v-if="isHistoryFeatureEnabled"
             @click="toggleHistory"
             class="inline-flex items-center px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
@@ -463,7 +467,7 @@ onMounted(() => {
         </div>
 
         <!-- History -->
-        <div v-if="showHistory" class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+        <div v-if="isHistoryFeatureEnabled && showHistory" class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
           <div class="p-6">
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Change History</h3>
 
