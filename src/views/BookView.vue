@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useImageLibrary } from "@/composables/useImageLibrary";
@@ -390,18 +390,6 @@ const buildChapterOrder = (partUpdates: Record<string, string[]>) => {
   return chapterOrder;
 };
 
-// Check if a part should be expanded by default (contains active chapter)
-const shouldExpandPart = (partId: string) => {
-  const activeChapterId = route.params.chapterId;
-  if (!activeChapterId) return false;
-
-  return (
-    chaptersByPart.value.parts
-      .find((part) => part.id === partId)
-      ?.chapters.some((chapter) => chapter.id === activeChapterId) || false
-  );
-};
-
 const formatWordCount = (count: number) => {
   if (count < 1000) return count.toString();
   return (count / 1000).toFixed(1) + "k";
@@ -561,8 +549,32 @@ const editChapter = (chapterId: string) => {
 const togglePart = (partId: string) => {
   if (expandedParts.value.has(partId)) {
     expandedParts.value.delete(partId);
+
+    // If collapsing a part that contains the active chapter, navigate to book view
+    const activeId = route.params.chapterId as string | undefined;
+    if (activeId) {
+      const part = chaptersByPart.value.parts.find((p) => p.id === partId);
+      const containsActiveChapter = part?.chapters.some((chapter) => chapter.id === activeId);
+      if (containsActiveChapter) {
+        router.push(`/books/${bookId.value}`);
+      }
+    }
   } else {
     expandedParts.value.add(partId);
+  }
+};
+
+// Expand the part containing the active chapter (used on initial load)
+const expandPartForActiveChapter = () => {
+  const activeId = route.params.chapterId as string | undefined;
+  if (!activeId) return;
+
+  const part = chaptersByPart.value.parts.find((p) =>
+    p.chapters.some((chapter) => chapter.id === activeId)
+  );
+
+  if (part) {
+    expandedParts.value.add(part.id);
   }
 };
 
@@ -737,19 +749,6 @@ watch(
   }
 );
 
-const checkAndRedirectToFirstChapter = () => {
-  const isDesktop = window.innerWidth >= 1024; // lg breakpoint
-  const hasChapterInRoute = route.path.includes("/chapters/") || route.path.includes("/wiki/");
-
-  if (isDesktop && !hasChapterInRoute && sortedChapters.value.length > 0) {
-    const firstChapter = sortedChapters.value[0];
-    router.replace(`/books/${bookId.value}/chapters/${firstChapter.id}`);
-  }
-};
-
-const handleResize = () => {
-  checkAndRedirectToFirstChapter();
-};
 
 // Watch for tab changes to reload wiki pages
 watch(currentTab, async (newTab) => {
@@ -763,23 +762,13 @@ watch(
   async () => {
     await loadBook();
     await loadWiki();
-    checkAndRedirectToFirstChapter();
   }
 );
 
 onMounted(async () => {
   await loadBook();
   await loadWiki();
-
-  // Check if we need to redirect to first chapter
-  checkAndRedirectToFirstChapter();
-
-  // Add resize listener
-  window.addEventListener("resize", handleResize);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("resize", handleResize);
+  expandPartForActiveChapter();
 });
 </script>
 
@@ -833,7 +822,6 @@ onUnmounted(() => {
     :sidebar-part-lists="sidebarPartLists"
     :sidebar-uncategorized="sidebarUncategorized"
     :expanded-parts="expandedParts"
-    :should-expand-part="shouldExpandPart"
     :toggle-part="togglePart"
     :create-new-chapter="createNewChapter"
     :create-new-chapter-in-part="createNewChapterInPart"

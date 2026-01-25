@@ -67,10 +67,6 @@ const props = defineProps({
     type: Object as PropType<Set<string>>,
     required: true
   },
-  shouldExpandPart: {
-    type: Function as PropType<(partId: string) => boolean>,
-    required: true
-  },
   togglePart: {
     type: Function as PropType<(partId: string) => void>,
     required: true
@@ -375,9 +371,7 @@ const selectBookCover = props.selectBookCover
                       </p>
                     </div>
                     <svg
-                      :class="
-                        expandedParts.has(part.id) || shouldExpandPart(part.id) ? 'rotate-180' : ''
-                      "
+                      :class="expandedParts.has(part.id) ? 'rotate-180' : ''"
                       class="h-4 w-4 text-gray-500 transition-transform dark:text-gray-400"
                       fill="none"
                       stroke="currentColor"
@@ -400,7 +394,7 @@ const selectBookCover = props.selectBookCover
                 </div>
 
                 <div
-                  v-if="expandedParts.has(part.id) || shouldExpandPart(part.id)"
+                  v-if="expandedParts.has(part.id)"
                   class="bg-white dark:bg-gray-800"
                 >
                   <div class="pr-2 pt-3 pb-2 flex justify-end border-t border-gray-200 dark:border-gray-700">
