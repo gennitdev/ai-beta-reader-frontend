@@ -55,6 +55,7 @@ const wikiPageId = computed(() => route.params.wikiPageId as string)
 
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true)
+const routePrefix = computed(() => (isMobileRoute.value ? '/m/books' : '/books'))
 
 // Use local database
 const { books, loadBooks, getWikiPageById, updateWikiPage } = useDatabase()
@@ -111,7 +112,7 @@ const bookTitle = computed(() => {
 })
 
 // Computed navigation URLs
-const bookWikiUrl = computed(() => `/books/${bookId.value}?tab=wiki`)
+const bookWikiUrl = computed(() => `${routePrefix.value}/${bookId.value}?tab=wiki`)
 
 const loadWikiPage = async () => {
   loading.value = true
@@ -139,11 +140,11 @@ const loadWikiPage = async () => {
       editedContent.value = pageData.content || ''
     } else {
       console.error('Wiki page not found')
-      router.push(`/books/${bookId.value}?tab=wiki`)
+      router.push(bookWikiUrl.value)
     }
   } catch (error) {
     console.error('Failed to load wiki page:', error)
-    router.push(`/books/${bookId.value}?tab=wiki`)
+    router.push(bookWikiUrl.value)
   } finally {
     loading.value = false
   }

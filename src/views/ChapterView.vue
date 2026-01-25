@@ -343,6 +343,7 @@ async function buildPriorChapterSummariesInPart(
 
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true);
+const routePrefix = computed(() => (isMobileRoute.value ? "/m/books" : "/books"));
 
 const hasUnsavedChanges = computed(() => {
   if (!chapter.value) return false;
@@ -359,7 +360,7 @@ const chapterTruncation = computed(() => {
 });
 
 // Computed navigation URLs
-const bookUrl = computed(() => `/books/${bookId.value}`);
+const bookUrl = computed(() => `${routePrefix.value}/${bookId.value}`);
 const backButtonUrl = computed(() => bookUrl.value);
 
 const loadChapter = async () => {
@@ -421,11 +422,11 @@ const loadChapter = async () => {
       }
     } else {
       console.error("Chapter not found");
-      router.push(`/books/${bookId.value}`);
+      router.push(bookUrl.value);
     }
   } catch (error) {
     console.error("Failed to load chapter:", error);
-    router.push(`/books/${bookId.value}`);
+    router.push(bookUrl.value);
   } finally {
     loading.value = false;
   }
@@ -905,7 +906,7 @@ const getCharacterWikiInfo = (characterName: string) => {
 const navigateToWiki = (characterName: string) => {
   const character = getCharacterWikiInfo(characterName);
   if (character?.has_wiki_page && character.wiki_page_id) {
-    router.push(`/books/${bookId.value}/wiki/${character.wiki_page_id}`);
+    router.push(`${routePrefix.value}/${bookId.value}/wiki/${character.wiki_page_id}`);
   }
 };
 
