@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
+import { useImageLibrary } from '@/composables/useImageLibrary'
 import JSZip from 'jszip'
 import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 
@@ -20,6 +21,15 @@ const {
   prepareCloudSync,
   cloudSyncReady,
 } = useDatabase()
+
+// Image library for exporting images
+const {
+  desktopImagesAvailable,
+  fetchBookCover,
+  fetchPartCover,
+  fetchChapterImages,
+  getImageSource,
+} = useImageLibrary()
 
 // OpenAI API Key state
 const openaiApiKey = ref('')
@@ -92,6 +102,19 @@ const goBack = () => {
   router.back()
 }
 
+// Helper to convert data URL to Uint8Array for zip
+const dataUrlToUint8Array = (dataUrl: string): { data: Uint8Array; mimeType: string } => {
+  const [header, base64Data] = dataUrl.split(',')
+  const mimeMatch = header.match(/data:([^;]+)/)
+  const mimeType = mimeMatch ? mimeMatch[1] : 'image/png'
+  const binaryString = atob(base64Data)
+  const bytes = new Uint8Array(binaryString.length)
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+  return { data: bytes, mimeType }
+}
+
 const exportUserData = async () => {
   if (isExporting.value) return
 
@@ -119,9 +142,26 @@ const exportUserData = async () => {
       // Create book info file
       bookFolder.file('book-info.txt', `Title: ${book.title}\nID: ${book.id}\nCreated: ${book.created_at || 'Unknown'}\n`)
 
+      // Export book cover image if available
+      if (desktopImagesAvailable.value) {
+        try {
+          const bookCover = await fetchBookCover(book.id)
+          if (bookCover) {
+            exportProgress.value = `Exporting book cover for: ${book.title}`
+            const dataUrl = await getImageSource(bookCover)
+            const { data, mimeType } = dataUrlToUint8Array(dataUrl)
+            const ext = mimeType.split('/')[1] || 'png'
+            bookFolder.file(`cover.${ext}`, data)
+          }
+        } catch (err) {
+          console.warn('Failed to export book cover:', err)
+        }
+      }
+
       // Get chapters for this book from local database
       await loadChapters(book.id)
       const chaptersData = chapters.value
+      const chapterMap = new Map(chaptersData.map(ch => [ch.id, ch]))
       const partsData = await getParts(book.id)
       const chaptersFolder = bookFolder.folder('chapters')
       const orderedPartIds = parseJsonArray(book.part_order)
@@ -131,67 +171,15 @@ const exportUserData = async () => {
       const remainingParts = partsData.filter(part => !orderedPartIds.includes(part.id))
       const allParts = [...orderedParts, ...remainingParts]
       const hasParts = allParts.length > 0
-      const partFolders = new Map<string, JSZip>()
-      let uncategorizedFolder: JSZip | undefined
 
-      if (hasParts && chaptersFolder) {
-        const partPaddingLength = allParts.length.toString().length
-        allParts.forEach((part, index) => {
-          const partNumber = (index + 1).toString().padStart(partPaddingLength, '0')
-          const partName = part.name || `Part ${index + 1}`
-          const partFolderName = `${partNumber} - ${sanitizeFileName(partName)}`
-          const partFolder = chaptersFolder.folder(partFolderName) || undefined
-          if (!partFolder) {
-            return
-          }
-          const partChapterIds = parseJsonArray(part.chapter_order)
-          const partInfoLines = [
-            `Name: ${partName}`,
-            `ID: ${part.id}`,
-            `Chapters: ${partChapterIds.length}`,
-            `Created: ${part.created_at || 'Unknown'}`,
-            `Updated: ${part.updated_at || 'Unknown'}`,
-          ]
-          if (partChapterIds.length) {
-            partInfoLines.push(`Chapter Order: ${partChapterIds.join(', ')}`)
-          }
-          partFolder.file('part-info.txt', `${partInfoLines.join('\n')}\n`)
-          partFolders.set(part.id, partFolder)
-        })
-      }
+      // Track which chapters have been exported (to handle uncategorized)
+      const exportedChapterIds = new Set<string>()
 
-      const getChapterParentFolder = (partId?: string | null): JSZip | undefined => {
-        if (!hasParts) {
-          return chaptersFolder || undefined
-        }
-
-        if (partId && partFolders.has(partId)) {
-          return partFolders.get(partId)
-        }
-
-        if (!uncategorizedFolder && chaptersFolder) {
-          const newFolder = chaptersFolder.folder('uncategorized') || undefined
-          if (newFolder) {
-            newFolder.file('readme.txt', 'Chapters without a part assignment\n')
-            uncategorizedFolder = newFolder
-          }
-        }
-
-        return uncategorizedFolder || chaptersFolder || undefined
-      }
-
-      // Calculate padding length based on total chapters
-      const paddingLength = chaptersData.length.toString().length
-
-      for (let chapterIndex = 0; chapterIndex < chaptersData.length; chapterIndex++) {
-        const chapter = chaptersData[chapterIndex]
+      // Helper to export a chapter to a folder with a given number
+      const exportChapter = async (chapter: typeof chaptersData[0], chapterNumber: string, parentFolder: JSZip) => {
         exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
-
-        // Create zero-padded chapter number
-        const chapterNumber = (chapterIndex + 1).toString().padStart(paddingLength, '0')
         const chapterFolderName = `${chapterNumber} - ${sanitizeFileName(chapter.title || chapter.id)}`
-        const chapterParentFolder = getChapterParentFolder(chapter.part_id)
-        const chapterFolder = chapterParentFolder?.folder(chapterFolderName)
+        const chapterFolder = parentFolder.folder(chapterFolderName)
 
         if (chapterFolder) {
           // Add chapter content
@@ -201,13 +189,119 @@ const exportUserData = async () => {
           const chapterInfo = `Title: ${chapter.title || 'Untitled'}\nID: ${chapter.id}\nWord Count: ${chapter.word_count || 0}\nCreated: ${chapter.created_at || 'Unknown'}\n`
           chapterFolder.file('chapter-info.txt', chapterInfo)
 
-          // Note: Summaries are in a separate table, would need to fetch them separately
-          // Skipping for now to keep it simple
+          // Export chapter images if available
+          if (desktopImagesAvailable.value) {
+            try {
+              const chapterImages = await fetchChapterImages(chapter.id)
+              if (chapterImages.length > 0) {
+                const imagesFolder = chapterFolder.folder('images')
+                if (imagesFolder) {
+                  for (let imgIndex = 0; imgIndex < chapterImages.length; imgIndex++) {
+                    const image = chapterImages[imgIndex]
+                    try {
+                      const dataUrl = await getImageSource(image)
+                      const { data, mimeType } = dataUrlToUint8Array(dataUrl)
+                      const ext = mimeType.split('/')[1] || 'png'
+                      const imgNumber = (imgIndex + 1).toString().padStart(2, '0')
+                      const imgFileName = image.file_name || `image-${imgNumber}.${ext}`
+                      imagesFolder.file(imgFileName, data)
+                    } catch (imgErr) {
+                      console.warn(`Failed to export image ${image.id}:`, imgErr)
+                    }
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to fetch chapter images:', err)
+            }
+          }
         }
+        exportedChapterIds.add(chapter.id)
       }
 
-      // Note: Wiki pages would need separate loading from local DB
-      // Skipping for now to keep export simple
+      if (hasParts && chaptersFolder) {
+        const partPaddingLength = allParts.length.toString().length
+
+        for (let partIndex = 0; partIndex < allParts.length; partIndex++) {
+          const part = allParts[partIndex]
+          const partNumber = (partIndex + 1).toString().padStart(partPaddingLength, '0')
+          const partName = part.name || `Part ${partIndex + 1}`
+          const partFolderName = `${partNumber} - ${sanitizeFileName(partName)}`
+          const partFolder = chaptersFolder.folder(partFolderName)
+          if (!partFolder) continue
+
+          // Get ordered chapter IDs for this part
+          const partChapterIds = parseJsonArray(part.chapter_order)
+          const partChapters = partChapterIds
+            .map(id => chapterMap.get(id))
+            .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
+
+          // Part info
+          const partInfoLines = [
+            `Name: ${partName}`,
+            `ID: ${part.id}`,
+            `Chapters: ${partChapters.length}`,
+            `Created: ${part.created_at || 'Unknown'}`,
+            `Updated: ${part.updated_at || 'Unknown'}`,
+          ]
+          partFolder.file('part-info.txt', `${partInfoLines.join('\n')}\n`)
+
+          // Export part cover image if available
+          if (desktopImagesAvailable.value) {
+            try {
+              const partCover = await fetchPartCover(part.id)
+              if (partCover) {
+                exportProgress.value = `Exporting cover for part: ${partName}`
+                const dataUrl = await getImageSource(partCover)
+                const { data, mimeType } = dataUrlToUint8Array(dataUrl)
+                const ext = mimeType.split('/')[1] || 'png'
+                partFolder.file(`cover.${ext}`, data)
+              }
+            } catch (err) {
+              console.warn('Failed to export part cover:', err)
+            }
+          }
+
+          // Export chapters in part order
+          const chapterPaddingLength = partChapters.length.toString().length
+          for (let chapterIndex = 0; chapterIndex < partChapters.length; chapterIndex++) {
+            const chapter = partChapters[chapterIndex]
+            const chapterNumber = (chapterIndex + 1).toString().padStart(chapterPaddingLength, '0')
+            await exportChapter(chapter, chapterNumber, partFolder)
+          }
+        }
+
+        // Handle uncategorized chapters (chapters not in any part's chapter_order)
+        const uncategorizedChapters = chaptersData.filter(ch => !exportedChapterIds.has(ch.id))
+        if (uncategorizedChapters.length > 0) {
+          const uncategorizedFolder = chaptersFolder.folder('uncategorized')
+          if (uncategorizedFolder) {
+            uncategorizedFolder.file('readme.txt', 'Chapters without a part assignment\n')
+            const uncatPaddingLength = uncategorizedChapters.length.toString().length
+            for (let chapterIndex = 0; chapterIndex < uncategorizedChapters.length; chapterIndex++) {
+              const chapter = uncategorizedChapters[chapterIndex]
+              const chapterNumber = (chapterIndex + 1).toString().padStart(uncatPaddingLength, '0')
+              await exportChapter(chapter, chapterNumber, uncategorizedFolder)
+            }
+          }
+        }
+      } else if (chaptersFolder) {
+        // No parts - export chapters in book's chapter_order
+        const bookChapterOrder = parseJsonArray(book.chapter_order)
+        const orderedChapters = bookChapterOrder
+          .map(id => chapterMap.get(id))
+          .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
+        // Add any chapters not in the order
+        const remainingChapters = chaptersData.filter(ch => !bookChapterOrder.includes(ch.id))
+        const allChapters = [...orderedChapters, ...remainingChapters]
+
+        const paddingLength = allChapters.length.toString().length
+        for (let chapterIndex = 0; chapterIndex < allChapters.length; chapterIndex++) {
+          const chapter = allChapters[chapterIndex]
+          const chapterNumber = (chapterIndex + 1).toString().padStart(paddingLength, '0')
+          await exportChapter(chapter, chapterNumber, chaptersFolder)
+        }
+      }
     }
 
     exportProgress.value = 'Creating zip file...'
