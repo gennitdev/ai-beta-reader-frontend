@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": "^20.19.0 || ^22.12.0"
   },
   "scripts": {
     "dev": "vite",
@@ -25,7 +25,7 @@
     "@capacitor/app-launcher": "^7.0.2",
     "@capacitor/browser": "^7.0.2",
     "@capacitor/cli": "^7.4.3",
-    "@capacitor/clipboard": "^8.0.1",
+    "@capacitor/clipboard": "^7.0.2",
     "@capacitor/core": "^7.4.3",
     "@capacitor/filesystem": "^7.1.4",
     "@capacitor/preferences": "^7.0.2",
