@@ -310,5 +310,6 @@ export function useImageLibrary() {
     pickPartCover,
     fetchPartThumbnails,
     getImageSource,
+    setPartCoverImageId,
   }
 }

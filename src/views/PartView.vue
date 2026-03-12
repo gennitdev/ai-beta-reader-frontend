@@ -7,6 +7,7 @@ import {
   PencilIcon,
   CheckCircleIcon,
   ClockIcon,
+  TrashIcon,
 } from '@heroicons/vue/24/outline'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { useDatabase } from '@/composables/useDatabase'
@@ -56,6 +57,8 @@ const {
   fetchPartCover,
   pickPartCover,
   fetchChapterThumbnails,
+  deleteImage,
+  setPartCoverImageId,
 } = useImageLibrary()
 
 const part = ref<BookPart | null>(null)
@@ -391,6 +394,24 @@ const handleSelectPartCover = async () => {
   }
 }
 
+const handleDeletePartCover = async () => {
+  if (!part.value || !partCoverImage.value) return
+
+  partCoverLoading.value = true
+  partCoverError.value = null
+  try {
+    await deleteImage(partCoverImage.value)
+    await setPartCoverImageId(part.value.id, null)
+    partCoverImage.value = null
+    partCoverSrc.value = null
+    part.value.cover_image_id = null
+  } catch (error) {
+    partCoverError.value = error instanceof Error ? error.message : 'Failed to delete part cover'
+  } finally {
+    partCoverLoading.value = false
+  }
+}
+
 const openPartImageModal = (imageId: string) => {
   if (!partImageSources.value[imageId]) return
   partActiveImageId.value = imageId
@@ -539,7 +560,7 @@ watch([bookId, partId], async () => {
             <ArrowLeftIcon class="h-5 w-5" />
           </button>
           <div
-            v-if="partCoverSrc"
+            v-if="!partCoverSrc"
           >
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
               {{ partLabel }}<span v-if="partName">: {{ partName }}</span>
@@ -600,20 +621,30 @@ watch([bookId, partId], async () => {
                 </p>
               </div>
             </div>
-            <!-- Change cover button -->
-            <button
-              v-if="desktopImagesAvailable"
-              type="button"
-              class="absolute right-4 top-4 inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-60 sm:right-6 lg:right-8"
-              :disabled="partCoverLoading"
-              @click.stop="handleSelectPartCover"
-            >
-              <span
-                v-if="partCoverLoading"
-                class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-              ></span>
-              {{ partCoverLoading ? 'Updating...' : 'Change cover' }}
-            </button>
+            <!-- Cover action buttons -->
+            <div v-if="desktopImagesAvailable" class="absolute right-4 top-4 flex items-center gap-2 sm:right-6 lg:right-8">
+              <button
+                type="button"
+                class="inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="partCoverLoading"
+                @click.stop="handleSelectPartCover"
+              >
+                <span
+                  v-if="partCoverLoading"
+                  class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                ></span>
+                {{ partCoverLoading ? 'Updating...' : 'Change cover' }}
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center rounded-md bg-red-600/80 px-2.5 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="partCoverLoading"
+                title="Delete cover"
+                @click.stop="handleDeletePartCover"
+              >
+                <TrashIcon class="h-4 w-4" />
+              </button>
+            </div>
             <p v-if="partCoverError" class="absolute right-4 top-14 text-xs text-red-400 sm:right-6 lg:right-8">
               {{ partCoverError }}
             </p>

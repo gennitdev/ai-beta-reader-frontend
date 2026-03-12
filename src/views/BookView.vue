@@ -39,6 +39,7 @@ const {
   searchBook,
   replaceInChapter,
   replaceInWikiPage,
+  setBookCoverImageId,
 } = useDatabase();
 
 const {
@@ -48,6 +49,7 @@ const {
   getImageSource: getCoverImageSource,
   fetchChapterThumbnails,
   fetchPartThumbnails,
+  deleteImage,
 } = useImageLibrary();
 
 const book = ref<DatabaseBook | null>(null);
@@ -547,6 +549,24 @@ const handleSelectBookCover = async () => {
   }
 };
 
+const handleDeleteBookCover = async () => {
+  if (!book.value || !bookCoverImage.value) return;
+
+  coverLoading.value = true;
+  coverError.value = null;
+  try {
+    await deleteImage(bookCoverImage.value);
+    await setBookCoverImageId(book.value.id, null);
+    bookCoverImage.value = null;
+    bookCoverSrc.value = null;
+    book.value.cover_image_id = null;
+  } catch (error) {
+    coverError.value = error instanceof Error ? error.message : "Failed to delete book cover";
+  } finally {
+    coverLoading.value = false;
+  }
+};
+
 const refreshData = async () => {
   await loadBook();
   await loadWiki();
@@ -841,6 +861,7 @@ onMounted(async () => {
       :cover-loading="coverLoading"
       :cover-error="coverError"
       :select-book-cover="handleSelectBookCover"
+      :delete-book-cover="handleDeleteBookCover"
       :chapter-thumbnails="chapterThumbnails"
       :part-thumbnails="partThumbnails"
     />
@@ -889,6 +910,7 @@ onMounted(async () => {
     :cover-loading="coverLoading"
     :cover-error="coverError"
     :select-book-cover="handleSelectBookCover"
+    :delete-book-cover="handleDeleteBookCover"
     :chapter-thumbnails="chapterThumbnails"
     :part-thumbnails="partThumbnails"
   />

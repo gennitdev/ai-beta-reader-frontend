@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, toRefs, watch } from 'vue'
-import { DocumentTextIcon, BookOpenIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { DocumentTextIcon, BookOpenIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import type { Book } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import type { PropType } from 'vue'
@@ -135,6 +135,10 @@ const props = defineProps({
     type: Function as PropType<() => void>,
     required: true
   },
+  deleteBookCover: {
+    type: Function as PropType<() => void>,
+    default: null
+  },
   chapterThumbnails: {
     type: Object as PropType<Record<string, string>>,
     default: () => ({})
@@ -168,6 +172,7 @@ const {
 } = toRefs(props)
 
 const selectBookCover = props.selectBookCover
+const deleteBookCover = props.deleteBookCover
 
 // Lightbox state
 const showLightbox = ref(false)
@@ -287,7 +292,7 @@ watch(
           <p class="text-sm text-gray-500 dark:text-gray-400">
             Covers stay on your device when you use the desktop app.
           </p>
-          <div class="mt-2">
+          <div class="mt-2 flex items-center gap-2">
             <button
               type="button"
               class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -298,7 +303,16 @@ watch(
                 v-if="coverLoading"
                 class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
               ></span>
-              {{ coverImageSrc ? 'Replace cover' : 'Add cover' }}
+              {{ coverImageSrc ? 'Replace' : 'Add cover' }}
+            </button>
+            <button
+              v-if="coverImageSrc && deleteBookCover"
+              type="button"
+              class="inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="coverLoading"
+              @click="deleteBookCover"
+            >
+              <TrashIcon class="h-4 w-4" />
             </button>
             <p v-if="coverError" class="mt-2 text-xs text-red-600 dark:text-red-400">
               {{ coverError }}
