@@ -59,7 +59,7 @@ function togglePart(partId: string) {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
+  <div class="p-3 sm:p-6 space-y-4 sm:space-y-6">
     <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
       <h3 class="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
         How to organize chapters
@@ -150,7 +150,7 @@ function togglePart(partId: string) {
         v-if="chaptersByPart.uncategorized.length > 0"
         class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
       >
-        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700">
+        <div class="px-2 py-2 sm:px-4 sm:py-3 bg-gray-50 dark:bg-gray-700">
           <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized Chapters</h4>
           <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
             {{ chaptersByPart.uncategorized.length }} chapter{{
@@ -167,55 +167,56 @@ function togglePart(partId: string) {
             @change="emit('save-order')"
           >
             <template #item="{ element: chapter, index }">
-              <div class="flex items-center justify-between gap-3 py-3 px-4">
-                <div class="flex-1">
-                  <h5 class="text-sm font-medium text-gray-900 dark:text-white">
+              <div class="flex items-center gap-2 py-2 px-2 sm:gap-3 sm:py-3 sm:px-4">
+                <!-- Up/Down buttons - more prominent on mobile -->
+                <div class="flex flex-col">
+                  <button
+                    :disabled="index === 0"
+                    class="p-1.5 sm:p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation"
+                    title="Move up"
+                    @click="emit('move-chapter-up', chaptersByPart.uncategorized, index)"
+                  >
+                    <ChevronUpIcon class="w-5 h-5 sm:w-4 sm:h-4" />
+                  </button>
+                  <button
+                    :disabled="index >= chaptersByPart.uncategorized.length - 1"
+                    class="p-1.5 sm:p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation"
+                    title="Move down"
+                    @click="emit('move-chapter-down', chaptersByPart.uncategorized, index)"
+                  >
+                    <ChevronDownIcon class="w-5 h-5 sm:w-4 sm:h-4" />
+                  </button>
+                </div>
+                <!-- Chapter info -->
+                <div class="flex-1 min-w-0">
+                  <h5 class="text-sm font-medium text-gray-900 dark:text-white truncate">
                     {{ chapter.title || chapter.id }}
                   </h5>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
                     {{ chapter.word_count?.toLocaleString() || 0 }} words
                   </p>
                 </div>
-                <div class="flex items-center space-x-2">
-                  <div class="flex flex-col">
-                    <button
-                      :disabled="index === 0"
-                      class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Move up"
-                      @click="emit('move-chapter-up', chaptersByPart.uncategorized, index)"
-                    >
-                      <ChevronUpIcon class="w-4 h-4" />
-                    </button>
-                    <button
-                      :disabled="index >= chaptersByPart.uncategorized.length - 1"
-                      class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Move down"
-                      @click="emit('move-chapter-down', chaptersByPart.uncategorized, index)"
-                    >
-                      <ChevronDownIcon class="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div class="relative">
-                    <select
-                      :value="chapter.part_id || ''"
-                      class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
-                      @change="
-                        emit(
-                          'move-chapter-to-part',
-                          chapter.id,
-                          ($event.target as HTMLSelectElement)?.value || null
-                        )
-                      "
-                    >
-                      <option value="">Uncategorized</option>
-                      <option v-for="part in chaptersByPart.parts" :key="part.id" :value="part.id">
-                        {{ part.name }}
-                      </option>
-                    </select>
-                    <ChevronDownIcon
-                      class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300"
-                    />
-                  </div>
+                <!-- Part selector -->
+                <div class="relative flex-shrink-0">
+                  <select
+                    :value="chapter.part_id || ''"
+                    class="appearance-none text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 pr-7 sm:pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-24 sm:min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    @change="
+                      emit(
+                        'move-chapter-to-part',
+                        chapter.id,
+                        ($event.target as HTMLSelectElement)?.value || null
+                      )
+                    "
+                  >
+                    <option value="">None</option>
+                    <option v-for="part in chaptersByPart.parts" :key="part.id" :value="part.id">
+                      {{ part.name }}
+                    </option>
+                  </select>
+                  <ChevronDownIcon
+                    class="pointer-events-none absolute right-2 sm:right-3 top-1/2 h-3 w-3 sm:h-4 sm:w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300"
+                  />
                 </div>
               </div>
             </template>
@@ -228,11 +229,11 @@ function togglePart(partId: string) {
         :key="part.id"
         class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
       >
-        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 flex-1">
+        <div class="px-2 py-2 sm:px-4 sm:py-3 bg-gray-50 dark:bg-gray-700">
+          <div class="flex items-center justify-between gap-1">
+            <div class="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
               <button
-                class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-transform"
+                class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-transform flex-shrink-0"
                 :title="expandedPartIds.has(part.id) ? 'Collapse' : 'Expand'"
                 @click="togglePart(part.id)"
               >
@@ -243,7 +244,7 @@ function togglePart(partId: string) {
                 <ChevronRightIcon v-else class="w-5 h-5" />
               </button>
               <div
-                class="flex-1 cursor-pointer"
+                class="flex-1 min-w-0 cursor-pointer"
                 @click="togglePart(part.id)"
               >
                 <input
@@ -257,16 +258,16 @@ function togglePart(partId: string) {
                   @keyup.enter="emit('save-part', part.id)"
                   @keyup.escape="emit('cancel-edit-part')"
                 />
-                <h4 v-else class="font-medium text-gray-900 dark:text-white">
+                <h4 v-else class="font-medium text-gray-900 dark:text-white truncate">
                   {{ part.name }}
                 </h4>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-0.5 sm:mt-1">
                   {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }}
                   · {{ part.wordCount.toLocaleString() }} words
                 </p>
               </div>
             </div>
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
               <template v-if="editingPartId === part.id">
                 <button
                   class="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
@@ -325,55 +326,56 @@ function togglePart(partId: string) {
             @change="emit('save-order')"
           >
             <template #item="{ element: chapter, index }">
-              <div class="flex items-center justify-between gap-3 py-3 px-4">
-                <div class="flex-1">
-                  <h5 class="text-sm font-medium text-gray-900 dark:text-white">
+              <div class="flex items-center gap-2 py-2 px-2 sm:gap-3 sm:py-3 sm:px-4">
+                <!-- Up/Down buttons - more prominent on mobile -->
+                <div class="flex flex-col">
+                  <button
+                    :disabled="index === 0"
+                    class="p-1.5 sm:p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation"
+                    title="Move up"
+                    @click="emit('move-chapter-up', part.chapters, index)"
+                  >
+                    <ChevronUpIcon class="w-5 h-5 sm:w-4 sm:h-4" />
+                  </button>
+                  <button
+                    :disabled="index >= part.chapters.length - 1"
+                    class="p-1.5 sm:p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation"
+                    title="Move down"
+                    @click="emit('move-chapter-down', part.chapters, index)"
+                  >
+                    <ChevronDownIcon class="w-5 h-5 sm:w-4 sm:h-4" />
+                  </button>
+                </div>
+                <!-- Chapter info -->
+                <div class="flex-1 min-w-0">
+                  <h5 class="text-sm font-medium text-gray-900 dark:text-white truncate">
                     {{ chapter.title || chapter.id }}
                   </h5>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
                     {{ chapter.word_count?.toLocaleString() || 0 }} words
                   </p>
                 </div>
-                <div class="flex items-center space-x-2">
-                  <div class="flex flex-col">
-                    <button
-                      :disabled="index === 0"
-                      class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Move up"
-                      @click="emit('move-chapter-up', part.chapters, index)"
-                    >
-                      <ChevronUpIcon class="w-4 h-4" />
-                    </button>
-                    <button
-                      :disabled="index >= part.chapters.length - 1"
-                      class="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Move down"
-                      @click="emit('move-chapter-down', part.chapters, index)"
-                    >
-                      <ChevronDownIcon class="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div class="relative">
-                    <select
-                      :value="chapter.part_id || ''"
-                      class="appearance-none text-sm px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
-                      @change="
-                        emit(
-                          'move-chapter-to-part',
-                          chapter.id,
-                          ($event.target as HTMLSelectElement)?.value || null
-                        )
-                      "
-                    >
-                      <option value="">Uncategorized</option>
-                      <option v-for="p in chaptersByPart.parts" :key="p.id" :value="p.id">
-                        {{ p.name }}
-                      </option>
-                    </select>
-                    <ChevronDownIcon
-                      class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300"
-                    />
-                  </div>
+                <!-- Part selector -->
+                <div class="relative flex-shrink-0">
+                  <select
+                    :value="chapter.part_id || ''"
+                    class="appearance-none text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 pr-7 sm:pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-24 sm:min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    @change="
+                      emit(
+                        'move-chapter-to-part',
+                        chapter.id,
+                        ($event.target as HTMLSelectElement)?.value || null
+                      )
+                    "
+                  >
+                    <option value="">None</option>
+                    <option v-for="p in chaptersByPart.parts" :key="p.id" :value="p.id">
+                      {{ p.name }}
+                    </option>
+                  </select>
+                  <ChevronDownIcon
+                    class="pointer-events-none absolute right-2 sm:right-3 top-1/2 h-3 w-3 sm:h-4 sm:w-4 -translate-y-1/2 text-gray-500 dark:text-gray-300"
+                  />
                 </div>
               </div>
             </template>
