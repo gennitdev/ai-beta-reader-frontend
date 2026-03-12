@@ -229,10 +229,10 @@ export function setupContentSecurityPolicy(customScheme: string): void {
     const scriptSrc = `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com`;
     const styleSrc = `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com`;
     const fontSrc = `font-src 'self' data: https://fonts.gstatic.com`;
-    // Allow connecting to Google APIs for OAuth and Drive
+    // Allow connecting to Google APIs for OAuth and Drive, and OpenAI API
     const connectSrc = electronIsDev
-      ? `connect-src ${customScheme}://* devtools://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com`
-      : `connect-src ${customScheme}://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com`;
+      ? `connect-src ${customScheme}://* devtools://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://api.openai.com`
+      : `connect-src ${customScheme}://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://api.openai.com`;
     // Allow Google auth popups/frames
     const frameSrc = `frame-src https://accounts.google.com`;
 
