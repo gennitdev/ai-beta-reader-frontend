@@ -2,6 +2,7 @@
 import { ref, watch, onUnmounted, type PropType } from "vue";
 import TextEditor from "@/components/TextEditor.vue";
 import MarkdownRenderer from "@/components/MarkdownRenderer.vue";
+import { copyToClipboard } from "@/utils/clipboard";
 import {
   ArrowsPointingOutIcon,
   ArrowsPointingInIcon,
@@ -64,33 +65,20 @@ const resetChapterCopyState = () => {
   chapterCopied.value = false;
 };
 
-const fallbackCopy = (text: string) => {
-  if (typeof document === "undefined") return;
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  document.execCommand("copy");
-  document.body.removeChild(textarea);
-};
-
 const copyChapterToClipboard = async () => {
   if (!props.chapterText) return;
   try {
     resetChapterCopyState();
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(props.chapterText);
+    const success = await copyToClipboard(props.chapterText);
+    if (success) {
+      chapterCopied.value = true;
+      chapterCopyTimeout = setTimeout(() => {
+        chapterCopied.value = false;
+        chapterCopyTimeout = null;
+      }, 2000);
     } else {
-      fallbackCopy(props.chapterText);
+      console.error("Failed to copy chapter text");
     }
-    chapterCopied.value = true;
-    chapterCopyTimeout = setTimeout(() => {
-      chapterCopied.value = false;
-      chapterCopyTimeout = null;
-    }, 2000);
   } catch (error) {
     console.error("Failed to copy chapter text:", error);
   }

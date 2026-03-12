@@ -10,6 +10,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import AvatarComponent from '@/components/AvatarComponent.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import { copyToClipboard } from '@/utils/clipboard'
 
 type Review = {
   id: string
@@ -94,32 +95,19 @@ const resetCopiedReview = () => {
   copiedReviewId.value = null
 }
 
-const fallbackCopy = (text: string) => {
-  if (typeof document === 'undefined') return
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.focus()
-  textarea.select()
-  document.execCommand('copy')
-  document.body.removeChild(textarea)
-}
-
 const copyReviewText = async (review: Review) => {
   if (!review.review_text) return
   try {
     resetCopiedReview()
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(review.review_text)
+    const success = await copyToClipboard(review.review_text)
+    if (success) {
+      copiedReviewId.value = review.id
+      reviewCopyTimeout = setTimeout(() => {
+        resetCopiedReview()
+      }, 2000)
     } else {
-      fallbackCopy(review.review_text)
+      console.error('Failed to copy review text')
     }
-    copiedReviewId.value = review.id
-    reviewCopyTimeout = setTimeout(() => {
-      resetCopiedReview()
-    }, 2000)
   } catch (error) {
     console.error('Failed to copy review text:', error)
   }

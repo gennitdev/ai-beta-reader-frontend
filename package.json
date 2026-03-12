@@ -24,6 +24,7 @@
     "@capacitor/app-launcher": "^7.0.2",
     "@capacitor/browser": "^7.0.2",
     "@capacitor/cli": "^7.4.3",
+    "@capacitor/clipboard": "^8.0.1",
     "@capacitor/core": "^7.4.3",
     "@capacitor/filesystem": "^7.1.4",
     "@capacitor/preferences": "^7.0.2",
