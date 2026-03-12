@@ -1,7 +1,7 @@
 import type { CapacitorElectronConfig } from '@capacitor-community/electron';
 import { getCapacitorElectronConfig, setupElectronDeepLinking } from '@capacitor-community/electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, MenuItem } from 'electron';
+import { app, MenuItem, ipcMain } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
@@ -15,9 +15,169 @@ unhandled();
 
 // Define our menu templates (these are optional)
 const trayMenuTemplate: (MenuItemConstructorOptions | MenuItem)[] = [new MenuItem({ label: 'Quit App', role: 'quit' })];
+
+// Custom Edit menu with Find functionality
+const editMenuTemplate: MenuItemConstructorOptions = {
+  label: 'Edit',
+  submenu: [
+    { role: 'undo' },
+    { role: 'redo' },
+    { type: 'separator' },
+    { role: 'cut' },
+    { role: 'copy' },
+    { role: 'paste' },
+    { role: 'pasteAndMatchStyle' },
+    { role: 'delete' },
+    { role: 'selectAll' },
+    { type: 'separator' },
+    {
+      label: 'Find',
+      accelerator: 'CmdOrCtrl+F',
+      click: (_menuItem, browserWindow) => {
+        if (browserWindow) {
+          browserWindow.webContents.executeJavaScript(`
+            (function() {
+              // Check if find bar already exists
+              let findBar = document.getElementById('electron-find-bar');
+              if (findBar) {
+                findBar.style.display = findBar.style.display === 'none' ? 'flex' : 'none';
+                if (findBar.style.display === 'flex') {
+                  findBar.querySelector('input').focus();
+                  findBar.querySelector('input').select();
+                }
+                return;
+              }
+
+              // Create find bar
+              findBar = document.createElement('div');
+              findBar.id = 'electron-find-bar';
+              findBar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:40px;background:#1f2937;border-bottom:1px solid #374151;display:flex;align-items:center;padding:0 12px;gap:8px;z-index:99999;font-family:system-ui,-apple-system,sans-serif;';
+
+              const input = document.createElement('input');
+              input.type = 'text';
+              input.placeholder = 'Find in page...';
+              input.style.cssText = 'flex:1;max-width:300px;padding:6px 10px;border:1px solid #4b5563;border-radius:4px;background:#111827;color:#f3f4f6;font-size:14px;outline:none;';
+
+              const countLabel = document.createElement('span');
+              countLabel.style.cssText = 'color:#9ca3af;font-size:13px;min-width:60px;';
+              countLabel.textContent = '';
+
+              const prevBtn = document.createElement('button');
+              prevBtn.innerHTML = '&#9650;';
+              prevBtn.title = 'Previous (Shift+Enter)';
+              prevBtn.style.cssText = 'padding:4px 8px;border:1px solid #4b5563;border-radius:4px;background:#374151;color:#f3f4f6;cursor:pointer;font-size:12px;';
+
+              const nextBtn = document.createElement('button');
+              nextBtn.innerHTML = '&#9660;';
+              nextBtn.title = 'Next (Enter)';
+              nextBtn.style.cssText = 'padding:4px 8px;border:1px solid #4b5563;border-radius:4px;background:#374151;color:#f3f4f6;cursor:pointer;font-size:12px;';
+
+              const closeBtn = document.createElement('button');
+              closeBtn.innerHTML = '&times;';
+              closeBtn.title = 'Close (Escape)';
+              closeBtn.style.cssText = 'padding:4px 10px;border:none;border-radius:4px;background:transparent;color:#9ca3af;cursor:pointer;font-size:18px;margin-left:auto;';
+
+              findBar.appendChild(input);
+              findBar.appendChild(countLabel);
+              findBar.appendChild(prevBtn);
+              findBar.appendChild(nextBtn);
+              findBar.appendChild(closeBtn);
+              document.body.appendChild(findBar);
+
+              let currentIndex = 0;
+              let totalMatches = 0;
+              let debounceTimer = null;
+
+              function updateCount(result) {
+                if (result && result.matches > 0) {
+                  totalMatches = result.matches;
+                  currentIndex = result.activeMatchOrdinal;
+                  countLabel.textContent = currentIndex + ' of ' + totalMatches;
+                } else {
+                  countLabel.textContent = input.value ? 'No results' : '';
+                }
+                // Re-focus input after find completes
+                input.focus();
+              }
+
+              function doFind(forward) {
+                if (input.value) {
+                  window.electronFindInPage(input.value, forward);
+                } else {
+                  window.electronStopFind();
+                  countLabel.textContent = '';
+                }
+              }
+
+              function debouncedFind() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                  doFind(true);
+                }, 150);
+              }
+
+              // Listen for find results from main process
+              window.addEventListener('electron-find-result', (e) => {
+                updateCount(e.detail);
+              });
+
+              // Prevent events from bubbling to Vue app
+              input.addEventListener('input', (e) => {
+                e.stopPropagation();
+                debouncedFind();
+              });
+              input.addEventListener('keydown', (e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  clearTimeout(debounceTimer);
+                  doFind(!e.shiftKey);
+                } else if (e.key === 'Escape') {
+                  closeFindBar();
+                }
+              });
+              input.addEventListener('keyup', (e) => e.stopPropagation());
+              input.addEventListener('keypress', (e) => e.stopPropagation());
+              input.addEventListener('focus', (e) => e.stopPropagation());
+              input.addEventListener('blur', (e) => {
+                e.stopPropagation();
+                // Re-focus if blur was caused by find operation
+                setTimeout(() => {
+                  if (findBar.style.display === 'flex' && document.activeElement !== input) {
+                    input.focus();
+                  }
+                }, 10);
+              });
+
+              prevBtn.addEventListener('click', () => doFind(false));
+              nextBtn.addEventListener('click', () => doFind(true));
+
+              function closeFindBar() {
+                findBar.style.display = 'none';
+                window.electronStopFind();
+                countLabel.textContent = '';
+              }
+
+              closeBtn.addEventListener('click', closeFindBar);
+
+              document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && findBar.style.display === 'flex') {
+                  closeFindBar();
+                }
+              });
+
+              input.focus();
+            })();
+          `);
+        }
+      },
+    },
+  ],
+};
+
 const appMenuBarMenuTemplate: (MenuItemConstructorOptions | MenuItem)[] = [
   { role: process.platform === 'darwin' ? 'appMenu' : 'fileMenu' },
-  { role: 'editMenu' },
+  editMenuTemplate,
   { role: 'viewMenu' },
 ];
 
@@ -46,6 +206,32 @@ if (electronIsDev) {
   await app.whenReady();
   registerDesktopImageBridge();
   registerOAuthLoopbackHandlers();
+
+  // Register find-in-page IPC handlers
+  ipcMain.handle('find-in-page', (_event, text: string, forward: boolean) => {
+    const mainWindow = myCapacitorApp.getMainWindow();
+    if (mainWindow && text) {
+      mainWindow.webContents.findInPage(text, { forward, findNext: true });
+    }
+  });
+
+  ipcMain.handle('stop-find-in-page', () => {
+    const mainWindow = myCapacitorApp.getMainWindow();
+    if (mainWindow) {
+      mainWindow.webContents.stopFindInPage('clearSelection');
+    }
+  });
+
+  // Listen for find-in-page results and send to renderer
+  ipcMain.on('setup-find-result-listener', () => {
+    const mainWindow = myCapacitorApp.getMainWindow();
+    if (mainWindow) {
+      mainWindow.webContents.on('found-in-page', (_event, result) => {
+        mainWindow.webContents.send('find-in-page-result', result);
+      });
+    }
+  });
+
   // Security - Set Content-Security-Policy based on whether or not we are in dev mode.
   setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme());
   // Initialize our app, build windows, and load content.

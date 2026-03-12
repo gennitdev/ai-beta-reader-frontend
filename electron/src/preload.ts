@@ -17,3 +17,19 @@ contextBridge.exposeInMainWorld('electronOAuth', {
   authenticate: (config: { clientId: string; scope: string }) =>
     ipcRenderer.invoke('oauth-loopback:authenticate', config),
 });
+
+// Find in page functionality
+contextBridge.exposeInMainWorld('electronFindInPage', (text: string, forward: boolean) => {
+  ipcRenderer.invoke('find-in-page', text, forward);
+});
+
+contextBridge.exposeInMainWorld('electronStopFind', () => {
+  ipcRenderer.invoke('stop-find-in-page');
+});
+
+// Set up find result listener
+ipcRenderer.send('setup-find-result-listener');
+ipcRenderer.on('find-in-page-result', (_event, result) => {
+  // Dispatch a custom event that the find bar can listen to
+  window.dispatchEvent(new CustomEvent('electron-find-result', { detail: result }));
+});
