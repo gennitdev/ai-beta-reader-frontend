@@ -12,7 +12,7 @@ function sanitizeBridgeAvailability(): boolean {
 
 function createAssetFromMetadata(
   metadata: DesktopImageMetadata,
-  options: { bookId: string; chapterId?: string | null; assetType: ImageAssetType },
+  options: { bookId: string; chapterId?: string | null; assetType: ImageAssetType; imageData?: string | null },
 ): ImageAsset {
   const now = new Date().toISOString()
   return {
@@ -23,6 +23,7 @@ function createAssetFromMetadata(
     file_name: metadata.fileName,
     file_path: metadata.relativePath,
     mime_type: metadata.mimeType ?? null,
+    image_data: options.imageData ?? null,
     created_at: now,
     updated_at: now,
   }
@@ -67,19 +68,29 @@ export function useImageLibrary() {
   }
 
   async function getImageSource(image: ImageAsset): Promise<string> {
-    if (!desktopImagesAvailable.value || !image.file_path) {
-      throw new Error('Image previews are only available in the desktop build')
-    }
+    // Check cache first
     if (imageSourceCache.has(image.id)) {
       return imageSourceCache.get(image.id)!
     }
-    const bridge = ensureBridge()
-    const payload = await bridge.readImageData({
-      relativePath: image.file_path,
-      mimeType: image.mime_type ?? undefined,
-    })
-    imageSourceCache.set(image.id, payload.dataUrl)
-    return payload.dataUrl
+
+    // On desktop, read from filesystem
+    if (desktopImagesAvailable.value && image.file_path) {
+      const bridge = ensureBridge()
+      const payload = await bridge.readImageData({
+        relativePath: image.file_path,
+        mimeType: image.mime_type ?? undefined,
+      })
+      imageSourceCache.set(image.id, payload.dataUrl)
+      return payload.dataUrl
+    }
+
+    // On web, use image_data from database (restored from backup)
+    if (image.image_data) {
+      imageSourceCache.set(image.id, image.image_data)
+      return image.image_data
+    }
+
+    throw new Error('Image data not available')
   }
 
   async function addImagesToChapter(bookId: string, chapterId: string) {
@@ -105,14 +116,67 @@ export function useImageLibrary() {
     return saved
   }
 
+  // Web-based image upload using File API
+  async function addImagesFromFiles(
+    files: FileList | File[],
+    options: { bookId: string; chapterId?: string | null; assetType: ImageAssetType }
+  ): Promise<ImageAsset[]> {
+    const saved: ImageAsset[] = []
+
+    for (const file of Array.from(files)) {
+      // Convert file to base64 data URL
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const id = crypto.randomUUID()
+      const now = new Date().toISOString()
+      const asset: ImageAsset = {
+        id,
+        book_id: options.bookId,
+        chapter_id: options.chapterId ?? null,
+        asset_type: options.assetType,
+        file_name: file.name,
+        file_path: `web/${id}/${file.name}`, // Virtual path for web
+        mime_type: file.type || null,
+        image_data: dataUrl,
+        created_at: now,
+        updated_at: now,
+      }
+
+      await saveImageAssetRecord(asset)
+      imageSourceCache.set(asset.id, dataUrl)
+      saved.push(asset)
+    }
+
+    return saved
+  }
+
+  // Check if images can be displayed (desktop filesystem or web with image_data)
+  function canDisplayImages(): boolean {
+    return desktopImagesAvailable.value || true // Web can display if image_data exists
+  }
+
+  // Check if new images can be uploaded
+  function canUploadImages(): boolean {
+    return desktopImagesAvailable.value || typeof window !== 'undefined'
+  }
+
   async function deleteImage(image: ImageAsset) {
-    const bridge = ensureBridge()
     await deleteImageAssetRecord(image.id)
     imageSourceCache.delete(image.id)
-    try {
-      await bridge.deleteImageFile({ relativePath: image.file_path })
-    } catch (error) {
-      console.warn('Failed to delete image file', error)
+
+    // Only delete from filesystem on desktop
+    if (desktopImagesAvailable.value && image.file_path && !image.file_path.startsWith('web/')) {
+      try {
+        const bridge = ensureBridge()
+        await bridge.deleteImageFile({ relativePath: image.file_path })
+      } catch (error) {
+        console.warn('Failed to delete image file', error)
+      }
     }
   }
 
@@ -126,17 +190,15 @@ export function useImageLibrary() {
   }
 
   async function fetchChapterThumbnails(chapterIds: string[]): Promise<Record<string, string>> {
-    if (!desktopImagesAvailable.value) {
-      return {}
-    }
     const thumbnails: Record<string, string> = {}
     for (const chapterId of chapterIds) {
       const firstImage = await fetchFirstChapterImage(chapterId)
       if (firstImage) {
         try {
+          // Works on desktop (filesystem) or web (image_data)
           thumbnails[chapterId] = await getImageSource(firstImage)
         } catch (error) {
-          console.warn(`Failed to load thumbnail for chapter ${chapterId}`, error)
+          // Silently skip if image can't be loaded
         }
       }
     }
@@ -215,17 +277,15 @@ export function useImageLibrary() {
   }
 
   async function fetchPartThumbnails(partIds: string[]): Promise<Record<string, string>> {
-    if (!desktopImagesAvailable.value) {
-      return {}
-    }
     const thumbnails: Record<string, string> = {}
     for (const partId of partIds) {
       const cover = await fetchPartCover(partId)
       if (cover) {
         try {
+          // Works on desktop (filesystem) or web (image_data)
           thumbnails[partId] = await getImageSource(cover)
         } catch (error) {
-          console.warn(`Failed to load thumbnail for part ${partId}`, error)
+          // Silently skip if image can't be loaded
         }
       }
     }
@@ -236,6 +296,9 @@ export function useImageLibrary() {
     desktopImagesAvailable,
     refreshAvailability,
     addImagesToChapter,
+    addImagesFromFiles,
+    canDisplayImages,
+    canUploadImages,
     deleteImage,
     fetchChapterImages,
     fetchFirstChapterImage,

@@ -159,4 +159,31 @@ export function registerDesktopImageBridge() {
       updatedAt: stats.mtime.toISOString(),
     };
   });
+
+  // Write image data from base64 data URL to filesystem (for restore from backup)
+  ipcMain.handle('desktop-images:write', async (_event, payload: { relativePath: string; dataUrl: string }) => {
+    if (!payload?.relativePath || !payload?.dataUrl) {
+      throw new Error('Missing image path or data');
+    }
+
+    // Parse the data URL to get the binary data
+    const matches = payload.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!matches) {
+      throw new Error('Invalid data URL format');
+    }
+
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // Ensure the directory exists
+    const absolutePath = path.join(imagesRoot(), payload.relativePath);
+    const dir = path.dirname(absolutePath);
+    await ensureDirectory(dir);
+
+    // Write the file
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(absolutePath, buffer);
+
+    return { success: true };
+  });
 }

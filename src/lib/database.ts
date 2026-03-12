@@ -83,6 +83,7 @@ export interface ImageAsset {
   file_name: string;
   file_path: string;
   mime_type: string | null;
+  image_data: string | null; // Base64 data URL for web storage and backup/restore
   created_at: string;
   updated_at: string;
 }
@@ -324,6 +325,7 @@ export class AppDatabase {
         file_name TEXT NOT NULL,
         file_path TEXT NOT NULL,
         mime_type TEXT,
+        image_data TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (book_id) REFERENCES books(id),
@@ -365,7 +367,9 @@ export class AppDatabase {
       // Add cover_image_id to books if not exists
       `ALTER TABLE books ADD COLUMN cover_image_id TEXT`,
       // Add cover_image_id to book_parts if not exists
-      `ALTER TABLE book_parts ADD COLUMN cover_image_id TEXT`
+      `ALTER TABLE book_parts ADD COLUMN cover_image_id TEXT`,
+      // Add image_data to image_assets for web storage and backup/restore
+      `ALTER TABLE image_assets ADD COLUMN image_data TEXT`
     ];
 
     for (const migration of migrations) {
@@ -1816,8 +1820,8 @@ export class AppDatabase {
 
   async saveImageAsset(asset: ImageAsset) {
     const query = `INSERT OR REPLACE INTO image_assets
-      (id, book_id, chapter_id, asset_type, file_name, file_path, mime_type, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      (id, book_id, chapter_id, asset_type, file_name, file_path, mime_type, image_data, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     const params = [
       asset.id,
       asset.book_id,
@@ -1826,6 +1830,7 @@ export class AppDatabase {
       asset.file_name,
       asset.file_path,
       asset.mime_type ?? null,
+      asset.image_data ?? null,
       asset.created_at,
       asset.updated_at,
     ];
@@ -1865,6 +1870,7 @@ export class AppDatabase {
         file_name: row.file_name,
         file_path: row.file_path,
         mime_type: row.mime_type,
+        image_data: row.image_data ?? null,
         created_at: row.created_at,
         updated_at: row.updated_at,
       }));
@@ -1879,8 +1885,9 @@ export class AppDatabase {
         file_name: row[4],
         file_path: row[5],
         mime_type: row[6],
-        created_at: row[7],
-        updated_at: row[8],
+        image_data: row[7] ?? null,
+        created_at: row[8],
+        updated_at: row[9],
       }));
     }
   }
@@ -1904,6 +1911,7 @@ export class AppDatabase {
         file_name: row.file_name,
         file_path: row.file_path,
         mime_type: row.mime_type,
+        image_data: row.image_data ?? null,
         created_at: row.created_at,
         updated_at: row.updated_at,
       }));
@@ -1918,8 +1926,9 @@ export class AppDatabase {
         file_name: row[4],
         file_path: row[5],
         mime_type: row[6],
-        created_at: row[7],
-        updated_at: row[8],
+        image_data: row[7] ?? null,
+        created_at: row[8],
+        updated_at: row[9],
       }));
     }
   }
@@ -1945,6 +1954,7 @@ export class AppDatabase {
         file_name: row.file_name,
         file_path: row.file_path,
         mime_type: row.mime_type,
+        image_data: row.image_data ?? null,
         created_at: row.created_at,
         updated_at: row.updated_at,
       };
@@ -1961,8 +1971,9 @@ export class AppDatabase {
         file_name: row[4],
         file_path: row[5],
         mime_type: row[6],
-        created_at: row[7],
-        updated_at: row[8],
+        image_data: row[7] ?? null,
+        created_at: row[8],
+        updated_at: row[9],
       };
     }
   }
@@ -1999,6 +2010,7 @@ export class AppDatabase {
         file_name: row.file_name,
         file_path: row.file_path,
         mime_type: row.mime_type,
+        image_data: row.image_data ?? null,
         created_at: row.created_at,
         updated_at: row.updated_at,
       };
@@ -2015,8 +2027,9 @@ export class AppDatabase {
         file_name: row[4],
         file_path: row[5],
         mime_type: row[6],
-        created_at: row[7],
-        updated_at: row[8],
+        image_data: row[7] ?? null,
+        created_at: row[8],
+        updated_at: row[9],
       };
     }
   }

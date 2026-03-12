@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('desktopImages', {
   pickBookCover: (payload: { bookId: string }) => ipcRenderer.invoke('desktop-images:pick-cover', payload),
   readImageData: (payload: { relativePath: string; mimeType?: string }) =>
     ipcRenderer.invoke('desktop-images:read', payload),
+  writeImageData: (payload: { relativePath: string; dataUrl: string }) =>
+    ipcRenderer.invoke('desktop-images:write', payload),
   deleteImageFile: (payload: { relativePath: string }) => ipcRenderer.invoke('desktop-images:delete', payload),
 });
 

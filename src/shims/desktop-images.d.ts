@@ -17,6 +17,7 @@ export interface DesktopImagesBridge {
   readImageData: (payload: { relativePath: string; mimeType?: string | null }) => Promise<{
     dataUrl: string;
   }>;
+  writeImageData: (payload: { relativePath: string; dataUrl: string }) => Promise<{ success: boolean }>;
   deleteImageFile: (payload: { relativePath: string }) => Promise<{ success: boolean }>;
 }
 

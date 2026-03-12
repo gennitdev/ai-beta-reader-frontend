@@ -736,6 +736,7 @@ export class CloudSync {
 
   /**
    * Backup database to cloud storage (encrypted)
+   * Includes image data from desktop filesystem or web database
    */
   async backup(password: string): Promise<void> {
     if (!this.provider.isAuthenticated()) {
@@ -745,8 +746,55 @@ export class CloudSync {
     console.log('Exporting database...');
     const dbData = await db.exportDatabase();
 
+    // Enrich with image data if on desktop
+    let enrichedData = dbData;
+    if (typeof window !== 'undefined' && window.desktopImages) {
+      console.log('Reading image files for backup...');
+      try {
+        const exportJson = JSON.parse(new TextDecoder().decode(dbData));
+
+        // image_assets is an array of arrays (raw SQL rows)
+        if (exportJson.image_assets && Array.isArray(exportJson.image_assets)) {
+          // Get column indices - image_assets columns are:
+          // id, book_id, chapter_id, asset_type, file_name, file_path, mime_type, image_data, created_at, updated_at
+          const enrichedAssets = [];
+          for (const row of exportJson.image_assets) {
+            const filePath = row[5]; // file_path is at index 5
+            const mimeType = row[6]; // mime_type is at index 6
+            let imageData = row[7]; // image_data is at index 7
+
+            // If no image_data stored, try to read from filesystem
+            if (!imageData && filePath) {
+              try {
+                const result = await window.desktopImages.readImageData({
+                  relativePath: filePath,
+                  mimeType: mimeType,
+                });
+                imageData = result.dataUrl;
+                console.log(`Read image: ${filePath}`);
+              } catch (err) {
+                console.warn(`Failed to read image ${filePath}:`, err);
+              }
+            }
+
+            // Create new row with image_data
+            const newRow = [...row];
+            newRow[7] = imageData;
+            enrichedAssets.push(newRow);
+          }
+          exportJson.image_assets = enrichedAssets;
+        }
+
+        enrichedData = new TextEncoder().encode(JSON.stringify(exportJson));
+        console.log(`Enriched backup with ${exportJson.image_assets?.length || 0} images`);
+      } catch (err) {
+        console.warn('Failed to enrich backup with images:', err);
+        // Continue with original data
+      }
+    }
+
     console.log('Encrypting database...');
-    const encrypted = Encryption.encrypt(dbData, password);
+    const encrypted = Encryption.encrypt(enrichedData, password);
 
     console.log(`Uploading to ${this.provider.name}...`);
     await this.provider.upload(this.backupFileName, encrypted);
@@ -756,6 +804,7 @@ export class CloudSync {
 
   /**
    * Restore database from cloud storage (decrypt)
+   * Writes image files to desktop filesystem if available
    */
   async restore(password: string): Promise<boolean> {
     if (!this.provider.isAuthenticated()) {
@@ -782,8 +831,55 @@ export class CloudSync {
     }
 
     try {
-      // Import the decrypted data back into the database
-      await db.importDatabase(decrypted);
+      // On desktop, write image files to filesystem before importing
+      let dataToImport = decrypted;
+      if (typeof window !== 'undefined' && window.desktopImages) {
+        console.log('Writing image files from backup...');
+        try {
+          const importJson = JSON.parse(new TextDecoder().decode(decrypted));
+
+          if (importJson.image_assets && Array.isArray(importJson.image_assets)) {
+            let imagesWritten = 0;
+            const processedAssets = [];
+
+            for (const row of importJson.image_assets) {
+              const filePath = row[5]; // file_path is at index 5
+              const imageData = row[7]; // image_data is at index 7
+
+              // Write image to filesystem if we have data
+              if (imageData && filePath) {
+                try {
+                  await window.desktopImages.writeImageData({
+                    relativePath: filePath,
+                    dataUrl: imageData,
+                  });
+                  imagesWritten++;
+                  console.log(`Wrote image: ${filePath}`);
+                } catch (err) {
+                  console.warn(`Failed to write image ${filePath}:`, err);
+                }
+              }
+
+              // On desktop, clear image_data since it's now on filesystem
+              // This keeps the database smaller
+              const newRow = [...row];
+              newRow[7] = null;
+              processedAssets.push(newRow);
+            }
+
+            importJson.image_assets = processedAssets;
+            dataToImport = new TextEncoder().encode(JSON.stringify(importJson));
+            console.log(`Wrote ${imagesWritten} images to filesystem`);
+          }
+        } catch (err) {
+          console.warn('Failed to process images from backup:', err);
+          // Continue with original data
+        }
+      }
+      // On web, image_data stays in the database for display
+
+      // Import the data into the database
+      await db.importDatabase(dataToImport);
 
       console.log('✅ Database restored successfully!');
       return true;
