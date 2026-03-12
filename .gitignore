@@ -157,3 +157,7 @@ android/app/betabot-release.keystore
 ai-beta-reader-backup.enc
 inspect-backup.mjs
 fixtures/
+
+# sql.js WebAssembly file (copied from node_modules during setup)
+public/sql-wasm.wasm
+

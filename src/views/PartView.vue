@@ -55,6 +55,7 @@ const {
   getImageSource: getPartImageSource,
   fetchPartCover,
   pickPartCover,
+  fetchChapterThumbnails,
 } = useImageLibrary()
 
 const part = ref<BookPart | null>(null)
@@ -82,6 +83,7 @@ const partCoverSrc = ref<string | null>(null)
 const partCoverLoading = ref(false)
 const partCoverError = ref<string | null>(null)
 const partCoverLightboxOpen = ref(false)
+const chapterThumbnails = ref<Record<string, string>>({})
 
 const book = computed(() => books.value.find((b: any) => b.id === bookId.value) || null)
 const bookTitle = computed(() => book.value?.title ?? bookId.value)
@@ -291,15 +293,11 @@ async function loadPart() {
     part.value = currentPart
     await hydrateChapterEntries(currentPart)
     await loadPartSummaryData(currentPart.id)
-    if (desktopImagesAvailable.value) {
-      await refreshPartImages(currentPart.id)
-      await loadPartCoverImage(currentPart.id)
-    } else {
-      partImages.value = []
-      partImageSources.value = {}
-      partCoverImage.value = null
-      partCoverSrc.value = null
-    }
+    // Load images - works on desktop (filesystem) or web (restored from backup)
+    await refreshPartImages(currentPart.id)
+    await loadPartCoverImage(currentPart.id)
+    // Load chapter thumbnails
+    await loadChapterThumbnailsForPart()
   } catch (error) {
     console.error('Failed to load part data:', error)
     errorMessage.value = 'Failed to load part details.'
@@ -308,9 +306,23 @@ async function loadPart() {
   }
 }
 
+const loadChapterThumbnailsForPart = async () => {
+  const chapterIds = chapterEntries.value.map((entry) => entry.id)
+  if (chapterIds.length === 0) {
+    chapterThumbnails.value = {}
+    return
+  }
+  try {
+    chapterThumbnails.value = await fetchChapterThumbnails(chapterIds)
+  } catch (error) {
+    console.warn('Failed to load chapter thumbnails:', error)
+    chapterThumbnails.value = {}
+  }
+}
+
 const refreshPartImages = async (targetPartId?: string) => {
   const resolvedPartId = targetPartId ?? partId.value
-  if (!desktopImagesAvailable.value || !resolvedPartId) {
+  if (!resolvedPartId) {
     partImages.value = []
     partImageSources.value = {}
     return
@@ -326,7 +338,7 @@ const refreshPartImages = async (targetPartId?: string) => {
       try {
         sources[image.id] = await getPartImageSource(image)
       } catch (error) {
-        console.warn('Failed to load part illustration preview', error)
+        // Silently skip images that can't be loaded
       }
     }
     partImageSources.value = sources
@@ -339,18 +351,20 @@ const refreshPartImages = async (targetPartId?: string) => {
 }
 
 const loadPartCoverImage = async (targetPartId: string) => {
-  if (!desktopImagesAvailable.value) {
-    partCoverImage.value = null
-    partCoverSrc.value = null
-    return
-  }
-
   partCoverLoading.value = true
   partCoverError.value = null
   try {
     const asset = await fetchPartCover(targetPartId)
     partCoverImage.value = asset
-    partCoverSrc.value = asset ? await getPartImageSource(asset) : null
+    if (asset) {
+      try {
+        partCoverSrc.value = await getPartImageSource(asset)
+      } catch {
+        partCoverSrc.value = null
+      }
+    } else {
+      partCoverSrc.value = null
+    }
   } catch (error) {
     partCoverError.value = error instanceof Error ? error.message : 'Failed to load part cover'
   } finally {
@@ -492,9 +506,7 @@ watch(
   async (available) => {
     if (available && part.value) {
       await refreshPartImages(part.value.id)
-    } else if (!available) {
-      partImages.value = []
-      partImageSources.value = {}
+      await loadPartCoverImage(part.value.id)
     }
   },
 )
@@ -502,12 +514,7 @@ watch(
 watch(
   partId,
   async () => {
-    if (desktopImagesAvailable.value) {
-      await refreshPartImages(partId.value)
-    } else {
-      partImages.value = []
-      partImageSources.value = {}
-    }
+    await refreshPartImages(partId.value)
   },
 )
 
@@ -531,10 +538,9 @@ watch([bookId, partId], async () => {
           >
             <ArrowLeftIcon class="h-5 w-5" />
           </button>
-          <div>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-              {{ bookTitle }}
-            </p>
+          <div
+            v-if="partCoverSrc"
+          >
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
               {{ partLabel }}<span v-if="partName">: {{ partName }}</span>
             </h1>
@@ -566,53 +572,83 @@ watch([bookId, partId], async () => {
         </div>
 
         <template v-else>
-          <!-- Part Cover -->
+          <!-- Part Cover Hero -->
           <div
-            v-if="desktopImagesAvailable"
-            class="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+            v-if="partCoverSrc"
+            class="relative -mx-4 -mt-8 mb-8 sm:-mx-6 lg:-mx-8"
           >
-            <div class="flex gap-4">
-              <div class="h-40 w-28 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
-                <img
-                  v-if="partCoverSrc"
-                  :src="partCoverSrc"
-                  class="h-full w-full cursor-pointer object-cover transition-opacity hover:opacity-90"
-                  alt="Part cover"
-                  title="Click to view full size"
-                  @click="openPartCoverLightbox"
-                />
-                <div
-                  v-else
-                  class="flex h-full w-full items-center justify-center text-center text-xs text-gray-500 dark:text-gray-400"
-                >
-                  No cover yet
-                </div>
+            <!-- Hero image container -->
+            <div
+              class="relative h-48 w-full overflow-hidden bg-gray-900 sm:h-64 md:h-80 lg:h-96 cursor-pointer"
+              @click="openPartCoverLightbox"
+            >
+              <img
+                :src="partCoverSrc"
+                class="h-full w-full object-cover opacity-90 transition-opacity hover:opacity-100"
+                alt="Part cover"
+              />
+              <!-- Gradient overlay -->
+              <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+              <!-- Part info overlay -->
+              <div class="absolute bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8">
+                <p class="text-sm font-medium text-white/80">{{ bookTitle }}</p>
+                <h2 class="mt-1 text-2xl font-bold text-white sm:text-3xl lg:text-4xl">
+                  {{ partLabel }}<span v-if="partName">: {{ partName }}</span>
+                </h2>
+                <p class="mt-2 text-sm text-white/70">
+                  {{ chapterEntries.length }} chapters &middot; {{ totalWordCount.toLocaleString() }} words
+                </p>
               </div>
-              <div class="flex flex-1 flex-col justify-between">
-                <div>
-                  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Part Cover</h2>
-                  <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Set a cover image for this part.
-                  </p>
-                </div>
-                <div class="mt-3">
-                  <button
-                    type="button"
-                    class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="partCoverLoading"
-                    @click="handleSelectPartCover"
-                  >
-                    <span
-                      v-if="partCoverLoading"
-                      class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-                    ></span>
-                    {{ partCoverSrc ? 'Replace cover' : 'Add cover' }}
-                  </button>
-                  <p v-if="partCoverError" class="mt-2 text-xs text-red-600 dark:text-red-400">
-                    {{ partCoverError }}
-                  </p>
-                </div>
+            </div>
+            <!-- Change cover button -->
+            <button
+              v-if="desktopImagesAvailable"
+              type="button"
+              class="absolute right-4 top-4 inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-60 sm:right-6 lg:right-8"
+              :disabled="partCoverLoading"
+              @click.stop="handleSelectPartCover"
+            >
+              <span
+                v-if="partCoverLoading"
+                class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+              ></span>
+              {{ partCoverLoading ? 'Updating...' : 'Change cover' }}
+            </button>
+            <p v-if="partCoverError" class="absolute right-4 top-14 text-xs text-red-400 sm:right-6 lg:right-8">
+              {{ partCoverError }}
+            </p>
+          </div>
+
+          <!-- Add cover prompt (when no cover) -->
+          <div
+            v-else-if="desktopImagesAvailable"
+            class="mb-8 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center dark:border-gray-700 dark:bg-gray-800/50"
+          >
+            <div class="mx-auto max-w-md">
+              <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
+                <svg class="h-8 w-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
               </div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Add a Part Cover</h3>
+              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Set a cover image for this part to create a visual header.
+              </p>
+              <button
+                type="button"
+                class="mt-4 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="partCoverLoading"
+                @click="handleSelectPartCover"
+              >
+                <span
+                  v-if="partCoverLoading"
+                  class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                ></span>
+                {{ partCoverLoading ? 'Adding...' : 'Add cover image' }}
+              </button>
+              <p v-if="partCoverError" class="mt-2 text-xs text-red-600 dark:text-red-400">
+                {{ partCoverError }}
+              </p>
             </div>
           </div>
 
@@ -821,30 +857,44 @@ watch([bookId, partId], async () => {
                 :key="chapter.id"
                 class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-200 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-700/50"
               >
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                      Chapter {{ chapter.position.toString().padStart(2, '0') }}
-                    </p>
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                      {{ chapter.title || `Chapter ${chapter.position}` }}
-                    </h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ chapter.wordCount.toLocaleString() }} words
-                    </p>
+                <div class="flex gap-4">
+                  <!-- Chapter thumbnail -->
+                  <div
+                    v-if="chapterThumbnails[chapter.id]"
+                    class="hidden h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:block dark:bg-gray-800"
+                  >
+                    <img
+                      :src="chapterThumbnails[chapter.id]"
+                      :alt="`${chapter.title || 'Chapter'} thumbnail`"
+                      class="h-full w-full object-cover"
+                    />
                   </div>
-                  <div class="flex items-center gap-2 text-sm font-medium">
-                    <CheckCircleIcon
-                      v-if="chapter.summary"
-                      class="h-5 w-5 text-green-500"
-                    />
-                    <ClockIcon
-                      v-else
-                      class="h-5 w-5 text-gray-400"
-                    />
-                    <span class="text-gray-600 dark:text-gray-300">
-                      {{ chapter.summary ? 'Summary ready' : 'Needs summary' }}
-                    </span>
+
+                  <div class="flex flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                        Chapter {{ chapter.position.toString().padStart(2, '0') }}
+                      </p>
+                      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {{ chapter.title || `Chapter ${chapter.position}` }}
+                      </h3>
+                      <p class="text-sm text-gray-500 dark:text-gray-400">
+                        {{ chapter.wordCount.toLocaleString() }} words
+                      </p>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm font-medium">
+                      <CheckCircleIcon
+                        v-if="chapter.summary"
+                        class="h-5 w-5 text-green-500"
+                      />
+                      <ClockIcon
+                        v-else
+                        class="h-5 w-5 text-gray-400"
+                      />
+                      <span class="text-gray-600 dark:text-gray-300">
+                        {{ chapter.summary ? 'Summary ready' : 'Needs summary' }}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
