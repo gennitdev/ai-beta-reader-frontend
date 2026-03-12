@@ -534,6 +534,37 @@ const closeImageModal = () => {
   activeImageId.value = null;
 };
 
+const currentImageIndex = computed(() => {
+  if (!activeImageId.value) return -1;
+  return chapterImages.value.findIndex((img) => img.id === activeImageId.value);
+});
+
+const hasNextImage = computed(() => {
+  return currentImageIndex.value >= 0 && currentImageIndex.value < chapterImages.value.length - 1;
+});
+
+const hasPrevImage = computed(() => {
+  return currentImageIndex.value > 0;
+});
+
+const goToNextImage = () => {
+  if (!hasNextImage.value) return;
+  const nextIndex = currentImageIndex.value + 1;
+  const nextImage = chapterImages.value[nextIndex];
+  if (nextImage && chapterImageSources.value[nextImage.id]) {
+    activeImageId.value = nextImage.id;
+  }
+};
+
+const goToPrevImage = () => {
+  if (!hasPrevImage.value) return;
+  const prevIndex = currentImageIndex.value - 1;
+  const prevImage = chapterImages.value[prevIndex];
+  if (prevImage && chapterImageSources.value[prevImage.id]) {
+    activeImageId.value = prevImage.id;
+  }
+};
+
 watch(
   () => desktopImagesAvailable.value,
   (available) => {
@@ -1280,7 +1311,11 @@ onMounted(async () => {
     :open="showImageLightbox"
     :image-src="activeImageSource"
     :caption="activeImageLabel"
+    :has-next="hasNextImage"
+    :has-prev="hasPrevImage"
     @close="closeImageModal"
+    @next="goToNextImage"
+    @prev="goToPrevImage"
   />
 
   <teleport to="body">

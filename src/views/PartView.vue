@@ -423,6 +423,37 @@ const closePartImageModal = () => {
   partActiveImageId.value = null
 }
 
+const currentPartImageIndex = computed(() => {
+  if (!partActiveImageId.value) return -1
+  return partImages.value.findIndex((img) => img.id === partActiveImageId.value)
+})
+
+const hasNextPartImage = computed(() => {
+  return currentPartImageIndex.value >= 0 && currentPartImageIndex.value < partImages.value.length - 1
+})
+
+const hasPrevPartImage = computed(() => {
+  return currentPartImageIndex.value > 0
+})
+
+const goToNextPartImage = () => {
+  if (!hasNextPartImage.value) return
+  const nextIndex = currentPartImageIndex.value + 1
+  const nextImage = partImages.value[nextIndex]
+  if (nextImage && partImageSources.value[nextImage.id]) {
+    partActiveImageId.value = nextImage.id
+  }
+}
+
+const goToPrevPartImage = () => {
+  if (!hasPrevPartImage.value) return
+  const prevIndex = currentPartImageIndex.value - 1
+  const prevImage = partImages.value[prevIndex]
+  if (prevImage && partImageSources.value[prevImage.id]) {
+    partActiveImageId.value = prevImage.id
+  }
+}
+
 const openPartCoverLightbox = () => {
   if (partCoverSrc.value) {
     partCoverLightboxOpen.value = true
@@ -975,7 +1006,11 @@ watch([bookId, partId], async () => {
     :open="partImageModalOpen"
     :image-src="partActiveImageSource"
     :caption="partActiveImageLabel"
+    :has-next="hasNextPartImage"
+    :has-prev="hasPrevPartImage"
     @close="closePartImageModal"
+    @next="goToNextPartImage"
+    @prev="goToPrevPartImage"
   />
 
   <ImageLightbox
