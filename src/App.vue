@@ -9,7 +9,10 @@ import { primaryNavItems } from '@/config/navigation'
 
 const route = useRoute()
 const router = useRouter()
-const { books, chapters, loadBooks, loadChapters, getWikiPage, searchBook, replaceInChapter, replaceInWikiPage } = useDatabase()
+const { books, chapters, loadBooks, loadChapters, getParts, getWikiPage, searchBook, replaceInChapter, replaceInWikiPage } = useDatabase()
+
+// Parts data for breadcrumbs
+const parts = ref<Array<{ id: string; name: string }>>([])
 
 // Search modal state
 const showSearchModal = ref(false)
@@ -79,6 +82,13 @@ watch(
     const bookId = (params.bookId || params.id) as string | undefined
     if (bookId) {
       await loadChapters(bookId)
+      // Load parts for breadcrumb navigation
+      try {
+        parts.value = await getParts(bookId)
+      } catch (e) {
+        console.error('Failed to load parts for breadcrumbs:', e)
+        parts.value = []
+      }
     }
   },
   { immediate: true }
@@ -124,8 +134,26 @@ const breadcrumbs = computed(() => {
           const chapterId = route.params.chapterId as string
           // Try to find the chapter title
           const chapter = chapters.value.find((ch: any) => ch.id === chapterId)
+
+          // If chapter belongs to a part, add part breadcrumb first
+          if (chapter?.part_id) {
+            const part = parts.value.find((p: any) => p.id === chapter.part_id)
+            if (part) {
+              crumbs.push({
+                label: part.name,
+                to: `/books/${bookId}/parts/${chapter.part_id}`
+              })
+            }
+          }
+
           const chapterLabel = chapter?.title || chapterId
           crumbs.push({ label: chapterLabel })
+        } else if (path.includes('/parts/')) {
+          const partId = route.params.partId as string
+          // Find the part name
+          const part = parts.value.find((p: any) => p.id === partId)
+          const partLabel = part?.name || partId
+          crumbs.push({ label: partLabel })
         } else if (path.includes('/wiki/')) {
           const wikiPageId = route.params.wikiPageId as string
           crumbs.push({ label: 'Wiki' })
