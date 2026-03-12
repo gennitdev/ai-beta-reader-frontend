@@ -578,6 +578,7 @@ const editChapter = (chapterId: string) => {
 // Parts management functions
 const togglePart = (partId: string) => {
   if (expandedParts.value.has(partId)) {
+    // Collapse the part
     expandedParts.value.delete(partId);
 
     // If collapsing a part that contains the active chapter, navigate to book view
@@ -590,7 +591,9 @@ const togglePart = (partId: string) => {
       }
     }
   } else {
+    // Expand the part and navigate to the part detail page
     expandedParts.value.add(partId);
+    router.push(`/books/${bookId.value}/parts/${partId}`);
   }
 };
 
