@@ -53,6 +53,7 @@ export class ElectronCapacitorApp {
   ];
   private AppMenuBarMenuTemplate: (MenuItem | MenuItemConstructorOptions)[] = [
     { role: process.platform === 'darwin' ? 'appMenu' : 'fileMenu' },
+    { role: 'editMenu' },
     { role: 'viewMenu' },
   ];
   private mainWindowState;
@@ -219,20 +220,27 @@ export class ElectronCapacitorApp {
 // Set a CSP up for our application based on the custom scheme
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    // Allow 'wasm-unsafe-eval' for sql.js WebAssembly
+    // Allow Google Identity Services for OAuth
     const defaultSrc = electronIsDev
-      ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' data:`
-      : `default-src ${customScheme}://* 'unsafe-inline' data:`;
-    const styleSrc = `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`;
+      ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' 'wasm-unsafe-eval' data: blob:`
+      : `default-src ${customScheme}://* 'unsafe-inline' 'wasm-unsafe-eval' data: blob:`;
+    // Allow loading Google Identity Services script
+    const scriptSrc = `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com`;
+    const styleSrc = `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com`;
     const fontSrc = `font-src 'self' data: https://fonts.gstatic.com`;
+    // Allow connecting to Google APIs for OAuth and Drive
     const connectSrc = electronIsDev
-      ? `connect-src ${customScheme}://* devtools://* data:`
-      : `connect-src ${customScheme}://* data:`;
+      ? `connect-src ${customScheme}://* devtools://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com`
+      : `connect-src ${customScheme}://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com`;
+    // Allow Google auth popups/frames
+    const frameSrc = `frame-src https://accounts.google.com`;
 
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          [defaultSrc, styleSrc, fontSrc, connectSrc].join('; '),
+          [defaultSrc, scriptSrc, styleSrc, fontSrc, connectSrc, frameSrc].join('; '),
         ],
       },
     });

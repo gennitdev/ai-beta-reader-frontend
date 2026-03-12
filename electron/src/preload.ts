@@ -9,3 +9,9 @@ contextBridge.exposeInMainWorld('desktopImages', {
     ipcRenderer.invoke('desktop-images:read', payload),
   deleteImageFile: (payload: { relativePath: string }) => ipcRenderer.invoke('desktop-images:delete', payload),
 });
+
+// OAuth loopback for Electron
+contextBridge.exposeInMainWorld('electronOAuth', {
+  authenticate: (config: { clientId: string; scope: string }) =>
+    ipcRenderer.invoke('oauth-loopback:authenticate', config),
+});

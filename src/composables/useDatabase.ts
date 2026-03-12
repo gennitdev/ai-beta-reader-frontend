@@ -25,6 +25,20 @@ export async function initializeDatabase() {
     })
     cloudSync.value = new CloudSync(provider)
     cloudSyncReady.value = cloudSync.value.isWebSdkReady()
+    console.log('[useDatabase] Initial cloudSyncReady:', cloudSyncReady.value)
+
+    // On Electron/web, preload the GIS SDK so cloud sync is ready
+    if (!cloudSyncReady.value && cloudSync.value.ensureWebSdkReady) {
+      console.log('[useDatabase] Starting GIS preload...')
+      cloudSync.value.ensureWebSdkReady().then(() => {
+        const ready = cloudSync.value?.isWebSdkReady() ?? false
+        console.log('[useDatabase] GIS preload complete, isWebSdkReady:', ready)
+        cloudSyncReady.value = ready
+        console.log('[useDatabase] cloudSyncReady updated to:', cloudSyncReady.value)
+      }).catch((err) => {
+        console.warn('[useDatabase] Failed to preload GIS SDK:', err)
+      })
+    }
   }
 
   isInitialized.value = true
@@ -599,6 +613,28 @@ export function useDatabase() {
     }
   }
 
+  async function setPartCoverImageId(partId: string, imageId: string | null) {
+    try {
+      await initializeDatabase()
+      await db.setPartCoverImageId(partId, imageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update part cover'
+      console.error('Set part cover image error:', e)
+      throw e
+    }
+  }
+
+  async function getPartCoverImageAsset(partId: string): Promise<ImageAsset | null> {
+    try {
+      await initializeDatabase()
+      return await db.getPartCoverImage(partId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get part cover'
+      console.error('Get part cover image error:', e)
+      throw e
+    }
+  }
+
   return {
     // State
     books,
@@ -668,6 +704,8 @@ export function useDatabase() {
     getPartImageAssets,
     getBookCoverImageAsset,
     setBookCoverImageId,
+    getPartCoverImageAsset,
+    setPartCoverImageId,
 
     hasCloudSync: () => cloudSync.value !== null,
 

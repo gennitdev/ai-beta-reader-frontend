@@ -53,6 +53,8 @@ const {
   desktopImagesAvailable,
   fetchPartImages,
   getImageSource: getPartImageSource,
+  fetchPartCover,
+  pickPartCover,
 } = useImageLibrary()
 
 const part = ref<BookPart | null>(null)
@@ -75,6 +77,11 @@ const partImagesLoading = ref(false)
 const partImageError = ref<string | null>(null)
 const partImageModalOpen = ref(false)
 const partActiveImageId = ref<string | null>(null)
+const partCoverImage = ref<ImageAsset | null>(null)
+const partCoverSrc = ref<string | null>(null)
+const partCoverLoading = ref(false)
+const partCoverError = ref<string | null>(null)
+const partCoverLightboxOpen = ref(false)
 
 const book = computed(() => books.value.find((b: any) => b.id === bookId.value) || null)
 const bookTitle = computed(() => book.value?.title ?? bookId.value)
@@ -286,9 +293,12 @@ async function loadPart() {
     await loadPartSummaryData(currentPart.id)
     if (desktopImagesAvailable.value) {
       await refreshPartImages(currentPart.id)
+      await loadPartCoverImage(currentPart.id)
     } else {
       partImages.value = []
       partImageSources.value = {}
+      partCoverImage.value = null
+      partCoverSrc.value = null
     }
   } catch (error) {
     console.error('Failed to load part data:', error)
@@ -328,6 +338,45 @@ const refreshPartImages = async (targetPartId?: string) => {
   }
 }
 
+const loadPartCoverImage = async (targetPartId: string) => {
+  if (!desktopImagesAvailable.value) {
+    partCoverImage.value = null
+    partCoverSrc.value = null
+    return
+  }
+
+  partCoverLoading.value = true
+  partCoverError.value = null
+  try {
+    const asset = await fetchPartCover(targetPartId)
+    partCoverImage.value = asset
+    partCoverSrc.value = asset ? await getPartImageSource(asset) : null
+  } catch (error) {
+    partCoverError.value = error instanceof Error ? error.message : 'Failed to load part cover'
+  } finally {
+    partCoverLoading.value = false
+  }
+}
+
+const handleSelectPartCover = async () => {
+  if (!part.value) return
+
+  partCoverLoading.value = true
+  partCoverError.value = null
+  try {
+    const asset = await pickPartCover(bookId.value, part.value.id)
+    if (asset) {
+      partCoverImage.value = asset
+      partCoverSrc.value = await getPartImageSource(asset)
+      part.value.cover_image_id = asset.id
+    }
+  } catch (error) {
+    partCoverError.value = error instanceof Error ? error.message : 'Failed to update part cover'
+  } finally {
+    partCoverLoading.value = false
+  }
+}
+
 const openPartImageModal = (imageId: string) => {
   if (!partImageSources.value[imageId]) return
   partActiveImageId.value = imageId
@@ -337,6 +386,16 @@ const openPartImageModal = (imageId: string) => {
 const closePartImageModal = () => {
   partImageModalOpen.value = false
   partActiveImageId.value = null
+}
+
+const openPartCoverLightbox = () => {
+  if (partCoverSrc.value) {
+    partCoverLightboxOpen.value = true
+  }
+}
+
+const closePartCoverLightbox = () => {
+  partCoverLightboxOpen.value = false
 }
 
 const goBack = () => {
@@ -507,6 +566,56 @@ watch([bookId, partId], async () => {
         </div>
 
         <template v-else>
+          <!-- Part Cover -->
+          <div
+            v-if="desktopImagesAvailable"
+            class="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+          >
+            <div class="flex gap-4">
+              <div class="h-40 w-28 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+                <img
+                  v-if="partCoverSrc"
+                  :src="partCoverSrc"
+                  class="h-full w-full cursor-pointer object-cover transition-opacity hover:opacity-90"
+                  alt="Part cover"
+                  title="Click to view full size"
+                  @click="openPartCoverLightbox"
+                />
+                <div
+                  v-else
+                  class="flex h-full w-full items-center justify-center text-center text-xs text-gray-500 dark:text-gray-400"
+                >
+                  No cover yet
+                </div>
+              </div>
+              <div class="flex flex-1 flex-col justify-between">
+                <div>
+                  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Part Cover</h2>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Set a cover image for this part.
+                  </p>
+                </div>
+                <div class="mt-3">
+                  <button
+                    type="button"
+                    class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="partCoverLoading"
+                    @click="handleSelectPartCover"
+                  >
+                    <span
+                      v-if="partCoverLoading"
+                      class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                    ></span>
+                    {{ partCoverSrc ? 'Replace cover' : 'Add cover' }}
+                  </button>
+                  <p v-if="partCoverError" class="mt-2 text-xs text-red-600 dark:text-red-400">
+                    {{ partCoverError }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="grid gap-4 sm:grid-cols-3 mb-8">
             <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
               <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Chapters</p>
@@ -786,5 +895,12 @@ watch([bookId, partId], async () => {
     :image-src="partActiveImageSource"
     :caption="partActiveImageLabel"
     @close="closePartImageModal"
+  />
+
+  <ImageLightbox
+    :open="partCoverLightboxOpen"
+    :image-src="partCoverSrc"
+    :caption="`${partLabel}${partName ? ': ' + partName : ''} - Cover`"
+    @close="closePartCoverLightbox"
   />
 </template>

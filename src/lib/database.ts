@@ -26,6 +26,7 @@ export interface BookPart {
   book_id: string;
   name: string;
   chapter_order: string; // JSON array of chapter IDs
+  cover_image_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -64,7 +65,7 @@ export interface ChapterReview {
   updated_at: string;
 }
 
-export type ImageAssetType = 'cover' | 'chapter';
+export type ImageAssetType = 'cover' | 'chapter' | 'part_cover';
 
 export interface ImageAsset {
   id: string;
@@ -85,14 +86,33 @@ const IDB_NAME = 'ai-beta-reader-db';
 const IDB_STORE = 'database';
 const IDB_KEY = 'sqliteDb';
 
+// Detect if we're running in Electron (uses sql.js like web, not native SQLite)
+function isElectronRuntime(): boolean {
+  if (typeof window !== 'undefined' && window.desktopImages) {
+    return true;
+  }
+  try {
+    return Capacitor.getPlatform() === 'electron';
+  } catch {
+    return false;
+  }
+}
+
 export class AppDatabase {
   private db: any;
   private sqlite: SQLiteConnection | null = null;
-  private platform: string = typeof Capacitor.getPlatform === 'function' ? Capacitor.getPlatform() : 'web';
-  private isNative = NATIVE_CAPACITOR_PLATFORMS.has(this.platform);
+  private isNative: boolean | null = null; // Determined at init() time
   private tableColumnCache = new Map<string, string[]>();
 
   async init() {
+    // Determine platform at init time, not at module load time
+    // This ensures Capacitor and window.desktopImages are available
+    const platform = typeof Capacitor.getPlatform === 'function' ? Capacitor.getPlatform() : 'web';
+    const isElectron = isElectronRuntime();
+    this.isNative = NATIVE_CAPACITOR_PLATFORMS.has(platform) && !isElectron;
+
+    console.log(`[AppDatabase] Platform: ${platform}, isElectron: ${isElectron}, isNative: ${this.isNative}`);
+
     if (this.isNative) {
       // Mobile: Use native SQLite
       this.sqlite = new SQLiteConnection(CapacitorSQLite);
@@ -106,8 +126,9 @@ export class AppDatabase {
       await this.db.open();
     } else {
       // Desktop/Web: Use sql.js (SQLite compiled to WebAssembly)
+      // Use local WASM file (bundled in public/) to avoid CSP issues in Electron
       const SQL = await initSqlJs({
-        locateFile: (file: string) => `https://sql.js.org/dist/${file}`
+        locateFile: (file: string) => `/${file}`
       });
 
       // Try to load existing database from IndexedDB first, then fall back to localStorage for migration
@@ -325,7 +346,9 @@ export class AppDatabase {
       // Add chapter_order to book_parts if not exists
       `ALTER TABLE book_parts ADD COLUMN chapter_order TEXT DEFAULT '[]'`,
       // Add cover_image_id to books if not exists
-      `ALTER TABLE books ADD COLUMN cover_image_id TEXT`
+      `ALTER TABLE books ADD COLUMN cover_image_id TEXT`,
+      // Add cover_image_id to book_parts if not exists
+      `ALTER TABLE book_parts ADD COLUMN cover_image_id TEXT`
     ];
 
     for (const migration of migrations) {
@@ -613,17 +636,21 @@ export class AppDatabase {
       book_id: part.book_id,
       name: part.name,
       chapter_order: '[]',
+      cover_image_id: null,
       created_at: now,
       updated_at: now
     };
   }
 
   async getParts(bookId: string): Promise<BookPart[]> {
-    const query = `SELECT * FROM book_parts WHERE book_id = ? ORDER BY created_at`;
+    const query = `SELECT id, book_id, name, chapter_order, cover_image_id, created_at, updated_at FROM book_parts WHERE book_id = ? ORDER BY created_at`;
 
     if (this.isNative) {
       const result = await this.db.query(query, [bookId]);
-      return result.values || [];
+      return (result.values || []).map((row: any) => ({
+        ...row,
+        cover_image_id: row.cover_image_id ?? null
+      }));
     } else {
       const result = this.db.exec(query, [bookId]);
       if (result.length === 0) return [];
@@ -633,9 +660,22 @@ export class AppDatabase {
         book_id: row[1],
         name: row[2],
         chapter_order: row[3],
-        created_at: row[4],
-        updated_at: row[5]
+        cover_image_id: row[4] ?? null,
+        created_at: row[5],
+        updated_at: row[6]
       }));
+    }
+  }
+
+  async setPartCoverImageId(partId: string, imageId: string | null): Promise<void> {
+    const now = new Date().toISOString();
+    const query = `UPDATE book_parts SET cover_image_id = ?, updated_at = ? WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(query, [imageId, now, partId]);
+    } else {
+      this.db.run(query, [imageId, now, partId]);
+      this.saveToLocalStorage();
     }
   }
 
@@ -1857,6 +1897,49 @@ export class AppDatabase {
     } else {
       this.db.run(query, [imageId, bookId]);
       this.saveToLocalStorage();
+    }
+  }
+
+  async getPartCoverImage(partId: string): Promise<ImageAsset | null> {
+    const query = `
+      SELECT ia.*
+      FROM book_parts bp
+      LEFT JOIN image_assets ia ON ia.id = bp.cover_image_id
+      WHERE bp.id = ?
+      LIMIT 1
+    `;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [partId]);
+      const row = result.values && result.values[0];
+      if (!row || !row.id) return null;
+      return {
+        id: row.id,
+        book_id: row.book_id,
+        chapter_id: row.chapter_id,
+        asset_type: row.asset_type,
+        file_name: row.file_name,
+        file_path: row.file_path,
+        mime_type: row.mime_type,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      };
+    } else {
+      const result = this.db.exec(query, [partId]);
+      if (result.length === 0 || result[0].values.length === 0) return null;
+      const row = result[0].values[0];
+      if (!row[0]) return null;
+      return {
+        id: row[0],
+        book_id: row[1],
+        chapter_id: row[2],
+        asset_type: row[3] as ImageAssetType,
+        file_name: row[4],
+        file_path: row[5],
+        mime_type: row[6],
+        created_at: row[7],
+        updated_at: row[8],
+      };
     }
   }
 

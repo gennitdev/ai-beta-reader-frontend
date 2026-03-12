@@ -36,6 +36,8 @@ export function useImageLibrary() {
     getPartImageAssets,
     getBookCoverImageAsset,
     setBookCoverImageId,
+    getPartCoverImageAsset,
+    setPartCoverImageId,
   } = useDatabase()
 
   const desktopImagesAvailable = ref(sanitizeBridgeAvailability())
@@ -118,6 +120,29 @@ export function useImageLibrary() {
     return getChapterImageAssets(chapterId)
   }
 
+  async function fetchFirstChapterImage(chapterId: string): Promise<ImageAsset | null> {
+    const images = await getChapterImageAssets(chapterId)
+    return images.length > 0 ? images[0] : null
+  }
+
+  async function fetchChapterThumbnails(chapterIds: string[]): Promise<Record<string, string>> {
+    if (!desktopImagesAvailable.value) {
+      return {}
+    }
+    const thumbnails: Record<string, string> = {}
+    for (const chapterId of chapterIds) {
+      const firstImage = await fetchFirstChapterImage(chapterId)
+      if (firstImage) {
+        try {
+          thumbnails[chapterId] = await getImageSource(firstImage)
+        } catch (error) {
+          console.warn(`Failed to load thumbnail for chapter ${chapterId}`, error)
+        }
+      }
+    }
+    return thumbnails
+  }
+
   async function fetchPartImages(partId: string) {
     return getPartImageAssets(partId)
   }
@@ -155,15 +180,72 @@ export function useImageLibrary() {
     return asset
   }
 
+  async function fetchPartCover(partId: string) {
+    return getPartCoverImageAsset(partId)
+  }
+
+  async function pickPartCover(bookId: string, partId: string) {
+    const bridge = ensureBridge()
+    const previousCover = await getPartCoverImageAsset(partId)
+    // Reuse pickBookCover dialog - it just picks an image
+    const response = await bridge.pickBookCover({ bookId })
+    if (response.canceled || !response.image) {
+      return null
+    }
+
+    const asset = createAssetFromMetadata(response.image, {
+      bookId,
+      chapterId: null,
+      assetType: 'part_cover',
+    })
+    await saveImageAssetRecord(asset)
+    await setPartCoverImageId(partId, asset.id)
+
+    if (previousCover) {
+      imageSourceCache.delete(previousCover.id)
+      await deleteImageAssetRecord(previousCover.id)
+      try {
+        await bridge.deleteImageFile({ relativePath: previousCover.file_path })
+      } catch (error) {
+        console.warn('Failed to delete old part cover image', error)
+      }
+    }
+
+    return asset
+  }
+
+  async function fetchPartThumbnails(partIds: string[]): Promise<Record<string, string>> {
+    if (!desktopImagesAvailable.value) {
+      return {}
+    }
+    const thumbnails: Record<string, string> = {}
+    for (const partId of partIds) {
+      const cover = await fetchPartCover(partId)
+      if (cover) {
+        try {
+          thumbnails[partId] = await getImageSource(cover)
+        } catch (error) {
+          console.warn(`Failed to load thumbnail for part ${partId}`, error)
+        }
+      }
+    }
+    return thumbnails
+  }
+
   return {
     desktopImagesAvailable,
     refreshAvailability,
     addImagesToChapter,
     deleteImage,
     fetchChapterImages,
+    fetchFirstChapterImage,
+    fetchChapterThumbnails,
     fetchPartImages,
     fetchBookCover,
     pickNewBookCover,
+    fetchPartCover,
+    pickPartCover,
+    fetchPartThumbnails,
     getImageSource,
   }
 }

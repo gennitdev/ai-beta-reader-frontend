@@ -44,13 +44,21 @@ export class GoogleDriveProvider implements CloudProvider {
   private readonly webRedirectUri: string;
   private readonly nativeRedirectUri: string;
   private readonly tokenExpiryLeewayMs = 60 * 1000;
-  private webSdkReady = Capacitor.isNativePlatform();
+  // On Electron, we use web auth which requires GIS SDK, so webSdkReady starts as false
+  private webSdkReady = Capacitor.isNativePlatform() && Capacitor.getPlatform() !== 'electron';
+
+  private readonly desktopClientId: string | null;
 
   constructor(clientId: string, options?: GoogleDriveProviderOptions) {
     this.CLIENT_ID = clientId;
     const envNativeClientId =
       typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_ID_NATIVE ?? null : null;
     this.nativeClientId = options?.nativeClientId ?? envNativeClientId;
+
+    // Desktop (Electron) client ID - separate from web and mobile
+    const envDesktopClientId =
+      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_ID_DESKTOP ?? null : null;
+    this.desktopClientId = envDesktopClientId;
 
     const envWebRedirect =
       typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_REDIRECT_URI ?? DEFAULT_REDIRECT_URI : DEFAULT_REDIRECT_URI;
@@ -78,12 +86,102 @@ export class GoogleDriveProvider implements CloudProvider {
       throw new Error('Google Drive client ID is not configured.');
     }
 
+    // Check for Electron by looking for the electronOAuth bridge
+    const isElectron = typeof window !== 'undefined' && !!(window as any).electronOAuth;
+
+    if (isElectron) {
+      await this.authenticateElectron();
+      return;
+    }
+
     if (Capacitor.isNativePlatform()) {
       await this.authenticateNative();
       return;
     }
 
     await this.authenticateWeb();
+  }
+
+  private async authenticateElectron(): Promise<void> {
+    this.debug('authenticateElectron() invoked');
+
+    // Check for cached tokens first
+    try {
+      const cached = await loadTokens();
+      if (cached) {
+        this.debug('authenticateElectron() found cached tokens');
+        this.accessToken = cached.accessToken;
+        this.refreshToken = cached.refreshToken ?? null;
+        this.accessTokenExpiresAt = cached.expiresAt;
+
+        if (this.accessTokenExpiresAt && this.accessTokenExpiresAt > Date.now() + this.tokenExpiryLeewayMs) {
+          this.debug('authenticateElectron() using cached access token');
+          return;
+        }
+
+        if (this.refreshToken) {
+          this.debug('authenticateElectron() refreshing expired token');
+          try {
+            await this.refreshAccessToken();
+            return;
+          } catch (error) {
+            console.warn('[CloudSync] Failed to refresh cached Google token', error);
+            this.debug('authenticateElectron() refresh failed, clearing cache');
+            await this.wipeStoredTokens();
+          }
+        } else {
+          this.debug('authenticateElectron() cached token expired with no refresh token');
+          await this.wipeStoredTokens();
+        }
+      }
+    } catch (err) {
+      this.debug(`authenticateElectron() error checking cache: ${String(err)}`);
+    }
+
+    // Use loopback OAuth
+    const electronOAuth = (window as any).electronOAuth;
+    if (!electronOAuth) {
+      throw new Error('Electron OAuth bridge not available');
+    }
+
+    // Use desktop client ID if available, otherwise fall back to web client ID
+    const clientId = this.desktopClientId || this.CLIENT_ID;
+    if (!clientId) {
+      throw new Error('No OAuth client ID configured for desktop');
+    }
+
+    // Get desktop client secret if available
+    const clientSecret =
+      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_SECRET_DESKTOP ?? undefined : undefined;
+
+    this.debug('authenticateElectron() starting loopback OAuth flow', { clientId, hasSecret: !!clientSecret });
+    const result = await electronOAuth.authenticate({
+      clientId,
+      clientSecret,
+      scope: this.SCOPES,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'OAuth authentication failed');
+    }
+
+    this.debug('authenticateElectron() received tokens');
+    const accessToken = result.tokens.access_token;
+    const refreshToken = result.tokens.refresh_token ?? null;
+    const expiresAt = Date.now() + (result.tokens.expires_in * 1000);
+
+    this.accessToken = accessToken;
+    this.refreshToken = refreshToken;
+    this.accessTokenExpiresAt = expiresAt;
+
+    // Save tokens for future use
+    await saveTokens({
+      accessToken,
+      refreshToken: refreshToken ?? undefined,
+      expiresAt,
+    });
+
+    this.debug('authenticateElectron() completed successfully');
   }
 
   async upload(fileName: string, data: string): Promise<void> {
@@ -437,9 +535,13 @@ export class GoogleDriveProvider implements CloudProvider {
     }
 
     const isHostedHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    this.debug(`ensureGoogleIdentityServicesLoaded native=${Capacitor.isNativePlatform()} hostedHttps=${isHostedHttps} scriptPresent=${Boolean(document.querySelector('script[data-google-identity]'))}`);
+    const isElectron = Capacitor.getPlatform() === 'electron';
+    this.debug(`ensureGoogleIdentityServicesLoaded native=${Capacitor.isNativePlatform()} electron=${isElectron} hostedHttps=${isHostedHttps} scriptPresent=${Boolean(document.querySelector('script[data-google-identity]'))}`);
 
-    if (Capacitor.isNativePlatform()) {
+    // On Electron, always use loadGisForWeb since it can load external scripts
+    if (isElectron) {
+      this.gisLoadingPromise = this.loadGisForWeb().then(() => this.debug('GIS loaded via web script (Electron)'));
+    } else if (Capacitor.isNativePlatform()) {
       if (isHostedHttps) {
         this.gisLoadingPromise = this.loadGisForWeb()
           .then(() => this.debug('GIS loaded via web script'))
@@ -465,14 +567,33 @@ export class GoogleDriveProvider implements CloudProvider {
   }
 
   async ensureWebSdkReady(): Promise<void> {
-    if (Capacitor.isNativePlatform() || this.webSdkReady) {
+    // On Electron, we use loopback OAuth (no GIS SDK needed)
+    // On native mobile, we use native OAuth (no GIS SDK needed)
+    const isElectron = typeof window !== 'undefined' && !!(window as any).electronOAuth;
+    if (isElectron || Capacitor.isNativePlatform()) {
       return;
     }
-    await this.ensureGoogleIdentityServicesLoaded();
+
+    // Only web browser needs GIS SDK
+    if (!this.webSdkReady) {
+      await this.ensureGoogleIdentityServicesLoaded();
+    }
   }
 
   isWebSdkReady(): boolean {
-    return Capacitor.isNativePlatform() || this.webSdkReady;
+    // Electron uses loopback OAuth (always ready)
+    const isElectron = typeof window !== 'undefined' && !!(window as any).electronOAuth;
+    if (isElectron) {
+      return true;
+    }
+
+    // Native mobile uses native OAuth (always ready)
+    if (Capacitor.isNativePlatform()) {
+      return true;
+    }
+
+    // Web browser needs GIS SDK
+    return this.webSdkReady;
   }
 
   private async loadGisForNative(): Promise<void> {

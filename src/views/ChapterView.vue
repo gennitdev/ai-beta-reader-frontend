@@ -1035,6 +1035,96 @@ onMounted(async () => {
     />
 
     <div class="w-full max-w-6xl md:mx-auto px-4 lg:px-8">
+      <!-- Chapter Illustrations - at top below title -->
+      <section
+        v-if="desktopImagesAvailable"
+        class="mt-4 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900"
+      >
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              Chapter Illustrations
+            </h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              Images live locally inside the desktop app.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="addingChapterImages"
+            @click="handleAddIllustrations"
+          >
+            <span
+              v-if="addingChapterImages"
+              class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+            ></span>
+            {{ addingChapterImages ? "Adding..." : "Add images" }}
+          </button>
+        </div>
+
+        <p v-if="chapterImageError" class="mt-4 text-sm text-red-600 dark:text-red-400">
+          {{ chapterImageError }}
+        </p>
+
+        <div
+          v-if="chapterImagesLoading"
+          class="py-10 text-center text-sm text-gray-500 dark:text-gray-400"
+        >
+          Loading illustrations...
+        </div>
+
+        <div v-else>
+          <div
+            v-if="chapterImages.length"
+            class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+          >
+            <div
+              v-for="image in chapterImages"
+              :key="image.id"
+              class="group relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <button
+                type="button"
+                class="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100"
+                @click.stop="handleDeleteIllustration(image.id)"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                class="block w-full"
+                @click="openImageModal(image.id)"
+              >
+                <div class="aspect-[4/3] w-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                  <img
+                    v-if="chapterImageSources[image.id]"
+                    :src="chapterImageSources[image.id]"
+                    class="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                    :alt="image.file_name || 'Chapter illustration'"
+                  />
+                  <div
+                    v-else
+                    class="flex h-full w-full items-center justify-center text-xs text-gray-500 dark:text-gray-300"
+                  >
+                    Loading...
+                  </div>
+                </div>
+              </button>
+              <p class="truncate px-3 py-2 text-xs text-gray-600 dark:text-gray-300">
+                {{ image.file_name }}
+              </p>
+            </div>
+          </div>
+          <div
+            v-else
+            class="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300"
+          >
+            No illustrations yet.
+          </div>
+        </div>
+      </section>
+
       <div class="my-3 flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
         <span class="whitespace-nowrap"
           >{{ (chapter?.word_count || 0).toLocaleString() }} words</span
@@ -1091,95 +1181,6 @@ onMounted(async () => {
           @update:editedText="editedText = $event"
           @toggle-full-chapter="showFullChapterText = $event"
         />
-
-        <section
-          v-if="desktopImagesAvailable"
-          class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900"
-        >
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-                Chapter Illustrations
-              </h2>
-              <p class="text-sm text-gray-500 dark:text-gray-400">
-                Images live locally inside the desktop app.
-              </p>
-            </div>
-            <button
-              type="button"
-              class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="addingChapterImages"
-              @click="handleAddIllustrations"
-            >
-              <span
-                v-if="addingChapterImages"
-                class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-              ></span>
-              {{ addingChapterImages ? "Adding..." : "Add images" }}
-            </button>
-          </div>
-
-          <p v-if="chapterImageError" class="mt-4 text-sm text-red-600 dark:text-red-400">
-            {{ chapterImageError }}
-          </p>
-
-          <div
-            v-if="chapterImagesLoading"
-            class="py-10 text-center text-sm text-gray-500 dark:text-gray-400"
-          >
-            Loading illustrations...
-          </div>
-
-          <div v-else>
-            <div
-              v-if="chapterImages.length"
-              class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
-            >
-              <div
-                v-for="image in chapterImages"
-                :key="image.id"
-                class="group relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
-              >
-                <button
-                  type="button"
-                  class="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100"
-                  @click.stop="handleDeleteIllustration(image.id)"
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  class="block w-full"
-                  @click="openImageModal(image.id)"
-                >
-                  <div class="aspect-[4/3] w-full overflow-hidden bg-gray-200 dark:bg-gray-700">
-                    <img
-                      v-if="chapterImageSources[image.id]"
-                      :src="chapterImageSources[image.id]"
-                      class="h-full w-full object-cover transition duration-200 group-hover:scale-105"
-                      :alt="image.file_name || 'Chapter illustration'"
-                    />
-                    <div
-                      v-else
-                      class="flex h-full w-full items-center justify-center text-xs text-gray-500 dark:text-gray-300"
-                    >
-                      Loading...
-                    </div>
-                  </div>
-                </button>
-                <p class="truncate px-3 py-2 text-xs text-gray-600 dark:text-gray-300">
-                  {{ image.file_name }}
-                </p>
-              </div>
-            </div>
-            <div
-              v-else
-              class="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300"
-            >
-              No illustrations yet.
-            </div>
-          </div>
-        </section>
 
         <ChapterReviewsSection
           :review-tone="reviewTone"

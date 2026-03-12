@@ -9,10 +9,7 @@
     "capacitor.config.*",
     "app/**/*"
   ],
-  "publish": {
-    "provider": "github"
-  },
-  "nsis": {
+    "nsis": {
     "allowElevation": true,
     "oneClick": false,
     "allowToChangeInstallationDirectory": true

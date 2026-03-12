@@ -20,6 +20,10 @@ const props = defineProps({
   editChapter: {
     type: Function as PropType<(chapterId: string) => void>,
     required: true
+  },
+  thumbnailSrc: {
+    type: String as PropType<string | undefined>,
+    default: undefined
   }
 })
 
@@ -46,6 +50,16 @@ const chapterLink = `/books/${props.bookId}/chapters/${props.chapter.id}`
             d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
           />
         </svg>
+      </div>
+      <div
+        v-if="thumbnailSrc"
+        class="mr-3 h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-gray-100 dark:bg-gray-700"
+      >
+        <img
+          :src="thumbnailSrc"
+          class="h-full w-full object-cover"
+          alt=""
+        />
       </div>
       <div class="flex-1 min-w-0">
         <h3 class="text-sm font-medium text-gray-900 dark:text-white truncate">

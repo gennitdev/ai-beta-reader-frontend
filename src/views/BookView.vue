@@ -45,6 +45,8 @@ const {
   fetchBookCover,
   pickNewBookCover,
   getImageSource: getCoverImageSource,
+  fetchChapterThumbnails,
+  fetchPartThumbnails,
 } = useImageLibrary();
 
 const book = ref<DatabaseBook | null>(null);
@@ -62,6 +64,8 @@ const bookCoverImage = ref<ImageAsset | null>(null);
 const bookCoverSrc = ref<string | null>(null);
 const coverLoading = ref(false);
 const coverError = ref<string | null>(null);
+const chapterThumbnails = ref<Record<string, string>>({});
+const partThumbnails = ref<Record<string, string>>({});
 
 // Book editing state
 const isEditingBookTitle = ref(false);
@@ -466,15 +470,38 @@ const loadBook = async () => {
     await syncChaptersFromDb();
     if (desktopImagesAvailable.value) {
       await loadBookCoverImage(bookId.value);
+      await loadChapterThumbnailsForBook();
     } else {
       bookCoverImage.value = null;
       bookCoverSrc.value = null;
+      chapterThumbnails.value = {};
+      partThumbnails.value = {};
     }
   } catch (error) {
     console.error("Failed to load book:", error);
   } finally {
     suppressDbChapterSync = false;
     loading.value = false;
+  }
+};
+
+const loadChapterThumbnailsForBook = async () => {
+  if (!desktopImagesAvailable.value) {
+    chapterThumbnails.value = {};
+    partThumbnails.value = {};
+    return;
+  }
+
+  try {
+    const chapterIds = chapters.value.map((ch) => ch.id);
+    chapterThumbnails.value = await fetchChapterThumbnails(chapterIds);
+
+    const partIds = parts.value.map((p) => p.id);
+    partThumbnails.value = await fetchPartThumbnails(partIds);
+  } catch (error) {
+    console.error("Failed to load thumbnails:", error);
+    chapterThumbnails.value = {};
+    partThumbnails.value = {};
   }
 };
 
@@ -808,6 +835,8 @@ onMounted(async () => {
       :cover-loading="coverLoading"
       :cover-error="coverError"
       :select-book-cover="handleSelectBookCover"
+      :chapter-thumbnails="chapterThumbnails"
+      :part-thumbnails="partThumbnails"
     />
     <router-view v-else :key="routerViewKey" />
   </div>
@@ -854,6 +883,8 @@ onMounted(async () => {
     :cover-loading="coverLoading"
     :cover-error="coverError"
     :select-book-cover="handleSelectBookCover"
+    :chapter-thumbnails="chapterThumbnails"
+    :part-thumbnails="partThumbnails"
   />
 
   <SearchModal

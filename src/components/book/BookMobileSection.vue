@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, toRefs, watch } from 'vue'
-import { DocumentTextIcon, BookOpenIcon, PlusIcon, Cog6ToothIcon, PencilIcon } from '@heroicons/vue/24/outline'
+import { DocumentTextIcon, BookOpenIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import type { Book } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import type { PropType } from 'vue'
@@ -134,6 +134,14 @@ const props = defineProps({
   selectBookCover: {
     type: Function as PropType<() => void>,
     required: true
+  },
+  chapterThumbnails: {
+    type: Object as PropType<Record<string, string>>,
+    default: () => ({})
+  },
+  partThumbnails: {
+    type: Object as PropType<Record<string, string>>,
+    default: () => ({})
   }
 })
 
@@ -154,10 +162,25 @@ const {
   desktopImagesAvailable,
   coverImageSrc,
   coverLoading,
-  coverError
+  coverError,
+  chapterThumbnails,
+  partThumbnails
 } = toRefs(props)
 
 const selectBookCover = props.selectBookCover
+
+// Lightbox state
+const showLightbox = ref(false)
+
+const openLightbox = () => {
+  if (coverImageSrc.value) {
+    showLightbox.value = true
+  }
+}
+
+const closeLightbox = () => {
+  showLightbox.value = false
+}
 
 const expandedMobileParts = ref<Set<string>>(new Set())
 
@@ -248,8 +271,10 @@ watch(
           <img
             v-if="coverImageSrc"
             :src="coverImageSrc"
-            class="h-full w-full object-cover"
+            class="h-full w-full object-cover cursor-pointer transition-opacity hover:opacity-90"
             alt="Book cover"
+            title="Click to view full size"
+            @click="openLightbox"
           />
           <div
             v-else
@@ -329,12 +354,29 @@ watch(
               :aria-expanded="isPartExpanded(part.id)"
               :aria-controls="`mobile-part-${part.id}`"
             >
-              <div class="w-full">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ part.name }}</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }} ·
-                  {{ formatWordCount(part.wordCount) }} words
-                </p>
+              <div class="flex items-center gap-3 w-full">
+                <div
+                  v-if="partThumbnails[part.id]"
+                  class="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700"
+                >
+                  <img
+                    :src="partThumbnails[part.id]"
+                    class="h-full w-full object-cover"
+                    alt=""
+                  />
+                </div>
+                <div class="flex-1">
+                  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ part.name }}</h2>
+                  <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }} ·
+                    {{ formatWordCount(part.wordCount) }} words ·
+                    <router-link
+                      :to="`/m/books/${bookId}/parts/${part.id}`"
+                      class="text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                      @click.stop
+                    >View</router-link>
+                  </p>
+                </div>
               </div>
               <svg
                 class="h-5 w-5 text-gray-500 dark:text-gray-300 transition-transform duration-200"
@@ -350,12 +392,6 @@ watch(
               </svg>
             </button>
             <div class="flex items-center gap-2">
-              <router-link
-                :to="`/m/books/${bookId}/parts/${part.id}`"
-                class="inline-flex items-center rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-900/30"
-              >
-                View Part
-              </router-link>
               <button
                 @click="createNewChapterInPart(part.id)"
                 class="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-700"
@@ -380,6 +416,7 @@ watch(
               :get-summary-preview="getSummaryPreview"
               :toggle-summary="toggleSummary"
               :edit-chapter="editChapter"
+              :thumbnail-src="chapterThumbnails[chapter.id]"
             />
           </div>
         </section>
@@ -413,6 +450,7 @@ watch(
               :get-summary-preview="getSummaryPreview"
               :toggle-summary="toggleSummary"
               :edit-chapter="editChapter"
+              :thumbnail-src="chapterThumbnails[chapter.id]"
             />
           </div>
         </section>
@@ -433,6 +471,7 @@ watch(
               :get-summary-preview="getSummaryPreview"
               :toggle-summary="toggleSummary"
               :edit-chapter="editChapter"
+              :thumbnail-src="chapterThumbnails[chapter.id]"
             />
           </div>
         </section>
@@ -526,4 +565,36 @@ watch(
       </div>
     </div>
   </div>
+
+  <!-- Cover image lightbox -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-opacity duration-200"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition-opacity duration-200"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="showLightbox && coverImageSrc"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+        @click="closeLightbox"
+      >
+        <button
+          class="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+          @click.stop="closeLightbox"
+          title="Close"
+        >
+          <XMarkIcon class="h-6 w-6" />
+        </button>
+        <img
+          :src="coverImageSrc"
+          class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+          alt="Book cover"
+          @click.stop
+        />
+      </div>
+    </Transition>
+  </Teleport>
 </template>

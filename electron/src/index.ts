@@ -8,6 +8,7 @@ import { autoUpdater } from 'electron-updater';
 
 import { ElectronCapacitorApp, setupContentSecurityPolicy, setupReloadWatcher } from './setup';
 import { registerDesktopImageBridge } from './image-bridge';
+import { registerOAuthLoopbackHandlers } from './oauth-loopback';
 
 // Graceful handling of unhandled errors.
 unhandled();
@@ -43,6 +44,7 @@ if (electronIsDev) {
   // Wait for electron app to be ready.
   await app.whenReady();
   registerDesktopImageBridge();
+  registerOAuthLoopbackHandlers();
   // Security - Set Content-Security-Policy based on whether or not we are in dev mode.
   setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme());
   // Initialize our app, build windows, and load content.

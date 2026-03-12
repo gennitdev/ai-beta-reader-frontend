@@ -33,6 +33,10 @@ const props = defineProps({
   linkPrefix: {
     type: String,
     default: '/m/books'
+  },
+  thumbnailSrc: {
+    type: String as PropType<string | undefined>,
+    default: undefined
   }
 })
 
@@ -44,6 +48,16 @@ const chapterLink = computed(
 <template>
   <div>
     <div class="flex items-start gap-3">
+      <div
+        v-if="thumbnailSrc"
+        class="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700"
+      >
+        <img
+          :src="thumbnailSrc"
+          class="h-full w-full object-cover"
+          alt=""
+        />
+      </div>
       <router-link :to="chapterLink" class="flex-1">
         <h3 class="text-sm mt-1 font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
           {{ chapter.title || chapter.id }}

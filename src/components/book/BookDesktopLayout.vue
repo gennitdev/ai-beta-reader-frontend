@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { toRefs } from 'vue'
+import { toRefs, ref } from 'vue'
 import draggable from 'vuedraggable'
 import {
   PlusIcon,
@@ -7,7 +7,8 @@ import {
   BookOpenIcon,
   PencilIcon,
   Cog6ToothIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  XMarkIcon
 } from '@heroicons/vue/24/outline'
 import type { PropType } from 'vue'
 import type { Book } from '@/lib/database'
@@ -178,6 +179,14 @@ const props = defineProps({
   selectBookCover: {
     type: Function as PropType<() => void>,
     required: true
+  },
+  chapterThumbnails: {
+    type: Object as PropType<Record<string, string>>,
+    default: () => ({})
+  },
+  partThumbnails: {
+    type: Object as PropType<Record<string, string>>,
+    default: () => ({})
   }
 })
 
@@ -192,10 +201,25 @@ const {
   desktopImagesAvailable,
   coverImageSrc,
   coverLoading,
-  coverError
+  coverError,
+  chapterThumbnails,
+  partThumbnails
 } = toRefs(props)
 
 const selectBookCover = props.selectBookCover
+
+// Lightbox state
+const showLightbox = ref(false)
+
+const openLightbox = () => {
+  if (coverImageSrc.value) {
+    showLightbox.value = true
+  }
+}
+
+const closeLightbox = () => {
+  showLightbox.value = false
+}
 </script>
 
 <template>
@@ -281,8 +305,10 @@ const selectBookCover = props.selectBookCover
                 <img
                   v-if="coverImageSrc"
                   :src="coverImageSrc"
-                  class="h-full w-full object-cover"
+                  class="h-full w-full object-cover cursor-pointer transition-opacity hover:opacity-90"
                   alt="Book cover"
+                  title="Click to view full size"
+                  @click="openLightbox"
                 />
                 <div
                   v-else
@@ -350,25 +376,43 @@ const selectBookCover = props.selectBookCover
 
             <div v-else-if="hasChapters" class="divide-y divide-gray-200 dark:divide-gray-800">
               <div v-for="part in chaptersByPart.parts" :key="part.id" class="overflow-hidden">
-                <div class="flex items-start justify-between gap-2 pr-2 py-3">
+                <div class="flex items-center gap-2 pr-2 py-2">
                   <button
                     @click="togglePart(part.id)"
                     class="flex px-2 flex-1 items-center justify-between text-left transition-colors focus:outline-none"
                   >
-                    <div>
-                      <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
-                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        {{ (sidebarPartLists[part.id]?.length || 0) }} chapter{{
-                          (sidebarPartLists[part.id]?.length || 0) !== 1 ? 's' : ''
-                        }}
-                        ·
-                        {{
-                          formatWordCount(
-                            wordCountForChapters(sidebarPartLists[part.id] || [])
-                          )
-                        }}
-                        words
-                      </p>
+                    <div class="flex items-center gap-2">
+                      <div
+                        v-if="partThumbnails[part.id]"
+                        class="h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-gray-100 dark:bg-gray-700"
+                      >
+                        <img
+                          :src="partThumbnails[part.id]"
+                          class="h-full w-full object-cover"
+                          alt=""
+                        />
+                      </div>
+                      <div>
+                        <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
+                        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                          {{ (sidebarPartLists[part.id]?.length || 0) }} chapter{{
+                            (sidebarPartLists[part.id]?.length || 0) !== 1 ? 's' : ''
+                          }}
+                          ·
+                          {{
+                            formatWordCount(
+                              wordCountForChapters(sidebarPartLists[part.id] || [])
+                            )
+                          }}
+                          words
+                          ·
+                          <router-link
+                            :to="`/books/${bookId}/parts/${part.id}`"
+                            class="text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                            @click.stop
+                          >View</router-link>
+                        </p>
+                      </div>
                     </div>
                     <svg
                       :class="expandedParts.has(part.id) ? 'rotate-180' : ''"
@@ -385,12 +429,6 @@ const selectBookCover = props.selectBookCover
                       ></path>
                     </svg>
                   </button>
-                  <router-link
-                    :to="`/books/${bookId}/parts/${part.id}`"
-                    class="mt-0.5 inline-flex shrink-0 items-center rounded-md border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-900/30"
-                  >
-                    View
-                  </router-link>
                 </div>
 
                 <div
@@ -424,6 +462,7 @@ const selectBookCover = props.selectBookCover
                         :chapter="chapter"
                         :active-chapter-id="activeChapterId"
                         :edit-chapter="editChapter"
+                        :thumbnail-src="chapterThumbnails[chapter.id]"
                       />
                     </template>
                   </draggable>
@@ -462,6 +501,7 @@ const selectBookCover = props.selectBookCover
                         :chapter="chapter"
                         :active-chapter-id="activeChapterId"
                         :edit-chapter="editChapter"
+                        :thumbnail-src="chapterThumbnails[chapter.id]"
                       />
                     </template>
                   </draggable>
@@ -576,4 +616,36 @@ const selectBookCover = props.selectBookCover
       </div>
     </div>
   </div>
+
+  <!-- Cover image lightbox -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-opacity duration-200"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition-opacity duration-200"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="showLightbox && coverImageSrc"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+        @click="closeLightbox"
+      >
+        <button
+          class="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+          @click.stop="closeLightbox"
+          title="Close"
+        >
+          <XMarkIcon class="h-6 w-6" />
+        </button>
+        <img
+          :src="coverImageSrc"
+          class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+          alt="Book cover"
+          @click.stop
+        />
+      </div>
+    </Transition>
+  </Teleport>
 </template>
