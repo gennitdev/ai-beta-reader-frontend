@@ -14,10 +14,11 @@ import {
 import type { BookPart, PartSummary, ChapterSummary, ImageAsset } from "@/lib/database";
 import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
+import ChapterNotesPanel from "@/components/chapter/ChapterNotesPanel.vue";
 import ChapterContentSection from "@/components/chapter/ChapterContentSection.vue";
 import ChapterReviewsSection from "@/components/chapter/ChapterReviewsSection.vue";
 import ImageLightbox from "@/components/images/ImageLightbox.vue";
-import { CheckCircleIcon } from "@heroicons/vue/24/outline";
+import { CheckCircleIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
 
 interface Chapter {
   id: string;
@@ -31,6 +32,7 @@ interface Chapter {
   characters: string[] | null;
   beats: string[] | null;
   spoilers_ok: boolean | null;
+  notes: string | null;
 }
 
 interface Review {
@@ -88,6 +90,8 @@ const {
   saveReview,
   getReviews,
   deleteReview: dbDeleteReview,
+  getNotes,
+  saveNotes: dbSaveNotes,
 } = useDatabase();
 
 const {
@@ -152,6 +156,12 @@ const isEditingSummary = ref(false);
 const editedSummary = ref("");
 const savingSummary = ref(false);
 const showSummaryPanel = ref(false);
+
+// Notes editing state
+const isEditingNotes = ref(false);
+const editedNotes = ref("");
+const savingNotes = ref(false);
+const showNotesPanel = ref(false);
 
 // Text truncation state
 const showFullChapterText = ref(false);
@@ -390,6 +400,9 @@ const loadChapter = async () => {
           )
         : [];
 
+      // Load notes from database
+      const notesData = await getNotes(chapterData.id);
+
       chapter.value = {
         id: chapterData.id,
         book_id: chapterData.book_id,
@@ -402,10 +415,12 @@ const loadChapter = async () => {
         characters: normalizedCharacters.length ? normalizedCharacters : null,
         beats: beatsArray.length ? beatsArray : null,
         spoilers_ok: summaryData?.spoilers_ok || null,
+        notes: notesData?.notes || null,
       };
       editedText.value = String(chapterData.text || "");
       editedTitle.value = chapterData.title || "";
       editedSummary.value = summaryData?.summary || "";
+      editedNotes.value = notesData?.notes || "";
 
       // Load character wiki info
       await loadCharacters();
@@ -707,6 +722,37 @@ const saveSummary = async () => {
     alert("Failed to save summary");
   } finally {
     savingSummary.value = false;
+  }
+};
+
+// Notes editing methods
+const startEditingNotes = () => {
+  editedNotes.value = chapter.value?.notes || "";
+  isEditingNotes.value = true;
+};
+
+const cancelEditingNotes = () => {
+  isEditingNotes.value = false;
+  editedNotes.value = chapter.value?.notes || "";
+};
+
+const saveNotes = async () => {
+  if (!chapter.value) return;
+
+  try {
+    savingNotes.value = true;
+
+    // Save notes to database
+    await dbSaveNotes(chapter.value.id, editedNotes.value);
+
+    // Update UI
+    chapter.value.notes = editedNotes.value;
+    isEditingNotes.value = false;
+  } catch (error) {
+    console.error("Failed to save notes:", error);
+    alert("Failed to save notes");
+  } finally {
+    savingNotes.value = false;
   }
 };
 
@@ -1138,11 +1184,26 @@ onMounted(async () => {
             {{ Boolean(chapter?.summary) ? "Summarized" : "Not summarized" }}
           </span>
         </div>
+        <div class="flex items-center whitespace-nowrap">
+          <DocumentTextIcon
+            :class="Boolean(chapter?.notes) ? 'text-purple-500' : 'text-gray-300'"
+            class="mr-1 h-4 w-4"
+          />
+          <span :class="Boolean(chapter?.notes) ? 'text-purple-600' : 'text-gray-500'">
+            {{ Boolean(chapter?.notes) ? "Has Notes" : "No Notes" }}
+          </span>
+        </div>
         <button
           @click="showSummaryPanel = !showSummaryPanel"
           class="font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           {{ showSummaryPanel ? "Hide Summary Panel" : "Show Summary Panel" }}
+        </button>
+        <button
+          @click="showNotesPanel = !showNotesPanel"
+          class="font-medium text-purple-600 transition-colors hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
+        >
+          {{ showNotesPanel ? "Hide Notes Panel" : "Show Notes Panel" }}
         </button>
       </div>
       <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
@@ -1170,6 +1231,18 @@ onMounted(async () => {
           @save="saveSummary"
           @generate="generateSummary"
           @character-click="navigateToWiki"
+        />
+
+        <ChapterNotesPanel
+          v-if="showNotesPanel"
+          :chapter-notes="chapter.notes || ''"
+          :is-editing-notes="isEditingNotes"
+          :edited-notes="editedNotes"
+          :saving-notes="savingNotes"
+          @update:editedNotes="editedNotes = $event"
+          @start-edit="startEditingNotes"
+          @cancel-edit="cancelEditingNotes"
+          @save="saveNotes"
         />
 
         <ChapterContentSection

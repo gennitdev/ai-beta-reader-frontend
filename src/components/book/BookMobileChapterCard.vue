@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { PropType } from 'vue'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
-import { PencilIcon } from '@heroicons/vue/24/outline'
+import { PencilIcon, DocumentTextIcon } from '@heroicons/vue/24/outline'
 import type { BookChapter } from '@/types/bookView'
 
 const props = defineProps({
@@ -74,6 +74,10 @@ const chapterLink = computed(
             <span :class="chapter.has_summary ? 'text-green-600' : 'text-gray-500'" class="text-sm">
               {{ chapter.has_summary ? 'Summarized' : 'Not summarized' }}
             </span>
+          </div>
+          <div v-if="chapter.has_notes" class="flex items-center" title="Has notes">
+            <DocumentTextIcon class="w-4 h-4 mr-1 text-purple-500" />
+            <span class="text-sm text-purple-600">Notes</span>
           </div>
         </div>
 

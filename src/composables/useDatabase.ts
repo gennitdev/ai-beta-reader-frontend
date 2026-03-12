@@ -1,5 +1,5 @@
 import { ref, onMounted } from 'vue'
-import { db, type Book, type Chapter, type ChapterSummary, type ChapterReview, type ImageAsset } from '@/lib/database'
+import { db, type Book, type Chapter, type ChapterSummary, type ChapterReview, type ChapterNote, type ImageAsset } from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 
 const isInitialized = ref(false)
@@ -298,6 +298,40 @@ export function useDatabase() {
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to delete review'
       console.error('Delete review error:', e)
+      throw e
+    }
+  }
+
+  // Chapter notes operations
+  async function saveNotes(chapterId: string, notes: string) {
+    try {
+      await initializeDatabase()
+      await db.saveNotes(chapterId, notes)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to save notes'
+      console.error('Save notes error:', e)
+      throw e
+    }
+  }
+
+  async function getNotes(chapterId: string): Promise<ChapterNote | null> {
+    try {
+      await initializeDatabase()
+      return await db.getNotes(chapterId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get notes'
+      console.error('Get notes error:', e)
+      return null
+    }
+  }
+
+  async function deleteNotes(chapterId: string) {
+    try {
+      await initializeDatabase()
+      await db.deleteNotes(chapterId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete notes'
+      console.error('Delete notes error:', e)
       throw e
     }
   }
@@ -668,6 +702,11 @@ export function useDatabase() {
     saveReview,
     getReviews,
     deleteReview,
+
+    // Chapter notes operations
+    saveNotes,
+    getNotes,
+    deleteNotes,
 
     // Custom reviewer profile operations
     getCustomProfiles,

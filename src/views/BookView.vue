@@ -31,6 +31,7 @@ const {
   loadChapters,
   getWikiPages,
   getSummary,
+  getNotes,
   saveBook,
   getParts,
   updateChapterOrders,
@@ -218,11 +219,13 @@ const syncChaptersFromDb = async () => {
 
   const chapterPromises = dbChapters.value.map(async (ch: any, index: number) => {
     const summary = await getSummary(ch.id);
+    const notes = await getNotes(ch.id);
     return {
       id: ch.id,
       title: ch.title || null,
       word_count: Number(ch.word_count) || 0,
       has_summary: !!summary,
+      has_notes: !!notes,
       summary: summary?.summary || null,
       position: index,
       position_in_part: null,

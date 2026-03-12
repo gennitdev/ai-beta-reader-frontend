@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
-import { PencilIcon } from '@heroicons/vue/24/outline'
+import { PencilIcon, DocumentTextIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import type { BookChapter } from '@/types/bookView'
 
@@ -73,6 +73,11 @@ const chapterLink = `/books/${props.bookId}/chapters/${props.chapter.id}`
             :class="chapter.has_summary ? 'text-green-500' : 'text-gray-300'"
             class="w-3 h-3"
             :title="chapter.has_summary ? 'Summarized' : 'Not summarized'"
+          />
+          <DocumentTextIcon
+            v-if="chapter.has_notes"
+            class="w-3 h-3 text-purple-500"
+            title="Has notes"
           />
         </div>
       </div>

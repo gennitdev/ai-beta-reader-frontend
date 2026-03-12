@@ -65,6 +65,14 @@ export interface ChapterReview {
   updated_at: string;
 }
 
+export interface ChapterNote {
+  id: string;
+  chapter_id: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type ImageAssetType = 'cover' | 'chapter' | 'part_cover';
 
 export interface ImageAsset {
@@ -322,6 +330,15 @@ export class AppDatabase {
         FOREIGN KEY (chapter_id) REFERENCES chapters(id)
       );
 
+      CREATE TABLE IF NOT EXISTS chapter_notes (
+        id TEXT PRIMARY KEY,
+        chapter_id TEXT NOT NULL,
+        notes TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (chapter_id) REFERENCES chapters(id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_image_assets_book ON image_assets(book_id);
       CREATE INDEX IF NOT EXISTS idx_image_assets_chapter ON image_assets(chapter_id);
     `;
@@ -499,6 +516,7 @@ export class AppDatabase {
       { query: "DELETE FROM chapter_wiki_mentions WHERE chapter_id = ?", params: [chapterId] },
       { query: "DELETE FROM wiki_updates WHERE chapter_id = ?", params: [chapterId] },
       { query: "DELETE FROM image_assets WHERE chapter_id = ?", params: [chapterId] },
+      { query: "DELETE FROM chapter_notes WHERE chapter_id = ?", params: [chapterId] },
     ];
 
     for (const statement of cleanupStatements) {
@@ -883,7 +901,8 @@ export class AppDatabase {
         ai_profiles: getAllFromTable('ai_profiles'),
         wiki_updates: getAllFromTable('wiki_updates'),
         chapter_wiki_mentions: getAllFromTable('chapter_wiki_mentions'),
-        image_assets: getAllFromTable('image_assets')
+        image_assets: getAllFromTable('image_assets'),
+        chapter_notes: getAllFromTable('chapter_notes')
       };
 
       return new TextEncoder().encode(JSON.stringify(exportData));
@@ -918,6 +937,7 @@ export class AppDatabase {
       'book_characters',
       'chapter_summaries',
       'part_summaries',
+      'chapter_notes',
       'wiki_pages',
       'chapters',
       'book_parts',
@@ -978,6 +998,7 @@ export class AppDatabase {
     await importTable('wiki_updates', importData.wiki_updates);
     await importTable('chapter_wiki_mentions', importData.chapter_wiki_mentions);
     await importTable('image_assets', importData.image_assets);
+    await importTable('chapter_notes', importData.chapter_notes);
 
     if (!this.isNative) {
       this.saveToLocalStorage();
@@ -1008,7 +1029,8 @@ export class AppDatabase {
       custom_reviewer_profiles: [],
       ai_profiles: [],
       wiki_updates: [],
-      chapter_wiki_mentions: []
+      chapter_wiki_mentions: [],
+      chapter_notes: []
     };
 
     // Map Neon table exports to our format
@@ -1043,6 +1065,7 @@ export class AppDatabase {
     transformedData.wiki_updates = jsonData.wiki_updates || [];
     transformedData.chapter_wiki_mentions = jsonData.chapter_wiki_mentions || [];
     transformedData.image_assets = jsonData.image_assets || [];
+    transformedData.chapter_notes = jsonData.chapter_notes || [];
 
     // Use the standard import function
     const jsonString = JSON.stringify(transformedData);
@@ -1102,6 +1125,7 @@ export class AppDatabase {
       wiki_updates: rowsToObjects('wiki_updates'),
       chapter_wiki_mentions: rowsToObjects('chapter_wiki_mentions'),
       image_assets: rowsToObjects('image_assets'),
+      chapter_notes: rowsToObjects('chapter_notes'),
     };
   }
 
@@ -1323,6 +1347,60 @@ export class AppDatabase {
       await this.db.run(query, [reviewId]);
     } else {
       this.db.run(query, [reviewId]);
+      this.saveToLocalStorage();
+    }
+  }
+
+  // Chapter Notes methods
+  async saveNotes(chapterId: string, notes: string): Promise<void> {
+    const id = `notes-${chapterId}`;
+    const now = new Date().toISOString();
+
+    // Check if notes already exist for this chapter
+    const existing = await this.getNotes(chapterId);
+    const createdAt = existing?.created_at ?? now;
+
+    const query = `INSERT OR REPLACE INTO chapter_notes (id, chapter_id, notes, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?)`;
+
+    const params = [id, chapterId, notes, createdAt, now];
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async getNotes(chapterId: string): Promise<ChapterNote | null> {
+    const query = `SELECT * FROM chapter_notes WHERE chapter_id = ? LIMIT 1`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [chapterId]);
+      return result.values?.[0] || null;
+    } else {
+      const result = this.db.exec(query, [chapterId]);
+      if (result.length === 0 || result[0].values.length === 0) return null;
+
+      const row = result[0].values[0];
+      return {
+        id: row[0],
+        chapter_id: row[1],
+        notes: row[2],
+        created_at: row[3],
+        updated_at: row[4]
+      };
+    }
+  }
+
+  async deleteNotes(chapterId: string): Promise<void> {
+    const query = `DELETE FROM chapter_notes WHERE chapter_id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(query, [chapterId]);
+    } else {
+      this.db.run(query, [chapterId]);
       this.saveToLocalStorage();
     }
   }

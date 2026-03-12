@@ -5,6 +5,7 @@ export interface BookChapter {
   title: string | null
   word_count: number
   has_summary: boolean
+  has_notes: boolean
   summary: string | null
   position: number
   position_in_part: number | null
