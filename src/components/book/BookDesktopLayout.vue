@@ -391,60 +391,73 @@ const closeLightbox = () => {
 
             <div v-else-if="hasChapters" class="divide-y divide-gray-200 dark:divide-gray-800">
               <div v-for="part in chaptersByPart.parts" :key="part.id" class="overflow-hidden">
-                <div class="flex items-center gap-2 pr-2 py-2">
-                  <button
-                    @click="togglePart(part.id)"
-                    class="flex px-2 flex-1 items-center justify-between text-left transition-colors focus:outline-none"
-                  >
-                    <div class="flex items-center gap-2">
-                      <div
-                        v-if="partThumbnails[part.id]"
-                        class="h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-gray-100 dark:bg-gray-700"
-                      >
-                        <img
-                          :src="partThumbnails[part.id]"
-                          class="h-full w-full object-cover"
-                          alt=""
-                        />
-                      </div>
-                      <div>
-                        <h4 class="font-medium text-gray-900 dark:text-white">{{ part.name }}</h4>
-                        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                          {{ (sidebarPartLists[part.id]?.length || 0) }} chapter{{
-                            (sidebarPartLists[part.id]?.length || 0) !== 1 ? 's' : ''
-                          }}
-                          ·
-                          {{
-                            formatWordCount(
-                              wordCountForChapters(sidebarPartLists[part.id] || [])
-                            )
-                          }}
-                          words
-                          ·
-                          <router-link
-                            :to="`/books/${bookId}/parts/${part.id}`"
-                            class="text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-                            @click.stop
-                          >View</router-link>
-                        </p>
+                <button
+                  @click="togglePart(part.id)"
+                  class="w-full text-left transition-colors focus:outline-none"
+                >
+                  <!-- Card with full-width image and overlaid metadata -->
+                  <div class="relative overflow-hidden rounded-lg mx-2 my-2">
+                    <!-- Cover image - full width -->
+                    <div
+                      v-if="partThumbnails[part.id]"
+                      class="aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
+                    >
+                      <img
+                        :src="partThumbnails[part.id]"
+                        class="h-full w-full object-cover"
+                        alt=""
+                      />
+                    </div>
+                    <!-- Fallback when no image -->
+                    <div
+                      v-else
+                      class="aspect-[16/9] w-full bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 dark:from-indigo-900/40 dark:via-purple-900/30 dark:to-pink-900/40 flex items-center justify-center"
+                    >
+                      <BookOpenIcon class="w-12 h-12 text-indigo-300 dark:text-indigo-600 opacity-60" />
+                    </div>
+
+                    <!-- Overlaid metadata with gradient background -->
+                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-3 py-3 pt-8">
+                      <div class="flex items-end justify-between">
+                        <div>
+                          <h4 class="font-medium text-white drop-shadow-md">{{ part.name }}</h4>
+                          <p class="mt-0.5 text-xs text-gray-200">
+                            {{ (sidebarPartLists[part.id]?.length || 0) }} chapter{{
+                              (sidebarPartLists[part.id]?.length || 0) !== 1 ? 's' : ''
+                            }}
+                            ·
+                            {{
+                              formatWordCount(
+                                wordCountForChapters(sidebarPartLists[part.id] || [])
+                              )
+                            }}
+                            words
+                            ·
+                            <router-link
+                              :to="`/books/${bookId}/parts/${part.id}`"
+                              class="text-blue-300 hover:text-blue-200 hover:underline"
+                              @click.stop
+                            >View</router-link>
+                          </p>
+                        </div>
+                        <svg
+                          :class="expandedParts.has(part.id) ? 'rotate-180' : ''"
+                          class="h-5 w-5 text-white transition-transform flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 9l-7 7-7-7"
+                          ></path>
+                        </svg>
                       </div>
                     </div>
-                    <svg
-                      :class="expandedParts.has(part.id) ? 'rotate-180' : ''"
-                      class="h-4 w-4 text-gray-500 transition-transform dark:text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M19 9l-7 7-7-7"
-                      ></path>
-                    </svg>
-                  </button>
-                </div>
+                  </div>
+                </button>
 
                 <div
                   v-if="expandedParts.has(part.id)"

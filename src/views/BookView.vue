@@ -491,12 +491,6 @@ const loadBook = async () => {
 };
 
 const loadChapterThumbnailsForBook = async () => {
-  if (!desktopImagesAvailable.value) {
-    chapterThumbnails.value = {};
-    partThumbnails.value = {};
-    return;
-  }
-
   try {
     const chapterIds = chapters.value.map((ch) => ch.id);
     chapterThumbnails.value = await fetchChapterThumbnails(chapterIds);
@@ -511,12 +505,6 @@ const loadChapterThumbnailsForBook = async () => {
 };
 
 const loadBookCoverImage = async (targetBookId: string) => {
-  if (!desktopImagesAvailable.value) {
-    bookCoverImage.value = null;
-    bookCoverSrc.value = null;
-    return;
-  }
-
   coverLoading.value = true;
   coverError.value = null;
   try {

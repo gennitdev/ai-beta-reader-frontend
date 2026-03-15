@@ -191,17 +191,20 @@ export function useImageLibrary() {
 
   async function fetchChapterThumbnails(chapterIds: string[]): Promise<Record<string, string>> {
     const thumbnails: Record<string, string> = {}
+    console.log('[ImageLibrary] fetchChapterThumbnails called for', chapterIds.length, 'chapters')
     for (const chapterId of chapterIds) {
       const firstImage = await fetchFirstChapterImage(chapterId)
+      console.log('[ImageLibrary] Chapter', chapterId, 'firstImage:', firstImage ? { id: firstImage.id, hasImageData: !!firstImage.image_data } : null)
       if (firstImage) {
         try {
           // Works on desktop (filesystem) or web (image_data)
           thumbnails[chapterId] = await getImageSource(firstImage)
         } catch (error) {
-          // Silently skip if image can't be loaded
+          console.warn('[ImageLibrary] Failed to get image source for chapter', chapterId, error)
         }
       }
     }
+    console.log('[ImageLibrary] Returning', Object.keys(thumbnails).length, 'thumbnails')
     return thumbnails
   }
 
@@ -278,17 +281,20 @@ export function useImageLibrary() {
 
   async function fetchPartThumbnails(partIds: string[]): Promise<Record<string, string>> {
     const thumbnails: Record<string, string> = {}
+    console.log('[ImageLibrary] fetchPartThumbnails called for', partIds.length, 'parts')
     for (const partId of partIds) {
       const cover = await fetchPartCover(partId)
+      console.log('[ImageLibrary] Part', partId, 'cover:', cover ? { id: cover.id, hasImageData: !!cover.image_data } : null)
       if (cover) {
         try {
           // Works on desktop (filesystem) or web (image_data)
           thumbnails[partId] = await getImageSource(cover)
         } catch (error) {
-          // Silently skip if image can't be loaded
+          console.warn('[ImageLibrary] Failed to get image source for part', partId, error)
         }
       }
     }
+    console.log('[ImageLibrary] Returning', Object.keys(thumbnails).length, 'part thumbnails')
     return thumbnails
   }
 

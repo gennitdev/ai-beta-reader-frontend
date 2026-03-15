@@ -555,8 +555,8 @@ const openChapter = (chapterId: string) => {
 
 watch(
   () => desktopImagesAvailable.value,
-  async (available) => {
-    if (available && part.value) {
+  async () => {
+    if (part.value) {
       await refreshPartImages(part.value.id)
       await loadPartCoverImage(part.value.id)
     }

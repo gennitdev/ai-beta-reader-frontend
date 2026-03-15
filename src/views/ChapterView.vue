@@ -151,6 +151,22 @@ const activeImageLabel = computed(() => {
 });
 const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ?? null));
 
+// Hero image (first chapter image)
+const heroImage = computed(() => chapterImages.value.length > 0 ? chapterImages.value[0] : null);
+const heroImageSrc = computed(() => {
+  if (!heroImage.value) return null;
+  return chapterImageSources.value[heroImage.value.id] ?? null;
+});
+const heroLightboxOpen = ref(false);
+const openHeroLightbox = () => {
+  if (heroImageSrc.value) {
+    heroLightboxOpen.value = true;
+  }
+};
+const closeHeroLightbox = () => {
+  heroLightboxOpen.value = false;
+};
+
 // Summary editing state
 const isEditingSummary = ref(false);
 const editedSummary = ref("");
@@ -429,12 +445,7 @@ const loadChapter = async () => {
       await loadCustomProfiles();
       await loadSavedReviews();
 
-      if (desktopImagesAvailable.value) {
-        await refreshChapterImages();
-      } else {
-        chapterImages.value = [];
-        chapterImageSources.value = {};
-      }
+      await refreshChapterImages();
     } else {
       console.error("Chapter not found");
       router.push(bookUrl.value);
@@ -448,7 +459,7 @@ const loadChapter = async () => {
 };
 
 const refreshChapterImages = async () => {
-  if (!desktopImagesAvailable.value || !chapterId.value) {
+  if (!chapterId.value) {
     chapterImages.value = [];
     chapterImageSources.value = {};
     return;
@@ -567,25 +578,15 @@ const goToPrevImage = () => {
 
 watch(
   () => desktopImagesAvailable.value,
-  (available) => {
-    if (available) {
-      refreshChapterImages();
-    } else {
-      chapterImages.value = [];
-      chapterImageSources.value = {};
-    }
+  () => {
+    refreshChapterImages();
   }
 );
 
 watch(
   () => chapterId.value,
   () => {
-    if (desktopImagesAvailable.value) {
-      refreshChapterImages();
-    } else {
-      chapterImages.value = [];
-      chapterImageSources.value = {};
-    }
+    refreshChapterImages();
   }
 );
 
@@ -1092,6 +1093,7 @@ onMounted(async () => {
 <template>
   <div class="w-full">
     <ChapterHeaderBar
+      v-if="!heroImageSrc"
       :is-mobile-route="isMobileRoute"
       :chapter-title="chapter?.title || null"
       :chapter-id="chapterId"
@@ -1110,6 +1112,72 @@ onMounted(async () => {
       @save-chapter="saveChapter"
       @delete-chapter="requestDeleteChapter"
     />
+
+    <!-- Hero Image Section -->
+    <div
+      v-if="heroImageSrc"
+      class="relative w-full"
+    >
+      <!-- Hero image container -->
+      <div
+        class="relative h-48 w-full overflow-hidden bg-gray-900 sm:h-64 md:h-80 lg:h-96 cursor-pointer"
+        @click="openHeroLightbox"
+      >
+        <img
+          :src="heroImageSrc"
+          class="h-full w-full object-cover opacity-90 transition-opacity hover:opacity-100"
+          alt="Chapter hero"
+        />
+        <!-- Gradient overlay -->
+        <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+        <!-- Chapter info overlay -->
+        <div class="absolute bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8">
+          <p class="text-sm font-medium text-white/80">{{ currentBook?.title }}</p>
+          <h2 class="mt-1 text-2xl font-bold text-white sm:text-3xl lg:text-4xl">
+            {{ chapter?.title || 'Untitled Chapter' }}
+          </h2>
+          <p class="mt-2 text-sm text-white/70">
+            {{ chapter?.word_count?.toLocaleString() || 0 }} words
+            <span v-if="chapter?.summary"> &middot; Summarized</span>
+          </p>
+        </div>
+      </div>
+      <!-- Back button overlay -->
+      <button
+        @click="goBack"
+        class="absolute left-4 top-4 inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
+      >
+        <svg class="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back
+      </button>
+      <!-- Action buttons overlay -->
+      <div class="absolute right-4 top-4 flex items-center gap-2">
+        <button
+          v-if="!isEditing"
+          @click="startEdit"
+          class="inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
+        >
+          Edit
+        </button>
+        <button
+          v-if="isEditing"
+          @click="saveChapter"
+          :disabled="savingChapter || !hasUnsavedChanges"
+          class="inline-flex items-center rounded-md bg-blue-600/90 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-blue-700 disabled:opacity-50"
+        >
+          {{ savingChapter ? 'Saving...' : 'Save' }}
+        </button>
+        <button
+          v-if="isEditing"
+          @click="cancelEdit"
+          class="inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
 
     <div class="w-full max-w-6xl md:mx-auto px-4 lg:px-8">
       <!-- Chapter Illustrations - at top below title -->
@@ -1316,6 +1384,14 @@ onMounted(async () => {
     @close="closeImageModal"
     @next="goToNextImage"
     @prev="goToPrevImage"
+  />
+
+  <!-- Hero image lightbox -->
+  <ImageLightbox
+    :open="heroLightboxOpen"
+    :image-src="heroImageSrc"
+    :caption="chapter?.title || 'Chapter Image'"
+    @close="closeHeroLightbox"
   />
 
   <teleport to="body">

@@ -749,19 +749,24 @@ export class CloudSync {
     // Enrich with image data if on desktop
     let enrichedData = dbData;
     if (typeof window !== 'undefined' && window.desktopImages) {
-      console.log('Reading image files for backup...');
+      console.log('[CloudSync] Reading image files for backup...');
       try {
         const exportJson = JSON.parse(new TextDecoder().decode(dbData));
+        console.log('[CloudSync] Export has image_assets:', exportJson.image_assets?.length || 0, 'items');
+        if (exportJson.image_assets?.length > 0) {
+          console.log('[CloudSync] First image_asset row:', exportJson.image_assets[0]);
+        }
 
         // image_assets is an array of arrays (raw SQL rows)
         if (exportJson.image_assets && Array.isArray(exportJson.image_assets)) {
           // Get column indices - image_assets columns are:
-          // id, book_id, chapter_id, asset_type, file_name, file_path, mime_type, image_data, created_at, updated_at
+          // id(0), book_id(1), chapter_id(2), asset_type(3), file_name(4), file_path(5), mime_type(6), created_at(7), updated_at(8), image_data(9)
+          // Note: image_data is at index 9 because it was added via ALTER TABLE (appended to end)
           const enrichedAssets = [];
           for (const row of exportJson.image_assets) {
             const filePath = row[5]; // file_path is at index 5
             const mimeType = row[6]; // mime_type is at index 6
-            let imageData = row[7]; // image_data is at index 7
+            let imageData = row[9]; // image_data is at index 9 (added via ALTER TABLE)
 
             // If no image_data stored, try to read from filesystem
             if (!imageData && filePath) {
@@ -777,9 +782,9 @@ export class CloudSync {
               }
             }
 
-            // Create new row with image_data
+            // Create new row with image_data at index 9
             const newRow = [...row];
-            newRow[7] = imageData;
+            newRow[9] = imageData;
             enrichedAssets.push(newRow);
           }
           exportJson.image_assets = enrichedAssets;
@@ -833,18 +838,24 @@ export class CloudSync {
     try {
       // On desktop, write image files to filesystem before importing
       let dataToImport = decrypted;
-      if (typeof window !== 'undefined' && window.desktopImages) {
-        console.log('Writing image files from backup...');
-        try {
-          const importJson = JSON.parse(new TextDecoder().decode(decrypted));
+      const importJson = JSON.parse(new TextDecoder().decode(decrypted));
+      console.log('[CloudSync] Restore: image_assets in backup:', importJson.image_assets?.length || 0, 'items');
+      if (importJson.image_assets?.length > 0) {
+        console.log('[CloudSync] Restore: First image_asset:', importJson.image_assets[0]);
+        const hasImageData = importJson.image_assets.some((row: any[]) => row[9]); // image_data at index 9
+        console.log('[CloudSync] Restore: Any rows have image_data?', hasImageData);
+      }
 
+      if (typeof window !== 'undefined' && window.desktopImages) {
+        console.log('[CloudSync] Writing image files from backup (desktop mode)...');
+        try {
           if (importJson.image_assets && Array.isArray(importJson.image_assets)) {
             let imagesWritten = 0;
             const processedAssets = [];
 
             for (const row of importJson.image_assets) {
               const filePath = row[5]; // file_path is at index 5
-              const imageData = row[7]; // image_data is at index 7
+              const imageData = row[9]; // image_data is at index 9 (added via ALTER TABLE)
 
               // Write image to filesystem if we have data
               if (imageData && filePath) {
@@ -863,7 +874,7 @@ export class CloudSync {
               // On desktop, clear image_data since it's now on filesystem
               // This keeps the database smaller
               const newRow = [...row];
-              newRow[7] = null;
+              newRow[9] = null; // image_data is at index 9
               processedAssets.push(newRow);
             }
 

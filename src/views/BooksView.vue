@@ -21,9 +21,7 @@ const createBookHandler = async () => {
   try {
     await createBook(newBook.value)
     await loadBooks() // Refresh the list
-    if (desktopImagesAvailable.value) {
-      await refreshCoverSources()
-    }
+    await refreshCoverSources()
 
     newBook.value = { id: '', title: '' }
     showCreateModal.value = false
@@ -33,15 +31,13 @@ const createBookHandler = async () => {
 }
 
 const refreshCoverSources = async () => {
-  if (!desktopImagesAvailable.value) {
-    bookCoverSources.value = {}
-    return
-  }
+  console.log('[BooksView] refreshCoverSources called for', books.value.length, 'books')
   coverRefreshError.value = null
   const nextSources: Record<string, string> = {}
   for (const book of books.value) {
     try {
       const asset = await fetchBookCover(book.id)
+      console.log('[BooksView] Book', book.id, 'cover asset:', asset ? { id: asset.id, hasImageData: !!asset.image_data } : null)
       if (asset) {
         nextSources[book.id] = await getImageSource(asset)
       }
@@ -50,6 +46,7 @@ const refreshCoverSources = async () => {
       coverRefreshError.value = 'Some covers could not be loaded.'
     }
   }
+  console.log('[BooksView] Loaded', Object.keys(nextSources).length, 'cover sources')
   bookCoverSources.value = nextSources
 }
 
@@ -74,28 +71,20 @@ const formatWordCount = (count?: number) => {
 
 onMounted(async () => {
   await loadBooks()
-  if (desktopImagesAvailable.value) {
-    await refreshCoverSources()
-  }
+  await refreshCoverSources()
 })
 
 watch(
   () => desktopImagesAvailable.value,
-  async (available) => {
-    if (available) {
-      await refreshCoverSources()
-    } else {
-      bookCoverSources.value = {}
-    }
+  async () => {
+    await refreshCoverSources()
   }
 )
 
 watch(
   () => books.value.map((book) => `${book.id}:${book.cover_image_id ?? ''}`).join('|'),
   async () => {
-    if (desktopImagesAvailable.value) {
-      await refreshCoverSources()
-    }
+    await refreshCoverSources()
   }
 )
 </script>
@@ -134,7 +123,7 @@ watch(
         @click="viewBook(book.id)"
       >
         <div
-          v-if="desktopImagesAvailable"
+          v-if="desktopImagesAvailable || bookCoverSources[book.id]"
           class="h-40 w-full bg-gray-100 dark:bg-gray-900"
         >
           <img
@@ -151,7 +140,7 @@ watch(
           </div>
         </div>
         <div class="p-6">
-          <div class="flex items-center mb-4" v-if="!desktopImagesAvailable">
+          <div class="flex items-center mb-4" v-if="!desktopImagesAvailable && !bookCoverSources[book.id]">
             <BookOpenIcon class="w-8 h-8 text-blue-600 mr-3" />
             <h3 class="text-xl font-semibold text-gray-900 dark:text-white truncate">
               {{ book.title }}

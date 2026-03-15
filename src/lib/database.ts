@@ -916,6 +916,13 @@ export class AppDatabase {
   async importDatabase(data: Uint8Array): Promise<void> {
     const jsonString = new TextDecoder().decode(data);
     let importData = JSON.parse(jsonString);
+    console.log('[Database] importDatabase: image_assets count:', importData.image_assets?.length || 0);
+    if (importData.image_assets?.length > 0) {
+      console.log('[Database] importDatabase: First image_asset:', importData.image_assets[0]);
+      // image_data is at index 9 for arrays (added via ALTER TABLE)
+      const hasImageData = importData.image_assets.some((row: any) => Array.isArray(row) ? row[9] : row.image_data);
+      console.log('[Database] importDatabase: Any have image_data?', hasImageData);
+    }
     importData = this.normalizeCapacitorExport(importData);
 
     const run = async (sql: string, params: any[] = []) => {
