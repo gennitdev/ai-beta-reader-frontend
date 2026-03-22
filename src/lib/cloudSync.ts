@@ -880,12 +880,24 @@ export class CloudSync {
 
     // Decompress if needed
     if (isCompressed) {
-      console.log('Decompressing data...');
+      const compressedSizeMB = decrypted.length / 1024 / 1024;
+      console.log(`Decompressing data (${compressedSizeMB.toFixed(1)} MB compressed)...`);
+
+      // On mobile, warn if backup is very large (may crash)
+      const isMobile = Capacitor.isNativePlatform() &&
+        !(typeof window !== 'undefined' && window.desktopImages);
+      if (isMobile && compressedSizeMB > 20) {
+        console.warn(`[CloudSync] Large backup (${compressedSizeMB.toFixed(1)} MB) on mobile - may run out of memory`);
+      }
+
       try {
         decrypted = gunzipSync(decrypted);
-        console.log('Decompressed to', decrypted.length, 'bytes');
+        console.log('Decompressed to', (decrypted.length / 1024 / 1024).toFixed(1), 'MB');
       } catch (error) {
         console.error('Failed to decompress backup:', error);
+        if (isMobile) {
+          throw new Error('Backup is too large for mobile device. Please restore using the desktop app or web browser first, then sync.');
+        }
         return false;
       }
     }
@@ -894,7 +906,24 @@ export class CloudSync {
       // On desktop, write image files to filesystem before importing
       let dataToImport = decrypted;
       const importJson = JSON.parse(new TextDecoder().decode(decrypted));
+
+      // Free the decrypted buffer now that we've parsed it
+      decrypted = new Uint8Array(0);
+
       console.log('[CloudSync] Restore: image_assets in backup:', importJson.image_assets?.length || 0, 'items');
+
+      // On mobile (native platform without desktop image support), strip image data to save memory
+      // Images can't be stored on mobile anyway, so we only restore the metadata
+      const isMobileWithoutImageSupport = Capacitor.isNativePlatform() &&
+        !(typeof window !== 'undefined' && window.desktopImages);
+
+      if (isMobileWithoutImageSupport && importJson.image_assets?.length > 0) {
+        console.log('[CloudSync] Mobile detected - stripping image data to save memory');
+        for (const row of importJson.image_assets) {
+          row[9] = null; // Clear image_data at index 9
+        }
+      }
+
       if (importJson.image_assets?.length > 0) {
         console.log('[CloudSync] Restore: First image_asset:', importJson.image_assets[0]);
         const hasImageData = importJson.image_assets.some((row: any[]) => row[9]); // image_data at index 9
