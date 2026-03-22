@@ -1,43 +1,138 @@
 import CryptoJS from 'crypto-js';
 
+// Constants for Web Crypto encryption
+const ALGORITHM = 'AES-GCM';
+const KEY_LENGTH = 256;
+const IV_LENGTH = 12; // 96 bits for GCM
+const SALT_LENGTH = 16;
+const PBKDF2_ITERATIONS = 100000;
+const WEB_CRYPTO_PREFIX = 'WC1:'; // Prefix to identify Web Crypto format
+
 export class Encryption {
   /**
-   * Encrypt data using AES encryption with user's password
+   * Derive an AES key from a password using PBKDF2 (Web Crypto)
    */
-  static encrypt(data: Uint8Array, password: string): string {
-    // Convert Uint8Array to UTF-8 string (it's JSON, so it's text)
-    const textData = new TextDecoder().decode(data);
+  private static async deriveKeyFromPassword(
+    password: string,
+    salt: Uint8Array
+  ): Promise<CryptoKey> {
+    const encoder = new TextEncoder();
+    const passwordBuffer = encoder.encode(password);
 
-    // Encrypt with AES
-    const encrypted = CryptoJS.AES.encrypt(textData, password).toString();
-    return encrypted;
+    // Import password as a key for PBKDF2
+    const baseKey = await crypto.subtle.importKey(
+      'raw',
+      passwordBuffer,
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+
+    // Derive the actual encryption key
+    return crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt,
+        iterations: PBKDF2_ITERATIONS,
+        hash: 'SHA-256',
+      },
+      baseKey,
+      { name: ALGORITHM, length: KEY_LENGTH },
+      false,
+      ['encrypt', 'decrypt']
+    );
   }
 
   /**
-   * Decrypt data using AES decryption with user's password
+   * Encrypt data using AES-GCM with Web Crypto API (async, non-blocking)
    */
-  static decrypt(encryptedData: string, password: string): Uint8Array {
-    // Decrypt with AES
-    const decrypted = CryptoJS.AES.decrypt(encryptedData, password);
+  static async encrypt(data: Uint8Array, password: string): Promise<string> {
+    // Generate random salt and IV
+    const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+    const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
 
-    // Convert WordArray to UTF-8 string
+    // Derive key from password
+    const key = await Encryption.deriveKeyFromPassword(password, salt);
+
+    // Encrypt the data
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: ALGORITHM, iv },
+      key,
+      data
+    );
+
+    // Combine salt + iv + ciphertext into a single buffer
+    const combined = new Uint8Array(
+      salt.length + iv.length + ciphertext.byteLength
+    );
+    combined.set(salt, 0);
+    combined.set(iv, salt.length);
+    combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
+
+    // Return as base64 with prefix to identify format
+    return WEB_CRYPTO_PREFIX + btoa(String.fromCharCode(...combined));
+  }
+
+  /**
+   * Decrypt data using AES-GCM with Web Crypto API (async, non-blocking)
+   * Also supports legacy CryptoJS format for backward compatibility
+   */
+  static async decrypt(encryptedData: string, password: string): Promise<Uint8Array> {
+    // Check if this is the new Web Crypto format
+    if (encryptedData.startsWith(WEB_CRYPTO_PREFIX)) {
+      return Encryption.decryptWebCrypto(encryptedData, password);
+    }
+
+    // Fall back to legacy CryptoJS decryption for old backups
+    return Encryption.decryptLegacy(encryptedData, password);
+  }
+
+  /**
+   * Decrypt using Web Crypto API
+   */
+  private static async decryptWebCrypto(
+    encryptedData: string,
+    password: string
+  ): Promise<Uint8Array> {
+    // Remove prefix and decode base64
+    const base64Data = encryptedData.slice(WEB_CRYPTO_PREFIX.length);
+    const combined = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+
+    // Extract salt, iv, and ciphertext
+    const salt = combined.slice(0, SALT_LENGTH);
+    const iv = combined.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
+    const ciphertext = combined.slice(SALT_LENGTH + IV_LENGTH);
+
+    // Derive key from password
+    const key = await Encryption.deriveKeyFromPassword(password, salt);
+
+    // Decrypt
+    try {
+      const decrypted = await crypto.subtle.decrypt(
+        { name: ALGORITHM, iv },
+        key,
+        ciphertext
+      );
+      return new Uint8Array(decrypted);
+    } catch {
+      throw new Error('Decryption failed - wrong password or corrupted data');
+    }
+  }
+
+  /**
+   * Decrypt using legacy CryptoJS (for backward compatibility with old backups)
+   */
+  private static decryptLegacy(
+    encryptedData: string,
+    password: string
+  ): Uint8Array {
+    const decrypted = CryptoJS.AES.decrypt(encryptedData, password);
     const textData = decrypted.toString(CryptoJS.enc.Utf8);
 
     if (!textData) {
       throw new Error('Decryption failed - wrong password or corrupted data');
     }
 
-    // Convert back to Uint8Array
     return new TextEncoder().encode(textData);
-  }
-
-  /**
-   * Generate a secure encryption key from a password using PBKDF2
-   */
-  static deriveKey(password: string, salt: string = 'ai-beta-reader-salt'): string {
-    return CryptoJS.PBKDF2(password, salt, {
-      keySize: 256 / 32,
-      iterations: 1000
-    }).toString();
   }
 }

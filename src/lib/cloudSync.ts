@@ -799,7 +799,7 @@ export class CloudSync {
     }
 
     console.log('Encrypting database...');
-    const encrypted = Encryption.encrypt(enrichedData, password);
+    const encrypted = await Encryption.encrypt(enrichedData, password);
 
     console.log(`Uploading to ${this.provider.name}...`);
     await this.provider.upload(this.backupFileName, encrypted);
@@ -828,7 +828,7 @@ export class CloudSync {
     console.log('Decrypting database...');
     let decrypted: Uint8Array;
     try {
-      decrypted = Encryption.decrypt(encrypted, password);
+      decrypted = await Encryption.decrypt(encrypted, password);
       console.log('Decryption successful, importing database...', decrypted.length, 'bytes');
     } catch (error) {
       console.error('Failed to decrypt - wrong password?', error);
