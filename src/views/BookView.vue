@@ -40,6 +40,7 @@ const {
   replaceInChapter,
   replaceInWikiPage,
   setBookCoverImageId,
+  getBookImageAssets,
 } = useDatabase();
 
 const {
@@ -69,6 +70,9 @@ const coverLoading = ref(false);
 const coverError = ref<string | null>(null);
 const chapterThumbnails = ref<Record<string, string>>({});
 const partThumbnails = ref<Record<string, string>>({});
+const bookImages = ref<ImageAsset[]>([]);
+const bookImageSources = ref<Record<string, string>>({});
+const loadingImages = ref(false);
 
 // Book editing state
 const isEditingBookTitle = ref(false);
@@ -101,12 +105,30 @@ const currentTab = computed(() => {
     return "wiki";
   }
   // Check query parameter
-  return route.query.tab === "wiki" ? "wiki" : "chapters";
+  const tab = route.query.tab;
+  if (tab === "wiki") return "wiki";
+  if (tab === "images") return "images";
+  return "chapters";
+});
+
+const selectedImageId = computed(() => {
+  return (route.query.imageId as string) || null;
+});
+
+const selectedImageSrc = computed(() => {
+  if (!selectedImageId.value) return null;
+  return bookImageSources.value[selectedImageId.value] || null;
+});
+
+const selectedImage = computed(() => {
+  if (!selectedImageId.value) return null;
+  return bookImages.value.find(img => img.id === selectedImageId.value) || null;
 });
 
 const isOnBookOnly = computed(() => {
   // Check if we're on the book route but no child route (chapter or wiki page) is active
-  return route.name === "book" && !route.params.chapterId && !route.params.wikiPageId;
+  // Also not viewing an image
+  return route.name === "book" && !route.params.chapterId && !route.params.wikiPageId && !selectedImageId.value;
 });
 
 const activeChapterId = computed(() => route.params.chapterId as string | undefined);
@@ -709,6 +731,33 @@ const loadWiki = async () => {
   }
 };
 
+const loadBookImages = async () => {
+  if (!bookId.value || !desktopImagesAvailable.value) return;
+
+  try {
+    loadingImages.value = true;
+    const images = await getBookImageAssets(bookId.value);
+    bookImages.value = images;
+
+    // Load image sources for gallery display
+    const sources: Record<string, string> = {};
+    for (const image of images) {
+      try {
+        sources[image.id] = await getCoverImageSource(image);
+      } catch (err) {
+        console.warn("Failed to load image source for", image.id, err);
+      }
+    }
+    bookImageSources.value = sources;
+  } catch (error) {
+    console.error("Failed to load book images:", error);
+    bookImages.value = [];
+    bookImageSources.value = {};
+  } finally {
+    loadingImages.value = false;
+  }
+};
+
 const wikiPagesByType = computed(() => {
   const grouped = wikiPages.value.reduce((acc, page) => {
     if (!acc[page.page_type]) {
@@ -791,10 +840,12 @@ watch(
 );
 
 
-// Watch for tab changes to reload wiki pages
+// Watch for tab changes to reload wiki pages or images
 watch(currentTab, async (newTab) => {
   if (newTab === "wiki") {
     await loadWiki();
+  } else if (newTab === "images") {
+    await loadBookImages();
   }
 });
 
@@ -901,6 +952,12 @@ onMounted(async () => {
     :delete-book-cover="handleDeleteBookCover"
     :chapter-thumbnails="chapterThumbnails"
     :part-thumbnails="partThumbnails"
+    :book-images="bookImages"
+    :book-image-sources="bookImageSources"
+    :loading-images="loadingImages"
+    :selected-image-id="selectedImageId"
+    :selected-image-src="selectedImageSrc"
+    :selected-image="selectedImage"
   />
 
   <SearchModal

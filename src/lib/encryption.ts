@@ -8,6 +8,22 @@ const SALT_LENGTH = 16;
 const PBKDF2_ITERATIONS = 100000;
 const WEB_CRYPTO_PREFIX = 'WC1:'; // Prefix to identify Web Crypto format
 
+/**
+ * Convert Uint8Array to base64 string in chunks to avoid memory issues
+ * The spread operator on large arrays causes heap overflow
+ */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const CHUNK_SIZE = 32768; // 32KB chunks
+  let binary = '';
+
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
+    binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+  }
+
+  return btoa(binary);
+}
+
 export class Encryption {
   /**
    * Derive an AES key from a password using PBKDF2 (Web Crypto)
@@ -70,7 +86,8 @@ export class Encryption {
     combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
 
     // Return as base64 with prefix to identify format
-    return WEB_CRYPTO_PREFIX + btoa(String.fromCharCode(...combined));
+    // Use chunked encoding to avoid memory issues with large arrays
+    return WEB_CRYPTO_PREFIX + uint8ArrayToBase64(combined);
   }
 
   /**

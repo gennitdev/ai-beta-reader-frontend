@@ -9,10 +9,12 @@ import {
   Cog6ToothIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
-  TrashIcon
+  TrashIcon,
+  PhotoIcon,
+  ChevronDownIcon
 } from '@heroicons/vue/24/outline'
 import type { PropType } from 'vue'
-import type { Book } from '@/lib/database'
+import type { Book, ImageAsset } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import BookDesktopChapterListItem from './BookDesktopChapterListItem.vue'
 
@@ -42,7 +44,7 @@ const props = defineProps({
     default: 0
   },
   currentTab: {
-    type: String as PropType<'chapters' | 'wiki'>,
+    type: String as PropType<'chapters' | 'wiki' | 'images'>,
     default: 'chapters'
   },
   hasChapters: {
@@ -192,6 +194,30 @@ const props = defineProps({
   partThumbnails: {
     type: Object as PropType<Record<string, string>>,
     default: () => ({})
+  },
+  bookImages: {
+    type: Array as PropType<ImageAsset[]>,
+    default: () => []
+  },
+  bookImageSources: {
+    type: Object as PropType<Record<string, string>>,
+    default: () => ({})
+  },
+  loadingImages: {
+    type: Boolean,
+    default: false
+  },
+  selectedImageId: {
+    type: String as PropType<string | null>,
+    default: null
+  },
+  selectedImageSrc: {
+    type: String as PropType<string | null>,
+    default: null
+  },
+  selectedImage: {
+    type: Object as PropType<ImageAsset | null>,
+    default: null
   }
 })
 
@@ -208,11 +234,40 @@ const {
   coverLoading,
   coverError,
   chapterThumbnails,
-  partThumbnails
+  partThumbnails,
+  bookImages,
+  bookImageSources,
+  loadingImages,
+  selectedImageId,
+  selectedImageSrc,
+  selectedImage
 } = toRefs(props)
 
 const selectBookCover = props.selectBookCover
 const deleteBookCover = props.deleteBookCover
+
+// Section dropdown state
+const showSectionDropdown = ref(false)
+
+const sectionOptions = [
+  { id: 'chapters', label: 'Chapters', icon: DocumentTextIcon, route: (bookId: string) => `/books/${bookId}` },
+  { id: 'wiki', label: 'Characters', icon: BookOpenIcon, route: (bookId: string) => `/books/${bookId}?tab=wiki` },
+  { id: 'images', label: 'Images', icon: PhotoIcon, route: (bookId: string) => `/books/${bookId}?tab=images` }
+]
+
+const currentSectionLabel = () => {
+  const section = sectionOptions.find(s => s.id === props.currentTab)
+  return section?.label || 'Chapters'
+}
+
+const currentSectionIcon = () => {
+  const section = sectionOptions.find(s => s.id === props.currentTab)
+  return section?.icon || DocumentTextIcon
+}
+
+const closeSectionDropdown = () => {
+  showSectionDropdown.value = false
+}
 
 // Lightbox state
 const showLightbox = ref(false)
@@ -360,31 +415,58 @@ const closeLightbox = () => {
             </p>
           </div>
 
-          <div class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-2">
-            <router-link
-              :to="`/books/${bookId}`"
-              :class="[
-                'px-4 py-2 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center rounded-lg transition-colors',
-                currentTab === 'chapters'
-                  ? 'bg-white text-blue-700 shadow'
-                  : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
-              ]"
+          <!-- Section dropdown -->
+          <div class="relative mb-2">
+            <button
+              @click="showSectionDropdown = !showSectionDropdown"
+              class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium bg-white dark:bg-gray-700 rounded-lg shadow border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
             >
-              <DocumentTextIcon class="w-4 h-4 inline mr-2" />
-              Chapters
-            </router-link>
-            <router-link
-              :to="`/books/${bookId}?tab=wiki`"
-              :class="[
-                'px-4 py-2 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center rounded-lg transition-colors',
-                currentTab === 'wiki'
-                  ? 'bg-white text-blue-700 shadow'
-                  : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
-              ]"
+              <span class="flex items-center">
+                <component :is="currentSectionIcon()" class="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" />
+                <span class="text-gray-900 dark:text-white">{{ currentSectionLabel() }}</span>
+              </span>
+              <ChevronDownIcon
+                :class="['w-4 h-4 text-gray-500 transition-transform', showSectionDropdown ? 'rotate-180' : '']"
+              />
+            </button>
+
+            <!-- Backdrop to close dropdown when clicking outside -->
+            <div
+              v-if="showSectionDropdown"
+              class="fixed inset-0 z-0"
+              @click="closeSectionDropdown"
+            ></div>
+
+            <!-- Dropdown menu -->
+            <Transition
+              enter-active-class="transition ease-out duration-100"
+              enter-from-class="transform opacity-0 scale-95"
+              enter-to-class="transform opacity-100 scale-100"
+              leave-active-class="transition ease-in duration-75"
+              leave-from-class="transform opacity-100 scale-100"
+              leave-to-class="transform opacity-0 scale-95"
             >
-              <BookOpenIcon class="w-4 h-4 inline mr-2" />
-              Characters
-            </router-link>
+              <div
+                v-if="showSectionDropdown"
+                class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 py-1"
+              >
+                <router-link
+                  v-for="option in sectionOptions"
+                  :key="option.id"
+                  :to="option.route(bookId)"
+                  @click="closeSectionDropdown"
+                  :class="[
+                    'flex items-center px-3 py-2 text-sm transition-colors',
+                    currentTab === option.id
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600'
+                  ]"
+                >
+                  <component :is="option.icon" class="w-4 h-4 mr-2" />
+                  {{ option.label }}
+                </router-link>
+              </div>
+            </Transition>
           </div>
 
           <div v-if="currentTab === 'chapters'">
@@ -617,6 +699,61 @@ const closeLightbox = () => {
             </div>
           </div>
 
+          <div v-else-if="currentTab === 'images'">
+            <div v-if="!desktopImagesAvailable" class="text-center py-8">
+              <PhotoIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
+              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                Images available in desktop app
+              </h3>
+              <p class="text-xs text-gray-600 dark:text-gray-400">
+                Image management is only available when running in the Electron desktop app.
+              </p>
+            </div>
+
+            <div v-else-if="loadingImages" class="flex justify-center items-center h-32">
+              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+
+            <div v-else-if="bookImages.length > 0" class="grid grid-cols-2 gap-2">
+              <router-link
+                v-for="image in bookImages"
+                :key="image.id"
+                :to="`/books/${bookId}?tab=images&imageId=${image.id}`"
+                :class="[
+                  'relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 cursor-pointer transition-all',
+                  selectedImageId === image.id
+                    ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-100 dark:ring-offset-gray-800'
+                    : 'hover:ring-2 hover:ring-blue-400'
+                ]"
+              >
+                <img
+                  v-if="bookImageSources[image.id]"
+                  :src="bookImageSources[image.id]"
+                  class="h-full w-full object-cover"
+                  :alt="image.file_name || 'Book illustration'"
+                />
+                <div v-else class="h-full w-full flex items-center justify-center">
+                  <PhotoIcon class="w-8 h-8 text-gray-400" />
+                </div>
+                <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+                  <p class="text-xs text-white truncate">
+                    {{ image.file_name || 'Untitled' }}
+                  </p>
+                </div>
+              </router-link>
+            </div>
+
+            <div v-else class="text-center py-8">
+              <PhotoIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
+              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                No images yet
+              </h3>
+              <p class="text-xs text-gray-600 dark:text-gray-400">
+                Add illustrations to your chapters to see them here.
+              </p>
+            </div>
+          </div>
+
           <div class="fixed bottom-4 left-4 z-10">
             <router-link
               to="/settings"
@@ -631,7 +768,40 @@ const closeLightbox = () => {
       </div>
 
       <div class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
-        <div v-if="isOnBookOnly" class="flex items-center justify-center h-full">
+        <!-- Image viewer when an image is selected -->
+        <div v-if="currentTab === 'images' && selectedImageId && selectedImageSrc" class="h-full flex flex-col">
+          <div class="flex-1 flex items-center justify-center p-4 bg-gray-100 dark:bg-gray-800">
+            <img
+              :src="selectedImageSrc"
+              class="max-h-full max-w-full object-contain rounded-lg shadow-lg"
+              :alt="selectedImage?.file_name || 'Book illustration'"
+            />
+          </div>
+          <div class="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+            <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+              {{ selectedImage?.file_name || 'Untitled' }}
+            </h2>
+            <p v-if="selectedImage?.asset_type" class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Type: {{ selectedImage.asset_type }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Images tab with no image selected -->
+        <div v-else-if="currentTab === 'images' && !selectedImageId" class="flex items-center justify-center h-full">
+          <div class="text-center">
+            <PhotoIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">
+              Please select an image
+            </h3>
+            <p class="text-gray-600 dark:text-gray-400 max-w-md">
+              Choose an image from the sidebar to view it at full size.
+            </p>
+          </div>
+        </div>
+
+        <!-- Chapters/Wiki tab with nothing selected -->
+        <div v-else-if="isOnBookOnly" class="flex items-center justify-center h-full">
           <div class="text-center">
             <DocumentTextIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">
@@ -643,6 +813,8 @@ const closeLightbox = () => {
             </p>
           </div>
         </div>
+
+        <!-- Chapter or wiki page view -->
         <router-view v-else :key="routerViewKey" />
       </div>
     </div>

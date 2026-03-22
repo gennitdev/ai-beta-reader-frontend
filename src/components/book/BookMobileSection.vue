@@ -24,7 +24,7 @@ const props = defineProps({
     default: ''
   },
   currentTab: {
-    type: String as PropType<'chapters' | 'wiki'>,
+    type: String as PropType<'chapters' | 'wiki' | 'images'>,
     default: 'chapters'
   },
   loading: {

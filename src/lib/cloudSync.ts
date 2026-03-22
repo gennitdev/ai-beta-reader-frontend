@@ -1,9 +1,13 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { gzipSync, gunzipSync } from 'fflate';
 import { Encryption } from './encryption';
 import { db } from './database';
 import { performNativeGoogleOAuth } from './googleOAuth';
 import type { GoogleOAuthTokens } from './googleOAuth';
 import { loadTokens, saveTokens, clearTokens } from './tokenStorage';
+
+// Prefix to identify compressed backups
+const COMPRESSED_PREFIX = 'GZ1:';
 
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const DEFAULT_REDIRECT_URI = 'https://www.beta-bot.net/oauth2redirect';
@@ -758,51 +762,82 @@ export class CloudSync {
         }
 
         // image_assets is an array of arrays (raw SQL rows)
+        // Process images in batches to avoid memory exhaustion
         if (exportJson.image_assets && Array.isArray(exportJson.image_assets)) {
           // Get column indices - image_assets columns are:
           // id(0), book_id(1), chapter_id(2), asset_type(3), file_name(4), file_path(5), mime_type(6), created_at(7), updated_at(8), image_data(9)
           // Note: image_data is at index 9 because it was added via ALTER TABLE (appended to end)
-          const enrichedAssets = [];
-          for (const row of exportJson.image_assets) {
-            const filePath = row[5]; // file_path is at index 5
-            const mimeType = row[6]; // mime_type is at index 6
-            let imageData = row[9]; // image_data is at index 9 (added via ALTER TABLE)
+          const BATCH_SIZE = 5; // Process 5 images at a time to limit memory
+          const totalImages = exportJson.image_assets.length;
 
-            // If no image_data stored, try to read from filesystem
-            if (!imageData && filePath) {
-              try {
-                const result = await window.desktopImages.readImageData({
-                  relativePath: filePath,
-                  mimeType: mimeType,
-                });
-                imageData = result.dataUrl;
-                console.log(`Read image: ${filePath}`);
-              } catch (err) {
-                console.warn(`Failed to read image ${filePath}:`, err);
+          for (let i = 0; i < totalImages; i += BATCH_SIZE) {
+            const batchEnd = Math.min(i + BATCH_SIZE, totalImages);
+            console.log(`Processing images ${i + 1}-${batchEnd} of ${totalImages}...`);
+
+            for (let j = i; j < batchEnd; j++) {
+              const row = exportJson.image_assets[j];
+              const filePath = row[5]; // file_path is at index 5
+              const mimeType = row[6]; // mime_type is at index 6
+              let imageData = row[9]; // image_data is at index 9
+
+              // If no image_data stored, try to read from filesystem
+              if (!imageData && filePath) {
+                try {
+                  const result = await window.desktopImages.readImageData({
+                    relativePath: filePath,
+                    mimeType: mimeType,
+                  });
+                  imageData = result.dataUrl;
+                  console.log(`Read image: ${filePath}`);
+                } catch (err) {
+                  console.warn(`Failed to read image ${filePath}:`, err);
+                }
               }
+
+              // Update row in place to avoid creating new arrays
+              row[9] = imageData;
             }
 
-            // Create new row with image_data at index 9
-            const newRow = [...row];
-            newRow[9] = imageData;
-            enrichedAssets.push(newRow);
+            // Small delay to allow garbage collection between batches
+            await new Promise(resolve => setTimeout(resolve, 10));
           }
-          exportJson.image_assets = enrichedAssets;
         }
 
-        enrichedData = new TextEncoder().encode(JSON.stringify(exportJson));
         console.log(`Enriched backup with ${exportJson.image_assets?.length || 0} images`);
+
+        // Stringify and encode, then immediately clear the object
+        const jsonString = JSON.stringify(exportJson);
+        // Clear the large object to free memory before encoding
+        exportJson.image_assets = [];
+
+        enrichedData = new TextEncoder().encode(jsonString);
       } catch (err) {
         console.warn('Failed to enrich backup with images:', err);
         // Continue with original data
       }
     }
 
+    // Compress data before encryption to reduce memory usage and upload size
+    console.log(`Compressing ${(enrichedData.length / 1024 / 1024).toFixed(2)} MB of data...`);
+
+    // Use lower compression level for speed and less memory
+    const compressed = gzipSync(enrichedData, { level: 4 });
+    console.log(`Compressed to ${(compressed.length / 1024 / 1024).toFixed(2)} MB (${((1 - compressed.length / enrichedData.length) * 100).toFixed(1)}% reduction)`);
+
+    // Free the uncompressed data immediately
+    enrichedData = new Uint8Array(0);
+
+    // Small delay to encourage garbage collection
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     console.log('Encrypting database...');
-    const encrypted = await Encryption.encrypt(enrichedData, password);
+    const encrypted = await Encryption.encrypt(compressed, password);
+
+    // Prefix with compression marker so restore knows to decompress
+    const finalData = COMPRESSED_PREFIX + encrypted;
 
     console.log(`Uploading to ${this.provider.name}...`);
-    await this.provider.upload(this.backupFileName, encrypted);
+    await this.provider.upload(this.backupFileName, finalData);
 
     console.log('✅ Backup complete!');
   }
@@ -818,21 +853,40 @@ export class CloudSync {
 
     console.log('[CloudSync] Starting restore workflow');
     console.log(`Downloading from ${this.provider.name}...`);
-    const encrypted = await this.provider.download(this.backupFileName);
+    let downloaded = await this.provider.download(this.backupFileName);
 
-    if (!encrypted) {
+    if (!downloaded) {
       console.log('No backup found in cloud storage');
       return false;
+    }
+
+    // Check if the backup is compressed (has GZ1: prefix)
+    const isCompressed = downloaded.startsWith(COMPRESSED_PREFIX);
+    if (isCompressed) {
+      console.log('Detected compressed backup format');
+      downloaded = downloaded.slice(COMPRESSED_PREFIX.length);
     }
 
     console.log('Decrypting database...');
     let decrypted: Uint8Array;
     try {
-      decrypted = await Encryption.decrypt(encrypted, password);
-      console.log('Decryption successful, importing database...', decrypted.length, 'bytes');
+      decrypted = await Encryption.decrypt(downloaded, password);
+      console.log('Decryption successful,', decrypted.length, 'bytes');
     } catch (error) {
       console.error('Failed to decrypt - wrong password?', error);
       return false;
+    }
+
+    // Decompress if needed
+    if (isCompressed) {
+      console.log('Decompressing data...');
+      try {
+        decrypted = gunzipSync(decrypted);
+        console.log('Decompressed to', decrypted.length, 'bytes');
+      } catch (error) {
+        console.error('Failed to decompress backup:', error);
+        return false;
+      }
     }
 
     try {

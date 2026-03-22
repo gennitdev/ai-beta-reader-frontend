@@ -1940,6 +1940,41 @@ export class AppDatabase {
     }
   }
 
+  async getBookImages(bookId: string): Promise<ImageAsset[]> {
+    const query = `SELECT * FROM image_assets WHERE book_id = ? ORDER BY created_at DESC`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [bookId]);
+      return (result.values || []).map((row: any) => ({
+        id: row.id,
+        book_id: row.book_id,
+        chapter_id: row.chapter_id,
+        asset_type: row.asset_type,
+        file_name: row.file_name,
+        file_path: row.file_path,
+        mime_type: row.mime_type,
+        image_data: row.image_data ?? null,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      }));
+    } else {
+      const result = this.db.exec(query, [bookId]);
+      if (result.length === 0) return [];
+      return result[0].values.map((row: any[]) => ({
+        id: row[0],
+        book_id: row[1],
+        chapter_id: row[2],
+        asset_type: row[3] as ImageAssetType,
+        file_name: row[4],
+        file_path: row[5],
+        mime_type: row[6],
+        image_data: row[7] ?? null,
+        created_at: row[8],
+        updated_at: row[9],
+      }));
+    }
+  }
+
   async getBookCoverImage(bookId: string): Promise<ImageAsset | null> {
     const query = `
       SELECT ia.*

@@ -669,6 +669,17 @@ export function useDatabase() {
     }
   }
 
+  async function getBookImageAssets(bookId: string): Promise<ImageAsset[]> {
+    try {
+      await initializeDatabase()
+      return await db.getBookImages(bookId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load book images'
+      console.error('Get book images error:', e)
+      throw e
+    }
+  }
+
   return {
     // State
     books,
@@ -745,6 +756,7 @@ export function useDatabase() {
     setBookCoverImageId,
     getPartCoverImageAsset,
     setPartCoverImageId,
+    getBookImageAssets,
 
     hasCloudSync: () => cloudSync.value !== null,
 

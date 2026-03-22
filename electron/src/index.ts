@@ -10,6 +10,10 @@ import { ElectronCapacitorApp, setupContentSecurityPolicy, setupReloadWatcher } 
 import { registerDesktopImageBridge } from './image-bridge';
 import { registerOAuthLoopbackHandlers } from './oauth-loopback';
 
+// Increase memory limit for renderer process (needed for large backups with images)
+// 8GB should handle backups with many large images
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=8192');
+
 // Graceful handling of unhandled errors.
 unhandled();
 
