@@ -234,54 +234,81 @@ const closeLightbox = () => {
       <div
         class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto relative"
       >
-        <div class="p-2 pt-4 pb-16">
-          <div>
-            <div v-if="isEditingBookTitle" class="flex flex-col space-y-2">
-              <input
-                :value="editingBookTitle"
-                @input="updateEditingBookTitle(($event.target as HTMLInputElement).value)"
-                @keyup.enter="saveBookTitle"
-                @keyup.esc="cancelEditingBookTitle"
-                type="text"
-                class="text-xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Book title"
-                autofocus
+        <div class="p-2 pt-2 pb-16">
+          <!-- Book Card with cover image background -->
+          <div class="relative overflow-hidden rounded-lg mb-3">
+            <!-- Cover image or gradient fallback -->
+            <div
+              v-if="coverImageSrc"
+              class="aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-pointer"
+              @click="openLightbox"
+            >
+              <img
+                :src="coverImageSrc"
+                class="h-full w-full object-cover transition-opacity hover:opacity-90"
+                alt="Book cover"
+                title="Click to view full size"
               />
-              <div class="flex space-x-2">
+            </div>
+            <div
+              v-else
+              class="aspect-[16/9] w-full bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
+            >
+              <BookOpenIcon class="w-16 h-16 text-blue-300 dark:text-blue-600 opacity-60" />
+            </div>
+
+            <!-- Overlaid metadata with gradient background -->
+            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-3 py-3 pt-10">
+              <div v-if="isEditingBookTitle" class="flex flex-col space-y-2">
+                <input
+                  :value="editingBookTitle"
+                  @input="updateEditingBookTitle(($event.target as HTMLInputElement).value)"
+                  @keyup.enter="saveBookTitle"
+                  @keyup.esc="cancelEditingBookTitle"
+                  type="text"
+                  class="text-lg font-bold bg-white/90 dark:bg-gray-700/90 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Book title"
+                  autofocus
+                  @click.stop
+                />
+                <div class="flex space-x-2">
+                  <button
+                    @click.stop="saveBookTitle"
+                    class="flex-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                  >
+                    Save
+                  </button>
+                  <button
+                    @click.stop="cancelEditingBookTitle"
+                    class="flex-1 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+
+              <div v-else class="flex items-end justify-between">
+                <div class="flex-1 min-w-0">
+                  <h1 class="text-lg font-bold text-white drop-shadow-md truncate">
+                    {{ book?.title }}
+                  </h1>
+                  <p class="mt-0.5 text-xs text-gray-200">
+                    {{ chapterCount }} chapter{{ chapterCount !== 1 ? 's' : '' }} · {{ formatWordCount(totalWordCount) }} words
+                  </p>
+                </div>
                 <button
-                  @click="saveBookTitle"
-                  class="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  @click.stop="startEditingBookTitle"
+                  class="p-1 text-white/70 hover:text-white flex-shrink-0 ml-2"
+                  title="Rename book"
                 >
-                  Save
-                </button>
-                <button
-                  @click="cancelEditingBookTitle"
-                  class="flex-1 px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Cancel
+                  <PencilIcon class="w-4 h-4" />
                 </button>
               </div>
             </div>
-
-            <div v-else class="flex items-center space-x-2">
-              <h1 class="text-xl font-bold text-gray-900 dark:text-white flex-1">
-                {{ book?.title }}
-              </h1>
-              <button
-                @click="startEditingBookTitle"
-                class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                title="Rename book"
-              >
-                <PencilIcon class="w-5 h-5" />
-              </button>
-            </div>
-
-            <p class="text-gray-600 dark:text-gray-400 mt-1">
-              {{ chapterCount }} chapters · {{ formatWordCount(totalWordCount) }} words total
-            </p>
           </div>
 
-          <div class="my-2 flex items-center space-x-2">
+          <!-- Action buttons -->
+          <div class="mb-3 flex items-center space-x-2">
             <button
               @click="createNewChapter"
               class="inline-flex items-center justify-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -302,59 +329,35 @@ const closeLightbox = () => {
             </button>
           </div>
 
+          <!-- Cover management buttons (desktop only) -->
           <div
             v-if="desktopImagesAvailable"
-            class="mb-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900"
+            class="mb-3 flex items-center gap-2"
           >
-            <div class="flex gap-3">
-              <div class="h-40 w-28 overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800">
-                <img
-                  v-if="coverImageSrc"
-                  :src="coverImageSrc"
-                  class="h-full w-full object-cover cursor-pointer transition-opacity hover:opacity-90"
-                  alt="Book cover"
-                  title="Click to view full size"
-                  @click="openLightbox"
-                />
-                <div
-                  v-else
-                  class="flex h-full w-full items-center justify-center text-center text-xs text-gray-500 dark:text-gray-400"
-                >
-                  No cover yet
-                </div>
-              </div>
-              <div class="flex flex-1 flex-col justify-between">
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  Desktop covers live in your local library.
-                </p>
-                <div class="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    class="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="coverLoading"
-                    @click="selectBookCover"
-                  >
-                    <span
-                      v-if="coverLoading"
-                      class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-                    ></span>
-                    {{ coverImageSrc ? 'Replace' : 'Add cover' }}
-                  </button>
-                  <button
-                    v-if="coverImageSrc && deleteBookCover"
-                    type="button"
-                    class="inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="coverLoading"
-                    @click="deleteBookCover"
-                  >
-                    <TrashIcon class="h-4 w-4" />
-                  </button>
-                  <p v-if="coverError" class="mt-2 text-xs text-red-600 dark:text-red-400">
-                    {{ coverError }}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <button
+              type="button"
+              class="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="coverLoading"
+              @click="selectBookCover"
+            >
+              <span
+                v-if="coverLoading"
+                class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+              ></span>
+              {{ coverImageSrc ? 'Replace cover' : 'Add cover' }}
+            </button>
+            <button
+              v-if="coverImageSrc && deleteBookCover"
+              type="button"
+              class="inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="coverLoading"
+              @click="deleteBookCover"
+            >
+              <TrashIcon class="h-4 w-4" />
+            </button>
+            <p v-if="coverError" class="text-xs text-red-600 dark:text-red-400">
+              {{ coverError }}
+            </p>
           </div>
 
           <div class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-2">
