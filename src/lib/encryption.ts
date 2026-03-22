@@ -24,6 +24,26 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/**
+ * Convert base64 string to Uint8Array in chunks to avoid memory issues
+ */
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const length = binaryString.length;
+  const bytes = new Uint8Array(length);
+
+  // Process in chunks to avoid creating too many intermediate values
+  const CHUNK_SIZE = 32768;
+  for (let i = 0; i < length; i += CHUNK_SIZE) {
+    const end = Math.min(i + CHUNK_SIZE, length);
+    for (let j = i; j < end; j++) {
+      bytes[j] = binaryString.charCodeAt(j);
+    }
+  }
+
+  return bytes;
+}
+
 export class Encryption {
   /**
    * Derive an AES key from a password using PBKDF2 (Web Crypto)
@@ -111,9 +131,9 @@ export class Encryption {
     encryptedData: string,
     password: string
   ): Promise<Uint8Array> {
-    // Remove prefix and decode base64
+    // Remove prefix and decode base64 using chunked approach
     const base64Data = encryptedData.slice(WEB_CRYPTO_PREFIX.length);
-    const combined = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+    const combined = base64ToUint8Array(base64Data);
 
     // Extract salt, iv, and ciphertext
     const salt = combined.slice(0, SALT_LENGTH);
