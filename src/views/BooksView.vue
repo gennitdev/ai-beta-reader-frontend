@@ -69,6 +69,16 @@ const formatWordCount = (count?: number) => {
   return (count / 1000).toFixed(1) + 'k'
 }
 
+const getChapterCount = (book: Book): number => {
+  if (!book.chapter_order) return 0
+  try {
+    const chapters = JSON.parse(book.chapter_order)
+    return Array.isArray(chapters) ? chapters.length : 0
+  } catch {
+    return 0
+  }
+}
+
 onMounted(async () => {
   await loadBooks()
   await refreshCoverSources()
@@ -119,46 +129,35 @@ watch(
       <div
         v-for="book in books"
         :key="book.id"
-        class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer border border-gray-200 dark:border-gray-700 overflow-hidden"
+        class="relative overflow-hidden rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
         @click="viewBook(book.id)"
       >
+        <!-- Cover image or gradient fallback -->
         <div
-          v-if="desktopImagesAvailable || bookCoverSources[book.id]"
-          class="h-40 w-full bg-gray-100 dark:bg-gray-900"
+          v-if="bookCoverSources[book.id]"
+          class="aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
         >
           <img
-            v-if="bookCoverSources[book.id]"
             :src="bookCoverSources[book.id]"
             class="h-full w-full object-cover"
             :alt="`${book.title} cover`"
           />
-          <div
-            v-else
-            class="flex h-full items-center justify-center text-gray-400 dark:text-gray-600"
-          >
-            <BookOpenIcon class="w-10 h-10" />
-          </div>
         </div>
-        <div class="p-6">
-          <div class="flex items-center mb-4" v-if="!desktopImagesAvailable && !bookCoverSources[book.id]">
-            <BookOpenIcon class="w-8 h-8 text-blue-600 mr-3" />
-            <h3 class="text-xl font-semibold text-gray-900 dark:text-white truncate">
-              {{ book.title }}
-            </h3>
-          </div>
-          <div v-else>
-            <h3 class="text-xl font-semibold text-gray-900 dark:text-white truncate">
-              {{ book.title }}
-            </h3>
-          </div>
-          <p class="text-gray-600 dark:text-gray-400 text-sm">
-            ID: {{ book.id }}
+        <div
+          v-else
+          class="aspect-[16/9] w-full bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
+        >
+          <BookOpenIcon class="w-16 h-16 text-blue-300 dark:text-blue-600 opacity-60" />
+        </div>
+
+        <!-- Overlaid metadata with gradient background -->
+        <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-4 py-4 pt-12">
+          <h3 class="text-lg font-semibold text-white drop-shadow-md truncate">
+            {{ book.title }}
+          </h3>
+          <p class="mt-1 text-sm text-gray-200">
+            {{ getChapterCount(book) }} chapter{{ getChapterCount(book) !== 1 ? 's' : '' }}
           </p>
-          <div class="mt-4 flex justify-end items-center">
-            <span class="text-blue-600 hover:text-blue-700 text-sm font-medium">
-              Open →
-            </span>
-          </div>
         </div>
       </div>
     </div>
