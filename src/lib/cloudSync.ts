@@ -530,6 +530,7 @@ export class GoogleDriveProvider implements CloudProvider {
 
     if ((window as any).google?.accounts?.oauth2) {
       this.debug('GIS already present');
+      this.webSdkReady = true;
       return Promise.resolve();
     }
 
