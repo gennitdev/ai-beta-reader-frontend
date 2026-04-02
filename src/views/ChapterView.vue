@@ -2,23 +2,25 @@
 import { ref, onMounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
-import { useImageLibrary } from "@/composables/useImageLibrary";
+import { useChapterImages } from "@/composables/useChapterImages";
 import {
   generateChapterSummary,
-  updateWikiPagesFromChapter,
   generateReview as generateAIReview,
   BUILT_IN_PROFILES,
   type PartSummaryChapterInput,
   type PartSummaryOverview,
 } from "@/lib/openai";
-import type { BookPart, PartSummary, ChapterSummary, ImageAsset } from "@/lib/database";
+import type { BookPart, PartSummary, ChapterSummary } from "@/lib/database";
 import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterNotesPanel from "@/components/chapter/ChapterNotesPanel.vue";
 import ChapterContentSection from "@/components/chapter/ChapterContentSection.vue";
 import ChapterReviewsSection from "@/components/chapter/ChapterReviewsSection.vue";
+import ChapterHeroSection from "@/components/chapter/ChapterHeroSection.vue";
+import ChapterIllustrationsSection from "@/components/chapter/ChapterIllustrationsSection.vue";
+import ChapterStatusBar from "@/components/chapter/ChapterStatusBar.vue";
+import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
 import ImageLightbox from "@/components/images/ImageLightbox.vue";
-import { CheckCircleIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
 
 interface Chapter {
   id: string;
@@ -68,6 +70,44 @@ const router = useRouter();
 const bookId = computed(() => (route.params.bookId || route.params.id) as string);
 const chapterId = computed(() => route.params.chapterId as string);
 
+// Use chapter images composable
+const {
+  desktopImagesAvailable,
+  chapterImages,
+  chapterImagesLoading,
+  addingChapterImages,
+  chapterImageSources,
+  chapterImageError,
+  showImageLightbox,
+  showDeleteIllustrationModal,
+  deletingIllustration,
+  chapterCoverImageId,
+  settingCoverId,
+  heroLightboxOpen,
+  activeImageSource,
+  activeImageLabel,
+  heroImageSrc,
+  hasNextImage,
+  hasPrevImage,
+  illustrationToDeleteName,
+  refreshChapterImages,
+  handleAddIllustrations,
+  requestDeleteIllustration,
+  cancelDeleteIllustration,
+  handleDeleteIllustration,
+  openImageModal,
+  closeImageModal,
+  goToNextImage,
+  goToPrevImage,
+  handleSetAsCover,
+  handleDownloadImage,
+  openHeroLightbox,
+  closeHeroLightbox,
+} = useChapterImages(
+  () => chapterId.value,
+  () => bookId.value
+);
+
 // Use local database
 const {
   books,
@@ -93,16 +133,6 @@ const {
   getNotes,
   saveNotes: dbSaveNotes,
 } = useDatabase();
-
-const {
-  desktopImagesAvailable,
-  addImagesToChapter,
-  deleteImage: deleteChapterImageAsset,
-  fetchChapterImages,
-  fetchChapterCover,
-  setChapterCoverImageId,
-  getImageSource,
-} = useImageLibrary();
 
 const chapter = ref<Chapter | null>(null);
 const loading = ref(false);
@@ -131,18 +161,6 @@ const characters = ref<Character[]>([]);
 const showDeleteModal = ref(false);
 const deletingChapter = ref(false);
 const parts = ref<BookPart[]>([]);
-const chapterImages = ref<ImageAsset[]>([]);
-const chapterImagesLoading = ref(false);
-const addingChapterImages = ref(false);
-const chapterImageSources = ref<Record<string, string>>({});
-const chapterImageError = ref<string | null>(null);
-const showImageLightbox = ref(false);
-const activeImageId = ref<string | null>(null);
-const showDeleteIllustrationModal = ref(false);
-const deletingIllustration = ref(false);
-const illustrationToDelete = ref<string | null>(null);
-const chapterCoverImageId = ref<string | null>(null);
-const settingCoverId = ref<string | null>(null);
 
 const chapterSummaryCache = new Map<string, ChapterSummary | null>();
 const partSummaryCache = new Map<string, PartSummary | null>();
@@ -155,42 +173,7 @@ const currentPart = computed(() => {
   return parts.value.find((part) => part.id === chapter.value?.part_id) || null;
 });
 
-const activeImageSource = computed(() => {
-  const id = activeImageId.value;
-  if (!id) return null;
-  return chapterImageSources.value[id] ?? null;
-});
-
-const activeImageLabel = computed(() => {
-  if (!activeImageId.value) return "";
-  const image = chapterImages.value.find((item) => item.id === activeImageId.value);
-  return image?.file_name ?? "";
-});
 const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ?? null));
-
-// Hero image (selected cover or first chapter image)
-const heroImage = computed(() => {
-  if (chapterImages.value.length === 0) return null;
-  // If a cover is selected, use it; otherwise fall back to first image
-  if (chapterCoverImageId.value) {
-    const coverImage = chapterImages.value.find(img => img.id === chapterCoverImageId.value);
-    if (coverImage) return coverImage;
-  }
-  return chapterImages.value[0];
-});
-const heroImageSrc = computed(() => {
-  if (!heroImage.value) return null;
-  return chapterImageSources.value[heroImage.value.id] ?? null;
-});
-const heroLightboxOpen = ref(false);
-const openHeroLightbox = () => {
-  if (heroImageSrc.value) {
-    heroLightboxOpen.value = true;
-  }
-};
-const closeHeroLightbox = () => {
-  heroLightboxOpen.value = false;
-};
 
 // Summary editing state
 const isEditingSummary = ref(false);
@@ -483,195 +466,7 @@ const loadChapter = async () => {
   }
 };
 
-const refreshChapterImages = async () => {
-  if (!chapterId.value) {
-    chapterImages.value = [];
-    chapterImageSources.value = {};
-    chapterCoverImageId.value = null;
-    return;
-  }
-
-  chapterImagesLoading.value = true;
-  chapterImageError.value = null;
-  try {
-    const images = await fetchChapterImages(chapterId.value);
-    chapterImages.value = images;
-    const sources: Record<string, string> = {};
-    for (const image of images) {
-      try {
-        sources[image.id] = await getImageSource(image);
-      } catch (error) {
-        console.warn("Failed to load illustration preview", error);
-      }
-    }
-    chapterImageSources.value = sources;
-
-    // Load cover image ID
-    const coverImage = await fetchChapterCover(chapterId.value);
-    chapterCoverImageId.value = coverImage?.id ?? null;
-  } catch (error) {
-    chapterImageError.value =
-      error instanceof Error ? error.message : "Failed to load chapter illustrations";
-  } finally {
-    chapterImagesLoading.value = false;
-  }
-};
-
-const handleAddIllustrations = async () => {
-  if (!chapter.value) return;
-  addingChapterImages.value = true;
-  chapterImageError.value = null;
-
-  try {
-    const newImages = await addImagesToChapter(chapter.value.book_id, chapter.value.id);
-    if (!newImages.length) return;
-
-    chapterImages.value = [...newImages, ...chapterImages.value];
-    const updatedSources: Record<string, string> = { ...chapterImageSources.value };
-    for (const image of newImages) {
-      try {
-        updatedSources[image.id] = await getImageSource(image);
-      } catch (error) {
-        console.warn("Failed to load preview for new illustration", error);
-      }
-    }
-    chapterImageSources.value = updatedSources;
-  } catch (error) {
-    chapterImageError.value =
-      error instanceof Error ? error.message : "Failed to add illustrations";
-  } finally {
-    addingChapterImages.value = false;
-  }
-};
-
-const requestDeleteIllustration = (imageId: string) => {
-  illustrationToDelete.value = imageId;
-  showDeleteIllustrationModal.value = true;
-};
-
-const cancelDeleteIllustration = () => {
-  if (deletingIllustration.value) return;
-  showDeleteIllustrationModal.value = false;
-  illustrationToDelete.value = null;
-};
-
-const illustrationToDeleteName = computed(() => {
-  if (!illustrationToDelete.value) return "";
-  const image = chapterImages.value.find((img) => img.id === illustrationToDelete.value);
-  return image?.file_name || "this illustration";
-});
-
-const handleDeleteIllustration = async () => {
-  const imageId = illustrationToDelete.value;
-  if (!imageId) return;
-
-  const target = chapterImages.value.find((image) => image.id === imageId);
-  if (!target) return;
-
-  deletingIllustration.value = true;
-  try {
-    await deleteChapterImageAsset(target);
-    chapterImages.value = chapterImages.value.filter((image) => image.id !== imageId);
-    const nextSources = { ...chapterImageSources.value };
-    delete nextSources[imageId];
-    chapterImageSources.value = nextSources;
-    if (activeImageId.value === imageId) {
-      showImageLightbox.value = false;
-      activeImageId.value = null;
-    }
-    // Clear cover if the deleted image was the cover
-    if (chapterCoverImageId.value === imageId && chapter.value) {
-      await setChapterCoverImageId(chapter.value.id, null);
-      chapterCoverImageId.value = null;
-    }
-    showDeleteIllustrationModal.value = false;
-    illustrationToDelete.value = null;
-  } catch (error) {
-    chapterImageError.value =
-      error instanceof Error ? error.message : "Failed to delete illustration";
-  } finally {
-    deletingIllustration.value = false;
-  }
-};
-
-const openImageModal = (imageId: string) => {
-  if (!chapterImageSources.value[imageId]) return;
-  activeImageId.value = imageId;
-  showImageLightbox.value = true;
-};
-
-const closeImageModal = () => {
-  showImageLightbox.value = false;
-  activeImageId.value = null;
-};
-
-const currentImageIndex = computed(() => {
-  if (!activeImageId.value) return -1;
-  return chapterImages.value.findIndex((img) => img.id === activeImageId.value);
-});
-
-const hasNextImage = computed(() => {
-  return currentImageIndex.value >= 0 && currentImageIndex.value < chapterImages.value.length - 1;
-});
-
-const hasPrevImage = computed(() => {
-  return currentImageIndex.value > 0;
-});
-
-const goToNextImage = () => {
-  if (!hasNextImage.value) return;
-  const nextIndex = currentImageIndex.value + 1;
-  const nextImage = chapterImages.value[nextIndex];
-  if (nextImage && chapterImageSources.value[nextImage.id]) {
-    activeImageId.value = nextImage.id;
-  }
-};
-
-const goToPrevImage = () => {
-  if (!hasPrevImage.value) return;
-  const prevIndex = currentImageIndex.value - 1;
-  const prevImage = chapterImages.value[prevIndex];
-  if (prevImage && chapterImageSources.value[prevImage.id]) {
-    activeImageId.value = prevImage.id;
-  }
-};
-
-const handleSetAsCover = async (imageId: string) => {
-  if (!chapter.value) return;
-  settingCoverId.value = imageId;
-  try {
-    await setChapterCoverImageId(chapter.value.id, imageId);
-    chapterCoverImageId.value = imageId;
-  } catch (error) {
-    chapterImageError.value =
-      error instanceof Error ? error.message : "Failed to set cover image";
-  } finally {
-    settingCoverId.value = null;
-  }
-};
-
-const handleDownloadImage = (imageId: string) => {
-  const imageSrc = chapterImageSources.value[imageId];
-  if (!imageSrc) return;
-
-  const image = chapterImages.value.find((img) => img.id === imageId);
-  const fileName = image?.file_name || `illustration-${imageId}.jpg`;
-
-  const link = document.createElement("a");
-  link.href = imageSrc;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
-watch(
-  () => desktopImagesAvailable.value,
-  () => {
-    refreshChapterImages();
-  }
-);
-
+// Watch for chapter changes to refresh images
 watch(
   () => chapterId.value,
   () => {
@@ -1272,240 +1067,52 @@ onMounted(async () => {
     />
 
     <!-- Hero Image Section -->
-    <div
+    <ChapterHeroSection
       v-if="heroImageSrc"
-      class="relative w-full"
-    >
-      <!-- Hero image container -->
-      <div
-        class="relative h-48 w-full overflow-hidden bg-gray-900 sm:h-64 md:h-80 lg:h-96 cursor-pointer"
-        @click="openHeroLightbox"
-      >
-        <img
-          :src="heroImageSrc"
-          class="h-full w-full object-cover opacity-90 transition-opacity hover:opacity-100"
-          alt="Chapter hero"
-        />
-        <!-- Gradient overlay -->
-        <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-        <!-- Chapter info overlay -->
-        <div class="absolute bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8">
-          <p class="text-sm font-medium text-white/80">{{ currentBook?.title }}</p>
-          <h2 v-if="!isEditing" class="mt-1 text-2xl font-bold text-white sm:text-3xl lg:text-4xl">
-            {{ chapter?.title || 'Untitled Chapter' }}
-          </h2>
-          <p class="mt-2 text-sm text-white/70">
-            {{ chapter?.word_count?.toLocaleString() || 0 }} words
-            <span v-if="chapter?.summary"> &middot; Summarized</span>
-          </p>
-        </div>
-      </div>
-      <!-- Title edit field when editing with hero image -->
-      <div v-if="isEditing" class="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
-        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chapter Title</label>
-        <input
-          v-model="editedTitle"
-          type="text"
-          placeholder="Enter chapter title..."
-          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-lg font-semibold text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
-        />
-      </div>
-      <!-- Back button overlay -->
-      <button
-        @click="goBack"
-        class="absolute left-4 top-4 inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
-      >
-        <svg class="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-        Back
-      </button>
-      <!-- Action buttons overlay -->
-      <div class="absolute right-4 top-4 flex items-center gap-2">
-        <button
-          v-if="!isEditing"
-          @click="startEdit"
-          class="inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
-        >
-          Edit
-        </button>
-        <button
-          v-if="isEditing"
-          @click="saveChapter"
-          :disabled="savingChapter || !hasUnsavedChanges"
-          class="inline-flex items-center rounded-md bg-blue-600/90 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-blue-700 disabled:opacity-50"
-        >
-          {{ savingChapter ? 'Saving...' : 'Save' }}
-        </button>
-        <button
-          v-if="isEditing"
-          @click="cancelEdit"
-          class="inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
+      :hero-image-src="heroImageSrc"
+      :book-title="currentBook?.title || ''"
+      :chapter-title="chapter?.title || ''"
+      :word-count="chapter?.word_count || 0"
+      :has-summary="Boolean(chapter?.summary)"
+      :is-editing="isEditing"
+      :edited-title="editedTitle"
+      :saving-chapter="savingChapter"
+      :has-unsaved-changes="hasUnsavedChanges"
+      @update:edited-title="editedTitle = $event"
+      @open-lightbox="openHeroLightbox"
+      @go-back="goBack"
+      @start-edit="startEdit"
+      @cancel-edit="cancelEdit"
+      @save-chapter="saveChapter"
+    />
 
     <div class="w-full max-w-6xl md:mx-auto px-4 lg:px-8">
       <!-- Chapter Illustrations - at top below title -->
-      <section
+      <ChapterIllustrationsSection
         v-if="desktopImagesAvailable"
-        class="mt-4 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900"
-      >
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-              Chapter Illustrations
-            </h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-              Images live locally inside the desktop app.
-            </p>
-          </div>
-          <button
-            type="button"
-            class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            :disabled="addingChapterImages"
-            @click="handleAddIllustrations"
-          >
-            <span
-              v-if="addingChapterImages"
-              class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-            ></span>
-            {{ addingChapterImages ? "Adding..." : "Add images" }}
-          </button>
-        </div>
+        :images="chapterImages"
+        :image-sources="chapterImageSources"
+        :cover-image-id="chapterCoverImageId"
+        :loading="chapterImagesLoading"
+        :adding="addingChapterImages"
+        :error="chapterImageError"
+        :setting-cover-id="settingCoverId"
+        @add-images="handleAddIllustrations"
+        @open-image="openImageModal"
+        @set-cover="handleSetAsCover"
+        @download="handleDownloadImage"
+        @delete="requestDeleteIllustration"
+      />
 
-        <p v-if="chapterImageError" class="mt-4 text-sm text-red-600 dark:text-red-400">
-          {{ chapterImageError }}
-        </p>
-
-        <div
-          v-if="chapterImagesLoading"
-          class="py-10 text-center text-sm text-gray-500 dark:text-gray-400"
-        >
-          Loading illustrations...
-        </div>
-
-        <div v-else>
-          <div
-            v-if="chapterImages.length"
-            class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
-          >
-            <div
-              v-for="image in chapterImages"
-              :key="image.id"
-              class="group relative overflow-hidden rounded-lg border bg-gray-50 dark:bg-gray-800"
-              :class="chapterCoverImageId === image.id ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-gray-200 dark:border-gray-700'"
-            >
-              <!-- Cover badge -->
-              <div
-                v-if="chapterCoverImageId === image.id"
-                class="absolute left-2 top-2 z-10 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white"
-              >
-                Cover
-              </div>
-              <!-- Action buttons overlay -->
-              <div class="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition group-hover:opacity-100">
-                <button
-                  v-if="chapterCoverImageId !== image.id"
-                  type="button"
-                  class="rounded-full bg-blue-600/90 px-2 py-1 text-xs font-medium text-white transition hover:bg-blue-700"
-                  :disabled="settingCoverId === image.id"
-                  @click.stop="handleSetAsCover(image.id)"
-                >
-                  {{ settingCoverId === image.id ? '...' : 'Set as cover' }}
-                </button>
-                <button
-                  type="button"
-                  class="rounded-full bg-black/60 p-1.5 text-white transition hover:bg-black/80"
-                  title="Download"
-                  @click.stop="handleDownloadImage(image.id)"
-                >
-                  <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="rounded-full bg-red-600/90 p-1.5 text-white transition hover:bg-red-700"
-                  title="Delete"
-                  @click.stop="requestDeleteIllustration(image.id)"
-                >
-                  <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
-              <button
-                type="button"
-                class="block w-full"
-                @click="openImageModal(image.id)"
-              >
-                <div class="aspect-[4/3] w-full overflow-hidden bg-gray-200 dark:bg-gray-700">
-                  <img
-                    v-if="chapterImageSources[image.id]"
-                    :src="chapterImageSources[image.id]"
-                    class="h-full w-full object-cover transition duration-200 group-hover:scale-105"
-                    :alt="image.file_name || 'Chapter illustration'"
-                  />
-                  <div
-                    v-else
-                    class="flex h-full w-full items-center justify-center text-xs text-gray-500 dark:text-gray-300"
-                  >
-                    Loading...
-                  </div>
-                </div>
-              </button>
-              <p class="truncate px-3 py-2 text-xs text-gray-600 dark:text-gray-300">
-                {{ image.file_name }}
-              </p>
-            </div>
-          </div>
-          <div
-            v-else
-            class="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300"
-          >
-            No illustrations yet.
-          </div>
-        </div>
-      </section>
-
-      <div class="my-3 flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-        <span class="whitespace-nowrap"
-          >{{ (chapter?.word_count || 0).toLocaleString() }} words</span
-        >
-        <div class="flex items-center whitespace-nowrap">
-          <CheckCircleIcon
-            :class="Boolean(chapter?.summary) ? 'text-green-500' : 'text-gray-300'"
-            class="mr-1 h-4 w-4"
-          />
-          <span :class="Boolean(chapter?.summary) ? 'text-green-600' : 'text-gray-500'">
-            {{ Boolean(chapter?.summary) ? "Summarized" : "Not summarized" }}
-          </span>
-        </div>
-        <div class="flex items-center whitespace-nowrap">
-          <DocumentTextIcon
-            :class="Boolean(chapter?.notes) ? 'text-purple-500' : 'text-gray-300'"
-            class="mr-1 h-4 w-4"
-          />
-          <span :class="Boolean(chapter?.notes) ? 'text-purple-600' : 'text-gray-500'">
-            {{ Boolean(chapter?.notes) ? "Has Notes" : "No Notes" }}
-          </span>
-        </div>
-        <button
-          @click="showSummaryPanel = !showSummaryPanel"
-          class="font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          {{ showSummaryPanel ? "Hide Summary Panel" : "Show Summary Panel" }}
-        </button>
-        <button
-          @click="showNotesPanel = !showNotesPanel"
-          class="font-medium text-purple-600 transition-colors hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
-        >
-          {{ showNotesPanel ? "Hide Notes Panel" : "Show Notes Panel" }}
-        </button>
-      </div>
+      <ChapterStatusBar
+        :word-count="chapter?.word_count || 0"
+        :has-summary="Boolean(chapter?.summary)"
+        :has-notes="Boolean(chapter?.notes)"
+        :show-summary-panel="showSummaryPanel"
+        :show-notes-panel="showNotesPanel"
+        @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
+        @toggle-notes-panel="showNotesPanel = !showNotesPanel"
+      />
       <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
         <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
       </div>
@@ -1603,86 +1210,23 @@ onMounted(async () => {
   />
 
   <!-- Delete Chapter Confirmation Modal -->
-  <teleport to="body">
-    <div
-      v-if="showDeleteModal"
-      class="fixed inset-0 z-50 flex items-center justify-center px-4"
-    >
-      <div class="absolute inset-0 bg-gray-900/70" @click="cancelDeleteChapter"></div>
-      <div
-        class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800"
-      >
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Delete chapter?</h2>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          This will permanently delete
-          <span class="font-medium text-gray-900 dark:text-gray-200">
-            {{ chapter?.title || chapterId }}
-          </span>
-          along with its summaries and reviews. This action cannot be undone.
-        </p>
-        <div class="mt-6 flex justify-end space-x-3">
-          <button
-            @click="cancelDeleteChapter"
-            :disabled="deletingChapter"
-            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-          >
-            Cancel
-          </button>
-          <button
-            @click="handleDeleteChapter"
-            :disabled="deletingChapter"
-            class="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <span
-              v-if="deletingChapter"
-              class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-            ></span>
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  </teleport>
+  <ConfirmDeleteModal
+    :show="showDeleteModal"
+    title="Delete chapter?"
+    :item-name="chapter?.title || chapterId"
+    description="along with its summaries and reviews. This action cannot be undone."
+    :deleting="deletingChapter"
+    @cancel="cancelDeleteChapter"
+    @confirm="handleDeleteChapter"
+  />
 
   <!-- Delete Illustration Confirmation Modal -->
-  <teleport to="body">
-    <div
-      v-if="showDeleteIllustrationModal"
-      class="fixed inset-0 z-50 flex items-center justify-center px-4"
-    >
-      <div class="absolute inset-0 bg-gray-900/70" @click="cancelDeleteIllustration"></div>
-      <div
-        class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800"
-      >
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Delete illustration?</h2>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          This will permanently delete
-          <span class="font-medium text-gray-900 dark:text-gray-200">
-            {{ illustrationToDeleteName }}
-          </span>.
-          This action cannot be undone.
-        </p>
-        <div class="mt-6 flex justify-end space-x-3">
-          <button
-            @click="cancelDeleteIllustration"
-            :disabled="deletingIllustration"
-            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-          >
-            Cancel
-          </button>
-          <button
-            @click="handleDeleteIllustration"
-            :disabled="deletingIllustration"
-            class="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <span
-              v-if="deletingIllustration"
-              class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-            ></span>
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  </teleport>
+  <ConfirmDeleteModal
+    :show="showDeleteIllustrationModal"
+    title="Delete illustration?"
+    :item-name="illustrationToDeleteName"
+    :deleting="deletingIllustration"
+    @cancel="cancelDeleteIllustration"
+    @confirm="handleDeleteIllustration"
+  />
 </template>
