@@ -89,6 +89,8 @@ const partCoverSrc = ref<string | null>(null);
 const partCoverLoading = ref(false);
 const partCoverError = ref<string | null>(null);
 const partCoverLightboxOpen = ref(false);
+const showDeletePartCoverModal = ref(false);
+const deletingPartCover = ref(false);
 const chapterThumbnails = ref<Record<string, string>>({});
 
 const book = computed(() => books.value.find((b: any) => b.id === bookId.value) || null);
@@ -398,10 +400,20 @@ const handleSelectPartCover = async () => {
   }
 };
 
+const requestDeletePartCover = () => {
+  if (!part.value || !partCoverImage.value) return;
+  showDeletePartCoverModal.value = true;
+};
+
+const cancelDeletePartCover = () => {
+  if (deletingPartCover.value) return;
+  showDeletePartCoverModal.value = false;
+};
+
 const handleDeletePartCover = async () => {
   if (!part.value || !partCoverImage.value) return;
 
-  partCoverLoading.value = true;
+  deletingPartCover.value = true;
   partCoverError.value = null;
   try {
     await deleteImage(partCoverImage.value);
@@ -409,10 +421,11 @@ const handleDeletePartCover = async () => {
     partCoverImage.value = null;
     partCoverSrc.value = null;
     part.value.cover_image_id = null;
+    showDeletePartCoverModal.value = false;
   } catch (error) {
     partCoverError.value = error instanceof Error ? error.message : "Failed to delete part cover";
   } finally {
-    partCoverLoading.value = false;
+    deletingPartCover.value = false;
   }
 };
 
@@ -677,7 +690,7 @@ watch([bookId, partId], async () => {
                 class="inline-flex items-center rounded-md bg-red-600/80 px-2.5 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="partCoverLoading"
                 title="Delete cover"
-                @click.stop="handleDeletePartCover"
+                @click.stop="requestDeletePartCover"
               >
                 <TrashIcon class="h-4 w-4" />
               </button>
@@ -1056,4 +1069,46 @@ watch([bookId, partId], async () => {
     :caption="`${partLabel}${partName ? ': ' + partName : ''} - Cover`"
     @close="closePartCoverLightbox"
   />
+
+  <!-- Delete Part Cover Confirmation Modal -->
+  <teleport to="body">
+    <div
+      v-if="showDeletePartCoverModal"
+      class="fixed inset-0 z-50 flex items-center justify-center px-4"
+    >
+      <div class="absolute inset-0 bg-gray-900/70" @click="cancelDeletePartCover"></div>
+      <div
+        class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800"
+      >
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Delete part cover?</h2>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          This will permanently delete the cover image for
+          <span class="font-medium text-gray-900 dark:text-gray-200">
+            {{ partLabel }}{{ partName ? `: ${partName}` : '' }}
+          </span>.
+          This action cannot be undone.
+        </p>
+        <div class="mt-6 flex justify-end space-x-3">
+          <button
+            @click="cancelDeletePartCover"
+            :disabled="deletingPartCover"
+            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleDeletePartCover"
+            :disabled="deletingPartCover"
+            class="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span
+              v-if="deletingPartCover"
+              class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+            ></span>
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </teleport>
 </template>

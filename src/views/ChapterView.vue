@@ -126,6 +126,9 @@ const chapterImageSources = ref<Record<string, string>>({});
 const chapterImageError = ref<string | null>(null);
 const showImageLightbox = ref(false);
 const activeImageId = ref<string | null>(null);
+const showDeleteIllustrationModal = ref(false);
+const deletingIllustration = ref(false);
+const illustrationToDelete = ref<string | null>(null);
 
 const chapterSummaryCache = new Map<string, ChapterSummary | null>();
 const partSummaryCache = new Map<string, PartSummary | null>();
@@ -514,10 +517,31 @@ const handleAddIllustrations = async () => {
   }
 };
 
-const handleDeleteIllustration = async (imageId: string) => {
+const requestDeleteIllustration = (imageId: string) => {
+  illustrationToDelete.value = imageId;
+  showDeleteIllustrationModal.value = true;
+};
+
+const cancelDeleteIllustration = () => {
+  if (deletingIllustration.value) return;
+  showDeleteIllustrationModal.value = false;
+  illustrationToDelete.value = null;
+};
+
+const illustrationToDeleteName = computed(() => {
+  if (!illustrationToDelete.value) return "";
+  const image = chapterImages.value.find((img) => img.id === illustrationToDelete.value);
+  return image?.file_name || "this illustration";
+});
+
+const handleDeleteIllustration = async () => {
+  const imageId = illustrationToDelete.value;
+  if (!imageId) return;
+
   const target = chapterImages.value.find((image) => image.id === imageId);
   if (!target) return;
 
+  deletingIllustration.value = true;
   try {
     await deleteChapterImageAsset(target);
     chapterImages.value = chapterImages.value.filter((image) => image.id !== imageId);
@@ -528,9 +552,13 @@ const handleDeleteIllustration = async (imageId: string) => {
       showImageLightbox.value = false;
       activeImageId.value = null;
     }
+    showDeleteIllustrationModal.value = false;
+    illustrationToDelete.value = null;
   } catch (error) {
     chapterImageError.value =
       error instanceof Error ? error.message : "Failed to delete illustration";
+  } finally {
+    deletingIllustration.value = false;
   }
 };
 
@@ -1232,7 +1260,7 @@ onMounted(async () => {
               <button
                 type="button"
                 class="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100"
-                @click.stop="handleDeleteIllustration(image.id)"
+                @click.stop="requestDeleteIllustration(image.id)"
               >
                 Delete
               </button>
@@ -1394,6 +1422,7 @@ onMounted(async () => {
     @close="closeHeroLightbox"
   />
 
+  <!-- Delete Chapter Confirmation Modal -->
   <teleport to="body">
     <div
       v-if="showDeleteModal"
@@ -1426,6 +1455,48 @@ onMounted(async () => {
           >
             <span
               v-if="deletingChapter"
+              class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+            ></span>
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </teleport>
+
+  <!-- Delete Illustration Confirmation Modal -->
+  <teleport to="body">
+    <div
+      v-if="showDeleteIllustrationModal"
+      class="fixed inset-0 z-50 flex items-center justify-center px-4"
+    >
+      <div class="absolute inset-0 bg-gray-900/70" @click="cancelDeleteIllustration"></div>
+      <div
+        class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800"
+      >
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Delete illustration?</h2>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          This will permanently delete
+          <span class="font-medium text-gray-900 dark:text-gray-200">
+            {{ illustrationToDeleteName }}
+          </span>.
+          This action cannot be undone.
+        </p>
+        <div class="mt-6 flex justify-end space-x-3">
+          <button
+            @click="cancelDeleteIllustration"
+            :disabled="deletingIllustration"
+            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleDeleteIllustration"
+            :disabled="deletingIllustration"
+            class="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span
+              v-if="deletingIllustration"
               class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
             ></span>
             Delete
