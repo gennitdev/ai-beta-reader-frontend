@@ -999,7 +999,8 @@ watch([bookId, partId], async () => {
               <div
                 v-for="chapter in chapterEntries"
                 :key="chapter.id"
-                class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-200 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-700/50"
+                class="cursor-pointer rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-200 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-700/50"
+                @click="openChapter(chapter.id)"
               >
                 <div class="flex gap-4">
                   <!-- Chapter thumbnail -->
@@ -1056,14 +1057,6 @@ watch([bookId, partId], async () => {
                   </span>
                 </div>
 
-                <div class="mt-4 flex flex-wrap gap-3">
-                  <button
-                    @click="openChapter(chapter.id)"
-                    class="rounded-md border border-blue-200 px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-900/30"
-                  >
-                    Open Chapter
-                  </button>
-                </div>
               </div>
             </div>
           </section>
