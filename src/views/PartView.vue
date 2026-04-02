@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowLeftIcon,
+  ArrowDownTrayIcon,
   SparklesIcon,
   PencilIcon,
   CheckCircleIcon,
@@ -429,6 +430,17 @@ const handleDeletePartCover = async () => {
   }
 };
 
+const handleDownloadPartCover = () => {
+  if (!partCoverSrc.value || !partCoverImage.value) return;
+
+  const link = document.createElement("a");
+  link.href = partCoverSrc.value;
+  link.download = partCoverImage.value.file_name || `${partLabel.value}-cover.jpg`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 const openPartImageModal = (imageId: string) => {
   if (!partImageSources.value[imageId]) return;
   partActiveImageId.value = imageId;
@@ -684,6 +696,14 @@ watch([bookId, partId], async () => {
                   class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
                 ></span>
                 {{ partCoverLoading ? "Updating..." : "Change cover" }}
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center rounded-md bg-black/50 px-2.5 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
+                title="Download cover"
+                @click.stop="handleDownloadPartCover"
+              >
+                <ArrowDownTrayIcon class="h-4 w-4" />
               </button>
               <button
                 type="button"
