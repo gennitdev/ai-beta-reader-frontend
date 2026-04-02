@@ -125,7 +125,7 @@ watch(
     </p>
 
     <!-- Books grid -->
-    <div v-else-if="books.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div v-else-if="books.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
       <div
         v-for="book in books"
         :key="book.id"
@@ -135,11 +135,11 @@ watch(
         <!-- Cover image or gradient fallback -->
         <div
           v-if="bookCoverSources[book.id]"
-          class="aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
+          class="w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
         >
           <img
             :src="bookCoverSources[book.id]"
-            class="h-full w-full object-cover"
+            class="w-full"
             :alt="`${book.title} cover`"
           />
         </div>
