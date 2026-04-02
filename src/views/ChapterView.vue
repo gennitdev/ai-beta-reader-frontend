@@ -112,6 +112,16 @@ const editedText = ref("");
 const editedTitle = ref("");
 const generatingReview = ref(false);
 const generatingSummary = ref(false);
+const summaryProgress = ref<string>("");
+const summaryError = ref<string | null>(null);
+
+interface WikiUpdateResult {
+  characterName: string;
+  wikiPageId: string;
+  updateType: 'created' | 'updated' | 'unchanged';
+}
+const wikiUpdateResults = ref<WikiUpdateResult[]>([]);
+const showWikiUpdateResults = ref(false);
 const reviewTone = ref<string>("fanficnet");
 const customProfiles = ref<CustomReviewerProfile[]>([]);
 const savedReviews = ref<Review[]>([]);
@@ -702,6 +712,12 @@ const saveChapter = async () => {
 const generateSummary = async () => {
   if (!chapter.value) return;
 
+  // Reset state
+  summaryProgress.value = "";
+  summaryError.value = null;
+  wikiUpdateResults.value = [];
+  showWikiUpdateResults.value = false;
+
   try {
     generatingSummary.value = true;
 
@@ -713,7 +729,8 @@ const generateSummary = async () => {
       return;
     }
 
-    // Check if this is the first chapter (position 0 in book's chapter order)
+    // Step 1: Build context
+    summaryProgress.value = "Building context from previous chapters...";
     const book = currentBook.value;
     const chapterOrder = parseIdArray(book?.chapter_order);
     const isFirstChapter = chapterOrder[0] === chapter.value.id;
@@ -724,7 +741,8 @@ const generateSummary = async () => {
       chapter.value.id
     );
 
-    // Generate summary using OpenAI
+    // Step 2: Generate summary
+    summaryProgress.value = "Generating chapter summary...";
     const result = await generateChapterSummary(
       apiKey,
       chapter.value.text,
@@ -744,7 +762,8 @@ const generateSummary = async () => {
     const generatedCharacters = normalizeCharacterList(result.characters);
     const beatsArray = Array.isArray(result.beats) ? result.beats : [];
 
-    // Save summary to database
+    // Step 3: Save summary
+    summaryProgress.value = "Saving summary...";
     await dbSaveSummary({
       chapter_id: chapter.value.id,
       summary: result.summary,
@@ -755,44 +774,104 @@ const generateSummary = async () => {
     });
     chapterSummaryCache.delete(chapter.value.id);
 
-    // Update UI
+    // Update UI immediately so user sees the summary
     chapter.value.summary = result.summary;
     chapter.value.pov = result.pov;
     chapter.value.characters = generatedCharacters.length ? generatedCharacters : null;
     chapter.value.beats = beatsArray.length ? beatsArray : null;
     chapter.value.spoilers_ok = result.spoilers_ok;
-
-    // Update summary editing state
     editedSummary.value = result.summary;
 
-    // Auto-generate/update wiki pages for characters
+    // Step 4: Update wiki pages for characters (with individual progress tracking)
     if (generatedCharacters.length > 0) {
-      try {
-        await updateWikiPagesFromChapter(
-          apiKey,
-          bookId.value,
-          chapter.value.id,
-          chapter.value.text,
-          result.summary,
-          generatedCharacters,
-          getWikiPage,
-          createWikiPage,
-          updateWikiPage,
-          trackWikiUpdate,
-          addChapterWikiMention
-        );
-        console.log(`Updated wiki pages for ${generatedCharacters.length} characters`);
-      } catch (wikiError: any) {
-        console.error("Failed to update wiki pages:", wikiError);
-        // Don't fail the whole operation if wiki update fails
+      const wikiResults: WikiUpdateResult[] = [];
+
+      for (let i = 0; i < generatedCharacters.length; i++) {
+        const characterName = generatedCharacters[i];
+        summaryProgress.value = `Updating wiki: ${characterName} (${i + 1} of ${generatedCharacters.length})...`;
+
+        try {
+          // Check if wiki page exists
+          const existingPage = await getWikiPage(bookId.value, characterName);
+
+          // Generate wiki content
+          const { generateWikiContent } = await import("@/lib/openai");
+          const wikiResult = await generateWikiContent(
+            apiKey,
+            characterName,
+            chapter.value.text,
+            result.summary,
+            existingPage?.content || null
+          );
+
+          if (existingPage) {
+            if (wikiResult.hasChanges) {
+              await updateWikiPage(existingPage.id, {
+                content: wikiResult.content,
+                summary: wikiResult.summary
+              });
+              await trackWikiUpdate({
+                wiki_page_id: existingPage.id,
+                chapter_id: chapter.value.id,
+                update_type: wikiResult.hasContradictions ? 'update_with_contradictions' : 'update',
+                change_summary: wikiResult.changeSummary,
+                contradiction_notes: wikiResult.contradictions
+              });
+              wikiResults.push({
+                characterName,
+                wikiPageId: existingPage.id,
+                updateType: 'updated'
+              });
+            } else {
+              wikiResults.push({
+                characterName,
+                wikiPageId: existingPage.id,
+                updateType: 'unchanged'
+              });
+            }
+            await addChapterWikiMention(chapter.value.id, existingPage.id);
+          } else {
+            const newPageId = await createWikiPage({
+              book_id: bookId.value,
+              page_name: characterName,
+              content: wikiResult.content,
+              summary: wikiResult.summary,
+              page_type: 'character',
+              created_by_ai: true
+            });
+            await trackWikiUpdate({
+              wiki_page_id: newPageId,
+              chapter_id: chapter.value.id,
+              update_type: 'created',
+              change_summary: `Created character page for ${characterName}`
+            });
+            await addChapterWikiMention(chapter.value.id, newPageId);
+            wikiResults.push({
+              characterName,
+              wikiPageId: newPageId,
+              updateType: 'created'
+            });
+          }
+        } catch (wikiError) {
+          console.error(`Failed to update wiki for ${characterName}:`, wikiError);
+          // Continue with other characters
+        }
+      }
+
+      wikiUpdateResults.value = wikiResults;
+      if (wikiResults.length > 0) {
+        showWikiUpdateResults.value = true;
       }
     }
 
     // Reload character wiki info
+    summaryProgress.value = "Finishing up...";
     await loadCharacters();
+    summaryProgress.value = "";
   } catch (error: any) {
     console.error("Failed to generate summary:", error);
-    alert(`Failed to generate summary: ${error.message || "Unknown error"}`);
+    summaryError.value = error.message || "Unknown error occurred";
+    summaryProgress.value = "";
   } finally {
     generatingSummary.value = false;
   }
@@ -1445,13 +1524,20 @@ onMounted(async () => {
           :edited-summary="editedSummary"
           :generating-summary="generatingSummary"
           :saving-summary="savingSummary"
+          :summary-progress="summaryProgress"
+          :summary-error="summaryError"
+          :wiki-update-results="wikiUpdateResults"
+          :show-wiki-update-results="showWikiUpdateResults"
           :character-lookup="getCharacterWikiInfo"
+          :route-prefix="routePrefix"
+          :book-id="bookId"
           @update:editedSummary="editedSummary = $event"
           @start-edit="startEditingSummary"
           @cancel-edit="cancelEditingSummary"
           @save="saveSummary"
           @generate="generateSummary"
           @character-click="navigateToWiki"
+          @dismiss-wiki-results="showWikiUpdateResults = false"
         />
 
         <ChapterNotesPanel

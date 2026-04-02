@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { PropType } from 'vue'
-import { PencilIcon, SparklesIcon, ClockIcon } from '@heroicons/vue/24/outline'
+import { PencilIcon, SparklesIcon, ClockIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/vue/24/outline'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
 type CharacterWikiInfo = {
@@ -9,6 +9,12 @@ type CharacterWikiInfo = {
   character_name: string
   wiki_page_id: string | null
   has_wiki_page: boolean
+}
+
+interface WikiUpdateResult {
+  characterName: string
+  wikiPageId: string
+  updateType: 'created' | 'updated' | 'unchanged'
 }
 
 const props = defineProps({
@@ -44,9 +50,33 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  summaryProgress: {
+    type: String,
+    default: '',
+  },
+  summaryError: {
+    type: String as PropType<string | null>,
+    default: null,
+  },
+  wikiUpdateResults: {
+    type: Array as PropType<WikiUpdateResult[]>,
+    default: () => [],
+  },
+  showWikiUpdateResults: {
+    type: Boolean,
+    default: false,
+  },
   characterLookup: {
     type: Function as PropType<(name: string) => CharacterWikiInfo | undefined>,
     default: () => undefined,
+  },
+  routePrefix: {
+    type: String,
+    default: '/books',
+  },
+  bookId: {
+    type: String,
+    default: '',
   },
 })
 
@@ -57,6 +87,7 @@ const emit = defineEmits<{
   (e: 'save'): void
   (e: 'generate'): void
   (e: 'character-click', name: string): void
+  (e: 'dismiss-wiki-results'): void
 }>()
 
 const hasCharacters = computed(() => props.chapterCharacters && props.chapterCharacters.length > 0)
@@ -89,9 +120,68 @@ const hasBeats = computed(() => props.chapterBeats && props.chapterBeats.length 
         </div>
       </div>
 
-      <div v-if="generatingSummary" class="flex items-center py-4">
-        <div class="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-green-600"></div>
-        <span class="text-sm text-gray-600 dark:text-gray-400">Generating summary...</span>
+      <!-- Progress indicator -->
+      <div v-if="generatingSummary" class="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+        <div class="flex items-center">
+          <div class="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-green-600 border-t-transparent"></div>
+          <span class="text-sm font-medium text-green-700 dark:text-green-300">
+            {{ summaryProgress || 'Generating summary...' }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Error message -->
+      <div v-if="summaryError" class="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+        <div class="flex items-start">
+          <XCircleIcon class="mr-2 h-5 w-5 flex-shrink-0 text-red-500" />
+          <div>
+            <p class="text-sm font-medium text-red-700 dark:text-red-300">Failed to generate summary</p>
+            <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ summaryError }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wiki update results -->
+      <div
+        v-if="showWikiUpdateResults && wikiUpdateResults.length > 0"
+        class="rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"
+      >
+        <div class="flex items-start justify-between">
+          <div class="flex items-center">
+            <CheckCircleIcon class="mr-2 h-5 w-5 text-blue-500" />
+            <span class="text-sm font-medium text-blue-700 dark:text-blue-300">Wiki pages updated</span>
+          </div>
+          <button
+            @click="emit('dismiss-wiki-results')"
+            class="text-blue-500 hover:text-blue-700 dark:hover:text-blue-300"
+          >
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="mt-2 space-y-1">
+          <router-link
+            v-for="result in wikiUpdateResults"
+            :key="result.wikiPageId"
+            :to="`${routePrefix}/${bookId}/wiki/${result.wikiPageId}`"
+            class="flex items-center text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            <span
+              :class="[
+                'mr-2 inline-block rounded px-1.5 py-0.5 text-xs font-medium',
+                result.updateType === 'created'
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                  : result.updateType === 'updated'
+                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+              ]"
+            >
+              {{ result.updateType === 'created' ? 'New' : result.updateType === 'updated' ? 'Updated' : 'No changes' }}
+            </span>
+            {{ result.characterName }}
+          </router-link>
+        </div>
       </div>
 
       <template v-else-if="chapterSummary || isEditingSummary">
