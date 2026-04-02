@@ -1662,6 +1662,26 @@ export class AppDatabase {
     }
   }
 
+  async deleteWikiPage(pageId: string): Promise<void> {
+    // Delete related wiki updates first
+    const deleteUpdatesQuery = `DELETE FROM wiki_updates WHERE wiki_page_id = ?`;
+    // Delete related chapter mentions
+    const deleteMentionsQuery = `DELETE FROM chapter_wiki_mentions WHERE wiki_page_id = ?`;
+    // Delete the wiki page itself
+    const deletePageQuery = `DELETE FROM wiki_pages WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(deleteUpdatesQuery, [pageId]);
+      await this.db.run(deleteMentionsQuery, [pageId]);
+      await this.db.run(deletePageQuery, [pageId]);
+    } else {
+      this.db.run(deleteUpdatesQuery, [pageId]);
+      this.db.run(deleteMentionsQuery, [pageId]);
+      this.db.run(deletePageQuery, [pageId]);
+      this.saveToLocalStorage();
+    }
+  }
+
   async trackWikiUpdate(update: {
     wiki_page_id: string;
     chapter_id: string;

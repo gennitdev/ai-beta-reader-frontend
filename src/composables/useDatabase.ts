@@ -448,6 +448,17 @@ export function useDatabase() {
     }
   }
 
+  async function deleteWikiPage(pageId: string) {
+    try {
+      await initializeDatabase()
+      await db.deleteWikiPage(pageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete wiki page'
+      console.error('Delete wiki page error:', e)
+      throw e
+    }
+  }
+
   async function trackWikiUpdate(update: {
     wiki_page_id: string;
     chapter_id: string;
@@ -753,6 +764,7 @@ export function useDatabase() {
     getWikiPageById,
     getWikiPage,
     getWikiPages,
+    deleteWikiPage,
     trackWikiUpdate,
     addChapterWikiMention,
 

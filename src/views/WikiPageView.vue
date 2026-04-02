@@ -58,7 +58,7 @@ const isMobileRoute = computed(() => route.meta?.mobile === true)
 const routePrefix = computed(() => (isMobileRoute.value ? '/m/books' : '/books'))
 
 // Use local database
-const { books, loadBooks, getWikiPageById, updateWikiPage } = useDatabase()
+const { books, loadBooks, getWikiPageById, updateWikiPage, deleteWikiPage } = useDatabase()
 
 const wikiPage = ref<WikiPage | null>(null)
 const wikiHistory = ref<WikiUpdate[]>([])
@@ -76,6 +76,10 @@ const saving = ref(false)
 // Page name editing state
 const isEditingPageName = ref(false)
 const editedPageName = ref('')
+
+// Delete state
+const showDeleteModal = ref(false)
+const deleting = ref(false)
 
 const getTypeIcon = (type: string) => {
   switch (type) {
@@ -227,6 +231,30 @@ const goBack = () => {
   router.push(bookWikiUrl.value)
 }
 
+const confirmDelete = () => {
+  showDeleteModal.value = true
+}
+
+const cancelDelete = () => {
+  showDeleteModal.value = false
+}
+
+const handleDelete = async () => {
+  if (!wikiPage.value) return
+
+  deleting.value = true
+  try {
+    await deleteWikiPage(wikiPageId.value)
+    showDeleteModal.value = false
+    router.push(bookWikiUrl.value)
+  } catch (error) {
+    console.error('Failed to delete wiki page:', error)
+    alert('Failed to delete wiki page')
+  } finally {
+    deleting.value = false
+  }
+}
+
 const formatDate = (dateString: string) => {
   const date = new Date(dateString)
   return date.toLocaleDateString('en-US', {
@@ -363,6 +391,13 @@ onMounted(() => {
             >
               <PencilIcon class="w-4 h-4 mr-1" />
               Edit
+            </button>
+            <button
+              @click="confirmDelete"
+              class="inline-flex items-center px-3 py-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-md hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+            >
+              <TrashIcon class="w-4 h-4 mr-1" />
+              Delete
             </button>
           </template>
         </div>
@@ -508,6 +543,40 @@ onMounted(() => {
               No changes recorded yet.
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete confirmation modal -->
+    <div v-if="showDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
+        <div class="flex items-center mb-4">
+          <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mr-3">
+            <TrashIcon class="w-5 h-5 text-red-600 dark:text-red-400" />
+          </div>
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Delete Wiki Page</h2>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-6">
+          Are you sure you want to delete <strong class="text-gray-900 dark:text-white">{{ wikiPage?.page_name }}</strong>? This action cannot be undone.
+        </p>
+
+        <div class="flex justify-end space-x-3">
+          <button
+            @click="cancelDelete"
+            :disabled="deleting"
+            class="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleDelete"
+            :disabled="deleting"
+            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center"
+          >
+            <span v-if="deleting" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></span>
+            {{ deleting ? 'Deleting...' : 'Delete' }}
+          </button>
         </div>
       </div>
     </div>
