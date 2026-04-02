@@ -75,6 +75,10 @@ const props = defineProps({
     type: Function as PropType<(partId: string) => void>,
     required: true
   },
+  expandPart: {
+    type: Function as PropType<(partId: string) => void>,
+    required: true
+  },
   createNewChapter: {
     type: Function as PropType<() => void>,
     required: true
@@ -521,7 +525,7 @@ const closeLightbox = () => {
                             <router-link
                               :to="`/books/${bookId}/parts/${part.id}`"
                               class="text-blue-300 hover:text-blue-200 hover:underline"
-                              @click.stop
+                              @click.stop="expandPart(part.id)"
                             >View</router-link>
                           </p>
                         </div>

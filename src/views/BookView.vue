@@ -627,6 +627,11 @@ const togglePart = (partId: string) => {
   }
 };
 
+// Expand a part without toggling or navigating (used by View link)
+const expandPart = (partId: string) => {
+  expandedParts.value.add(partId);
+};
+
 // Expand the part containing the active chapter (used on initial load)
 const expandPartForActiveChapter = () => {
   const activeId = route.params.chapterId as string | undefined;
@@ -922,6 +927,7 @@ onMounted(async () => {
     :sidebar-uncategorized="sidebarUncategorized"
     :expanded-parts="expandedParts"
     :toggle-part="togglePart"
+    :expand-part="expandPart"
     :create-new-chapter="createNewChapter"
     :create-new-chapter-in-part="createNewChapterInPart"
     :go-to-organize-chapters="goToOrganizeChapters"
