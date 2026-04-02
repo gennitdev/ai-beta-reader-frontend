@@ -187,6 +187,9 @@ const editedNotes = ref("");
 const savingNotes = ref(false);
 const showNotesPanel = ref(false);
 
+// Illustrations panel state
+const showIllustrationsPanel = ref(false);
+
 // Text truncation state
 const showFullChapterText = ref(false);
 const expandedReviews = ref<Set<string>>(new Set());
@@ -1089,7 +1092,7 @@ onMounted(async () => {
     <div class="w-full max-w-6xl md:mx-auto px-4 lg:px-8">
       <!-- Chapter Illustrations - at top below title -->
       <ChapterIllustrationsSection
-        v-if="desktopImagesAvailable"
+        v-if="desktopImagesAvailable && (chapterImages.length > 0 || showIllustrationsPanel)"
         :images="chapterImages"
         :image-sources="chapterImageSources"
         :cover-image-id="chapterCoverImageId"
@@ -1110,8 +1113,12 @@ onMounted(async () => {
         :has-notes="Boolean(chapter?.notes)"
         :show-summary-panel="showSummaryPanel"
         :show-notes-panel="showNotesPanel"
+        :has-illustrations="chapterImages.length > 0"
+        :show-illustrations-panel="showIllustrationsPanel || chapterImages.length > 0"
+        :desktop-images-available="desktopImagesAvailable"
         @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
         @toggle-notes-panel="showNotesPanel = !showNotesPanel"
+        @toggle-illustrations-panel="showIllustrationsPanel = !showIllustrationsPanel"
       />
       <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
         <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>

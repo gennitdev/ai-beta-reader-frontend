@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckCircleIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
+import { CheckCircleIcon, DocumentTextIcon, PhotoIcon } from "@heroicons/vue/24/outline";
 
 defineProps<{
   wordCount: number;
@@ -7,11 +7,15 @@ defineProps<{
   hasNotes: boolean;
   showSummaryPanel: boolean;
   showNotesPanel: boolean;
+  hasIllustrations?: boolean;
+  showIllustrationsPanel?: boolean;
+  desktopImagesAvailable?: boolean;
 }>();
 
 const emit = defineEmits<{
   'toggle-summary-panel': [];
   'toggle-notes-panel': [];
+  'toggle-illustrations-panel': [];
 }>();
 </script>
 
@@ -47,6 +51,13 @@ const emit = defineEmits<{
       class="font-medium text-purple-600 transition-colors hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
     >
       {{ showNotesPanel ? "Hide Notes Panel" : "Show Notes Panel" }}
+    </button>
+    <button
+      v-if="desktopImagesAvailable"
+      @click="emit('toggle-illustrations-panel')"
+      class="font-medium text-emerald-600 transition-colors hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+    >
+      {{ showIllustrationsPanel ? "Hide Illustrations" : "Show Illustrations" }}
     </button>
   </div>
 </template>
