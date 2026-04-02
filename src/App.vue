@@ -4,8 +4,8 @@ import { MagnifyingGlassIcon, PlusIcon, Bars3Icon, XMarkIcon, Cog6ToothIcon } fr
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
-import AppSideNav from '@/components/AppSideNav.vue'
 import { primaryNavItems } from '@/config/navigation'
+import type { Book } from '@/lib/database'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,15 +30,37 @@ const searchService = {
   }
 }
 
-const isMobileNavOpen = ref(false)
-const mobileNavItems = computed(() => primaryNavItems)
+const isSideNavOpen = ref(false)
+const sideNavItems = computed(() => primaryNavItems)
 
-const toggleMobileNav = () => {
-  isMobileNavOpen.value = !isMobileNavOpen.value
+const toggleSideNav = () => {
+  isSideNavOpen.value = !isSideNavOpen.value
 }
 
-const closeMobileNav = () => {
-  isMobileNavOpen.value = false
+const closeSideNav = () => {
+  isSideNavOpen.value = false
+}
+
+// Books for side nav
+const sortedBooks = computed(() => {
+  return [...books.value].sort((a: Book, b: Book) => {
+    const aDate = new Date(a.created_at ?? 0).getTime()
+    const bDate = new Date(b.created_at ?? 0).getTime()
+    return bDate - aDate
+  })
+})
+
+const isBookActive = (bookId: string) => route.path.startsWith(`/books/${bookId}`)
+
+const getBookInitials = (title: string | null | undefined) => {
+  if (!title) return '??'
+  const normalized = title.trim()
+  if (!normalized) return '??'
+  const words = normalized.split(/\s+/)
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase()
+  }
+  return (words[0][0] + (words[1]?.[0] ?? '')).toUpperCase()
 }
 
 // Keyboard shortcut for search
@@ -97,7 +119,7 @@ watch(
 watch(
   () => route.path,
   () => {
-    closeMobileNav()
+    closeSideNav()
   }
 )
 
@@ -175,8 +197,6 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
 
 <template>
   <div class="h-screen bg-gray-50 dark:bg-gray-900 flex">
-    <AppSideNav />
-
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Header -->
       <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 safe-area-top">
@@ -189,6 +209,16 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
           <div
             class="flex items-center gap-x-6 md:order-2 md:basis-full md:min-w-0 md:flex-wrap md:gap-y-2 lg:order-1 lg:flex-nowrap"
           >
+            <button
+              @click="toggleSideNav"
+              :aria-expanded="isSideNavOpen"
+              aria-controls="side-nav"
+              class="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              aria-label="Toggle navigation"
+            >
+              <Bars3Icon v-if="!isSideNavOpen" class="w-6 h-6" />
+              <XMarkIcon v-else class="w-6 h-6" />
+            </button>
             <router-link to="/" class="flex items-center flex-shrink-0">
               <h1
                 class="text-md text-gray-900 dark:text-white space-grotesk-logo whitespace-nowrap"
@@ -304,13 +334,13 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center space-x-3">
               <button
-                @click="toggleMobileNav"
-                :aria-expanded="isMobileNavOpen"
-                aria-controls="mobile-primary-nav"
+                @click="toggleSideNav"
+                :aria-expanded="isSideNavOpen"
+                aria-controls="side-nav"
                 class="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 aria-label="Toggle navigation"
               >
-                <Bars3Icon v-if="!isMobileNavOpen" class="w-6 h-6" />
+                <Bars3Icon v-if="!isSideNavOpen" class="w-6 h-6" />
                 <XMarkIcon v-else class="w-6 h-6" />
               </button>
               <router-link to="/" class="flex items-center">
@@ -415,22 +445,22 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
       />
 
       <Teleport to="body">
-        <div v-if="isMobileNavOpen" class="fixed inset-0 z-40 md:hidden">
-          <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeMobileNav" />
+        <div v-if="isSideNavOpen" class="fixed inset-0 z-40">
+          <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeSideNav" />
           <div
-            id="mobile-primary-nav"
-            class="absolute inset-y-0 left-0 flex h-full w-64 max-w-[80%] flex-col bg-white px-6 py-6 shadow-xl dark:bg-gray-900"
+            id="side-nav"
+            class="absolute inset-y-0 left-0 flex h-full w-72 max-w-[85%] flex-col bg-white px-6 py-6 shadow-xl dark:bg-gray-900"
           >
             <div class="mb-6 flex items-center justify-between">
               <router-link
                 to="/"
                 class="text-lg font-semibold text-gray-900 transition-colors dark:text-white"
-                @click="closeMobileNav"
+                @click="closeSideNav"
               >
                 Beta-bot
               </router-link>
               <button
-                @click="closeMobileNav"
+                @click="closeSideNav"
                 class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
                 aria-label="Close navigation"
               >
@@ -440,7 +470,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
 
             <nav class="flex-1 space-y-2 overflow-y-auto">
               <RouterLink
-                v-for="item in mobileNavItems"
+                v-for="item in sideNavItems"
                 :key="item.to"
                 :to="item.to"
                 custom
@@ -453,12 +483,37 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                     ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
                     : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'"
                   :aria-current="isActive ? 'page' : undefined"
-                  @click.prevent="navigate(); closeMobileNav()"
+                  @click.prevent="navigate(); closeSideNav()"
                 >
                   <component :is="item.icon" class="h-5 w-5" />
                   <span>{{ item.label }}</span>
                 </a>
               </RouterLink>
+
+              <!-- Books section -->
+              <template v-if="sortedBooks.length">
+                <div class="pt-4 pb-2">
+                  <h3 class="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    My Books
+                  </h3>
+                </div>
+                <router-link
+                  v-for="book in sortedBooks"
+                  :key="book.id"
+                  :to="`/books/${book.id}`"
+                  class="flex items-center gap-3 rounded-lg px-3 py-2 text-base font-medium transition-colors"
+                  :class="isBookActive(book.id)
+                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'"
+                  :aria-current="isBookActive(book.id) ? 'page' : undefined"
+                  @click="closeSideNav"
+                >
+                  <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-semibold">
+                    {{ getBookInitials(book.title) }}
+                  </span>
+                  <span class="truncate">{{ book.title || book.id }}</span>
+                </router-link>
+              </template>
             </nav>
           </div>
         </div>

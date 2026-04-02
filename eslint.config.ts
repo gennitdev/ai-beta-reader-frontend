@@ -19,6 +19,7 @@ export default defineConfigWithVueTs(
     '**/coverage/**',
     'android/app/build/**',
     'android/app/src/main/assets/**',
+    'electron/**',
   ]),
 
   pluginVue.configs['flat/essential'],
