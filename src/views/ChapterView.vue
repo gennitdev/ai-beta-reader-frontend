@@ -99,6 +99,8 @@ const {
   addImagesToChapter,
   deleteImage: deleteChapterImageAsset,
   fetchChapterImages,
+  fetchChapterCover,
+  setChapterCoverImageId,
   getImageSource,
 } = useImageLibrary();
 
@@ -129,6 +131,8 @@ const activeImageId = ref<string | null>(null);
 const showDeleteIllustrationModal = ref(false);
 const deletingIllustration = ref(false);
 const illustrationToDelete = ref<string | null>(null);
+const chapterCoverImageId = ref<string | null>(null);
+const settingCoverId = ref<string | null>(null);
 
 const chapterSummaryCache = new Map<string, ChapterSummary | null>();
 const partSummaryCache = new Map<string, PartSummary | null>();
@@ -154,8 +158,16 @@ const activeImageLabel = computed(() => {
 });
 const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ?? null));
 
-// Hero image (first chapter image)
-const heroImage = computed(() => chapterImages.value.length > 0 ? chapterImages.value[0] : null);
+// Hero image (selected cover or first chapter image)
+const heroImage = computed(() => {
+  if (chapterImages.value.length === 0) return null;
+  // If a cover is selected, use it; otherwise fall back to first image
+  if (chapterCoverImageId.value) {
+    const coverImage = chapterImages.value.find(img => img.id === chapterCoverImageId.value);
+    if (coverImage) return coverImage;
+  }
+  return chapterImages.value[0];
+});
 const heroImageSrc = computed(() => {
   if (!heroImage.value) return null;
   return chapterImageSources.value[heroImage.value.id] ?? null;
@@ -465,6 +477,7 @@ const refreshChapterImages = async () => {
   if (!chapterId.value) {
     chapterImages.value = [];
     chapterImageSources.value = {};
+    chapterCoverImageId.value = null;
     return;
   }
 
@@ -482,6 +495,10 @@ const refreshChapterImages = async () => {
       }
     }
     chapterImageSources.value = sources;
+
+    // Load cover image ID
+    const coverImage = await fetchChapterCover(chapterId.value);
+    chapterCoverImageId.value = coverImage?.id ?? null;
   } catch (error) {
     chapterImageError.value =
       error instanceof Error ? error.message : "Failed to load chapter illustrations";
@@ -552,6 +569,11 @@ const handleDeleteIllustration = async () => {
       showImageLightbox.value = false;
       activeImageId.value = null;
     }
+    // Clear cover if the deleted image was the cover
+    if (chapterCoverImageId.value === imageId && chapter.value) {
+      await setChapterCoverImageId(chapter.value.id, null);
+      chapterCoverImageId.value = null;
+    }
     showDeleteIllustrationModal.value = false;
     illustrationToDelete.value = null;
   } catch (error) {
@@ -602,6 +624,35 @@ const goToPrevImage = () => {
   if (prevImage && chapterImageSources.value[prevImage.id]) {
     activeImageId.value = prevImage.id;
   }
+};
+
+const handleSetAsCover = async (imageId: string) => {
+  if (!chapter.value) return;
+  settingCoverId.value = imageId;
+  try {
+    await setChapterCoverImageId(chapter.value.id, imageId);
+    chapterCoverImageId.value = imageId;
+  } catch (error) {
+    chapterImageError.value =
+      error instanceof Error ? error.message : "Failed to set cover image";
+  } finally {
+    settingCoverId.value = null;
+  }
+};
+
+const handleDownloadImage = (imageId: string) => {
+  const imageSrc = chapterImageSources.value[imageId];
+  if (!imageSrc) return;
+
+  const image = chapterImages.value.find((img) => img.id === imageId);
+  const fileName = image?.file_name || `illustration-${imageId}.jpg`;
+
+  const link = document.createElement("a");
+  link.href = imageSrc;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 
 watch(
@@ -1161,7 +1212,7 @@ onMounted(async () => {
         <!-- Chapter info overlay -->
         <div class="absolute bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8">
           <p class="text-sm font-medium text-white/80">{{ currentBook?.title }}</p>
-          <h2 class="mt-1 text-2xl font-bold text-white sm:text-3xl lg:text-4xl">
+          <h2 v-if="!isEditing" class="mt-1 text-2xl font-bold text-white sm:text-3xl lg:text-4xl">
             {{ chapter?.title || 'Untitled Chapter' }}
           </h2>
           <p class="mt-2 text-sm text-white/70">
@@ -1169,6 +1220,16 @@ onMounted(async () => {
             <span v-if="chapter?.summary"> &middot; Summarized</span>
           </p>
         </div>
+      </div>
+      <!-- Title edit field when editing with hero image -->
+      <div v-if="isEditing" class="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
+        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chapter Title</label>
+        <input
+          v-model="editedTitle"
+          type="text"
+          placeholder="Enter chapter title..."
+          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-lg font-semibold text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+        />
       </div>
       <!-- Back button overlay -->
       <button
@@ -1255,15 +1316,48 @@ onMounted(async () => {
             <div
               v-for="image in chapterImages"
               :key="image.id"
-              class="group relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
+              class="group relative overflow-hidden rounded-lg border bg-gray-50 dark:bg-gray-800"
+              :class="chapterCoverImageId === image.id ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-gray-200 dark:border-gray-700'"
             >
-              <button
-                type="button"
-                class="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100"
-                @click.stop="requestDeleteIllustration(image.id)"
+              <!-- Cover badge -->
+              <div
+                v-if="chapterCoverImageId === image.id"
+                class="absolute left-2 top-2 z-10 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white"
               >
-                Delete
-              </button>
+                Cover
+              </div>
+              <!-- Action buttons overlay -->
+              <div class="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition group-hover:opacity-100">
+                <button
+                  v-if="chapterCoverImageId !== image.id"
+                  type="button"
+                  class="rounded-full bg-blue-600/90 px-2 py-1 text-xs font-medium text-white transition hover:bg-blue-700"
+                  :disabled="settingCoverId === image.id"
+                  @click.stop="handleSetAsCover(image.id)"
+                >
+                  {{ settingCoverId === image.id ? '...' : 'Set as cover' }}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full bg-black/60 p-1.5 text-white transition hover:bg-black/80"
+                  title="Download"
+                  @click.stop="handleDownloadImage(image.id)"
+                >
+                  <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full bg-red-600/90 p-1.5 text-white transition hover:bg-red-700"
+                  title="Delete"
+                  @click.stop="requestDeleteIllustration(image.id)"
+                >
+                  <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
               <button
                 type="button"
                 class="block w-full"

@@ -39,6 +39,8 @@ export function useImageLibrary() {
     setBookCoverImageId,
     getPartCoverImageAsset,
     setPartCoverImageId,
+    getChapterCoverImageAsset,
+    setChapterCoverImageId,
   } = useDatabase()
 
   const desktopImagesAvailable = ref(sanitizeBridgeAvailability())
@@ -298,6 +300,10 @@ export function useImageLibrary() {
     return thumbnails
   }
 
+  async function fetchChapterCover(chapterId: string) {
+    return getChapterCoverImageAsset(chapterId)
+  }
+
   return {
     desktopImagesAvailable,
     refreshAvailability,
@@ -315,6 +321,8 @@ export function useImageLibrary() {
     fetchPartCover,
     pickPartCover,
     fetchPartThumbnails,
+    fetchChapterCover,
+    setChapterCoverImageId,
     getImageSource,
     setPartCoverImageId,
   }

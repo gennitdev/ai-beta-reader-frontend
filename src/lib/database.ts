@@ -18,6 +18,7 @@ export interface Chapter {
   title?: string;
   text: string;
   word_count: number;
+  cover_image_id?: string | null;
   created_at: string;
 }
 
@@ -368,6 +369,8 @@ export class AppDatabase {
       `ALTER TABLE books ADD COLUMN cover_image_id TEXT`,
       // Add cover_image_id to book_parts if not exists
       `ALTER TABLE book_parts ADD COLUMN cover_image_id TEXT`,
+      // Add cover_image_id to chapters if not exists
+      `ALTER TABLE chapters ADD COLUMN cover_image_id TEXT`,
       // Add image_data to image_assets for web storage and backup/restore
       `ALTER TABLE image_assets ADD COLUMN image_data TEXT`
     ];
@@ -2058,6 +2061,62 @@ export class AppDatabase {
       };
     } else {
       const result = this.db.exec(query, [partId]);
+      if (result.length === 0 || result[0].values.length === 0) return null;
+      const row = result[0].values[0];
+      if (!row[0]) return null;
+      return {
+        id: row[0],
+        book_id: row[1],
+        chapter_id: row[2],
+        asset_type: row[3] as ImageAssetType,
+        file_name: row[4],
+        file_path: row[5],
+        mime_type: row[6],
+        image_data: row[7] ?? null,
+        created_at: row[8],
+        updated_at: row[9],
+      };
+    }
+  }
+
+  async setChapterCoverImageId(chapterId: string, imageId: string | null): Promise<void> {
+    const query = `UPDATE chapters SET cover_image_id = ? WHERE id = ?`;
+
+    if (this.isNative) {
+      await this.db.run(query, [imageId, chapterId]);
+    } else {
+      this.db.run(query, [imageId, chapterId]);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async getChapterCoverImage(chapterId: string): Promise<ImageAsset | null> {
+    const query = `
+      SELECT ia.*
+      FROM chapters c
+      LEFT JOIN image_assets ia ON ia.id = c.cover_image_id
+      WHERE c.id = ?
+      LIMIT 1
+    `;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [chapterId]);
+      const row = result.values && result.values[0];
+      if (!row || !row.id) return null;
+      return {
+        id: row.id,
+        book_id: row.book_id,
+        chapter_id: row.chapter_id,
+        asset_type: row.asset_type,
+        file_name: row.file_name,
+        file_path: row.file_path,
+        mime_type: row.mime_type,
+        image_data: row.image_data ?? null,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      };
+    } else {
+      const result = this.db.exec(query, [chapterId]);
       if (result.length === 0 || result[0].values.length === 0) return null;
       const row = result[0].values[0];
       if (!row[0]) return null;

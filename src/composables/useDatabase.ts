@@ -669,6 +669,28 @@ export function useDatabase() {
     }
   }
 
+  async function setChapterCoverImageId(chapterId: string, imageId: string | null) {
+    try {
+      await initializeDatabase()
+      await db.setChapterCoverImageId(chapterId, imageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update chapter cover'
+      console.error('Set chapter cover image error:', e)
+      throw e
+    }
+  }
+
+  async function getChapterCoverImageAsset(chapterId: string): Promise<ImageAsset | null> {
+    try {
+      await initializeDatabase()
+      return await db.getChapterCoverImage(chapterId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get chapter cover'
+      console.error('Get chapter cover image error:', e)
+      throw e
+    }
+  }
+
   async function getBookImageAssets(bookId: string): Promise<ImageAsset[]> {
     try {
       await initializeDatabase()
@@ -756,6 +778,8 @@ export function useDatabase() {
     setBookCoverImageId,
     getPartCoverImageAsset,
     setPartCoverImageId,
+    getChapterCoverImageAsset,
+    setChapterCoverImageId,
     getBookImageAssets,
 
     hasCloudSync: () => cloudSync.value !== null,
