@@ -295,12 +295,12 @@ const closeLightbox = () => {
             <!-- Cover image or gradient fallback -->
             <div
               v-if="coverImageSrc"
-              class="aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-pointer"
+              class="w-full overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-pointer"
               @click="openLightbox"
             >
               <img
                 :src="coverImageSrc"
-                class="h-full w-full object-cover transition-opacity hover:opacity-90"
+                class="w-full transition-opacity hover:opacity-90"
                 alt="Book cover"
                 title="Click to view full size"
               />
