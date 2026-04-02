@@ -1,7 +1,7 @@
 import type { CapacitorElectronConfig } from '@capacitor-community/electron';
 import { getCapacitorElectronConfig, setupElectronDeepLinking } from '@capacitor-community/electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, MenuItem, ipcMain } from 'electron';
+import { app, MenuItem, ipcMain, Menu } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
@@ -264,6 +264,24 @@ if (electronIsDev) {
   setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme());
   // Initialize our app, build windows, and load content.
   await myCapacitorApp.init();
+
+  // Set up context menu with Copy option when text is selected
+  const mainWindow = myCapacitorApp.getMainWindow();
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const menu = new Menu();
+
+    if (params.selectionText) {
+      menu.append(new MenuItem({
+        label: 'Copy',
+        role: 'copy',
+      }));
+    }
+
+    if (menu.items.length > 0) {
+      menu.popup();
+    }
+  });
+
   // Check for updates if we are in a packaged app.
   autoUpdater.checkForUpdatesAndNotify();
 })();
