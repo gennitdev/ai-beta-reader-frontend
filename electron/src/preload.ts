@@ -19,8 +19,8 @@ contextBridge.exposeInMainWorld('electronOAuth', {
 });
 
 // Find in page functionality
-contextBridge.exposeInMainWorld('electronFindInPage', (text: string, forward: boolean) => {
-  ipcRenderer.invoke('find-in-page', text, forward);
+contextBridge.exposeInMainWorld('electronFindInPage', (text: string, forward: boolean, isNavigation: boolean = false) => {
+  ipcRenderer.invoke('find-in-page', text, forward, isNavigation);
 });
 
 contextBridge.exposeInMainWorld('electronStopFind', () => {

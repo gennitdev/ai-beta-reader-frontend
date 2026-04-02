@@ -59,7 +59,7 @@ const editMenuTemplate: MenuItemConstructorOptions = {
 
               const input = document.createElement('input');
               input.type = 'text';
-              input.placeholder = 'Find in page...';
+              input.placeholder = 'Find in page (Enter to search)';
               input.style.cssText = 'flex:1;max-width:300px;padding:6px 10px;border:1px solid #4b5563;border-radius:4px;background:#111827;color:#f3f4f6;font-size:14px;outline:none;';
 
               const countLabel = document.createElement('span');
@@ -90,7 +90,8 @@ const editMenuTemplate: MenuItemConstructorOptions = {
 
               let currentIndex = 0;
               let totalMatches = 0;
-              let debounceTimer = null;
+              let lastSearchedText = '';
+              let focusGuardInterval = null;
 
               function updateCount(result) {
                 if (result && result.matches > 0) {
@@ -100,24 +101,44 @@ const editMenuTemplate: MenuItemConstructorOptions = {
                 } else {
                   countLabel.textContent = input.value ? 'No results' : '';
                 }
-                // Re-focus input after find completes
-                input.focus();
               }
 
               function doFind(forward) {
                 if (input.value) {
-                  window.electronFindInPage(input.value, forward);
+                  // Determine if this is navigation (same text) or new search
+                  const isNavigation = input.value === lastSearchedText;
+                  lastSearchedText = input.value;
+
+                  // Start focus guard before find operation
+                  startFocusGuard();
+                  window.electronFindInPage(input.value, forward, isNavigation);
                 } else {
                   window.electronStopFind();
                   countLabel.textContent = '';
+                  lastSearchedText = '';
                 }
               }
 
-              function debouncedFind() {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                  doFind(true);
-                }, 150);
+              // Aggressively maintain focus for a short period after find operations
+              function startFocusGuard() {
+                stopFocusGuard();
+                let attempts = 0;
+                focusGuardInterval = setInterval(() => {
+                  if (findBar.style.display === 'flex' && document.activeElement !== input) {
+                    input.focus();
+                  }
+                  attempts++;
+                  if (attempts > 10) {
+                    stopFocusGuard();
+                  }
+                }, 20);
+              }
+
+              function stopFocusGuard() {
+                if (focusGuardInterval) {
+                  clearInterval(focusGuardInterval);
+                  focusGuardInterval = null;
+                }
               }
 
               // Listen for find results from main process
@@ -128,13 +149,15 @@ const editMenuTemplate: MenuItemConstructorOptions = {
               // Prevent events from bubbling to Vue app
               input.addEventListener('input', (e) => {
                 e.stopPropagation();
-                debouncedFind();
+                // Clear result count when typing (search happens on Enter)
+                if (input.value !== lastSearchedText) {
+                  countLabel.textContent = '';
+                }
               });
               input.addEventListener('keydown', (e) => {
                 e.stopPropagation();
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  clearTimeout(debounceTimer);
                   doFind(!e.shiftKey);
                 } else if (e.key === 'Escape') {
                   closeFindBar();
@@ -145,21 +168,17 @@ const editMenuTemplate: MenuItemConstructorOptions = {
               input.addEventListener('focus', (e) => e.stopPropagation());
               input.addEventListener('blur', (e) => {
                 e.stopPropagation();
-                // Re-focus if blur was caused by find operation
-                setTimeout(() => {
-                  if (findBar.style.display === 'flex' && document.activeElement !== input) {
-                    input.focus();
-                  }
-                }, 10);
               });
 
-              prevBtn.addEventListener('click', () => doFind(false));
-              nextBtn.addEventListener('click', () => doFind(true));
+              prevBtn.addEventListener('click', () => { doFind(false); });
+              nextBtn.addEventListener('click', () => { doFind(true); });
 
               function closeFindBar() {
+                stopFocusGuard();
                 findBar.style.display = 'none';
                 window.electronStopFind();
                 countLabel.textContent = '';
+                lastSearchedText = '';
               }
 
               closeBtn.addEventListener('click', closeFindBar);
@@ -212,10 +231,15 @@ if (electronIsDev) {
   registerOAuthLoopbackHandlers();
 
   // Register find-in-page IPC handlers
-  ipcMain.handle('find-in-page', (_event, text: string, forward: boolean) => {
+  // Track the last search text to determine if this is a new search or navigation
+  let lastSearchText = '';
+  ipcMain.handle('find-in-page', (_event, text: string, forward: boolean, isNavigation: boolean) => {
     const mainWindow = myCapacitorApp.getMainWindow();
     if (mainWindow && text) {
-      mainWindow.webContents.findInPage(text, { forward, findNext: true });
+      // findNext should be true only when navigating (next/prev) with the same search text
+      const findNext = isNavigation && text === lastSearchText;
+      lastSearchText = text;
+      mainWindow.webContents.findInPage(text, { forward, findNext });
     }
   });
 
