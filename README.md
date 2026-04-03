@@ -10,6 +10,7 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 - **Local Storage:** `sql.js` (browser) / `@capacitor-community/sqlite` (native)
 - **Cloud Sync:** Google Drive via OAuth 2.0 (GIS for web, PKCE + App Links for native)
 - **AI Services:** OpenAI (GPT‑4o Mini) for summaries & reviews
+- **Native Platforms:** Capacitor for Android, Electron for desktop (macOS/Windows/Linux)
 - **Backend Repository:** [ai-beta-reader-backend](https://github.com/gennitdev/ai-beta-reader-backend)
 
 ## Features
@@ -41,6 +42,13 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 - **Story bible**: Character sheets, wiki pages, change history, and cross-document search keep continuity intact.
 - **Find & replace**: Rename characters/places everywhere in one shot.
 - **Drag & drop parts**: Reorder chapters and group them into parts.
+
+### Chapter Illustrations (Desktop Only)
+
+- **Image management**: Add multiple illustrations per chapter in the Electron desktop app
+- **Chapter covers**: Set any illustration as the chapter's cover image for visual navigation
+- **Lightbox viewer**: View images full-screen with download option
+- **Local storage**: Images stored locally on desktop (not synced to cloud backup)
 
 ## Screenshots
 
@@ -202,11 +210,17 @@ See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secre
 npm install          # install deps
 npm run dev          # local dev server (Vite)
 npm run build        # type-check + production bundle (outputs to dist/)
-npx cap sync android # sync Capacitor plugins & web assets (run after build)
-npx cap run android --target <serial>  # deploy to device/emulator
 npm run preview      # serve production bundle locally
 npm run lint         # eslint --fix
 npm run type-check   # vue-tsc --build
+
+# Android
+npx cap sync android # sync Capacitor plugins & web assets (run after build)
+npx cap run android --target <serial>  # deploy to device/emulator
+
+# Electron Desktop
+cd electron && npm install   # first time only
+cd electron && npm run electron:start  # run desktop app (after npm run build)
 ```
 
 ## Hosting & Deployment
@@ -218,6 +232,10 @@ npm run type-check   # vue-tsc --build
     - SHA‑1 fingerprint from `./gradlew signingReport`
     - Custom URI scheme enabled (`com.googleusercontent.apps.<client-id>:/oauth2redirect`)
   - Status bar height is handled via `@capacitor/status-bar` to avoid UI overlap.
+- **Electron Desktop**: Run `npm run build` then `cd electron && npm run electron:start`.
+  - Desktop-only features: chapter illustrations, image management
+  - Uses `@capacitor-community/electron` for native SQLite and filesystem access
+  - Images stored in app data directory, not synced to cloud
 
 ## Troubleshooting Cheat Sheet
 
