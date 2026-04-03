@@ -1,7 +1,7 @@
 # AI Beta Reader Vue Frontend - Claude Development Guide
 
 ## Project Overview
-Vue.js 3 frontend for AI Beta Reader with local-first storage, Google Drive backup/restore, rich text editing, and AI-powered writing feedback.
+Vue.js 3 frontend for AI Beta Reader with local-first SQLite storage, Google Drive backup/restore, rich text editing, AI-powered writing feedback, wiki pages for world-building, and Electron desktop support.
 
 ## Quick Start Commands
 ```bash
@@ -19,39 +19,95 @@ npm install
 
 # Lint code
 npm run lint
+
+# Build and sync for Android
+npm run build && npx cap sync android
+
+# Run Electron desktop app
+cd electron && npm run electron:start
 ```
 
 ## Project Structure
 ```
 src/
 ├── components/
-│   ├── TextEditor.vue        # Rich markdown editor with toolbar
-│   └── MarkdownRenderer.vue  # Syntax-highlighted markdown display
+│   ├── book/                    # Book view components
+│   │   ├── BookDesktopLayout.vue
+│   │   ├── BookDesktopChapterListItem.vue
+│   │   ├── BookMobileSection.vue
+│   │   └── BookMobileChapterCard.vue
+│   ├── chapter/                 # Chapter view components
+│   │   ├── ChapterHeaderBar.vue
+│   │   ├── ChapterStatusBar.vue
+│   │   ├── ChapterContentSection.vue
+│   │   ├── ChapterSummaryPanel.vue
+│   │   ├── ChapterNotesPanel.vue
+│   │   ├── ChapterReviewsSection.vue
+│   │   ├── ChapterIllustrationsSection.vue
+│   │   ├── ChapterHeroSection.vue
+│   │   └── ConfirmDeleteModal.vue
+│   ├── organize/                # Chapter organization components
+│   │   ├── OrganizeHeader.vue
+│   │   └── OrganizePartsBoard.vue
+│   ├── images/
+│   │   └── ImageLightbox.vue
+│   ├── TextEditor.vue           # Rich markdown editor with toolbar
+│   ├── MarkdownRenderer.vue     # Syntax-highlighted markdown display
+│   ├── SearchModal.vue          # Search and replace across book
+│   ├── CustomProfilesPanel.vue  # AI reviewer profile management
+│   └── CloudSyncSettings.vue    # Google Drive sync UI
 ├── composables/
-│   └── useDatabase.ts        # Local database + cloud sync orchestration
+│   ├── useDatabase.ts           # Local SQLite database operations
+│   ├── useImageLibrary.ts       # Image management (desktop only)
+│   ├── useChapterImages.ts      # Chapter illustration handling
+│   └── useBooks.ts              # Book list management
+├── lib/
+│   ├── database.ts              # SQLite database implementation
+│   ├── openai.ts                # OpenAI API integration
+│   ├── cloudSync.ts             # Google Drive backup/restore
+│   ├── googleOAuth.ts           # OAuth authentication
+│   ├── encryption.ts            # Data encryption utilities
+│   └── tokenStorage.ts          # Auth token management
 ├── services/
-│   └── api.ts               # Backend API client with auto JWT tokens
+│   └── api.ts                   # Backend API client
 ├── views/
-│   ├── BooksView.vue        # Books listing and management
-│   ├── BookView.vue         # Chapter listing for a book
-│   ├── ChapterView.vue      # Chapter editing and AI review
+│   ├── BooksView.vue            # Books listing and management
+│   ├── BookView.vue             # Book detail with chapters/wiki/images
+│   ├── ChapterView.vue          # Chapter reading and AI review
+│   ├── ChapterEditorView.vue    # Chapter text editing
+│   ├── WikiPageView.vue         # Wiki page viewing and editing
+│   ├── PartView.vue             # Part/volume detail view
+│   ├── OrganizeChaptersView.vue # Drag-and-drop chapter organization
+│   ├── AIProfileView.vue        # Custom AI profile editing
+│   ├── AIProfilesView.vue       # AI profiles listing
+│   ├── UserSettingsView.vue     # User preferences and cloud sync
+│   ├── DocsView.vue             # Documentation/help
+│   └── HomeView.vue             # Landing page
+├── types/
+│   ├── bookView.ts              # Book view type definitions
+│   └── organize.ts              # Organization types
 ├── router/
-│   └── index.ts             # Vue Router setup
-├── App.vue                  # Main shell layout, navigation, search, etc.
-└── main.ts                  # App initialization
+│   └── index.ts                 # Vue Router setup
+├── App.vue                      # Main shell layout, navigation
+└── main.ts                      # App initialization
 ```
 
 ## Key Technologies
-- **Vue 3** - Composition API
-- **TypeScript** - Type safety
-- **Vue Router** - Client-side routing
+- **Vue 3** - Composition API with `<script setup>`
+- **TypeScript** - Type safety throughout
+- **Vue Router** - Client-side routing with nested routes
 - **Pinia** - State management
-- **Tailwind CSS** - Styling
-- **Headless UI** - Unstyled components
+- **Tailwind CSS** - Utility-first styling with dark mode
+- **Headless UI** - Accessible unstyled components
 - **Heroicons** - Icon library
-- **Axios** - HTTP client
-- **Markdown-it** - Markdown parsing
-- **Highlight.js** - Syntax highlighting
+- **sql.js / @capacitor-community/sqlite** - Local SQLite database
+- **OpenAI SDK** - AI summaries, reviews, and wiki generation
+- **Capacitor** - Native mobile (Android) and desktop (Electron) builds
+- **vuedraggable** - Drag and drop for chapter organization
+- **Axios** - HTTP client for backend API
+- **Markdown-it + Highlight.js** - Markdown parsing and syntax highlighting
+- **crypto-js** - Data encryption for cloud sync
+- **Vue Query** - Server state management
 
 ## Environment Variables
 ```bash
@@ -63,62 +119,85 @@ VITE_GOOGLE_REDIRECT_URI_NATIVE=com.googleusercontent.apps.your-google-android-c
 
 # Optional: backend API base URL (defaults to http://localhost:3001)
 VITE_API_BASE_URL=http://localhost:3001
+
+# Optional: enable wiki history feature
+VITE_ENABLE_WIKI_HISTORY=true
 ```
 
-## Key Components
-
-### TextEditor.vue
-- Rich markdown editor with live preview
-- Formatting toolbar (bold, italic, headers, lists)
-- Character counter and validation
-- Tab interface for Write/Preview modes
-
-### MarkdownRenderer.vue
-- Syntax-highlighted code blocks
-- Custom heading anchors
-- Responsive image handling
-- Dark mode support
-
-### API Service (services/api.ts)
-- Axios-based REST client for backend calls
-- Typed service functions for backend
-- Includes Google Drive sync helpers in `src/lib/`
-
-## State Management
-- **Books**: Stored in localStorage (temporary solution)
-- **API Data**: Fetched on-demand from backend
+## Data Storage
+- **Primary**: Local SQLite database (sql.js in browser, native SQLite on mobile/desktop)
+- **Cloud Backup**: Optional Google Drive sync with encryption
+- **Images**: Stored locally in Electron desktop app only (not synced to cloud)
 
 ## Key Features
 
 ### Book Management
-- Create books with auto-generated IDs
-- List user's books with chapter counts
-- Navigate between books and chapters
+- Create and manage multiple books
+- Book cover images (desktop only)
+- Organize chapters into parts/volumes
+- Drag-and-drop chapter reordering
+- Search and replace across entire book
 
 ### Chapter Editing
 - Rich text editor with markdown support
 - Live preview with syntax highlighting
 - Word count tracking
-- Auto-save capability
+- Collapsible summary, notes, and illustrations panels
 
-import { bookService, chapterService, reviewService } from '@/services/api'
+### AI-Powered Features
+- **Summaries**: Auto-generate chapter summaries with POV, characters, and plot beats
+- **Reviews**: Get AI feedback on chapters with customizable tone
+- **Wiki Generation**: Auto-create character/location/concept pages from summaries
+- **Custom AI Profiles**: Create personalized AI reviewers with specific personalities
 
-// Create book
-await bookService.createBook({ id: 'book-id', title: 'Book Title' })
+### Wiki System
+- Character, location, and concept pages
+- Major/minor classification
+- AI-generated or manually created
+- Edit page names and content
+- Delete pages with confirmation
 
-// Generate review
-await reviewService.generateReview({
-  bookId: 'book-id',
-  newChapterId: 'chapter-id',
-  tone: 'fanficnet'
-})
+### Chapter Illustrations (Desktop Only)
+- Add multiple images per chapter
+- Set chapter cover image
+- Image lightbox viewer
+- Download and delete images
+
+### Parts/Volumes
+- Group chapters into parts
+- Part cover images
+- Expand/collapse in sidebar
+- Reorder parts and chapters within parts
+
+## Component Patterns
+
+### Prop-based Communication
+Components receive data via props and emit events for changes:
+```typescript
+defineProps<{
+  chapter: Chapter;
+  isEditing: boolean;
+}>();
+
+const emit = defineEmits<{
+  'save': [content: string];
+  'cancel': [];
+}>();
 ```
 
-### Styling Guidelines
+### Composables for Shared Logic
+Database and image operations are abstracted into composables:
+```typescript
+const { books, loadBooks, saveBook, deleteWikiPage } = useDatabase();
+const { fetchBookCover, pickNewBookCover } = useImageLibrary();
+```
+
+## Styling Guidelines
 - Use Tailwind CSS utility classes
-- Follow existing component patterns
 - Support dark mode with `dark:` prefixes
 - Use Heroicons for consistent iconography
+- Follow existing component patterns for consistency
+- Collapsible panels use toggle buttons in status bars
 
 ## Development Workflow
 
@@ -127,46 +206,27 @@ await reviewService.generateReview({
 2. Start frontend: `npm run dev`
 3. Navigate to `http://localhost:5173`
 
-### Testing Cloud Sync
+### Testing Android Build
 1. Connect Android device with USB debugging enabled
 2. Run `npm run build && npx cap sync android`
-3. Launch the app and trigger a Google Drive backup & restore
-4. Confirm AI summaries/reviews still function afterwards
+3. Open Android Studio and run the app
+4. Test Google Drive backup/restore and AI features
 
-## Component Communication
-- **Props down**: Parent to child data flow
-- **Events up**: Child to parent communication
-- **Router**: Navigate between views
-- **API**: Persist data to backend
+### Testing Electron Desktop
+1. Run `npm run build`
+2. `cd electron && npm run electron:start`
+3. Test image features (only available in desktop)
 
 ## Error Handling
-- Drive sync errors surface in the UI and console
-- API errors show user-friendly messages
+- Database errors surface in UI with user-friendly messages
+- API errors show toast notifications
 - Form validation with real-time feedback
-- Loading states for async operations
+- Loading states for all async operations
+- Confirmation modals for destructive actions (delete chapter, wiki page, etc.)
 
 ## Performance Notes
 - Components use `<script setup>` for optimal performance
 - Lazy-loaded routes for code splitting
-- Axios request interceptors handle auth automatically
-- Markdown rendering optimized for large documents
-
-## Styling System
-- **Base**: Tailwind CSS utilities
-- **Components**: Headless UI for accessibility
-- **Icons**: Heroicons for consistency
-- **Typography**: Prose classes for markdown content
-- **Dark Mode**: Full support throughout app
-
-## Recent Changes
-- Added Google Drive PKCE authentication for native builds
-- Added rich text editor with live preview
-- Implemented AI review system with multiple tones
-- Created responsive book and chapter management
-- Added comprehensive error handling and loading states
-
-## Future Enhancements
-- Advanced text formatting options
-- Export functionality (PDF, DOCX)
-- Offline support with PWA
-- Advanced AI customization options
+- SQLite queries are optimized with proper indexing
+- Images loaded on-demand with thumbnails in lists
+- Large chapter text truncated in previews
