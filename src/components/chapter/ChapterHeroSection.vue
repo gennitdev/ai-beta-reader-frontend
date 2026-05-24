@@ -18,6 +18,7 @@ const emit = defineEmits<{
   'start-edit': [];
   'cancel-edit': [];
   'save-chapter': [];
+  'delete-chapter': [];
 }>();
 </script>
 
@@ -94,6 +95,16 @@ const emit = defineEmits<{
         class="inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
       >
         Cancel
+      </button>
+      <button
+        @click="emit('delete-chapter')"
+        :disabled="savingChapter"
+        class="inline-flex items-center rounded-md bg-red-600/80 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-red-700 disabled:opacity-50"
+      >
+        <svg class="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+        Delete
       </button>
     </div>
   </div>

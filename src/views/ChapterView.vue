@@ -1087,6 +1087,7 @@ onMounted(async () => {
       @start-edit="startEdit"
       @cancel-edit="cancelEdit"
       @save-chapter="saveChapter"
+      @delete-chapter="requestDeleteChapter"
     />
 
     <div class="w-full max-w-6xl md:mx-auto px-4 lg:px-8">
