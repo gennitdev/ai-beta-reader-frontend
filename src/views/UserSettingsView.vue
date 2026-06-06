@@ -15,6 +15,7 @@ const {
   loadBooks,
   loadChapters,
   getParts,
+  getNotes,
   backupToCloud,
   restoreFromCloud,
   hasCloudSync,
@@ -88,6 +89,9 @@ const removeApiKey = () => {
 const isExporting = ref(false)
 const exportProgress = ref('')
 const exportError = ref('')
+const exportFormat = ref<'zip' | 'markdown'>('zip')
+const markdownGranularity = ref<'book' | 'part'>('book')
+const includeNotes = ref(true)
 
 // Cloud backup state
 const cloudPassword = ref('')
@@ -328,6 +332,187 @@ const exportUserData = async () => {
     exportProgress.value = ''
   } finally {
     isExporting.value = false
+  }
+}
+
+const exportAsMarkdown = async () => {
+  if (isExporting.value) return
+
+  exportError.value = ''
+
+  try {
+    isExporting.value = true
+    exportProgress.value = 'Fetching your books...'
+
+    const zip = new JSZip()
+
+    // Get all books from local database
+    await loadBooks()
+    const booksData = books.value
+    exportProgress.value = `Found ${booksData.length} books. Processing...`
+
+    // Helper to build chapter markdown content
+    const buildChapterMarkdown = async (chapter: typeof chapters.value[0], level: number) => {
+      const headingPrefix = '#'.repeat(level)
+      let content = `${headingPrefix} ${chapter.title || 'Untitled Chapter'}\n\n`
+
+      if (chapter.text) {
+        content += `${chapter.text}\n\n`
+      }
+
+      // Add notes if option is enabled
+      if (includeNotes.value) {
+        const chapterNotes = await getNotes(chapter.id)
+        if (chapterNotes?.notes) {
+          content += `---\n\n**Notes:**\n\n${chapterNotes.notes}\n\n`
+        }
+      }
+
+      return content
+    }
+
+    for (let i = 0; i < booksData.length; i++) {
+      const book = booksData[i]
+      exportProgress.value = `Processing book ${i + 1}/${booksData.length}: ${book.title}`
+
+      // Get chapters for this book
+      await loadChapters(book.id)
+      const chaptersData = chapters.value
+      const chapterMap = new Map(chaptersData.map(ch => [ch.id, ch]))
+      const partsData = await getParts(book.id)
+
+      const orderedPartIds = parseJsonArray(book.part_order)
+      const orderedParts = orderedPartIds
+        .map(partId => partsData.find(part => part.id === partId))
+        .filter((part): part is NonNullable<typeof part> => Boolean(part))
+      const remainingParts = partsData.filter(part => !orderedPartIds.includes(part.id))
+      const allParts = [...orderedParts, ...remainingParts]
+      const hasParts = allParts.length > 0
+
+      // Track which chapters have been exported (for finding uncategorized)
+      const exportedChapterIds = new Set<string>()
+
+      if (markdownGranularity.value === 'part' && hasParts) {
+        // Export one file per part, organized in a book folder
+        const bookFolder = zip.folder(sanitizeFileName(book.title))
+        if (!bookFolder) continue
+
+        const partPaddingLength = allParts.length.toString().length
+
+        for (let partIndex = 0; partIndex < allParts.length; partIndex++) {
+          const part = allParts[partIndex]
+          const partName = part.name || `Part ${partIndex + 1}`
+          const partNumber = (partIndex + 1).toString().padStart(partPaddingLength, '0')
+
+          let markdown = `# ${book.title}\n\n## ${partName}\n\n`
+
+          const partChapterIds = parseJsonArray(part.chapter_order)
+          const partChapters = partChapterIds
+            .map(id => chapterMap.get(id))
+            .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
+
+          for (const chapter of partChapters) {
+            exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
+            markdown += await buildChapterMarkdown(chapter, 3)
+            exportedChapterIds.add(chapter.id)
+          }
+
+          const fileName = `${partNumber} - ${sanitizeFileName(partName)}.md`
+          bookFolder.file(fileName, markdown)
+        }
+
+        // Handle uncategorized chapters in a separate file
+        const uncategorizedChapters = chaptersData.filter(ch => !exportedChapterIds.has(ch.id))
+        if (uncategorizedChapters.length > 0) {
+          let markdown = `# ${book.title}\n\n## Uncategorized Chapters\n\n`
+          for (const chapter of uncategorizedChapters) {
+            exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
+            markdown += await buildChapterMarkdown(chapter, 3)
+          }
+          bookFolder.file('Uncategorized.md', markdown)
+        }
+      } else {
+        // Export one file per book (default behavior, or fallback when no parts)
+        let markdown = `# ${book.title}\n\n`
+
+        if (hasParts) {
+          for (const part of allParts) {
+            const partName = part.name || 'Untitled Part'
+            markdown += `## ${partName}\n\n`
+
+            const partChapterIds = parseJsonArray(part.chapter_order)
+            const partChapters = partChapterIds
+              .map(id => chapterMap.get(id))
+              .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
+
+            for (const chapter of partChapters) {
+              exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
+              markdown += await buildChapterMarkdown(chapter, 3)
+              exportedChapterIds.add(chapter.id)
+            }
+          }
+
+          // Handle uncategorized chapters
+          const uncategorizedChapters = chaptersData.filter(ch => !exportedChapterIds.has(ch.id))
+          if (uncategorizedChapters.length > 0) {
+            markdown += `## Uncategorized Chapters\n\n`
+            for (const chapter of uncategorizedChapters) {
+              exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
+              markdown += await buildChapterMarkdown(chapter, 3)
+            }
+          }
+        } else {
+          // No parts - export chapters in book's chapter_order
+          const bookChapterOrder = parseJsonArray(book.chapter_order)
+          const orderedChapters = bookChapterOrder
+            .map(id => chapterMap.get(id))
+            .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
+          const remainingChapters = chaptersData.filter(ch => !bookChapterOrder.includes(ch.id))
+          const allChapters = [...orderedChapters, ...remainingChapters]
+
+          for (const chapter of allChapters) {
+            exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
+            markdown += await buildChapterMarkdown(chapter, 2)
+          }
+        }
+
+        const fileName = `${sanitizeFileName(book.title)}.md`
+        zip.file(fileName, markdown)
+      }
+    }
+
+    exportProgress.value = 'Creating zip file...'
+
+    // Generate and download zip
+    const content = await zip.generateAsync({ type: 'blob' })
+    const url = URL.createObjectURL(content)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `beta-bot-markdown-export-${new Date().toISOString().split('T')[0]}.zip`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    exportProgress.value = 'Export completed!'
+    setTimeout(() => {
+      exportProgress.value = ''
+    }, 3000)
+
+  } catch (err) {
+    console.error('Export failed:', err)
+    exportError.value = 'Export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
+    exportProgress.value = ''
+  } finally {
+    isExporting.value = false
+  }
+}
+
+const handleExport = () => {
+  if (exportFormat.value === 'markdown') {
+    exportAsMarkdown()
+  } else {
+    exportUserData()
   }
 }
 
@@ -686,7 +871,7 @@ onMounted(async () => {
               </p>
             </div>
             <button
-              @click="exportUserData"
+              @click="handleExport"
               :disabled="isExporting"
               class="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap w-full sm:w-auto"
             >
@@ -696,8 +881,100 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="px-6 py-4">
-          <div v-if="isExporting" class="mb-4">
+        <div class="px-6 py-4 space-y-4">
+          <!-- Export Format Selection -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Export Format
+            </label>
+            <div class="space-y-2">
+              <label class="flex items-start cursor-pointer">
+                <input
+                  type="radio"
+                  v-model="exportFormat"
+                  value="zip"
+                  class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
+                />
+                <span class="ml-2">
+                  <span class="block text-sm text-gray-900 dark:text-white">Structured ZIP (folders)</span>
+                  <span class="block text-xs text-gray-500 dark:text-gray-400">
+                    Creates folders for each book with separate files for chapters, images, and metadata
+                  </span>
+                </span>
+              </label>
+              <label class="flex items-start cursor-pointer">
+                <input
+                  type="radio"
+                  v-model="exportFormat"
+                  value="markdown"
+                  class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
+                />
+                <span class="ml-2">
+                  <span class="block text-sm text-gray-900 dark:text-white">Markdown files</span>
+                  <span class="block text-xs text-gray-500 dark:text-gray-400">
+                    Exports each book as a single .md file with all chapters combined
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Markdown Options (only for markdown export) -->
+          <div v-if="exportFormat === 'markdown'" class="pl-6 border-l-2 border-gray-200 dark:border-gray-700 space-y-4">
+            <!-- Granularity Option -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                File Organization
+              </label>
+              <div class="space-y-2">
+                <label class="flex items-start cursor-pointer">
+                  <input
+                    type="radio"
+                    v-model="markdownGranularity"
+                    value="book"
+                    class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
+                  />
+                  <span class="ml-2">
+                    <span class="block text-sm text-gray-900 dark:text-white">One file per book</span>
+                    <span class="block text-xs text-gray-500 dark:text-gray-400">
+                      Each book becomes a single markdown file
+                    </span>
+                  </span>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                  <input
+                    type="radio"
+                    v-model="markdownGranularity"
+                    value="part"
+                    class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
+                  />
+                  <span class="ml-2">
+                    <span class="block text-sm text-gray-900 dark:text-white">One file per part</span>
+                    <span class="block text-xs text-gray-500 dark:text-gray-400">
+                      Each part becomes a separate markdown file (books without parts export as one file)
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Include Notes Option -->
+            <div>
+              <label class="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="includeNotes"
+                  class="h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 rounded focus:ring-green-500"
+                />
+                <span class="ml-2 text-sm text-gray-900 dark:text-white">Include chapter notes</span>
+              </label>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-6">
+                Adds your personal notes at the end of each chapter
+              </p>
+            </div>
+          </div>
+
+          <div v-if="isExporting" class="pt-2">
             <div class="flex items-center mb-2">
               <div class="animate-spin rounded-full h-4 w-4 border-2 border-green-600 border-t-transparent mr-2"></div>
               <span class="text-sm text-gray-600 dark:text-gray-400">{{ exportProgress }}</span>
@@ -709,21 +986,32 @@ onMounted(async () => {
 
           <div
             v-if="exportError"
-            class="mb-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400"
+            class="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400"
           >
             {{ exportError }}
           </div>
 
-          <div class="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+          <div class="text-sm text-gray-600 dark:text-gray-400 space-y-2 pt-2">
             <p><strong>What's included in your export:</strong></p>
             <ul class="list-disc pl-5 space-y-1">
               <li>All your books with metadata</li>
               <li>Chapter content and summaries</li>
-              <li>Character wiki pages with all details</li>
-              <li>Organized folder structure for easy navigation</li>
+              <li v-if="exportFormat === 'zip'">Character wiki pages with all details</li>
+              <li v-if="exportFormat === 'zip'">Organized folder structure for easy navigation</li>
+              <li v-if="exportFormat === 'markdown' && markdownGranularity === 'book'">Combined chapters in reading order (one file per book)</li>
+              <li v-if="exportFormat === 'markdown' && markdownGranularity === 'part'">Separate files for each part within book folders</li>
+              <li v-if="exportFormat === 'markdown' && includeNotes">Your personal chapter notes</li>
             </ul>
             <p class="mt-4 text-xs text-gray-500 dark:text-gray-500">
-              Your data will be downloaded as a ZIP file containing folders for each book, with subfolders for chapters and characters.
+              <template v-if="exportFormat === 'zip'">
+                Your data will be downloaded as a ZIP file containing folders for each book, with subfolders for chapters and characters.
+              </template>
+              <template v-else-if="markdownGranularity === 'book'">
+                Your data will be downloaded as a ZIP file containing one Markdown file per book.
+              </template>
+              <template v-else>
+                Your data will be downloaded as a ZIP file with folders for each book, containing one Markdown file per part.
+              </template>
             </p>
           </div>
         </div>
