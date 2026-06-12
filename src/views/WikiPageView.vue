@@ -11,8 +11,7 @@ import {
   MapPinIcon,
   LightBulbIcon,
   BookOpenIcon,
-  TrashIcon,
-  SparklesIcon
+  TrashIcon
 } from '@heroicons/vue/24/outline'
 
 interface WikiPage {
@@ -347,10 +346,6 @@ onMounted(() => {
                   <span class="text-sm text-gray-500 dark:text-gray-400 capitalize">{{ wikiPage.page_type }}</span>
                   <span v-if="wikiPage.is_major" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
                     Major
-                  </span>
-                  <span v-if="wikiPage.created_by_ai" class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full flex items-center">
-                    <SparklesIcon class="w-2.5 h-2.5 mr-1" />
-                    AI Created
                   </span>
                 </div>
               </div>
