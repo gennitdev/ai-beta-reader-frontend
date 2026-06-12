@@ -3,6 +3,12 @@ import { useImageLibrary } from '@/composables/useImageLibrary';
 import { useDatabase } from '@/composables/useDatabase';
 import type { ImageAsset, ImageWikiTag } from '@/lib/database';
 
+interface WikiPageOption {
+  id: string;
+  page_name: string;
+  page_type?: string | null;
+}
+
 export function useChapterImages(chapterIdRef: () => string | undefined, bookIdRef: () => string | undefined) {
   const {
     desktopImagesAvailable,
@@ -26,7 +32,7 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
   const addingChapterImages = ref(false);
   const chapterImageSources = ref<Record<string, string>>({});
   const chapterImageTags = ref<Record<string, ImageWikiTag[]>>({});
-  const bookWikiPages = ref<{ id: string; page_name: string; page_type?: string | null }[]>([]);
+  const bookWikiPages = ref<WikiPageOption[]>([]);
   const chapterImageError = ref<string | null>(null);
   const showImageLightbox = ref(false);
   const activeImageId = ref<string | null>(null);
@@ -131,7 +137,7 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
       if (bookId) {
         try {
           const pages = await getWikiPages(bookId);
-          bookWikiPages.value = pages.map((page: any) => ({
+          bookWikiPages.value = pages.map((page: WikiPageOption) => ({
             id: page.id,
             page_name: page.page_name,
             page_type: page.page_type ?? null,

@@ -128,19 +128,19 @@ function imageAssetFromSqlRow(row: unknown[]): ImageAsset {
   };
 }
 
-function imageAssetFromNativeRow(row: any): ImageAsset {
+function imageAssetFromNativeRow(row: Record<string, unknown>): ImageAsset {
   return {
-    id: row.id,
-    book_id: row.book_id,
-    chapter_id: row.chapter_id ?? null,
-    asset_type: row.asset_type,
-    file_name: row.file_name,
-    file_path: row.file_path,
-    mime_type: row.mime_type ?? null,
-    image_data: row.image_data ?? null,
-    notes: row.notes ?? '',
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    id: String(row.id),
+    book_id: String(row.book_id),
+    chapter_id: row.chapter_id == null ? null : String(row.chapter_id),
+    asset_type: row.asset_type as ImageAssetType,
+    file_name: String(row.file_name),
+    file_path: String(row.file_path),
+    mime_type: row.mime_type == null ? null : String(row.mime_type),
+    image_data: row.image_data == null ? null : String(row.image_data),
+    notes: row.notes == null ? '' : String(row.notes),
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
   };
 }
 
@@ -980,11 +980,11 @@ export class AppDatabase {
         const result = this.db.exec(`SELECT ${columns.join(', ')} FROM ${tableName}`);
         if (result.length === 0) return [];
 
-        return result[0].values.map((row: any[]) =>
+        return result[0].values.map((row: unknown[]) =>
           columns.reduce((entry, column, index) => {
             entry[column] = row[index] ?? null;
             return entry;
-          }, {} as Record<string, any>)
+          }, {} as Record<string, unknown>)
         );
       };
 
@@ -1243,14 +1243,15 @@ export class AppDatabase {
     };
   }
 
-  private normalizeImageAssetImportRows(rows: any[] | undefined) {
+  private normalizeImageAssetImportRows(rows: unknown[] | undefined) {
     if (!rows) return [];
 
     return rows.map((row) => {
       if (!Array.isArray(row)) {
+        const rowRecord = (row ?? {}) as Record<string, unknown>;
         return {
-          ...row,
-          notes: row?.notes ?? '',
+          ...rowRecord,
+          notes: rowRecord.notes ?? '',
         };
       }
 
@@ -1275,7 +1276,7 @@ export class AppDatabase {
       return IMAGE_ASSET_COLUMNS.reduce((entry, column, index) => {
         entry[column] = row[index] ?? null;
         return entry;
-      }, {} as Record<string, any>);
+      }, {} as Record<string, unknown>);
     });
   }
 
@@ -2070,19 +2071,19 @@ export class AppDatabase {
 
     if (this.isNative) {
       const result = await this.db.query(query, [imageId]);
-      return (result.values || []).map((row: any) => ({
-        image_id: row.image_id,
-        wiki_page_id: row.wiki_page_id,
-        page_name: row.page_name,
-        page_type: row.page_type,
-        created_at: row.created_at,
+      return ((result.values || []) as Record<string, unknown>[]).map((row) => ({
+        image_id: String(row.image_id),
+        wiki_page_id: String(row.wiki_page_id),
+        page_name: String(row.page_name),
+        page_type: String(row.page_type),
+        created_at: String(row.created_at),
       }));
     }
 
     const result = this.db.exec(query, [imageId]);
     if (result.length === 0) return [];
 
-    return result[0].values.map((row: any[]) => ({
+    return result[0].values.map((row: unknown[]) => ({
       image_id: String(row[0]),
       wiki_page_id: String(row[1]),
       page_name: String(row[2]),
