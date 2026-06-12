@@ -24,6 +24,7 @@ function createAssetFromMetadata(
     file_path: metadata.relativePath,
     mime_type: metadata.mimeType ?? null,
     image_data: options.imageData ?? null,
+    notes: '',
     created_at: now,
     updated_at: now,
   }
@@ -145,6 +146,7 @@ export function useImageLibrary() {
         file_path: `web/${id}/${file.name}`, // Virtual path for web
         mime_type: file.type || null,
         image_data: dataUrl,
+        notes: '',
         created_at: now,
         updated_at: now,
       }

@@ -1,5 +1,5 @@
 import { ref, onMounted } from 'vue'
-import { db, type Book, type Chapter, type ChapterSummary, type ChapterReview, type ChapterNote, type ImageAsset } from '@/lib/database'
+import { db, type Book, type Chapter, type ChapterSummary, type ChapterReview, type ChapterNote, type ImageAsset, type ImageWikiTag } from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 
 const isInitialized = ref(false)
@@ -712,6 +712,50 @@ export function useDatabase() {
     }
   }
 
+  async function updateImageAssetNotes(imageId: string, notes: string) {
+    try {
+      await initializeDatabase()
+      await db.updateImageAssetNotes(imageId, notes)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to save image notes'
+      console.error('Update image notes error:', e)
+      throw e
+    }
+  }
+
+  async function getImageWikiTags(imageId: string): Promise<ImageWikiTag[]> {
+    try {
+      await initializeDatabase()
+      return await db.getImageWikiTags(imageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load image tags'
+      console.error('Get image tags error:', e)
+      throw e
+    }
+  }
+
+  async function setImageWikiTags(imageId: string, wikiPageIds: string[]) {
+    try {
+      await initializeDatabase()
+      await db.setImageWikiTags(imageId, wikiPageIds)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to save image tags'
+      console.error('Set image tags error:', e)
+      throw e
+    }
+  }
+
+  async function getWikiPageImageAssets(wikiPageId: string): Promise<ImageAsset[]> {
+    try {
+      await initializeDatabase()
+      return await db.getWikiPageImages(wikiPageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load wiki page images'
+      console.error('Get wiki page images error:', e)
+      throw e
+    }
+  }
+
   return {
     // State
     books,
@@ -792,6 +836,10 @@ export function useDatabase() {
     getChapterCoverImageAsset,
     setChapterCoverImageId,
     getBookImageAssets,
+    updateImageAssetNotes,
+    getImageWikiTags,
+    setImageWikiTags,
+    getWikiPageImageAssets,
 
     hasCloudSync: () => cloudSync.value !== null,
 

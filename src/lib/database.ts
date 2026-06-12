@@ -85,9 +85,32 @@ export interface ImageAsset {
   file_path: string;
   mime_type: string | null;
   image_data: string | null; // Base64 data URL for web storage and backup/restore
+  notes: string;
   created_at: string;
   updated_at: string;
 }
+
+export interface ImageWikiTag {
+  image_id: string;
+  wiki_page_id: string;
+  page_name: string;
+  page_type: string;
+  created_at: string;
+}
+
+const IMAGE_ASSET_COLUMNS = [
+  'id',
+  'book_id',
+  'chapter_id',
+  'asset_type',
+  'file_name',
+  'file_path',
+  'mime_type',
+  'image_data',
+  'notes',
+  'created_at',
+  'updated_at',
+];
 
 function imageAssetFromSqlRow(row: unknown[]): ImageAsset {
   return {
@@ -98,9 +121,26 @@ function imageAssetFromSqlRow(row: unknown[]): ImageAsset {
     file_name: String(row[4]),
     file_path: String(row[5]),
     mime_type: row[6] == null ? null : String(row[6]),
-    created_at: String(row[7]),
-    updated_at: String(row[8]),
-    image_data: row[9] == null ? null : String(row[9]),
+    image_data: row[7] == null ? null : String(row[7]),
+    notes: row[8] == null ? '' : String(row[8]),
+    created_at: String(row[9]),
+    updated_at: String(row[10]),
+  };
+}
+
+function imageAssetFromNativeRow(row: any): ImageAsset {
+  return {
+    id: row.id,
+    book_id: row.book_id,
+    chapter_id: row.chapter_id ?? null,
+    asset_type: row.asset_type,
+    file_name: row.file_name,
+    file_path: row.file_path,
+    mime_type: row.mime_type ?? null,
+    image_data: row.image_data ?? null,
+    notes: row.notes ?? '',
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
@@ -343,10 +383,20 @@ export class AppDatabase {
         file_path TEXT NOT NULL,
         mime_type TEXT,
         image_data TEXT,
+        notes TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (book_id) REFERENCES books(id),
         FOREIGN KEY (chapter_id) REFERENCES chapters(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS image_wiki_tags (
+        image_id TEXT NOT NULL,
+        wiki_page_id TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (image_id, wiki_page_id),
+        FOREIGN KEY (image_id) REFERENCES image_assets(id),
+        FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id)
       );
 
       CREATE TABLE IF NOT EXISTS chapter_notes (
@@ -360,6 +410,8 @@ export class AppDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_image_assets_book ON image_assets(book_id);
       CREATE INDEX IF NOT EXISTS idx_image_assets_chapter ON image_assets(chapter_id);
+      CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_image ON image_wiki_tags(image_id);
+      CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_wiki_page ON image_wiki_tags(wiki_page_id);
     `;
 
     if (this.isNative) {
@@ -390,7 +442,20 @@ export class AppDatabase {
       // Add image_data to image_assets for web storage and backup/restore
       `ALTER TABLE image_assets ADD COLUMN image_data TEXT`,
       // Add pinning support to wiki pages
-      `ALTER TABLE wiki_pages ADD COLUMN is_pinned BOOLEAN DEFAULT 0`
+      `ALTER TABLE wiki_pages ADD COLUMN is_pinned BOOLEAN DEFAULT 0`,
+      // Add markdown notes to image assets
+      `ALTER TABLE image_assets ADD COLUMN notes TEXT DEFAULT ''`,
+      // Add wiki tags for images
+      `CREATE TABLE IF NOT EXISTS image_wiki_tags (
+        image_id TEXT NOT NULL,
+        wiki_page_id TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (image_id, wiki_page_id),
+        FOREIGN KEY (image_id) REFERENCES image_assets(id),
+        FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_image ON image_wiki_tags(image_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_wiki_page ON image_wiki_tags(wiki_page_id)`
     ];
 
     for (const migration of migrations) {
@@ -911,6 +976,17 @@ export class AppDatabase {
         const result = this.db.exec(`SELECT * FROM ${tableName}`);
         return result.length > 0 ? result[0].values : [];
       };
+      const getAllObjectsFromTable = (tableName: string, columns: string[]) => {
+        const result = this.db.exec(`SELECT ${columns.join(', ')} FROM ${tableName}`);
+        if (result.length === 0) return [];
+
+        return result[0].values.map((row: any[]) =>
+          columns.reduce((entry, column, index) => {
+            entry[column] = row[index] ?? null;
+            return entry;
+          }, {} as Record<string, any>)
+        );
+      };
 
       const exportData = {
         version: 2,
@@ -926,7 +1002,8 @@ export class AppDatabase {
         ai_profiles: getAllFromTable('ai_profiles'),
         wiki_updates: getAllFromTable('wiki_updates'),
         chapter_wiki_mentions: getAllFromTable('chapter_wiki_mentions'),
-        image_assets: getAllFromTable('image_assets'),
+        image_assets: getAllObjectsFromTable('image_assets', IMAGE_ASSET_COLUMNS),
+        image_wiki_tags: getAllObjectsFromTable('image_wiki_tags', ['image_id', 'wiki_page_id', 'created_at']),
         chapter_notes: getAllFromTable('chapter_notes')
       };
 
@@ -970,6 +1047,7 @@ export class AppDatabase {
       'chapter_summaries',
       'part_summaries',
       'chapter_notes',
+      'image_wiki_tags',
       'wiki_pages',
       'chapters',
       'book_parts',
@@ -1029,7 +1107,8 @@ export class AppDatabase {
     await importTable('book_characters', importData.book_characters);
     await importTable('wiki_updates', importData.wiki_updates);
     await importTable('chapter_wiki_mentions', importData.chapter_wiki_mentions);
-    await importTable('image_assets', importData.image_assets);
+    await importTable('image_assets', this.normalizeImageAssetImportRows(importData.image_assets));
+    await importTable('image_wiki_tags', importData.image_wiki_tags);
     await importTable('chapter_notes', importData.chapter_notes);
 
     if (!this.isNative) {
@@ -1062,6 +1141,7 @@ export class AppDatabase {
       ai_profiles: [],
       wiki_updates: [],
       chapter_wiki_mentions: [],
+      image_wiki_tags: [],
       chapter_notes: []
     };
 
@@ -1097,6 +1177,7 @@ export class AppDatabase {
     transformedData.wiki_updates = jsonData.wiki_updates || [];
     transformedData.chapter_wiki_mentions = jsonData.chapter_wiki_mentions || [];
     transformedData.image_assets = jsonData.image_assets || [];
+    transformedData.image_wiki_tags = jsonData.image_wiki_tags || [];
     transformedData.chapter_notes = jsonData.chapter_notes || [];
 
     // Use the standard import function
@@ -1157,8 +1238,45 @@ export class AppDatabase {
       wiki_updates: rowsToObjects('wiki_updates'),
       chapter_wiki_mentions: rowsToObjects('chapter_wiki_mentions'),
       image_assets: rowsToObjects('image_assets'),
+      image_wiki_tags: rowsToObjects('image_wiki_tags'),
       chapter_notes: rowsToObjects('chapter_notes'),
     };
+  }
+
+  private normalizeImageAssetImportRows(rows: any[] | undefined) {
+    if (!rows) return [];
+
+    return rows.map((row) => {
+      if (!Array.isArray(row)) {
+        return {
+          ...row,
+          notes: row?.notes ?? '',
+        };
+      }
+
+      // Older sql.js exports used positional arrays with image_data appended by
+      // migration: id..mime_type, created_at, updated_at, image_data.
+      if (row.length === 10) {
+        return {
+          id: row[0],
+          book_id: row[1],
+          chapter_id: row[2],
+          asset_type: row[3],
+          file_name: row[4],
+          file_path: row[5],
+          mime_type: row[6],
+          image_data: row[9] ?? null,
+          notes: '',
+          created_at: row[7],
+          updated_at: row[8],
+        };
+      }
+
+      return IMAGE_ASSET_COLUMNS.reduce((entry, column, index) => {
+        entry[column] = row[index] ?? null;
+        return entry;
+      }, {} as Record<string, any>);
+    });
   }
 
   private async getTableColumns(tableName: string): Promise<string[]> {
@@ -1695,16 +1813,20 @@ export class AppDatabase {
     const deleteUpdatesQuery = `DELETE FROM wiki_updates WHERE wiki_page_id = ?`;
     // Delete related chapter mentions
     const deleteMentionsQuery = `DELETE FROM chapter_wiki_mentions WHERE wiki_page_id = ?`;
+    // Delete image tag relationships
+    const deleteImageTagsQuery = `DELETE FROM image_wiki_tags WHERE wiki_page_id = ?`;
     // Delete the wiki page itself
     const deletePageQuery = `DELETE FROM wiki_pages WHERE id = ?`;
 
     if (this.isNative) {
       await this.db.run(deleteUpdatesQuery, [pageId]);
       await this.db.run(deleteMentionsQuery, [pageId]);
+      await this.db.run(deleteImageTagsQuery, [pageId]);
       await this.db.run(deletePageQuery, [pageId]);
     } else {
       this.db.run(deleteUpdatesQuery, [pageId]);
       this.db.run(deleteMentionsQuery, [pageId]);
+      this.db.run(deleteImageTagsQuery, [pageId]);
       this.db.run(deletePageQuery, [pageId]);
       this.saveToLocalStorage();
     }
@@ -1878,8 +2000,8 @@ export class AppDatabase {
 
   async saveImageAsset(asset: ImageAsset) {
     const query = `INSERT OR REPLACE INTO image_assets
-      (id, book_id, chapter_id, asset_type, file_name, file_path, mime_type, image_data, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      (id, book_id, chapter_id, asset_type, file_name, file_path, mime_type, image_data, notes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     const params = [
       asset.id,
       asset.book_id,
@@ -1889,6 +2011,7 @@ export class AppDatabase {
       asset.file_path,
       asset.mime_type ?? null,
       asset.image_data ?? null,
+      asset.notes ?? '',
       asset.created_at,
       asset.updated_at,
     ];
@@ -1903,35 +2026,116 @@ export class AppDatabase {
 
   async deleteImageAsset(imageId: string) {
     const unlinkCoverQuery = `UPDATE books SET cover_image_id = NULL WHERE cover_image_id = ?`;
+    const unlinkPartCoverQuery = `UPDATE book_parts SET cover_image_id = NULL WHERE cover_image_id = ?`;
+    const unlinkChapterCoverQuery = `UPDATE chapters SET cover_image_id = NULL WHERE cover_image_id = ?`;
+    const deleteTagsQuery = `DELETE FROM image_wiki_tags WHERE image_id = ?`;
     const deleteQuery = `DELETE FROM image_assets WHERE id = ?`;
 
     if (this.isNative) {
       await this.db.run(unlinkCoverQuery, [imageId]);
+      await this.db.run(unlinkPartCoverQuery, [imageId]);
+      await this.db.run(unlinkChapterCoverQuery, [imageId]);
+      await this.db.run(deleteTagsQuery, [imageId]);
       await this.db.run(deleteQuery, [imageId]);
     } else {
       this.db.run(unlinkCoverQuery, [imageId]);
+      this.db.run(unlinkPartCoverQuery, [imageId]);
+      this.db.run(unlinkChapterCoverQuery, [imageId]);
+      this.db.run(deleteTagsQuery, [imageId]);
       this.db.run(deleteQuery, [imageId]);
       this.saveToLocalStorage();
     }
   }
 
+  async updateImageAssetNotes(imageId: string, notes: string): Promise<void> {
+    const query = `UPDATE image_assets SET notes = ?, updated_at = ? WHERE id = ?`;
+    const params = [notes, new Date().toISOString(), imageId];
+
+    if (this.isNative) {
+      await this.db.run(query, params);
+    } else {
+      this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async getImageWikiTags(imageId: string): Promise<ImageWikiTag[]> {
+    const query = `
+      SELECT iwt.image_id, iwt.wiki_page_id, wp.page_name, wp.page_type, iwt.created_at
+      FROM image_wiki_tags iwt
+      INNER JOIN wiki_pages wp ON wp.id = iwt.wiki_page_id
+      WHERE iwt.image_id = ?
+      ORDER BY wp.page_name
+    `;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [imageId]);
+      return (result.values || []).map((row: any) => ({
+        image_id: row.image_id,
+        wiki_page_id: row.wiki_page_id,
+        page_name: row.page_name,
+        page_type: row.page_type,
+        created_at: row.created_at,
+      }));
+    }
+
+    const result = this.db.exec(query, [imageId]);
+    if (result.length === 0) return [];
+
+    return result[0].values.map((row: any[]) => ({
+      image_id: String(row[0]),
+      wiki_page_id: String(row[1]),
+      page_name: String(row[2]),
+      page_type: String(row[3]),
+      created_at: String(row[4]),
+    }));
+  }
+
+  async setImageWikiTags(imageId: string, wikiPageIds: string[]): Promise<void> {
+    const deleteQuery = `DELETE FROM image_wiki_tags WHERE image_id = ?`;
+    const insertQuery = `INSERT OR IGNORE INTO image_wiki_tags (image_id, wiki_page_id, created_at) VALUES (?, ?, ?)`;
+    const now = new Date().toISOString();
+    const uniqueWikiPageIds = [...new Set(wikiPageIds)];
+
+    if (this.isNative) {
+      await this.db.run(deleteQuery, [imageId]);
+      for (const wikiPageId of uniqueWikiPageIds) {
+        await this.db.run(insertQuery, [imageId, wikiPageId, now]);
+      }
+    } else {
+      this.db.run(deleteQuery, [imageId]);
+      for (const wikiPageId of uniqueWikiPageIds) {
+        this.db.run(insertQuery, [imageId, wikiPageId, now]);
+      }
+      this.saveToLocalStorage();
+    }
+  }
+
+  async getWikiPageImages(wikiPageId: string): Promise<ImageAsset[]> {
+    const query = `
+      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
+      FROM image_wiki_tags iwt
+      INNER JOIN image_assets ia ON ia.id = iwt.image_id
+      WHERE iwt.wiki_page_id = ?
+      ORDER BY ia.created_at DESC
+    `;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [wikiPageId]);
+      return (result.values || []).map(imageAssetFromNativeRow);
+    }
+
+    const result = this.db.exec(query, [wikiPageId]);
+    if (result.length === 0) return [];
+    return result[0].values.map(imageAssetFromSqlRow);
+  }
+
   async getChapterImages(chapterId: string): Promise<ImageAsset[]> {
-    const query = `SELECT * FROM image_assets WHERE chapter_id = ? ORDER BY created_at DESC`;
+    const query = `SELECT ${IMAGE_ASSET_COLUMNS.join(', ')} FROM image_assets WHERE chapter_id = ? ORDER BY created_at DESC`;
 
     if (this.isNative) {
       const result = await this.db.query(query, [chapterId]);
-      return (result.values || []).map((row: any) => ({
-        id: row.id,
-        book_id: row.book_id,
-        chapter_id: row.chapter_id,
-        asset_type: row.asset_type,
-        file_name: row.file_name,
-        file_path: row.file_path,
-        mime_type: row.mime_type,
-        image_data: row.image_data ?? null,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      }));
+      return (result.values || []).map(imageAssetFromNativeRow);
     } else {
       const result = this.db.exec(query, [chapterId]);
       if (result.length === 0) return [];
@@ -1941,7 +2145,7 @@ export class AppDatabase {
 
   async getPartImages(partId: string): Promise<ImageAsset[]> {
     const query = `
-      SELECT ia.*
+      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
       FROM image_assets ia
       INNER JOIN chapters c ON c.id = ia.chapter_id
       WHERE c.part_id = ?
@@ -1950,18 +2154,7 @@ export class AppDatabase {
 
     if (this.isNative) {
       const result = await this.db.query(query, [partId]);
-      return (result.values || []).map((row: any) => ({
-        id: row.id,
-        book_id: row.book_id,
-        chapter_id: row.chapter_id,
-        asset_type: row.asset_type,
-        file_name: row.file_name,
-        file_path: row.file_path,
-        mime_type: row.mime_type,
-        image_data: row.image_data ?? null,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      }));
+      return (result.values || []).map(imageAssetFromNativeRow);
     } else {
       const result = this.db.exec(query, [partId]);
       if (result.length === 0) return [];
@@ -1970,22 +2163,11 @@ export class AppDatabase {
   }
 
   async getBookImages(bookId: string): Promise<ImageAsset[]> {
-    const query = `SELECT * FROM image_assets WHERE book_id = ? ORDER BY created_at DESC`;
+    const query = `SELECT ${IMAGE_ASSET_COLUMNS.join(', ')} FROM image_assets WHERE book_id = ? ORDER BY created_at DESC`;
 
     if (this.isNative) {
       const result = await this.db.query(query, [bookId]);
-      return (result.values || []).map((row: any) => ({
-        id: row.id,
-        book_id: row.book_id,
-        chapter_id: row.chapter_id,
-        asset_type: row.asset_type,
-        file_name: row.file_name,
-        file_path: row.file_path,
-        mime_type: row.mime_type,
-        image_data: row.image_data ?? null,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      }));
+      return (result.values || []).map(imageAssetFromNativeRow);
     } else {
       const result = this.db.exec(query, [bookId]);
       if (result.length === 0) return [];
@@ -1995,7 +2177,7 @@ export class AppDatabase {
 
   async getBookCoverImage(bookId: string): Promise<ImageAsset | null> {
     const query = `
-      SELECT ia.*
+      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
       FROM books b
       LEFT JOIN image_assets ia ON ia.id = b.cover_image_id
       WHERE b.id = ?
@@ -2006,18 +2188,7 @@ export class AppDatabase {
       const result = await this.db.query(query, [bookId]);
       const row = result.values && result.values[0];
       if (!row || !row.id) return null;
-      return {
-        id: row.id,
-        book_id: row.book_id,
-        chapter_id: row.chapter_id,
-        asset_type: row.asset_type,
-        file_name: row.file_name,
-        file_path: row.file_path,
-        mime_type: row.mime_type,
-        image_data: row.image_data ?? null,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      };
+      return imageAssetFromNativeRow(row);
     } else {
       const result = this.db.exec(query, [bookId]);
       if (result.length === 0 || result[0].values.length === 0) return null;
@@ -2040,7 +2211,7 @@ export class AppDatabase {
 
   async getPartCoverImage(partId: string): Promise<ImageAsset | null> {
     const query = `
-      SELECT ia.*
+      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
       FROM book_parts bp
       LEFT JOIN image_assets ia ON ia.id = bp.cover_image_id
       WHERE bp.id = ?
@@ -2051,18 +2222,7 @@ export class AppDatabase {
       const result = await this.db.query(query, [partId]);
       const row = result.values && result.values[0];
       if (!row || !row.id) return null;
-      return {
-        id: row.id,
-        book_id: row.book_id,
-        chapter_id: row.chapter_id,
-        asset_type: row.asset_type,
-        file_name: row.file_name,
-        file_path: row.file_path,
-        mime_type: row.mime_type,
-        image_data: row.image_data ?? null,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      };
+      return imageAssetFromNativeRow(row);
     } else {
       const result = this.db.exec(query, [partId]);
       if (result.length === 0 || result[0].values.length === 0) return null;
@@ -2085,7 +2245,7 @@ export class AppDatabase {
 
   async getChapterCoverImage(chapterId: string): Promise<ImageAsset | null> {
     const query = `
-      SELECT ia.*
+      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
       FROM chapters c
       LEFT JOIN image_assets ia ON ia.id = c.cover_image_id
       WHERE c.id = ?
@@ -2096,18 +2256,7 @@ export class AppDatabase {
       const result = await this.db.query(query, [chapterId]);
       const row = result.values && result.values[0];
       if (!row || !row.id) return null;
-      return {
-        id: row.id,
-        book_id: row.book_id,
-        chapter_id: row.chapter_id,
-        asset_type: row.asset_type,
-        file_name: row.file_name,
-        file_path: row.file_path,
-        mime_type: row.mime_type,
-        image_data: row.image_data ?? null,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      };
+      return imageAssetFromNativeRow(row);
     } else {
       const result = this.db.exec(query, [chapterId]);
       if (result.length === 0 || result[0].values.length === 0) return null;
