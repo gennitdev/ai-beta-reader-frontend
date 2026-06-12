@@ -268,6 +268,7 @@ export class AppDatabase {
         created_by_ai BOOLEAN,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_pinned BOOLEAN DEFAULT 0,
         FOREIGN KEY (book_id) REFERENCES books(id)
       );
 
@@ -387,7 +388,9 @@ export class AppDatabase {
       // Add cover_image_id to chapters if not exists
       `ALTER TABLE chapters ADD COLUMN cover_image_id TEXT`,
       // Add image_data to image_assets for web storage and backup/restore
-      `ALTER TABLE image_assets ADD COLUMN image_data TEXT`
+      `ALTER TABLE image_assets ADD COLUMN image_data TEXT`,
+      // Add pinning support to wiki pages
+      `ALTER TABLE wiki_pages ADD COLUMN is_pinned BOOLEAN DEFAULT 0`
     ];
 
     for (const migration of migrations) {
@@ -1530,11 +1533,12 @@ export class AppDatabase {
     summary: string;
     page_type?: string;
     created_by_ai?: boolean;
+    is_pinned?: boolean;
   }) {
     const id = `wiki-${page.book_id}-${Date.now()}`;
     const now = new Date().toISOString();
-    const query = `INSERT INTO wiki_pages (id, book_id, page_name, page_type, content, summary, created_by_ai, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const query = `INSERT INTO wiki_pages (id, book_id, page_name, page_type, content, summary, created_by_ai, created_at, updated_at, is_pinned)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     const params = [
       id,
@@ -1545,7 +1549,8 @@ export class AppDatabase {
       page.summary,
       page.created_by_ai ? 1 : 0,
       now,
-      now
+      now,
+      page.is_pinned ? 1 : 0
     ];
 
     if (this.isNative) {
@@ -1562,6 +1567,7 @@ export class AppDatabase {
     content?: string;
     summary?: string;
     page_name?: string;
+    is_pinned?: boolean;
   }) {
     const now = new Date().toISOString();
     const sets: string[] = [];
@@ -1578,6 +1584,10 @@ export class AppDatabase {
     if (updates.page_name !== undefined) {
       sets.push('page_name = ?');
       params.push(updates.page_name);
+    }
+    if (updates.is_pinned !== undefined) {
+      sets.push('is_pinned = ?');
+      params.push(updates.is_pinned ? 1 : 0);
     }
 
     sets.push('updated_at = ?');
@@ -1617,7 +1627,8 @@ export class AppDatabase {
         is_major: row[8],
         created_by_ai: row[9],
         created_at: row[10],
-        updated_at: row[11]
+        updated_at: row[11],
+        is_pinned: row[12]
       };
     }
   }
@@ -1645,7 +1656,8 @@ export class AppDatabase {
         is_major: row[8],
         created_by_ai: row[9],
         created_at: row[10],
-        updated_at: row[11]
+        updated_at: row[11],
+        is_pinned: row[12]
       };
     }
   }
@@ -1672,7 +1684,8 @@ export class AppDatabase {
         is_major: row[8],
         created_by_ai: row[9],
         created_at: row[10],
-        updated_at: row[11]
+        updated_at: row[11],
+        is_pinned: row[12]
       }));
     }
   }

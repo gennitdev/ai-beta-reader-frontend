@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, toRefs, watch } from 'vue'
-import { DocumentTextIcon, BookOpenIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import type { Component } from 'vue'
+import { DocumentTextIcon, BookOpenIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon, TrashIcon, BookmarkIcon } from '@heroicons/vue/24/outline'
 import type { Book } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import type { PropType } from 'vue'
@@ -108,11 +109,15 @@ const props = defineProps({
     required: true
   },
   getTypeIcon: {
-    type: Function as PropType<(type: string) => any>,
+    type: Function as PropType<(type: string) => Component>,
     required: true
   },
   getTypeColor: {
     type: Function as PropType<(type: string) => string>,
+    required: true
+  },
+  toggleWikiPagePinned: {
+    type: Function as PropType<(page: BookWikiPage) => void | Promise<void>>,
     required: true
   },
   desktopImagesAvailable: {
@@ -539,6 +544,18 @@ watch(
                 >
                   Major
                 </span>
+                <button
+                  @click.prevent.stop="toggleWikiPagePinned(page)"
+                  class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-300"
+                  :class="page.is_pinned ? 'text-blue-600 dark:text-blue-300' : ''"
+                  :title="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
+                  :aria-label="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
+                >
+                  <BookmarkIcon
+                    class="h-5 w-5"
+                    :class="page.is_pinned ? 'fill-current' : ''"
+                  />
+                </button>
               </div>
 
               <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-3">

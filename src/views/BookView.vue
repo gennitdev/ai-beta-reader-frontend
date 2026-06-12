@@ -21,6 +21,7 @@ type DatabaseWikiPage = {
   aliases?: string | null;
   tags?: string | null;
   is_major?: boolean | number | null;
+  is_pinned?: boolean | number | null;
   created_by_ai?: boolean | number | null;
   created_at: string;
   updated_at: string;
@@ -46,6 +47,7 @@ const {
   getNotes,
   saveBook,
   getParts,
+  updateWikiPage,
   updateChapterOrders,
   updatePartOrder,
   searchBook,
@@ -723,6 +725,7 @@ const loadWiki = async () => {
       aliases: safeParseArray(page.aliases),
       tags: safeParseArray(page.tags),
       is_major: Boolean(page.is_major),
+      is_pinned: Boolean(page.is_pinned),
       created_by_ai: Boolean(page.created_by_ai),
       created_at: page.created_at,
       updated_at: page.updated_at,
@@ -772,11 +775,11 @@ const wikiPagesByType = computed(() => {
     return acc;
   }, {} as Record<string, WikiPage[]>);
 
-  // Sort each group: major pages first, then alphabetical
+  // Sort each group: pinned pages first, then alphabetical
   Object.keys(grouped).forEach((type) => {
     grouped[type].sort((a, b) => {
-      if (a.is_major !== b.is_major) {
-        return b.is_major ? 1 : -1;
+      if (a.is_pinned !== b.is_pinned) {
+        return b.is_pinned ? 1 : -1;
       }
       return a.page_name.localeCompare(b.page_name);
     });
@@ -809,6 +812,29 @@ const getTypeColor = (type: string) => {
     default:
       return "text-gray-600";
   }
+};
+
+const toggleWikiPagePinned = async (page: WikiPage) => {
+  const previousPinned = page.is_pinned;
+  const nextPinned = !page.is_pinned;
+  page.is_pinned = nextPinned;
+  page.updated_at = new Date().toISOString();
+
+  try {
+    await updateWikiPage(page.id, { is_pinned: nextPinned });
+  } catch (error) {
+    page.is_pinned = previousPinned;
+    page.updated_at = new Date().toISOString();
+    console.error("Failed to update wiki page pin:", error);
+  }
+};
+
+const handleWikiPagePinChanged = (payload: { id: string; isPinned: boolean; updatedAt: string }) => {
+  const page = wikiPages.value.find((item) => item.id === payload.id);
+  if (!page) return;
+
+  page.is_pinned = payload.isPinned;
+  page.updated_at = payload.updatedAt;
 };
 
 const toggleSummary = (chapterId: string) => {
@@ -890,6 +916,7 @@ onMounted(async () => {
       :word-count-for-chapters="wordCountForChapters"
       :get-summary-preview="getSummaryPreview"
       :toggle-summary="toggleSummary"
+      :toggle-wiki-page-pinned="toggleWikiPagePinned"
       :create-new-chapter="createNewChapter"
       :go-to-organize-chapters="goToOrganizeChapters"
       :create-new-chapter-in-part="createNewChapterInPart"
@@ -909,7 +936,11 @@ onMounted(async () => {
       :chapter-thumbnails="chapterThumbnails"
       :part-thumbnails="partThumbnails"
     />
-    <router-view v-else :key="routerViewKey" />
+    <router-view
+      v-else
+      :key="routerViewKey"
+      @wiki-page-pin-changed="handleWikiPagePinChanged"
+    />
   </div>
 
   <BookDesktopLayout
@@ -945,6 +976,7 @@ onMounted(async () => {
     :get-type-color="getTypeColor"
     :active-chapter-id="activeChapterId"
     :active-wiki-page-id="activeWikiPageId"
+    :toggle-wiki-page-pinned="toggleWikiPagePinned"
     :is-on-book-only="isOnBookOnly"
     :router-view-key="routerViewKey"
     :start-editing-book-title="startEditingBookTitle"
@@ -965,6 +997,7 @@ onMounted(async () => {
     :selected-image-id="selectedImageId"
     :selected-image-src="selectedImageSrc"
     :selected-image="selectedImage"
+    :wiki-page-pin-changed="handleWikiPagePinChanged"
   />
 
   <SearchModal

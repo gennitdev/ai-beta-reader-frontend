@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import type { Book } from '@/lib/database'
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -11,7 +12,8 @@ import {
   MapPinIcon,
   LightBulbIcon,
   BookOpenIcon,
-  TrashIcon
+  TrashIcon,
+  BookmarkIcon
 } from '@heroicons/vue/24/outline'
 
 interface WikiPage {
@@ -24,6 +26,7 @@ interface WikiPage {
   aliases: string[]
   tags: string[]
   is_major: boolean
+  is_pinned: boolean
   created_by_ai: boolean
   created_at: string
   updated_at: string
@@ -47,6 +50,9 @@ interface Character {
 
 const route = useRoute()
 const router = useRouter()
+const emit = defineEmits<{
+  (event: 'wiki-page-pin-changed', payload: { id: string; isPinned: boolean; updatedAt: string }): void
+}>()
 
 // Computed route parameters to handle both nested and standalone routes
 const bookId = computed(() => (route.params.bookId || route.params.id) as string)
@@ -102,7 +108,7 @@ const getTypeColor = (type: string) => {
 const bookTitle = computed(() => {
   try {
     if (books.value.length > 0) {
-      const book = books.value.find((b: any) => b.id === bookId.value)
+      const book = books.value.find((b: Book) => b.id === bookId.value)
       if (book) {
         return book.title
       }
@@ -136,6 +142,7 @@ const loadWikiPage = async () => {
         aliases: pageData.aliases ? JSON.parse(pageData.aliases) : [],
         tags: pageData.tags ? JSON.parse(pageData.tags) : [],
         is_major: pageData.is_major || false,
+        is_pinned: Boolean(pageData.is_pinned),
         created_by_ai: pageData.created_by_ai || false,
         created_at: pageData.created_at,
         updated_at: pageData.updated_at
@@ -224,6 +231,41 @@ const cancelEdit = () => {
   if (!wikiPage.value) return
   editedContent.value = wikiPage.value.content
   isEditing.value = false
+}
+
+const togglePinned = async () => {
+  if (!wikiPage.value) return
+
+  const previousPinned = wikiPage.value.is_pinned
+  const nextPinned = !wikiPage.value.is_pinned
+  const updatedAt = new Date().toISOString()
+  wikiPage.value.is_pinned = nextPinned
+  wikiPage.value.updated_at = updatedAt
+  emit('wiki-page-pin-changed', {
+    id: wikiPage.value.id,
+    isPinned: nextPinned,
+    updatedAt
+  })
+
+  saving.value = true
+  try {
+    await updateWikiPage(wikiPageId.value, {
+      is_pinned: nextPinned
+    })
+  } catch (error) {
+    const rollbackUpdatedAt = new Date().toISOString()
+    wikiPage.value.is_pinned = previousPinned
+    wikiPage.value.updated_at = rollbackUpdatedAt
+    emit('wiki-page-pin-changed', {
+      id: wikiPage.value.id,
+      isPinned: previousPinned,
+      updatedAt: rollbackUpdatedAt
+    })
+    console.error('Failed to update wiki page pin:', error)
+    alert('Failed to update pin')
+  } finally {
+    saving.value = false
+  }
 }
 
 const goBack = () => {
@@ -354,6 +396,20 @@ onMounted(() => {
         </div>
 
         <div v-if="wikiPage" class="flex items-center space-x-3">
+          <button
+            @click="togglePinned"
+            :disabled="saving"
+            class="inline-flex items-center px-3 py-2 text-sm rounded-md transition-colors disabled:opacity-50"
+            :class="wikiPage.is_pinned
+              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
+          >
+            <BookmarkIcon
+              class="w-4 h-4 mr-1"
+              :class="wikiPage.is_pinned ? 'fill-current' : ''"
+            />
+            {{ wikiPage.is_pinned ? 'Pinned' : 'Pin' }}
+          </button>
           <button
             v-if="isHistoryFeatureEnabled"
             @click="toggleHistory"

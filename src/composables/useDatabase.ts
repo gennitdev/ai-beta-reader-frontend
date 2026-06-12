@@ -386,6 +386,7 @@ export function useDatabase() {
     summary: string;
     page_type?: string;
     created_by_ai?: boolean;
+    is_pinned?: boolean;
   }) {
     try {
       await initializeDatabase()
@@ -401,6 +402,7 @@ export function useDatabase() {
     content?: string;
     summary?: string;
     page_name?: string;
+    is_pinned?: boolean;
   }) {
     try {
       await initializeDatabase()

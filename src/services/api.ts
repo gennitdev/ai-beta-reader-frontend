@@ -189,6 +189,7 @@ export function createWikiService(getToken: () => Promise<string | undefined>) {
       aliases?: string[]
       tags?: string[]
       is_major?: boolean
+      is_pinned?: boolean
     }) {
       const response = await client.post(`/books/${bookId}/wiki`, page)
       return response.data
@@ -202,6 +203,7 @@ export function createWikiService(getToken: () => Promise<string | undefined>) {
       aliases?: string[]
       tags?: string[]
       is_major?: boolean
+      is_pinned?: boolean
     }) {
       const response = await client.put(`/wiki/${wikiPageId}`, updates)
       return response.data

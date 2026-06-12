@@ -34,6 +34,7 @@ export interface BookWikiPage {
   aliases: string[]
   tags: string[]
   is_major: boolean
+  is_pinned: boolean
   created_by_ai: boolean
   created_at: string
   updated_at: string
