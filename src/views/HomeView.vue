@@ -1,12 +1,30 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, LightBulbIcon, CogIcon } from '@heroicons/vue/24/outline'
 import heroImage from '@/assets/art-attack-RpSTMkZGKyE-unsplash.jpg'
+import { useDatabase } from '@/composables/useDatabase'
 
 const router = useRouter()
+const { books, loadBooks } = useDatabase()
+
 // Only show the detailed steps when the user clicks.
 const showDetailedSteps = ref(false)
+const isLoading = ref(true)
+
+const hasBooks = computed(() => books.value.length > 0)
+
+onMounted(async () => {
+  await loadBooks()
+  // Redirect to books page if user already has books
+  if (books.value.length > 0) {
+    router.replace('/books')
+    // Keep showing loading spinner during navigation
+  } else {
+    // Only show landing page if user has no books
+    isLoading.value = false
+  }
+})
 
 const handleGetStarted = () => {
   router.push('/books')
@@ -112,7 +130,12 @@ const detailedSteps = [
 
 <template>
   <div class="min-h-[calc(100vh-4rem)] bg-white dark:bg-gray-900">
-    <div class="lg:hidden">
+    <!-- Loading state while checking for books -->
+    <div v-if="isLoading" class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+    <!-- Mobile landing page - only shown when user has no books -->
+    <div v-else class="lg:hidden">
       <div class="h-64 sm:h-80 overflow-hidden">
         <img
           :src="heroImage"
@@ -246,7 +269,8 @@ const detailedSteps = [
       </div>
     </div>
 
-    <div class="hidden lg:flex min-h-[calc(100vh-4rem)]">
+    <!-- Desktop landing page - only shown when user has no books -->
+    <div v-if="!isLoading" class="hidden lg:flex min-h-[calc(100vh-4rem)]">
       <div class="w-1/3 relative overflow-hidden">
         <img
           :src="heroImage"
