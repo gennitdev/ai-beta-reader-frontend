@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
+import { useImageLibrary } from '@/composables/useImageLibrary'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
-import type { Book } from '@/lib/database'
+import IllustrationGrid from '@/components/images/IllustrationGrid.vue'
+import type { Book, ImageAsset } from '@/lib/database'
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -63,9 +65,20 @@ const isMobileRoute = computed(() => route.meta?.mobile === true)
 const routePrefix = computed(() => (isMobileRoute.value ? '/m/books' : '/books'))
 
 // Use local database
-const { books, loadBooks, getWikiPageById, updateWikiPage, deleteWikiPage } = useDatabase()
+const {
+  books,
+  loadBooks,
+  getWikiPageById,
+  updateWikiPage,
+  deleteWikiPage,
+  getWikiPageImageAssets,
+} = useDatabase()
+const { getImageSource } = useImageLibrary()
 
 const wikiPage = ref<WikiPage | null>(null)
+const wikiImages = ref<ImageAsset[]>([])
+const wikiImageSources = ref<Record<string, string>>({})
+const loadingWikiImages = ref(false)
 const wikiHistory = ref<WikiUpdate[]>([])
 const characters = ref<Character[]>([])
 const loading = ref(false)
@@ -122,6 +135,37 @@ const bookTitle = computed(() => {
 
 // Computed navigation URLs
 const bookWikiUrl = computed(() => `${routePrefix.value}/${bookId.value}?tab=wiki`)
+const bookImagesUrl = computed(() => `${routePrefix.value}/${bookId.value}?tab=images`)
+
+const loadWikiImages = async () => {
+  if (!wikiPageId.value) return
+
+  loadingWikiImages.value = true
+  try {
+    const images = await getWikiPageImageAssets(wikiPageId.value)
+    wikiImages.value = images
+
+    const sources: Record<string, string> = {}
+    for (const image of images) {
+      try {
+        sources[image.id] = await getImageSource(image)
+      } catch (error) {
+        console.warn('Failed to load wiki illustration source:', error)
+      }
+    }
+    wikiImageSources.value = sources
+  } catch (error) {
+    console.error('Failed to load wiki illustrations:', error)
+    wikiImages.value = []
+    wikiImageSources.value = {}
+  } finally {
+    loadingWikiImages.value = false
+  }
+}
+
+const openWikiImage = (imageId: string) => {
+  router.push(`${bookImagesUrl.value}&imageId=${imageId}`)
+}
 
 const loadWikiPage = async () => {
   loading.value = true
@@ -148,6 +192,7 @@ const loadWikiPage = async () => {
         updated_at: pageData.updated_at
       }
       editedContent.value = pageData.content || ''
+      await loadWikiImages()
     } else {
       console.error('Wiki page not found')
       router.push(bookWikiUrl.value)
@@ -318,6 +363,13 @@ onMounted(() => {
   loadWikiPage()
   loadCharacters()
 })
+
+watch(
+  () => wikiPageId.value,
+  () => {
+    loadWikiPage()
+  }
+)
 </script>
 
 <template>
@@ -492,6 +544,25 @@ onMounted(() => {
               <BookOpenIcon class="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p>No content yet. Click "Edit" to add information about {{ wikiPage.page_name }}.</p>
             </div>
+          </div>
+        </div>
+
+        <div
+          v-if="loadingWikiImages || wikiImages.length"
+          class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700"
+        >
+          <div class="p-6">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Illustrations</h2>
+            <IllustrationGrid
+              :images="wikiImages"
+              :image-sources="wikiImageSources"
+              :loading="loadingWikiImages"
+              :can-set-cover="false"
+              :can-download="false"
+              :can-delete="false"
+              empty-text="No tagged illustrations yet."
+              @open-image="openWikiImage"
+            />
           </div>
         </div>
       </div>
