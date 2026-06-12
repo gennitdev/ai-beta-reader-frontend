@@ -52,16 +52,6 @@ const sortedBooks = computed(() => {
 
 const isBookActive = (bookId: string) => route.path.startsWith(`/books/${bookId}`)
 
-const getBookInitials = (title: string | null | undefined) => {
-  if (!title) return '??'
-  const normalized = title.trim()
-  if (!normalized) return '??'
-  const words = normalized.split(/\s+/)
-  if (words.length === 1) {
-    return words[0].slice(0, 2).toUpperCase()
-  }
-  return (words[0][0] + (words[1]?.[0] ?? '')).toUpperCase()
-}
 
 // Keyboard shortcut for search
 const handleKeyDown = (e: KeyboardEvent) => {
@@ -451,24 +441,24 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
             id="side-nav"
             class="absolute inset-y-0 left-0 flex h-full w-72 max-w-[85%] flex-col bg-white px-6 py-6 shadow-xl dark:bg-gray-900"
           >
-            <div class="mb-6 flex items-center justify-between">
+            <div class="mb-4 flex items-center justify-between">
               <router-link
                 to="/"
-                class="text-lg font-semibold text-gray-900 transition-colors dark:text-white"
+                class="text-sm font-semibold text-gray-900 transition-colors dark:text-white"
                 @click="closeSideNav"
               >
                 Beta-bot
               </router-link>
               <button
                 @click="closeSideNav"
-                class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                class="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
                 aria-label="Close navigation"
               >
-                <XMarkIcon class="h-6 w-6" />
+                <XMarkIcon class="h-5 w-5" />
               </button>
             </div>
 
-            <nav class="flex-1 space-y-2 overflow-y-auto">
+            <nav class="flex-1 space-y-1 overflow-y-auto">
               <RouterLink
                 v-for="item in sideNavItems"
                 :key="item.to"
@@ -478,14 +468,14 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
               >
                 <a
                   :href="href"
-                  class="flex items-center gap-3 rounded-lg px-3 py-2 text-base font-medium transition-colors"
+                  class="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
                   :class="isActive
                     ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
                     : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'"
                   :aria-current="isActive ? 'page' : undefined"
                   @click.prevent="navigate(); closeSideNav()"
                 >
-                  <component :is="item.icon" class="h-5 w-5" />
+                  <component :is="item.icon" class="h-4 w-4" />
                   <span>{{ item.label }}</span>
                 </a>
               </RouterLink>
@@ -501,17 +491,14 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                   v-for="book in sortedBooks"
                   :key="book.id"
                   :to="`/books/${book.id}`"
-                  class="flex items-center gap-3 rounded-lg px-3 py-2 text-base font-medium transition-colors"
+                  class="block rounded-lg px-3 py-1.5 text-sm leading-snug transition-colors"
                   :class="isBookActive(book.id)
                     ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
                     : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'"
                   :aria-current="isBookActive(book.id) ? 'page' : undefined"
                   @click="closeSideNav"
                 >
-                  <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-semibold">
-                    {{ getBookInitials(book.title) }}
-                  </span>
-                  <span class="truncate">{{ book.title || book.id }}</span>
+                  {{ book.title || book.id }}
                 </router-link>
               </template>
             </nav>
