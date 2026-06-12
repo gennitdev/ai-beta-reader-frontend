@@ -41,28 +41,47 @@ const editMenuTemplate: MenuItemConstructorOptions = {
         if (browserWindow) {
           browserWindow.webContents.executeJavaScript(`
             (function() {
-              // Check if find bar already exists
-              let findBar = document.getElementById('electron-find-bar');
-              if (findBar) {
+              // Check if find bar host already exists
+              let findBarHost = document.getElementById('electron-find-bar-host');
+              if (findBarHost) {
+                const shadowRoot = findBarHost.shadowRoot;
+                const findBar = shadowRoot.getElementById('electron-find-bar');
                 findBar.style.display = findBar.style.display === 'none' ? 'flex' : 'none';
                 if (findBar.style.display === 'flex') {
-                  findBar.querySelector('input').focus();
-                  findBar.querySelector('input').select();
+                  shadowRoot.getElementById('find-input').focus();
+                  shadowRoot.getElementById('find-input').select();
                 }
                 return;
               }
 
-              // Create find bar
-              findBar = document.createElement('div');
+              // Create shadow DOM host to isolate find bar from page search
+              findBarHost = document.createElement('div');
+              findBarHost.id = 'electron-find-bar-host';
+              findBarHost.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;';
+              document.body.appendChild(findBarHost);
+
+              // Attach shadow root - content inside won't be searched by findInPage
+              const shadowRoot = findBarHost.attachShadow({ mode: 'open' });
+
+              // Create find bar inside shadow DOM
+              const findBar = document.createElement('div');
               findBar.id = 'electron-find-bar';
-              findBar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:40px;background:#1f2937;border-bottom:1px solid #374151;display:flex;align-items:center;padding:0 12px;gap:8px;z-index:99999;font-family:system-ui,-apple-system,sans-serif;';
+              findBar.style.cssText = 'height:40px;background:#1f2937;border-bottom:1px solid #374151;display:flex;align-items:center;padding:0 12px;gap:8px;font-family:system-ui,-apple-system,sans-serif;';
+
+              const style = document.createElement('style');
+              style.textContent = [
+                '.electron-find-match { background: #fde68a; color: #111827; padding: 0 1px; border-radius: 2px; }',
+                '.electron-find-match-current { background: #f97316; color: #111827; box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35); }',
+              ].join('\\n');
 
               const input = document.createElement('input');
+              input.id = 'find-input';
               input.type = 'text';
               input.placeholder = 'Find in page (Enter to search)';
               input.style.cssText = 'flex:1;max-width:300px;padding:6px 10px;border:1px solid #4b5563;border-radius:4px;background:#111827;color:#f3f4f6;font-size:14px;outline:none;';
 
               const countLabel = document.createElement('span');
+              countLabel.id = 'find-count';
               countLabel.style.cssText = 'color:#9ca3af;font-size:13px;min-width:60px;';
               countLabel.textContent = '';
 
@@ -86,45 +105,23 @@ const editMenuTemplate: MenuItemConstructorOptions = {
               findBar.appendChild(prevBtn);
               findBar.appendChild(nextBtn);
               findBar.appendChild(closeBtn);
-              document.body.appendChild(findBar);
+              shadowRoot.appendChild(style);
+              shadowRoot.appendChild(findBar);
 
-              let currentIndex = 0;
-              let totalMatches = 0;
+              let activeMatchIndex = -1;
+              let matchElements = [];
               let lastSearchedText = '';
               let focusGuardInterval = null;
-
-              function updateCount(result) {
-                if (result && result.matches > 0) {
-                  totalMatches = result.matches;
-                  currentIndex = result.activeMatchOrdinal;
-                  countLabel.textContent = currentIndex + ' of ' + totalMatches;
-                } else {
-                  countLabel.textContent = input.value ? 'No results' : '';
-                }
-              }
-
-              function doFind(forward) {
-                if (input.value) {
-                  // Determine if this is navigation (same text) or new search
-                  const isNavigation = input.value === lastSearchedText;
-                  lastSearchedText = input.value;
-
-                  // Start focus guard before find operation
-                  startFocusGuard();
-                  window.electronFindInPage(input.value, forward, isNavigation);
-                } else {
-                  window.electronStopFind();
-                  countLabel.textContent = '';
-                  lastSearchedText = '';
-                }
-              }
 
               // Aggressively maintain focus for a short period after find operations
               function startFocusGuard() {
                 stopFocusGuard();
                 let attempts = 0;
                 focusGuardInterval = setInterval(() => {
-                  if (findBar.style.display === 'flex' && document.activeElement !== input) {
+                  // With shadow DOM, check if the shadow host has focus and if the input inside is focused
+                  const hostHasFocus = document.activeElement === findBarHost;
+                  const inputHasFocus = hostHasFocus && shadowRoot.activeElement === input;
+                  if (findBar.style.display === 'flex' && !inputHasFocus) {
                     input.focus();
                   }
                   attempts++;
@@ -141,10 +138,136 @@ const editMenuTemplate: MenuItemConstructorOptions = {
                 }
               }
 
-              // Listen for find results from main process
-              window.addEventListener('electron-find-result', (e) => {
-                updateCount(e.detail);
-              });
+              function updateCount() {
+                if (matchElements.length > 0 && activeMatchIndex >= 0) {
+                  countLabel.textContent = activeMatchIndex + 1 + ' of ' + matchElements.length;
+                } else {
+                  countLabel.textContent = input.value ? 'No results' : '';
+                }
+              }
+
+              function isSearchableTextNode(node) {
+                const parent = node.parentElement;
+                if (!parent || findBarHost.contains(parent)) return false;
+                if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(parent.tagName)) return false;
+                if (parent.closest('.electron-find-match')) return false;
+
+                const computedStyle = window.getComputedStyle(parent);
+                return computedStyle.display !== 'none' && computedStyle.visibility !== 'hidden' && computedStyle.opacity !== '0';
+              }
+
+              function clearMatches() {
+                document.querySelectorAll('.electron-find-match').forEach((match) => {
+                  const parent = match.parentNode;
+                  if (!parent) return;
+                  parent.replaceChild(document.createTextNode(match.textContent || ''), match);
+                  parent.normalize();
+                });
+                matchElements = [];
+                activeMatchIndex = -1;
+              }
+
+              function highlightMatches(searchText) {
+                clearMatches();
+                if (!searchText) return;
+
+                const textNodes = [];
+                const walker = document.createTreeWalker(
+                  document.body,
+                  NodeFilter.SHOW_TEXT,
+                  {
+                    acceptNode(node) {
+                      if (!node.nodeValue || !isSearchableTextNode(node)) {
+                        return NodeFilter.FILTER_REJECT;
+                      }
+                      return NodeFilter.FILTER_ACCEPT;
+                    },
+                  }
+                );
+
+                while (walker.nextNode()) {
+                  textNodes.push(walker.currentNode);
+                }
+
+                const needle = searchText.toLocaleLowerCase();
+                if (!needle) return;
+
+                textNodes.forEach((node) => {
+                  const haystack = node.nodeValue.toLocaleLowerCase();
+                  let start = 0;
+                  let nextMatch = haystack.indexOf(needle, start);
+                  if (nextMatch === -1) return;
+
+                  const fragment = document.createDocumentFragment();
+                  let lastIndex = 0;
+
+                  while (nextMatch !== -1) {
+                    if (nextMatch > lastIndex) {
+                      fragment.appendChild(document.createTextNode(node.nodeValue.slice(lastIndex, nextMatch)));
+                    }
+
+                    const mark = document.createElement('mark');
+                    mark.className = 'electron-find-match';
+                    mark.textContent = node.nodeValue.slice(nextMatch, nextMatch + searchText.length);
+                    fragment.appendChild(mark);
+                    matchElements.push(mark);
+
+                    lastIndex = nextMatch + searchText.length;
+                    start = Math.max(lastIndex, nextMatch + 1);
+                    nextMatch = haystack.indexOf(needle, start);
+                  }
+
+                  if (lastIndex < node.nodeValue.length) {
+                    fragment.appendChild(document.createTextNode(node.nodeValue.slice(lastIndex)));
+                  }
+
+                  node.parentNode.replaceChild(fragment, node);
+                });
+              }
+
+              function setActiveMatch(index) {
+                matchElements.forEach((match) => {
+                  match.classList.remove('electron-find-match-current');
+                });
+
+                if (!matchElements.length) {
+                  activeMatchIndex = -1;
+                  updateCount();
+                  return;
+                }
+
+                activeMatchIndex = (index + matchElements.length) % matchElements.length;
+                const activeMatch = matchElements[activeMatchIndex];
+                activeMatch.classList.add('electron-find-match-current');
+                activeMatch.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+                updateCount();
+              }
+
+              function doFind(forward) {
+                const searchText = input.value;
+                startFocusGuard();
+
+                if (!searchText) {
+                  clearMatches();
+                  countLabel.textContent = '';
+                  lastSearchedText = '';
+                  return;
+                }
+
+                if (searchText !== lastSearchedText) {
+                  lastSearchedText = searchText;
+                  highlightMatches(searchText);
+                  setActiveMatch(forward ? 0 : matchElements.length - 1);
+                  return;
+                }
+
+                if (!matchElements.length) {
+                  updateCount();
+                  return;
+                }
+
+                setActiveMatch(activeMatchIndex + (forward ? 1 : -1));
+              }
 
               // Prevent events from bubbling to Vue app
               input.addEventListener('input', (e) => {
@@ -175,6 +298,7 @@ const editMenuTemplate: MenuItemConstructorOptions = {
 
               function closeFindBar() {
                 stopFocusGuard();
+                clearMatches();
                 findBar.style.display = 'none';
                 window.electronStopFind();
                 countLabel.textContent = '';
@@ -231,14 +355,10 @@ if (electronIsDev) {
   registerOAuthLoopbackHandlers();
 
   // Register find-in-page IPC handlers
-  // Track the last search text to determine if this is a new search or navigation
-  let lastSearchText = '';
-  ipcMain.handle('find-in-page', (_event, text: string, forward: boolean, isNavigation: boolean) => {
+  ipcMain.handle('find-in-page', (_event, text: string, forward: boolean, findNext: boolean) => {
     const mainWindow = myCapacitorApp.getMainWindow();
     if (mainWindow && text) {
-      // findNext should be true only when navigating (next/prev) with the same search text
-      const findNext = isNavigation && text === lastSearchText;
-      lastSearchText = text;
+      // findNext: true = navigate to next/prev match, false = start fresh search
       mainWindow.webContents.findInPage(text, { forward, findNext });
     }
   });
