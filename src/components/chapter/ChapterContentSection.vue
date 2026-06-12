@@ -3,11 +3,13 @@ import { ref, watch, onUnmounted, type PropType } from "vue";
 import TextEditor from "@/components/TextEditor.vue";
 import MarkdownRenderer from "@/components/MarkdownRenderer.vue";
 import { copyToClipboard } from "@/utils/clipboard";
+import { Capacitor } from "@capacitor/core";
 import {
   ArrowsPointingOutIcon,
   ArrowsPointingInIcon,
   DocumentDuplicateIcon,
   CheckIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/vue/24/outline";
 
 const props = defineProps({
@@ -49,7 +51,16 @@ const toggleFullChapter = (value: boolean) => {
 const isFullscreen = ref(false);
 let previousBodyOverflow: string | null = null;
 const chapterCopied = ref(false);
+const chapterCopyWarning = ref(false);
 let chapterCopyTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// Mobile clipboard has issues with text over ~3500 words
+const MOBILE_WORD_LIMIT = 3500;
+
+const countWords = (text: string): number => {
+  if (!text) return 0;
+  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+};
 
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.key === "Escape") {
@@ -63,6 +74,7 @@ const resetChapterCopyState = () => {
     chapterCopyTimeout = null;
   }
   chapterCopied.value = false;
+  chapterCopyWarning.value = false;
 };
 
 const copyChapterToClipboard = async () => {
@@ -72,10 +84,19 @@ const copyChapterToClipboard = async () => {
     const success = await copyToClipboard(props.chapterText);
     if (success) {
       chapterCopied.value = true;
+
+      // Warn on mobile if chapter exceeds word limit
+      const isMobile = Capacitor.isNativePlatform();
+      const wordCount = countWords(props.chapterText);
+      if (isMobile && wordCount > MOBILE_WORD_LIMIT) {
+        chapterCopyWarning.value = true;
+      }
+
       chapterCopyTimeout = setTimeout(() => {
         chapterCopied.value = false;
+        chapterCopyWarning.value = false;
         chapterCopyTimeout = null;
-      }, 2000);
+      }, chapterCopyWarning.value ? 5000 : 2000);
     } else {
       console.error("Failed to copy chapter text");
     }
@@ -123,12 +144,22 @@ onUnmounted(() => {
     <div v-if="!isEditing" class="mb-2 flex justify-end gap-2">
       <button
         type="button"
-        class="inline-flex h-10 items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+        class="inline-flex h-10 items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+        :class="chapterCopyWarning
+          ? 'border-amber-400 text-amber-600 dark:border-amber-500 dark:text-amber-400'
+          : 'border-gray-300 text-gray-600 hover:border-gray-400 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white'"
         :disabled="!chapterText"
         @click="copyChapterToClipboard"
       >
-        <component :is="chapterCopied ? CheckIcon : DocumentDuplicateIcon" class="h-4 w-4" />
-        <span class="hidden sm:inline">{{ chapterCopied ? "Copied" : "Copy" }}</span>
+        <component
+          :is="chapterCopyWarning ? ExclamationTriangleIcon : (chapterCopied ? CheckIcon : DocumentDuplicateIcon)"
+          class="h-4 w-4"
+        />
+        <span class="hidden sm:inline">
+          <template v-if="chapterCopyWarning">May be truncated</template>
+          <template v-else-if="chapterCopied">Copied</template>
+          <template v-else>Copy</template>
+        </span>
         <span class="sr-only">Copy chapter text</span>
       </button>
       <button
