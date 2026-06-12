@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useImageLibrary } from "@/composables/useImageLibrary";
-import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ImageAsset } from "@/lib/database";
+import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ImageAsset, ImageWikiTag } from "@/lib/database";
 import type {
   BookChapter,
   BookOrganizedPart,
@@ -55,6 +55,9 @@ const {
   replaceInWikiPage,
   setBookCoverImageId,
   getBookImageAssets,
+  updateImageAssetNotes,
+  getImageWikiTags,
+  setImageWikiTags,
 } = useDatabase();
 
 const {
@@ -86,7 +89,10 @@ const chapterThumbnails = ref<Record<string, string>>({});
 const partThumbnails = ref<Record<string, string>>({});
 const bookImages = ref<ImageAsset[]>([]);
 const bookImageSources = ref<Record<string, string>>({});
+const bookImageTags = ref<Record<string, ImageWikiTag[]>>({});
 const loadingImages = ref(false);
+const savingSelectedImageNotes = ref(false);
+const savingSelectedImageTags = ref(false);
 
 // Book editing state
 const isEditingBookTitle = ref(false);
@@ -137,6 +143,11 @@ const selectedImageSrc = computed(() => {
 const selectedImage = computed(() => {
   if (!selectedImageId.value) return null;
   return bookImages.value.find(img => img.id === selectedImageId.value) || null;
+});
+
+const selectedImageTags = computed(() => {
+  if (!selectedImageId.value) return [];
+  return bookImageTags.value[selectedImageId.value] ?? [];
 });
 
 const isOnBookOnly = computed(() => {
@@ -744,26 +755,90 @@ const loadBookImages = async () => {
 
   try {
     loadingImages.value = true;
+    if (!wikiPages.value.length) {
+      await loadWiki();
+    }
     const images = await getBookImageAssets(bookId.value);
     bookImages.value = images;
 
     // Load image sources for gallery display
     const sources: Record<string, string> = {};
+    const tags: Record<string, ImageWikiTag[]> = {};
     for (const image of images) {
       try {
         sources[image.id] = await getCoverImageSource(image);
       } catch (err) {
         console.warn("Failed to load image source for", image.id, err);
       }
+      try {
+        tags[image.id] = await getImageWikiTags(image.id);
+      } catch (err) {
+        console.warn("Failed to load image tags for", image.id, err);
+      }
     }
     bookImageSources.value = sources;
+    bookImageTags.value = tags;
   } catch (error) {
     console.error("Failed to load book images:", error);
     bookImages.value = [];
     bookImageSources.value = {};
+    bookImageTags.value = {};
   } finally {
     loadingImages.value = false;
   }
+};
+
+const saveSelectedImageNotes = async (notes: string) => {
+  const image = selectedImage.value;
+  if (!image) return;
+
+  savingSelectedImageNotes.value = true;
+  try {
+    await updateImageAssetNotes(image.id, notes);
+    const updatedImage = {
+      ...image,
+      notes,
+      updated_at: new Date().toISOString(),
+    };
+    bookImages.value = bookImages.value.map((item) =>
+      item.id === image.id ? updatedImage : item
+    );
+  } catch (error) {
+    console.error("Failed to save image notes:", error);
+  } finally {
+    savingSelectedImageNotes.value = false;
+  }
+};
+
+const saveSelectedImageTags = async (wikiPageIds: string[]) => {
+  const image = selectedImage.value;
+  if (!image) return;
+
+  savingSelectedImageTags.value = true;
+  try {
+    await setImageWikiTags(image.id, wikiPageIds);
+    bookImageTags.value = {
+      ...bookImageTags.value,
+      [image.id]: await getImageWikiTags(image.id),
+    };
+  } catch (error) {
+    console.error("Failed to save image tags:", error);
+  } finally {
+    savingSelectedImageTags.value = false;
+  }
+};
+
+const downloadSelectedImage = (imageId: string) => {
+  const imageSrc = bookImageSources.value[imageId];
+  if (!imageSrc) return;
+
+  const image = bookImages.value.find((item) => item.id === imageId);
+  const link = document.createElement("a");
+  link.href = imageSrc;
+  link.download = image?.file_name || `illustration-${imageId}.jpg`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 
 const wikiPagesByType = computed(() => {
@@ -997,6 +1072,13 @@ onMounted(async () => {
     :selected-image-id="selectedImageId"
     :selected-image-src="selectedImageSrc"
     :selected-image="selectedImage"
+    :selected-image-tags="selectedImageTags"
+    :wiki-pages="wikiPages"
+    :saving-selected-image-notes="savingSelectedImageNotes"
+    :saving-selected-image-tags="savingSelectedImageTags"
+    :save-selected-image-notes="saveSelectedImageNotes"
+    :save-selected-image-tags="saveSelectedImageTags"
+    :download-selected-image="downloadSelectedImage"
     :wiki-page-pin-changed="handleWikiPagePinChanged"
   />
 

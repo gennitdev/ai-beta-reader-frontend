@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue';
 import { useImageLibrary } from '@/composables/useImageLibrary';
-import type { ImageAsset } from '@/lib/database';
+import { useDatabase } from '@/composables/useDatabase';
+import type { ImageAsset, ImageWikiTag } from '@/lib/database';
 
 export function useChapterImages(chapterIdRef: () => string | undefined, bookIdRef: () => string | undefined) {
   const {
@@ -13,14 +14,24 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     getImageSource,
     canUploadImages,
   } = useImageLibrary();
+  const {
+    getWikiPages,
+    getImageWikiTags,
+    setImageWikiTags,
+    updateImageAssetNotes,
+  } = useDatabase();
 
   const chapterImages = ref<ImageAsset[]>([]);
   const chapterImagesLoading = ref(false);
   const addingChapterImages = ref(false);
   const chapterImageSources = ref<Record<string, string>>({});
+  const chapterImageTags = ref<Record<string, ImageWikiTag[]>>({});
+  const bookWikiPages = ref<{ id: string; page_name: string; page_type?: string | null }[]>([]);
   const chapterImageError = ref<string | null>(null);
   const showImageLightbox = ref(false);
   const activeImageId = ref<string | null>(null);
+  const savingImageNotes = ref(false);
+  const savingImageTags = ref(false);
   const showDeleteIllustrationModal = ref(false);
   const deletingIllustration = ref(false);
   const illustrationToDelete = ref<string | null>(null);
@@ -33,6 +44,16 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     const id = activeImageId.value;
     if (!id) return null;
     return chapterImageSources.value[id] ?? null;
+  });
+
+  const activeImage = computed(() => {
+    if (!activeImageId.value) return null;
+    return chapterImages.value.find((item) => item.id === activeImageId.value) ?? null;
+  });
+
+  const activeImageTags = computed(() => {
+    if (!activeImageId.value) return [];
+    return chapterImageTags.value[activeImageId.value] ?? [];
   });
 
   const activeImageLabel = computed(() => {
@@ -79,6 +100,7 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     if (!chapterId) {
       chapterImages.value = [];
       chapterImageSources.value = {};
+      chapterImageTags.value = {};
       chapterCoverImageId.value = null;
       return;
     }
@@ -89,14 +111,36 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
       const images = await fetchChapterImages(chapterId);
       chapterImages.value = images;
       const sources: Record<string, string> = {};
+      const tags: Record<string, ImageWikiTag[]> = {};
       for (const image of images) {
         try {
           sources[image.id] = await getImageSource(image);
         } catch (error) {
           console.warn("Failed to load illustration preview", error);
         }
+        try {
+          tags[image.id] = await getImageWikiTags(image.id);
+        } catch (error) {
+          console.warn("Failed to load illustration tags", error);
+        }
       }
       chapterImageSources.value = sources;
+      chapterImageTags.value = tags;
+
+      const bookId = bookIdRef();
+      if (bookId) {
+        try {
+          const pages = await getWikiPages(bookId);
+          bookWikiPages.value = pages.map((page: any) => ({
+            id: page.id,
+            page_name: page.page_name,
+            page_type: page.page_type ?? null,
+          }));
+        } catch (error) {
+          console.warn("Failed to load wiki pages for illustration tags", error);
+          bookWikiPages.value = [];
+        }
+      }
 
       const coverImage = await fetchChapterCover(chapterId);
       chapterCoverImageId.value = coverImage?.id ?? null;
@@ -122,14 +166,17 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
 
       chapterImages.value = [...newImages, ...chapterImages.value];
       const updatedSources: Record<string, string> = { ...chapterImageSources.value };
+      const updatedTags: Record<string, ImageWikiTag[]> = { ...chapterImageTags.value };
       for (const image of newImages) {
         try {
           updatedSources[image.id] = await getImageSource(image);
         } catch (error) {
           console.warn("Failed to load preview for new illustration", error);
         }
+        updatedTags[image.id] = [];
       }
       chapterImageSources.value = updatedSources;
+      chapterImageTags.value = updatedTags;
     } catch (error) {
       chapterImageError.value =
         error instanceof Error ? error.message : "Failed to add illustrations";
@@ -164,6 +211,9 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
       const nextSources = { ...chapterImageSources.value };
       delete nextSources[imageId];
       chapterImageSources.value = nextSources;
+      const nextTags = { ...chapterImageTags.value };
+      delete nextTags[imageId];
+      chapterImageTags.value = nextTags;
       if (activeImageId.value === imageId) {
         showImageLightbox.value = false;
         activeImageId.value = null;
@@ -191,6 +241,48 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
   const closeImageModal = () => {
     showImageLightbox.value = false;
     activeImageId.value = null;
+  };
+
+  const handleSaveActiveImageNotes = async (notes: string) => {
+    const image = activeImage.value;
+    if (!image) return;
+
+    savingImageNotes.value = true;
+    try {
+      await updateImageAssetNotes(image.id, notes);
+      const updatedImage = {
+        ...image,
+        notes,
+        updated_at: new Date().toISOString(),
+      };
+      chapterImages.value = chapterImages.value.map((item) =>
+        item.id === image.id ? updatedImage : item
+      );
+    } catch (error) {
+      chapterImageError.value =
+        error instanceof Error ? error.message : "Failed to save image notes";
+    } finally {
+      savingImageNotes.value = false;
+    }
+  };
+
+  const handleSaveActiveImageTags = async (wikiPageIds: string[]) => {
+    const image = activeImage.value;
+    if (!image) return;
+
+    savingImageTags.value = true;
+    try {
+      await setImageWikiTags(image.id, wikiPageIds);
+      chapterImageTags.value = {
+        ...chapterImageTags.value,
+        [image.id]: await getImageWikiTags(image.id),
+      };
+    } catch (error) {
+      chapterImageError.value =
+        error instanceof Error ? error.message : "Failed to save image tags";
+    } finally {
+      savingImageTags.value = false;
+    }
   };
 
   const goToNextImage = () => {
@@ -265,9 +357,13 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     chapterImagesLoading,
     addingChapterImages,
     chapterImageSources,
+    chapterImageTags,
+    bookWikiPages,
     chapterImageError,
     showImageLightbox,
     activeImageId,
+    savingImageNotes,
+    savingImageTags,
     showDeleteIllustrationModal,
     deletingIllustration,
     illustrationToDelete,
@@ -277,6 +373,8 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
 
     // Computed
     activeImageSource,
+    activeImage,
+    activeImageTags,
     activeImageLabel,
     heroImage,
     heroImageSrc,
@@ -292,6 +390,8 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     handleDeleteIllustration,
     openImageModal,
     closeImageModal,
+    handleSaveActiveImageNotes,
+    handleSaveActiveImageTags,
     goToNextImage,
     goToPrevImage,
     handleSetAsCover,

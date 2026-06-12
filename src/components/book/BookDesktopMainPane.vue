@@ -1,12 +1,21 @@
 <script setup lang="ts">
 import { DocumentTextIcon, PhotoIcon } from '@heroicons/vue/24/outline'
-import type { ImageAsset } from '@/lib/database'
+import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
+import type { ImageAsset, ImageWikiTag } from '@/lib/database'
+import type { BookWikiPage } from '@/types/bookView'
 
 defineProps<{
   currentTab: 'chapters' | 'wiki' | 'images'
   selectedImageId?: string | null
   selectedImageSrc?: string | null
   selectedImage?: ImageAsset | null
+  selectedImageTags?: ImageWikiTag[]
+  wikiPages?: BookWikiPage[]
+  savingSelectedImageNotes?: boolean
+  savingSelectedImageTags?: boolean
+  saveSelectedImageNotes?: (notes: string) => void | Promise<void>
+  saveSelectedImageTags?: (wikiPageIds: string[]) => void | Promise<void>
+  downloadSelectedImage?: (imageId: string) => void
   isOnBookOnly: boolean
   routerViewKey: number
   wikiPagePinChanged: (payload: { id: string; isPinned: boolean; updatedAt: string }) => void
@@ -16,21 +25,20 @@ defineProps<{
 <template>
   <div class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
     <div v-if="currentTab === 'images' && selectedImageId && selectedImageSrc" class="h-full flex flex-col">
-      <div class="flex-1 flex items-center justify-center p-4 bg-gray-100 dark:bg-gray-800">
-        <img
-          :src="selectedImageSrc"
-          class="max-h-full max-w-full object-contain rounded-lg shadow-lg"
-          :alt="selectedImage?.file_name || 'Book illustration'"
-        />
-      </div>
-      <div class="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-        <h2 class="text-lg font-medium text-gray-900 dark:text-white">
-          {{ selectedImage?.file_name || 'Untitled' }}
-        </h2>
-        <p v-if="selectedImage?.asset_type" class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Type: {{ selectedImage.asset_type }}
-        </p>
-      </div>
+      <IllustrationDetail
+        :image="selectedImage || null"
+        :image-src="selectedImageSrc"
+        :tags="selectedImageTags || []"
+        :wiki-pages="wikiPages || []"
+        :saving-notes="savingSelectedImageNotes"
+        :saving-tags="savingSelectedImageTags"
+        :can-edit-notes="Boolean(saveSelectedImageNotes)"
+        :can-edit-tags="Boolean(saveSelectedImageTags)"
+        :can-download="Boolean(downloadSelectedImage)"
+        @save-notes="saveSelectedImageNotes?.($event)"
+        @save-tags="saveSelectedImageTags?.($event)"
+        @download="downloadSelectedImage?.($event)"
+      />
     </div>
 
     <div v-else-if="currentTab === 'images' && !selectedImageId" class="flex items-center justify-center h-full">

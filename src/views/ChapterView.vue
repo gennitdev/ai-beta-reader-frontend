@@ -21,6 +21,8 @@ import ChapterIllustrationsSection from "@/components/chapter/ChapterIllustratio
 import ChapterStatusBar from "@/components/chapter/ChapterStatusBar.vue";
 import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
 import ImageLightbox from "@/components/images/ImageLightbox.vue";
+import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
+import Modal from "@/components/Modal.vue";
 
 interface Chapter {
   id: string;
@@ -78,6 +80,8 @@ const {
   chapterImagesLoading,
   addingChapterImages,
   chapterImageSources,
+  chapterImageTags,
+  bookWikiPages,
   chapterImageError,
   showImageLightbox,
   showDeleteIllustrationModal,
@@ -86,7 +90,11 @@ const {
   settingCoverId,
   heroLightboxOpen,
   activeImageSource,
+  activeImage,
+  activeImageTags,
   activeImageLabel,
+  savingImageNotes,
+  savingImageTags,
   heroImageSrc,
   hasNextImage,
   hasPrevImage,
@@ -102,6 +110,8 @@ const {
   goToPrevImage,
   handleSetAsCover,
   handleDownloadImage,
+  handleSaveActiveImageNotes,
+  handleSaveActiveImageTags,
   openHeroLightbox,
   closeHeroLightbox,
 } = useChapterImages(
@@ -1097,6 +1107,7 @@ onMounted(async () => {
         v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
         :images="chapterImages"
         :image-sources="chapterImageSources"
+        :image-tags="chapterImageTags"
         :cover-image-id="chapterCoverImageId"
         :loading="chapterImagesLoading"
         :adding="addingChapterImages"
@@ -1200,16 +1211,47 @@ onMounted(async () => {
     </div>
   </div>
 
-  <ImageLightbox
-    :open="showImageLightbox"
-    :image-src="activeImageSource"
-    :caption="activeImageLabel"
-    :has-next="hasNextImage"
-    :has-prev="hasPrevImage"
+  <Modal
+    :show="showImageLightbox"
+    :title="activeImageLabel || 'Illustration'"
+    max-width="4xl"
     @close="closeImageModal"
-    @next="goToNextImage"
-    @prev="goToPrevImage"
-  />
+  >
+    <IllustrationDetail
+      :image="activeImage"
+      :image-src="activeImageSource"
+      :wiki-pages="bookWikiPages"
+      :tags="activeImageTags"
+      :saving-notes="savingImageNotes"
+      :saving-tags="savingImageTags"
+      :can-edit-notes="true"
+      :can-edit-tags="true"
+      :can-download="true"
+      @save-notes="handleSaveActiveImageNotes"
+      @save-tags="handleSaveActiveImageTags"
+      @download="handleDownloadImage"
+    />
+    <template #footer>
+      <div class="flex items-center justify-between">
+        <button
+          type="button"
+          class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
+          :disabled="!hasPrevImage"
+          @click="goToPrevImage"
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
+          :disabled="!hasNextImage"
+          @click="goToNextImage"
+        >
+          Next
+        </button>
+      </div>
+    </template>
+  </Modal>
 
   <!-- Hero image lightbox -->
   <ImageLightbox

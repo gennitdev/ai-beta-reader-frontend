@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import type { Book, ImageAsset } from '@/lib/database'
+import type { Book, ImageAsset, ImageWikiTag } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import BookDesktopMainPane from './BookDesktopMainPane.vue'
 import BookDesktopSidebar from './BookDesktopSidebar.vue'
@@ -59,6 +59,13 @@ withDefaults(defineProps<{
   selectedImageId?: string | null
   selectedImageSrc?: string | null
   selectedImage?: ImageAsset | null
+  selectedImageTags?: ImageWikiTag[]
+  wikiPages?: BookWikiPage[]
+  savingSelectedImageNotes?: boolean
+  savingSelectedImageTags?: boolean
+  saveSelectedImageNotes?: (notes: string) => void | Promise<void>
+  saveSelectedImageTags?: (wikiPageIds: string[]) => void | Promise<void>
+  downloadSelectedImage?: (imageId: string) => void
   wikiPagePinChanged: (payload: { id: string; isPinned: boolean; updatedAt: string }) => void
 }>(), {
   isEditingBookTitle: false,
@@ -86,7 +93,14 @@ withDefaults(defineProps<{
   loadingImages: false,
   selectedImageId: null,
   selectedImageSrc: null,
-  selectedImage: null
+  selectedImage: null,
+  selectedImageTags: () => [],
+  wikiPages: () => [],
+  savingSelectedImageNotes: false,
+  savingSelectedImageTags: false,
+  saveSelectedImageNotes: undefined,
+  saveSelectedImageTags: undefined,
+  downloadSelectedImage: undefined
 })
 </script>
 
@@ -150,6 +164,13 @@ withDefaults(defineProps<{
         :selected-image-id="selectedImageId"
         :selected-image-src="selectedImageSrc"
         :selected-image="selectedImage"
+        :selected-image-tags="selectedImageTags"
+        :wiki-pages="wikiPages"
+        :saving-selected-image-notes="savingSelectedImageNotes"
+        :saving-selected-image-tags="savingSelectedImageTags"
+        :save-selected-image-notes="saveSelectedImageNotes"
+        :save-selected-image-tags="saveSelectedImageTags"
+        :download-selected-image="downloadSelectedImage"
         :is-on-book-only="isOnBookOnly"
         :router-view-key="routerViewKey"
         :wiki-page-pin-changed="wikiPagePinChanged"
