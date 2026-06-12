@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toRefs, ref } from 'vue'
+import type { Component } from 'vue'
 import draggable from 'vuedraggable'
 import {
   PlusIcon,
@@ -107,6 +108,10 @@ const props = defineProps({
     type: Function as PropType<(chapterId: string) => void>,
     required: true
   },
+  insertChapter: {
+    type: Function as PropType<(chapter: BookChapter, placement: 'before' | 'after') => void>,
+    required: true
+  },
   formatWordCount: {
     type: Function as PropType<(count: number) => string>,
     required: true
@@ -128,7 +133,7 @@ const props = defineProps({
     default: () => ({})
   },
   getTypeIcon: {
-    type: Function as PropType<(type: string) => any>,
+    type: Function as PropType<(type: string) => Component>,
     required: true
   },
   getTypeColor: {
@@ -579,6 +584,7 @@ const closeLightbox = () => {
                         :chapter="chapter"
                         :active-chapter-id="activeChapterId"
                         :edit-chapter="editChapter"
+                        :insert-chapter="insertChapter"
                         :thumbnail-src="chapterThumbnails[chapter.id]"
                       />
                     </template>
@@ -618,6 +624,7 @@ const closeLightbox = () => {
                         :chapter="chapter"
                         :active-chapter-id="activeChapterId"
                         :edit-chapter="editChapter"
+                        :insert-chapter="insertChapter"
                         :thumbnail-src="chapterThumbnails[chapter.id]"
                       />
                     </template>

@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useImageLibrary } from "@/composables/useImageLibrary";
-import type { Book as DatabaseBook, BookPart, ImageAsset } from "@/lib/database";
+import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ImageAsset } from "@/lib/database";
 import type {
   BookChapter,
   BookOrganizedPart,
@@ -12,8 +12,20 @@ import type {
 } from "@/types/bookView";
 
 type Chapter = BookChapter;
-type OrganizedPart = BookOrganizedPart;
 type WikiPage = BookWikiPage;
+type DatabaseWikiPage = {
+  id: string;
+  page_name: string;
+  page_type?: string | null;
+  summary?: string | null;
+  aliases?: string | null;
+  tags?: string | null;
+  is_major?: boolean | number | null;
+  created_by_ai?: boolean | number | null;
+  created_at: string;
+  updated_at: string;
+  content?: string | null;
+};
 import { BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon } from "@heroicons/vue/24/outline";
 import SearchModal from "@/components/SearchModal.vue";
 import BookMobileSection from "@/components/book/BookMobileSection.vue";
@@ -241,7 +253,7 @@ const syncChaptersFromDb = async () => {
 
   const partNameMap = new Map(parts.value.map((part) => [part.id, part.name]));
 
-  const chapterPromises = dbChapters.value.map(async (ch: any, index: number) => {
+  const chapterPromises = dbChapters.value.map(async (ch: DatabaseChapter, index: number) => {
     const summary = await getSummary(ch.id);
     const notes = await getNotes(ch.id);
     return {
@@ -376,22 +388,6 @@ const syncPartOrderWithParts = async () => {
   }
 
   setPartOrderState(updatedOrder);
-};
-
-const persistPartOrder = async (newOrder: string[]) => {
-  const uniqueOrder = Array.from(new Set(newOrder));
-  if (arraysEqual(uniqueOrder, partOrder.value)) {
-    return true;
-  }
-
-  try {
-    await updatePartOrder(bookId.value, uniqueOrder);
-    setPartOrderState(uniqueOrder);
-    return true;
-  } catch (error) {
-    console.error("Failed to update part order:", error);
-    return false;
-  }
 };
 
 const buildChapterOrder = (partUpdates: Record<string, string[]>) => {
@@ -594,6 +590,17 @@ const createNewChapterInPart = (partId: string) => {
   });
 };
 
+const insertChapter = (chapter: Chapter, placement: "before" | "after") => {
+  router.push({
+    path: `/books/${bookId.value}/chapter-editor`,
+    query: {
+      ...(chapter.part_id ? { partId: chapter.part_id } : {}),
+      insertRelativeTo: chapter.id,
+      insertPlacement: placement,
+    },
+  });
+};
+
 const editChapter = (chapterId: string) => {
   router.push(`/books/${bookId.value}/chapter-editor/${chapterId}`);
 };
@@ -697,7 +704,7 @@ const loadWiki = async () => {
 
   try {
     loadingWiki.value = true;
-    const safeParseArray = (value: string | null) => {
+    const safeParseArray = (value: string | null | undefined) => {
       if (!value) return [];
       try {
         const parsed = JSON.parse(value);
@@ -707,8 +714,8 @@ const loadWiki = async () => {
       }
     };
 
-    const pages = await getWikiPages(bookId.value);
-    wikiPages.value = pages.map((page: any) => ({
+    const pages = await getWikiPages(bookId.value) as DatabaseWikiPage[];
+    wikiPages.value = pages.map((page) => ({
       id: page.id,
       page_name: page.page_name,
       page_type: (page.page_type || "character") as WikiPage["page_type"],
@@ -928,6 +935,7 @@ onMounted(async () => {
     :on-sidebar-drag-start="onSidebarDragStart"
     :on-sidebar-drag-end="onSidebarDragEnd"
     :edit-chapter="editChapter"
+    :insert-chapter="insertChapter"
     :format-word-count="formatWordCount"
     :word-count-for-chapters="wordCountForChapters"
     :loading-wiki="loadingWiki"

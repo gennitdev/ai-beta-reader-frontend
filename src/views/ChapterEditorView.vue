@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import TextEditor from '@/components/TextEditor.vue'
 import { ArrowLeftIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
-import type { BookPart } from '@/lib/database'
+import type { Book, BookPart, Chapter as DatabaseChapter } from '@/lib/database'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,7 +14,15 @@ const chapterId = route.params.chapterId as string
 const isEditing = !!chapterId
 
 // Use local database
-const { chapters, loadChapters, saveChapter: dbSaveChapter, getParts } = useDatabase()
+const {
+  books,
+  chapters,
+  loadBooks,
+  loadChapters,
+  saveChapter: dbSaveChapter,
+  getParts,
+  updateChapterOrders
+} = useDatabase()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -28,6 +36,78 @@ const parts = ref<BookPart[]>([])
 const selectedPartId = ref(
   !isEditing && typeof route.query.partId === 'string' ? (route.query.partId as string) : ''
 )
+const insertRelativeTo = !isEditing && typeof route.query.insertRelativeTo === 'string'
+  ? route.query.insertRelativeTo
+  : ''
+const insertPlacement = route.query.insertPlacement === 'before' ? 'before' : 'after'
+
+const parseIdArray = (value: string | null | undefined): string[] => {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+const insertNearChapter = (ids: string[], newChapterId: string, relativeTo: string, placement: 'before' | 'after') => {
+  const withoutNewChapter = ids.filter((id) => id !== newChapterId)
+  const relativeIndex = withoutNewChapter.indexOf(relativeTo)
+
+  if (relativeIndex === -1) {
+    return [...withoutNewChapter, newChapterId]
+  }
+
+  const insertIndex = placement === 'before' ? relativeIndex : relativeIndex + 1
+  withoutNewChapter.splice(insertIndex, 0, newChapterId)
+  return withoutNewChapter
+}
+
+const buildStoredOrder = (storedOrder: string[], allChapterIds: string[]) => {
+  const existingIds = new Set(allChapterIds)
+  const sanitizedOrder = storedOrder.filter((id) => existingIds.has(id))
+  const missingIds = allChapterIds.filter((id) => !sanitizedOrder.includes(id))
+  return [...sanitizedOrder, ...missingIds]
+}
+
+const updateInsertedChapterOrder = async (newChapterId: string) => {
+  if (isEditing || !insertRelativeTo) return
+
+  await loadBooks()
+  await loadChapters(bookId)
+
+  const currentBook = books.value.find((candidate: Book) => candidate.id === bookId)
+  const allChapterIds = chapters.value.map((item) => item.id)
+  const bookOrder = buildStoredOrder(parseIdArray(currentBook?.chapter_order), allChapterIds)
+  const chapterOrder = insertNearChapter(bookOrder, newChapterId, insertRelativeTo, insertPlacement)
+
+  const fetchedParts = parts.value.length > 0 ? parts.value : await getParts(bookId)
+  const partUpdates: Record<string, string[]> = {}
+  const partIds = new Set(fetchedParts.map((part) => part.id))
+
+  const uncategorizedIds = chapters.value
+    .filter((item) => !item.part_id || !partIds.has(item.part_id))
+    .map((item) => item.id)
+  partUpdates["null"] = buildStoredOrder([], uncategorizedIds)
+
+  fetchedParts.forEach((part) => {
+    const partChapterIds = chapters.value
+      .filter((item) => item.part_id === part.id)
+      .map((item) => item.id)
+    partUpdates[part.id] = buildStoredOrder(parseIdArray(part.chapter_order), partChapterIds)
+  })
+
+  const targetPartKey = selectedPartId.value || 'null'
+  partUpdates[targetPartKey] = insertNearChapter(
+    partUpdates[targetPartKey] || [newChapterId],
+    newChapterId,
+    insertRelativeTo,
+    insertPlacement
+  )
+
+  await updateChapterOrders(bookId, chapterOrder, partUpdates)
+}
 
 const loadParts = async () => {
   try {
@@ -54,7 +134,7 @@ const loadChapter = async () => {
     await loadChapters(bookId)
 
     // Find the chapter being edited
-    const chapterData = chapters.value.find((ch: any) => ch.id === chapterId)
+    const chapterData = chapters.value.find((ch: DatabaseChapter) => ch.id === chapterId)
 
     if (chapterData) {
       chapter.value = {
@@ -112,6 +192,8 @@ const saveChapter = async () => {
       word_count: wordCount,
       created_at: new Date().toISOString()
     })
+
+    await updateInsertedChapterOrder(chapter.value.id)
 
     // Navigate to the chapter detail page
     router.push(`/books/${bookId}/chapters/${chapter.value.id}`)
