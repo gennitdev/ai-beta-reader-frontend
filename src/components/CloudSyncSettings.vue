@@ -114,18 +114,13 @@ async function handleRestore() {
   try {
     loading.value = true
     message.value = ''
-    const success = await restoreFromCloud(password.value)
-
-    if (success) {
-      showMessage('✓ Restore successful!', 'success')
-      await loadBooks() // Refresh the UI
-      // Optionally emit event or use router to refresh
-      window.location.reload()
-    } else {
-      showMessage('No backup found or wrong password', 'error')
-    }
+    await restoreFromCloud(password.value)
+    showMessage('✓ Restore successful!', 'success')
+    await loadBooks() // Refresh the UI
+    // Optionally emit event or use router to refresh
+    window.location.reload()
   } catch (error) {
-    showMessage(`Restore failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
+    showMessage(error instanceof Error ? error.message : 'Restore failed', 'error')
   } finally {
     loading.value = false
   }

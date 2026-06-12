@@ -198,6 +198,7 @@ export class GoogleDriveProvider implements CloudProvider {
 
     // Check if file exists
     const existingFileId = await this.findFile(fileName);
+    this.debug(`upload() existingFileId: ${existingFileId || 'none (will create new)'}`);
 
     const metadata = {
       name: fileName,
@@ -214,19 +215,29 @@ export class GoogleDriveProvider implements CloudProvider {
 
     const method = existingFileId ? 'PATCH' : 'POST';
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: form,
-    });
+    this.debug(`upload() starting ${method} to Google Drive (${(data.length / 1024 / 1024).toFixed(1)} MB)...`);
 
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: form,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => response.statusText);
+        this.debug(`upload() failed: ${response.status} ${errorText}`);
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+      }
+
+      this.debug('upload() completed successfully');
+      console.log('File uploaded to Google Drive successfully');
+    } catch (error) {
+      this.debug(`upload() error: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
-
-    console.log('File uploaded to Google Drive successfully');
   }
 
   async download(fileName: string): Promise<string | null> {
@@ -838,9 +849,13 @@ export class CloudSync {
     const finalData = COMPRESSED_PREFIX + encrypted;
 
     console.log(`Uploading to ${this.provider.name}...`);
-    await this.provider.upload(this.backupFileName, finalData);
-
-    console.log('✅ Backup complete!');
+    try {
+      await this.provider.upload(this.backupFileName, finalData);
+      console.log('✅ Backup complete!');
+    } catch (error) {
+      console.error('Upload failed:', error);
+      throw new Error(`Failed to upload backup: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
@@ -858,7 +873,7 @@ export class CloudSync {
 
     if (!downloaded) {
       console.log('No backup found in cloud storage');
-      return false;
+      throw new Error('No backup found in your Google Drive. Please create a backup first.');
     }
 
     // Check if the backup is compressed (has GZ1: prefix)
@@ -875,7 +890,7 @@ export class CloudSync {
       console.log('Decryption successful,', decrypted.length, 'bytes');
     } catch (error) {
       console.error('Failed to decrypt - wrong password?', error);
-      return false;
+      throw new Error('Incorrect password. Please check your encryption password and try again.');
     }
 
     // Decompress if needed
@@ -898,7 +913,7 @@ export class CloudSync {
         if (isMobile) {
           throw new Error('Backup is too large for mobile device. Please restore using the desktop app or web browser first, then sync.');
         }
-        return false;
+        throw new Error('Failed to decompress backup. The file may be corrupted or the password may be incorrect.');
       }
     }
 

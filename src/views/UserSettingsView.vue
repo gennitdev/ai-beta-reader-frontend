@@ -532,6 +532,7 @@ const parseJsonArray = (value?: string | null): string[] => {
 }
 
 const showCloudMessage = (message: string, type: 'success' | 'error') => {
+  console.log(`[CloudSync] showCloudMessage: ${type} - ${message}`)
   cloudMessage.value = message
   cloudMessageType.value = type
 
@@ -539,7 +540,7 @@ const showCloudMessage = (message: string, type: 'success' | 'error') => {
     setTimeout(() => {
       cloudMessage.value = ''
       cloudMessageType.value = ''
-    }, 5000)
+    }, 10000) // Keep success visible for 10 seconds
   }
 }
 
@@ -561,12 +562,16 @@ const handleCloudBackup = async () => {
   try {
     isBackingUp.value = true
     cloudMessage.value = ''
+    console.log('[CloudSync] handleCloudBackup starting...')
     await backupToCloud(cloudPassword.value)
+    console.log('[CloudSync] handleCloudBackup succeeded')
     showCloudMessage('Backup saved to Google Drive.', 'success')
   } catch (error) {
+    console.error('[CloudSync] handleCloudBackup failed:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     showCloudMessage(`Backup failed: ${message}`, 'error')
   } finally {
+    console.log('[CloudSync] handleCloudBackup finished, setting isBackingUp=false')
     isBackingUp.value = false
   }
 }
@@ -594,16 +599,13 @@ const handleCloudRestore = async () => {
     isRestoring.value = true
     cloudMessage.value = ''
     console.log('[CloudSync] handleCloudRestore triggered')
-    const success = await restoreFromCloud(cloudPassword.value)
-    console.log('[CloudSync] handleCloudRestore result', { success })
-    if (success) {
-      showCloudMessage('Backup restored from Google Drive.', 'success')
-    } else {
-      showCloudMessage('No backup found or the password was incorrect.', 'error')
-    }
+    await restoreFromCloud(cloudPassword.value)
+    console.log('[CloudSync] handleCloudRestore succeeded')
+    showCloudMessage('Backup restored from Google Drive.', 'success')
   } catch (error) {
+    console.error('[CloudSync] handleCloudRestore error:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
-    showCloudMessage(`Restore failed: ${message}`, 'error')
+    showCloudMessage(message, 'error')
   } finally {
     isRestoring.value = false
   }
@@ -785,7 +787,7 @@ onMounted(async () => {
               </button>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Remember this password. Without it your backup cannot be decrypted.
+              <strong>Important:</strong> Use the same password every time. Backup will encrypt with any password you enter, but you'll need this exact password to restore.
             </p>
           </div>
 
@@ -854,9 +856,13 @@ onMounted(async () => {
 
           <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
             <p>✓ Data is encrypted client-side before upload</p>
-            <p>✓ Backups are stored in your Google Drive only</p>
+            <p>✓ Backups are stored in your Google Drive as <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">ai-beta-reader-backup.enc</code></p>
             <p>✓ Restoring requires the same password used for backup</p>
+            <p>⚠️ Each backup overwrites the previous one - use the same password each time</p>
           </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            To find your backup: Open <a href="https://drive.google.com" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">Google Drive</a> and search for <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">ai-beta-reader-backup.enc</code>
+          </p>
         </div>
       </div>
 
