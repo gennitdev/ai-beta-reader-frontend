@@ -11,6 +11,7 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     fetchChapterCover,
     setChapterCoverImageId,
     getImageSource,
+    canUploadImages,
   } = useImageLibrary();
 
   const chapterImages = ref<ImageAsset[]>([]);
@@ -26,6 +27,7 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
   const chapterCoverImageId = ref<string | null>(null);
   const settingCoverId = ref<string | null>(null);
   const heroLightboxOpen = ref(false);
+  const chapterImageUploadAvailable = computed(() => canUploadImages());
 
   const activeImageSource = computed(() => {
     const id = activeImageId.value;
@@ -258,6 +260,7 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
   return {
     // State
     desktopImagesAvailable,
+    chapterImageUploadAvailable,
     chapterImages,
     chapterImagesLoading,
     addingChapterImages,

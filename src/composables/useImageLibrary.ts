@@ -164,7 +164,7 @@ export function useImageLibrary() {
 
   // Check if new images can be uploaded
   function canUploadImages(): boolean {
-    return desktopImagesAvailable.value || typeof window !== 'undefined'
+    return desktopImagesAvailable.value
   }
 
   async function deleteImage(image: ImageAsset) {

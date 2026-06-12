@@ -916,7 +916,7 @@ watch([bookId, partId], async () => {
           </section>
 
           <section
-            v-if="desktopImagesAvailable"
+            v-if="desktopImagesAvailable || partImages.length > 0"
             class="mb-10 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
           >
             <div class="mb-4">

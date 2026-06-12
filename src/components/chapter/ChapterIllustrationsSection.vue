@@ -9,6 +9,7 @@ defineProps<{
   adding: boolean;
   error: string | null;
   settingCoverId: string | null;
+  canAddImages: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -30,10 +31,11 @@ const emit = defineEmits<{
           Chapter Illustrations
         </h2>
         <p class="text-sm text-gray-500 dark:text-gray-400">
-          Images live locally inside the desktop app.
+          {{ canAddImages ? "Images live locally inside the desktop app." : "Restored images are available for viewing." }}
         </p>
       </div>
       <button
+        v-if="canAddImages"
         type="button"
         class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         :disabled="adding"

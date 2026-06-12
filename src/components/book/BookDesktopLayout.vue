@@ -704,18 +704,18 @@ const closeLightbox = () => {
           </div>
 
           <div v-else-if="currentTab === 'images'">
-            <div v-if="!desktopImagesAvailable" class="text-center py-8">
-              <PhotoIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
-              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                Images available in desktop app
-              </h3>
-              <p class="text-xs text-gray-600 dark:text-gray-400">
-                Image management is only available when running in the Electron desktop app.
-              </p>
+            <div v-if="loadingImages" class="flex justify-center items-center h-32">
+              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             </div>
 
-            <div v-else-if="loadingImages" class="flex justify-center items-center h-32">
-              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <div v-else-if="!desktopImagesAvailable && bookImages.length === 0" class="text-center py-8">
+              <PhotoIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
+              <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                No restored images
+              </h3>
+              <p class="text-xs text-gray-600 dark:text-gray-400">
+                Add images in the desktop app, back up, then restore here to view them on web.
+              </p>
             </div>
 
             <div v-else-if="bookImages.length > 0" class="grid grid-cols-2 gap-2">

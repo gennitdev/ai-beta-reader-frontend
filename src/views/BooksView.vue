@@ -118,7 +118,7 @@ watch(
     </div>
 
     <p
-      v-if="desktopImagesAvailable && coverRefreshError"
+      v-if="coverRefreshError"
       class="mb-4 text-sm text-amber-600 dark:text-amber-400"
     >
       {{ coverRefreshError }}

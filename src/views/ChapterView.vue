@@ -73,6 +73,7 @@ const chapterId = computed(() => route.params.chapterId as string);
 // Use chapter images composable
 const {
   desktopImagesAvailable,
+  chapterImageUploadAvailable,
   chapterImages,
   chapterImagesLoading,
   addingChapterImages,
@@ -1093,7 +1094,7 @@ onMounted(async () => {
     <div class="w-full max-w-6xl md:mx-auto px-4 lg:px-8">
       <!-- Chapter Illustrations - at top below title -->
       <ChapterIllustrationsSection
-        v-if="desktopImagesAvailable && (chapterImages.length > 0 || showIllustrationsPanel)"
+        v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
         :images="chapterImages"
         :image-sources="chapterImageSources"
         :cover-image-id="chapterCoverImageId"
@@ -1101,6 +1102,7 @@ onMounted(async () => {
         :adding="addingChapterImages"
         :error="chapterImageError"
         :setting-cover-id="settingCoverId"
+        :can-add-images="chapterImageUploadAvailable"
         @add-images="handleAddIllustrations"
         @open-image="openImageModal"
         @set-cover="handleSetAsCover"

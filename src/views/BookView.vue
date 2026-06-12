@@ -291,12 +291,9 @@ watch(
 
 watch(
   () => desktopImagesAvailable.value,
-  (available) => {
-    if (available && book.value) {
+  () => {
+    if (book.value) {
       loadBookCoverImage(book.value.id);
-    } else if (!available) {
-      bookCoverImage.value = null;
-      bookCoverSrc.value = null;
     }
   }
 );
@@ -304,7 +301,7 @@ watch(
 watch(
   () => book.value?.id,
   (nextId) => {
-    if (nextId && desktopImagesAvailable.value) {
+    if (nextId) {
       loadBookCoverImage(nextId);
     }
   }
@@ -495,14 +492,10 @@ const loadBook = async () => {
 
     await syncPartOrderWithParts();
     await syncChaptersFromDb();
-    if (desktopImagesAvailable.value) {
-      await loadBookCoverImage(bookId.value);
-      await loadChapterThumbnailsForBook();
-    } else {
-      bookCoverImage.value = null;
-      bookCoverSrc.value = null;
-      chapterThumbnails.value = {};
-      partThumbnails.value = {};
+    await loadBookCoverImage(bookId.value);
+    await loadChapterThumbnailsForBook();
+    if (currentTab.value === "images") {
+      await loadBookImages();
     }
   } catch (error) {
     console.error("Failed to load book:", error);
@@ -737,7 +730,7 @@ const loadWiki = async () => {
 };
 
 const loadBookImages = async () => {
-  if (!bookId.value || !desktopImagesAvailable.value) return;
+  if (!bookId.value) return;
 
   try {
     loadingImages.value = true;

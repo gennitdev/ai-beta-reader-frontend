@@ -89,6 +89,21 @@ export interface ImageAsset {
   updated_at: string;
 }
 
+function imageAssetFromSqlRow(row: unknown[]): ImageAsset {
+  return {
+    id: String(row[0]),
+    book_id: String(row[1]),
+    chapter_id: row[2] == null ? null : String(row[2]),
+    asset_type: row[3] as ImageAssetType,
+    file_name: String(row[4]),
+    file_path: String(row[5]),
+    mime_type: row[6] == null ? null : String(row[6]),
+    created_at: String(row[7]),
+    updated_at: String(row[8]),
+    image_data: row[9] == null ? null : String(row[9]),
+  };
+}
+
 const NATIVE_CAPACITOR_PLATFORMS = new Set(['ios', 'android']);
 
 // IndexedDB constants for web storage (much larger capacity than localStorage)
@@ -1907,18 +1922,7 @@ export class AppDatabase {
     } else {
       const result = this.db.exec(query, [chapterId]);
       if (result.length === 0) return [];
-      return result[0].values.map((row: any[]) => ({
-        id: row[0],
-        book_id: row[1],
-        chapter_id: row[2],
-        asset_type: row[3] as ImageAssetType,
-        file_name: row[4],
-        file_path: row[5],
-        mime_type: row[6],
-        image_data: row[7] ?? null,
-        created_at: row[8],
-        updated_at: row[9],
-      }));
+      return result[0].values.map(imageAssetFromSqlRow);
     }
   }
 
@@ -1948,18 +1952,7 @@ export class AppDatabase {
     } else {
       const result = this.db.exec(query, [partId]);
       if (result.length === 0) return [];
-      return result[0].values.map((row: any[]) => ({
-        id: row[0],
-        book_id: row[1],
-        chapter_id: row[2],
-        asset_type: row[3] as ImageAssetType,
-        file_name: row[4],
-        file_path: row[5],
-        mime_type: row[6],
-        image_data: row[7] ?? null,
-        created_at: row[8],
-        updated_at: row[9],
-      }));
+      return result[0].values.map(imageAssetFromSqlRow);
     }
   }
 
@@ -1983,18 +1976,7 @@ export class AppDatabase {
     } else {
       const result = this.db.exec(query, [bookId]);
       if (result.length === 0) return [];
-      return result[0].values.map((row: any[]) => ({
-        id: row[0],
-        book_id: row[1],
-        chapter_id: row[2],
-        asset_type: row[3] as ImageAssetType,
-        file_name: row[4],
-        file_path: row[5],
-        mime_type: row[6],
-        image_data: row[7] ?? null,
-        created_at: row[8],
-        updated_at: row[9],
-      }));
+      return result[0].values.map(imageAssetFromSqlRow);
     }
   }
 
@@ -2028,18 +2010,7 @@ export class AppDatabase {
       if (result.length === 0 || result[0].values.length === 0) return null;
       const row = result[0].values[0];
       if (!row[0]) return null;
-      return {
-        id: row[0],
-        book_id: row[1],
-        chapter_id: row[2],
-        asset_type: row[3] as ImageAssetType,
-        file_name: row[4],
-        file_path: row[5],
-        mime_type: row[6],
-        image_data: row[7] ?? null,
-        created_at: row[8],
-        updated_at: row[9],
-      };
+      return imageAssetFromSqlRow(row);
     }
   }
 
@@ -2084,18 +2055,7 @@ export class AppDatabase {
       if (result.length === 0 || result[0].values.length === 0) return null;
       const row = result[0].values[0];
       if (!row[0]) return null;
-      return {
-        id: row[0],
-        book_id: row[1],
-        chapter_id: row[2],
-        asset_type: row[3] as ImageAssetType,
-        file_name: row[4],
-        file_path: row[5],
-        mime_type: row[6],
-        image_data: row[7] ?? null,
-        created_at: row[8],
-        updated_at: row[9],
-      };
+      return imageAssetFromSqlRow(row);
     }
   }
 
@@ -2140,18 +2100,7 @@ export class AppDatabase {
       if (result.length === 0 || result[0].values.length === 0) return null;
       const row = result[0].values[0];
       if (!row[0]) return null;
-      return {
-        id: row[0],
-        book_id: row[1],
-        chapter_id: row[2],
-        asset_type: row[3] as ImageAssetType,
-        file_name: row[4],
-        file_path: row[5],
-        mime_type: row[6],
-        image_data: row[7] ?? null,
-        created_at: row[8],
-        updated_at: row[9],
-      };
+      return imageAssetFromSqlRow(row);
     }
   }
 

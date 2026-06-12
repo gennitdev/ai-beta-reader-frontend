@@ -268,7 +268,7 @@ watch(
     </div>
 
     <div
-      v-if="desktopImagesAvailable"
+      v-if="desktopImagesAvailable || coverImageSrc"
       class="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
     >
       <div class="flex gap-4">
@@ -290,9 +290,9 @@ watch(
         </div>
         <div class="flex flex-1 flex-col justify-between">
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            Covers stay on your device when you use the desktop app.
+            {{ desktopImagesAvailable ? 'Covers stay on your device when you use the desktop app.' : 'Restored cover image.' }}
           </p>
-          <div class="mt-2 flex items-center gap-2">
+          <div v-if="desktopImagesAvailable" class="mt-2 flex items-center gap-2">
             <button
               type="button"
               class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
