@@ -1042,6 +1042,17 @@ watch(currentTab, async (newTab) => {
   }
 });
 
+// Watch for returning to wiki list from a wiki page (e.g., after deletion)
+watch(
+  () => activeWikiPageId.value,
+  async (newId, oldId) => {
+    // If we had a wiki page selected and now we don't, reload the list
+    if (oldId && !newId && currentTab.value === "wiki") {
+      await loadWiki();
+    }
+  }
+);
+
 watch(
   () => bookId.value,
   async () => {
