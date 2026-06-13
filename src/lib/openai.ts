@@ -35,13 +35,14 @@ export async function generateChapterSummary(
   summary: string
   pov: string | null
   characters: string[]
+  locations: string[]
   beats: string[]
   spoilers_ok: boolean
 }> {
   const client = createOpenAIClient(apiKey)
 
   // Use same system prompt as Express backend
-  const systemPrompt = `You are an expert fiction editor. Produce a tight factual summary (150–250 words), include POV, main characters, and 4–8 bullet beats. No speculation. Return valid JSON only.${
+  const systemPrompt = `You are an expert fiction editor. Produce a tight factual summary (150–250 words), include POV, main characters, key locations/settings, and 4–8 bullet beats. No speculation. Return valid JSON only.${
     isFirstChapter
       ? ' IMPORTANT: This is the FIRST chapter of the book - there are no previous chapters to reference. Focus only on what happens in this opening chapter.'
       : ''
@@ -100,7 +101,7 @@ export async function generateChapterSummary(
   }
 
   userPromptLines.push(
-    'Return JSON only for this schema: {pov, characters[], beats[], spoilers_ok, summary}',
+    'Return JSON only for this schema: {pov, characters[], locations[], beats[], spoilers_ok, summary}. The locations array should contain significant named places, settings, or locations that appear in the chapter.',
   )
   userPromptLines.push(chapterText)
 
@@ -126,6 +127,7 @@ export async function generateChapterSummary(
     summary: parsed.summary || '',
     pov: parsed.pov || null,
     characters: parsed.characters || [],
+    locations: parsed.locations || [],
     beats: parsed.beats || [],
     spoilers_ok: !!parsed.spoilers_ok
   }
@@ -492,15 +494,18 @@ export async function updateWikiPagesFromChapter(
   }
 }
 
+export type WikiEntityType = 'character' | 'location' | 'concept' | 'other'
+
 /**
- * Generate or update wiki page content for a character
+ * Generate or update wiki page content for an entity (character, location, etc.)
  */
 export async function generateWikiContent(
   apiKey: string,
-  characterName: string,
+  entityName: string,
   chapterText: string,
   chapterSummary: string,
-  existingContent: string | null
+  existingContent: string | null,
+  entityType: WikiEntityType = 'character'
 ): Promise<{
   content: string
   summary: string
@@ -512,25 +517,50 @@ export async function generateWikiContent(
   const client = createOpenAIClient(apiKey)
   const isNewPage = !existingContent
 
+  const entityLabels: Record<WikiEntityType, string> = {
+    character: 'character',
+    location: 'location/setting',
+    concept: 'concept',
+    other: 'entity'
+  }
+  const entityLabel = entityLabels[entityType]
+
+  const sectionsByType: Record<WikiEntityType, string> = {
+    character: `- Basic Information
+- Appearance
+- Personality
+- Background
+- Relationships
+- Chapter Appearances`,
+    location: `- Overview
+- Description
+- History/Background
+- Notable Features
+- Significance
+- Chapter Appearances`,
+    concept: `- Definition
+- Significance
+- Related Elements
+- Chapter Appearances`,
+    other: `- Overview
+- Details
+- Chapter Appearances`
+  }
+
   const systemPrompt = isNewPage
-    ? `You are a wiki editor creating a character page. Create a comprehensive character profile based on the information provided. Return JSON with: {content: "markdown content", summary: "brief summary", hasChanges: true}`
-    : `You are a wiki editor updating a character page. Compare the existing content with new information from the chapter. Update the wiki to include new information and note any contradictions. Return JSON with: {content: "updated markdown", summary: "updated summary", hasChanges: boolean, changeSummary: "what changed", hasContradictions: boolean, contradictions: "contradictions found"}`
+    ? `You are a wiki editor creating a ${entityLabel} page. Create a comprehensive profile based on the information provided. Return JSON with: {content: "markdown content", summary: "brief summary", hasChanges: true}`
+    : `You are a wiki editor updating a ${entityLabel} page. Compare the existing content with new information from the chapter. Update the wiki to include new information and note any contradictions. Return JSON with: {content: "updated markdown", summary: "updated summary", hasChanges: boolean, changeSummary: "what changed", hasContradictions: boolean, contradictions: "contradictions found"}`
 
   const userPrompt = isNewPage
-    ? `Create a wiki page for character: ${characterName}
+    ? `Create a wiki page for ${entityLabel}: ${entityName}
 
 Chapter Summary: ${chapterSummary}
 
 Chapter Text Context: ${chapterText.substring(0, 2000)}...
 
-Create a character profile with sections for:
-- Basic Information
-- Appearance
-- Personality
-- Background
-- Relationships
-- Chapter Appearances`
-    : `Update the wiki page for character: ${characterName}
+Create a ${entityLabel} profile with sections for:
+${sectionsByType[entityType]}`
+    : `Update the wiki page for ${entityLabel}: ${entityName}
 
 EXISTING WIKI CONTENT:
 ${existingContent}
@@ -561,9 +591,15 @@ Update the wiki with any new information. If there are contradictions with exist
   } catch (error) {
     console.error('Error generating wiki content:', error)
     // Return a basic fallback
+    const typeDescriptions: Record<WikiEntityType, string> = {
+      character: 'Character from the story',
+      location: 'Location from the story',
+      concept: 'Concept from the story',
+      other: 'Element from the story'
+    }
     return {
-      content: `# ${characterName}\n\nMentioned in chapter summary: ${chapterSummary}`,
-      summary: `Character from the story`,
+      content: `# ${entityName}\n\nMentioned in chapter summary: ${chapterSummary}`,
+      summary: typeDescriptions[entityType],
       hasChanges: true,
       changeSummary: 'Basic wiki page created due to AI generation error'
     }

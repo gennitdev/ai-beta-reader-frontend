@@ -12,7 +12,8 @@ type CharacterWikiInfo = {
 }
 
 interface WikiUpdateResult {
-  characterName: string
+  entityName: string
+  entityType: 'character' | 'location' | 'concept' | 'other'
   wikiPageId: string
   updateType: 'created' | 'updated' | 'unchanged'
 }
@@ -179,7 +180,12 @@ const hasBeats = computed(() => props.chapterBeats && props.chapterBeats.length 
             >
               {{ result.updateType === 'created' ? 'New' : result.updateType === 'updated' ? 'Updated' : 'No changes' }}
             </span>
-            {{ result.characterName }}
+            <span
+              class="mr-1.5 inline-block rounded px-1 py-0.5 text-xs capitalize text-gray-500 dark:text-gray-400"
+            >
+              {{ result.entityType }}:
+            </span>
+            {{ result.entityName }}
           </router-link>
         </div>
       </div>
