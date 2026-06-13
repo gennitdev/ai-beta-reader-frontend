@@ -120,6 +120,10 @@ const props = defineProps({
     type: Function as PropType<(page: BookWikiPage) => void | Promise<void>>,
     required: true
   },
+  openCreateWikiModal: {
+    type: Function as PropType<() => void>,
+    default: () => {}
+  },
   desktopImagesAvailable: {
     type: Boolean,
     default: false
@@ -350,7 +354,7 @@ watch(
         ]"
       >
         <BookOpenIcon class="w-5 h-5 inline mr-2" />
-        Characters
+        Wiki Pages
       </router-link>
     </div>
 
@@ -515,6 +519,15 @@ watch(
       </div>
 
       <div v-else-if="Object.keys(wikiPagesByType).length > 0" class="space-y-8">
+        <div class="flex justify-end">
+          <button
+            @click="openCreateWikiModal"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <PlusIcon class="w-5 h-5 mr-2" />
+            New Wiki Page
+          </button>
+        </div>
         <div v-for="(pages, type) in wikiPagesByType" :key="type" class="space-y-4">
           <div class="flex items-center space-x-2">
             <component :is="getTypeIcon(type)" :class="['w-6 h-6', getTypeColor(type)]" />
@@ -587,12 +600,19 @@ watch(
       <div v-else class="text-center py-16">
         <BookOpenIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No wiki pages yet</h3>
-        <p class="text-gray-600 dark:text-gray-400 mb-6">
-          Wiki pages will be automatically created when you generate chapter summaries with character mentions.
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+          Create wiki pages to track characters, locations, and concepts in your book.
         </p>
-        <div class="text-sm text-gray-500 dark:text-gray-400">
-          💡 Try generating a summary for a chapter to see the wiki in action!
-        </div>
+        <button
+          @click="openCreateWikiModal"
+          class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <PlusIcon class="w-5 h-5 mr-2" />
+          Create Wiki Page
+        </button>
+        <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+          Wiki pages can also be auto-generated when you create chapter summaries.
+        </p>
       </div>
     </div>
   </div>

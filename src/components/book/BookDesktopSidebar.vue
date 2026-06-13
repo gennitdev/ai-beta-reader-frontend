@@ -52,6 +52,7 @@ const props = defineProps<{
   activeChapterId?: string
   activeWikiPageId?: string
   toggleWikiPagePinned: (page: BookWikiPage) => void | Promise<void>
+  openCreateWikiModal?: () => void
   startEditingBookTitle: () => void
   saveBookTitle: () => void
   cancelEditingBookTitle: () => void
@@ -75,7 +76,7 @@ const showLightbox = ref(false)
 
 const sectionOptions = [
   { id: 'chapters', label: 'Chapters', icon: DocumentTextIcon, route: (bookId: string) => `/books/${bookId}` },
-  { id: 'wiki', label: 'Characters', icon: BookOpenIcon, route: (bookId: string) => `/books/${bookId}?tab=wiki` },
+  { id: 'wiki', label: 'Wiki Pages', icon: BookOpenIcon, route: (bookId: string) => `/books/${bookId}?tab=wiki` },
   { id: 'images', label: 'Images', icon: PhotoIcon, route: (bookId: string) => `/books/${bookId}?tab=images` }
 ]
 
@@ -313,6 +314,7 @@ const closeLightbox = () => {
         :get-type-color="getTypeColor"
         :active-wiki-page-id="activeWikiPageId"
         :toggle-wiki-page-pinned="toggleWikiPagePinned"
+        :open-create-wiki-modal="openCreateWikiModal"
       />
 
       <BookDesktopImagesSidebar

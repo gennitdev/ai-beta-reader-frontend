@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import { BookmarkIcon, BookOpenIcon } from '@heroicons/vue/24/outline'
+import { BookmarkIcon, BookOpenIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import type { BookWikiPage } from '@/types/bookView'
 
 defineProps<{
@@ -12,6 +12,7 @@ defineProps<{
   getTypeColor: (type: string) => string
   activeWikiPageId?: string
   toggleWikiPagePinned: (page: BookWikiPage) => void | Promise<void>
+  openCreateWikiModal?: () => void
 }>()
 </script>
 
@@ -22,6 +23,14 @@ defineProps<{
     </div>
 
     <div v-else-if="hasWikiPages" class="space-y-4">
+      <button
+        v-if="openCreateWikiModal"
+        @click="openCreateWikiModal"
+        class="w-full inline-flex items-center justify-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      >
+        <PlusIcon class="w-4 h-4 mr-1.5" />
+        New Wiki Page
+      </button>
       <div v-for="(pages, type) in wikiPagesByType" :key="type" class="space-y-2">
         <div class="flex items-center space-x-2">
           <component :is="getTypeIcon(type)" :class="['w-4 h-4', getTypeColor(type)]" />
@@ -88,9 +97,17 @@ defineProps<{
       <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
         No wiki pages yet
       </h3>
-      <p class="text-xs text-gray-600 dark:text-gray-400">
-        Generate chapter summaries to create wiki pages.
+      <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+        Create wiki pages to track characters, locations, and concepts.
       </p>
+      <button
+        v-if="openCreateWikiModal"
+        @click="openCreateWikiModal"
+        class="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      >
+        <PlusIcon class="w-4 h-4 mr-1" />
+        Create Wiki Page
+      </button>
     </div>
   </div>
 </template>

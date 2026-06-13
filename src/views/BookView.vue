@@ -43,6 +43,8 @@ const {
   loadBooks,
   loadChapters,
   getWikiPages,
+  getWikiPage,
+  createWikiPage,
   getSummary,
   getNotes,
   saveBook,
@@ -118,6 +120,13 @@ const searchService = {
 const isDragging = ref(false);
 const isDraggingInSidebar = ref(false);
 const showSearchModal = ref(false);
+
+// Create wiki page state
+const showCreateWikiModal = ref(false);
+const newWikiPageName = ref("");
+const newWikiPageType = ref<"character" | "location" | "concept" | "other">("character");
+const creatingWikiPage = ref(false);
+const createWikiPageError = ref<string | null>(null);
 
 const currentTab = computed(() => {
   // Check if we're on a wiki page child route
@@ -596,6 +605,63 @@ const openSearchModal = () => {
   showSearchModal.value = true;
 };
 
+const openCreateWikiModal = () => {
+  newWikiPageName.value = "";
+  newWikiPageType.value = "character";
+  createWikiPageError.value = null;
+  showCreateWikiModal.value = true;
+};
+
+const closeCreateWikiModal = () => {
+  if (creatingWikiPage.value) return;
+  showCreateWikiModal.value = false;
+  newWikiPageName.value = "";
+  createWikiPageError.value = null;
+};
+
+const handleCreateWikiPage = async () => {
+  const pageName = newWikiPageName.value.trim();
+  if (!pageName) {
+    createWikiPageError.value = "Please enter a page name.";
+    return;
+  }
+
+  creatingWikiPage.value = true;
+  createWikiPageError.value = null;
+
+  try {
+    // Check for duplicate name
+    const existingPage = await getWikiPage(bookId.value, pageName);
+    if (existingPage) {
+      createWikiPageError.value = `A wiki page named "${pageName}" already exists.`;
+      creatingWikiPage.value = false;
+      return;
+    }
+
+    // Create the new wiki page
+    const newPageId = await createWikiPage({
+      book_id: bookId.value,
+      page_name: pageName,
+      page_type: newWikiPageType.value,
+      content: "",
+      summary: "",
+      created_by_ai: false,
+    });
+
+    // Refresh wiki pages list
+    await loadWiki();
+
+    // Close modal and navigate to new page
+    showCreateWikiModal.value = false;
+    newWikiPageName.value = "";
+    router.push(`/books/${bookId.value}/wiki/${newPageId}`);
+  } catch (error) {
+    createWikiPageError.value = error instanceof Error ? error.message : "Failed to create wiki page.";
+  } finally {
+    creatingWikiPage.value = false;
+  }
+};
+
 const createNewChapterInPart = (partId: string) => {
   router.push({
     path: `/books/${bookId.value}/chapter-editor`,
@@ -995,6 +1061,7 @@ onMounted(async () => {
       :create-new-chapter="createNewChapter"
       :go-to-organize-chapters="goToOrganizeChapters"
       :create-new-chapter-in-part="createNewChapterInPart"
+      :open-create-wiki-modal="openCreateWikiModal"
       :edit-chapter="editChapter"
       :start-editing-book-title="startEditingBookTitle"
       :save-book-title="saveBookTitle"
@@ -1052,6 +1119,7 @@ onMounted(async () => {
     :active-chapter-id="activeChapterId"
     :active-wiki-page-id="activeWikiPageId"
     :toggle-wiki-page-pinned="toggleWikiPagePinned"
+    :open-create-wiki-modal="openCreateWikiModal"
     :is-on-book-only="isOnBookOnly"
     :router-view-key="routerViewKey"
     :start-editing-book-title="startEditingBookTitle"
@@ -1089,4 +1157,79 @@ onMounted(async () => {
     @close="showSearchModal = false"
     @refresh="refreshData"
   />
+
+  <!-- Create Wiki Page Modal -->
+  <teleport to="body">
+    <div
+      v-if="showCreateWikiModal"
+      class="fixed inset-0 z-50 flex items-center justify-center px-4"
+    >
+      <div class="absolute inset-0 bg-gray-900/70" @click="closeCreateWikiModal"></div>
+      <div class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Create Wiki Page</h2>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Add a new character, location, or concept to your book's wiki.
+        </p>
+
+        <div class="mt-4 space-y-4">
+          <div>
+            <label for="wiki-page-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Page Name
+            </label>
+            <input
+              id="wiki-page-name"
+              v-model="newWikiPageName"
+              type="text"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              placeholder="e.g., John Smith, The Castle, Time Travel"
+              :disabled="creatingWikiPage"
+              @keydown.enter="handleCreateWikiPage"
+            />
+          </div>
+
+          <div>
+            <label for="wiki-page-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Page Type
+            </label>
+            <select
+              id="wiki-page-type"
+              v-model="newWikiPageType"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              :disabled="creatingWikiPage"
+            >
+              <option value="character">Character</option>
+              <option value="location">Location</option>
+              <option value="concept">Concept</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <p v-if="createWikiPageError" class="text-sm text-red-600 dark:text-red-400">
+            {{ createWikiPageError }}
+          </p>
+        </div>
+
+        <div class="mt-6 flex justify-end space-x-3">
+          <button
+            @click="closeCreateWikiModal"
+            :disabled="creatingWikiPage"
+            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleCreateWikiPage"
+            :disabled="creatingWikiPage || !newWikiPageName.trim()"
+            class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span
+              v-if="creatingWikiPage"
+              class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+            ></span>
+            {{ creatingWikiPage ? 'Creating...' : 'Create Page' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </teleport>
 </template>

@@ -39,6 +39,7 @@ withDefaults(defineProps<{
   activeChapterId?: string
   activeWikiPageId?: string
   toggleWikiPagePinned: (page: BookWikiPage) => void | Promise<void>
+  openCreateWikiModal?: () => void
   isOnBookOnly?: boolean
   routerViewKey: number
   startEditingBookTitle: () => void
@@ -80,6 +81,7 @@ withDefaults(defineProps<{
   wikiPagesByType: () => ({}),
   activeChapterId: undefined,
   activeWikiPageId: undefined,
+  openCreateWikiModal: () => {},
   isOnBookOnly: false,
   desktopImagesAvailable: false,
   coverImageSrc: null,
@@ -141,6 +143,7 @@ withDefaults(defineProps<{
         :active-chapter-id="activeChapterId"
         :active-wiki-page-id="activeWikiPageId"
         :toggle-wiki-page-pinned="toggleWikiPagePinned"
+        :open-create-wiki-modal="openCreateWikiModal"
         :start-editing-book-title="startEditingBookTitle"
         :save-book-title="saveBookTitle"
         :cancel-editing-book-title="cancelEditingBookTitle"
