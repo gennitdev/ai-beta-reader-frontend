@@ -168,6 +168,7 @@ export class AppDatabase {
   private sqlite: SQLiteConnection | null = null;
   private isNative: boolean | null = null; // Determined at init() time
   private tableColumnCache = new Map<string, string[]>();
+  private isImporting = false; // Skip intermediate saves during bulk import
 
   async init() {
     // Determine platform at init time, not at module load time
@@ -1033,96 +1034,106 @@ export class AppDatabase {
       }
     };
 
-    // Disable foreign key constraints during import
-    // Use execute() on native platforms for PRAGMA commands
-    if (this.isNative) {
-      await this.db.execute('PRAGMA foreign_keys = OFF');
-    } else {
-      this.db.run('PRAGMA foreign_keys = OFF');
-    }
+    // Skip intermediate saves during bulk import (saves 170MB+ being written hundreds of times)
+    this.isImporting = true;
 
-    const tablesToClear = [
-      'chapter_wiki_mentions',
-      'wiki_updates',
-      'chapter_reviews',
-      'book_characters',
-      'chapter_summaries',
-      'part_summaries',
-      'chapter_notes',
-      'image_wiki_tags',
-      'wiki_pages',
-      'chapters',
-      'book_parts',
-      'books',
-      'custom_reviewer_profiles',
-      'ai_profiles',
-      'image_assets'
-    ];
-
-    for (const table of tablesToClear) {
-      await run(`DELETE FROM ${table}`);
-    }
-
-    const importTable = async (tableName: string, rows: any[]) => {
-      if (!rows || rows.length === 0) return;
-
-      const expectedColumns = await this.getTableColumns(tableName);
-      if (!expectedColumns.length) return;
-
-      const placeholders = expectedColumns.map(() => '?').join(', ');
-      const columnList = expectedColumns.map((col) => `"${col}"`).join(', ');
-      const insertSql = `INSERT OR REPLACE INTO ${tableName} (${columnList}) VALUES (${placeholders})`;
-
-      for (const row of rows) {
-        const rowValues: Record<string, any> = Array.isArray(row)
-          ? expectedColumns.reduce((acc, column, index) => {
-              acc[column] = row[index] ?? null;
-              return acc;
-            }, {} as Record<string, any>)
-          : row ?? {};
-
-        const values = expectedColumns.map((column) => rowValues[column] ?? null);
-        await run(insertSql, values);
+    try {
+      // Disable foreign key constraints during import
+      // Use execute() on native platforms for PRAGMA commands
+      if (this.isNative) {
+        await this.db.execute('PRAGMA foreign_keys = OFF');
+      } else {
+        this.db.run('PRAGMA foreign_keys = OFF');
       }
-    };
 
-    if (importData.books) {
-      for (const book of importData.books) {
-        await this.saveBook(book);
+      const tablesToClear = [
+        'chapter_wiki_mentions',
+        'wiki_updates',
+        'chapter_reviews',
+        'book_characters',
+        'chapter_summaries',
+        'part_summaries',
+        'chapter_notes',
+        'image_wiki_tags',
+        'wiki_pages',
+        'chapters',
+        'book_parts',
+        'books',
+        'custom_reviewer_profiles',
+        'ai_profiles',
+        'image_assets'
+      ];
+
+      for (const table of tablesToClear) {
+        await run(`DELETE FROM ${table}`);
       }
+
+      const importTable = async (tableName: string, rows: any[]) => {
+        if (!rows || rows.length === 0) return;
+
+        const expectedColumns = await this.getTableColumns(tableName);
+        if (!expectedColumns.length) return;
+
+        const placeholders = expectedColumns.map(() => '?').join(', ');
+        const columnList = expectedColumns.map((col) => `"${col}"`).join(', ');
+        const insertSql = `INSERT OR REPLACE INTO ${tableName} (${columnList}) VALUES (${placeholders})`;
+
+        for (const row of rows) {
+          const rowValues: Record<string, any> = Array.isArray(row)
+            ? expectedColumns.reduce((acc, column, index) => {
+                acc[column] = row[index] ?? null;
+                return acc;
+              }, {} as Record<string, any>)
+            : row ?? {};
+
+          const values = expectedColumns.map((column) => rowValues[column] ?? null);
+          await run(insertSql, values);
+        }
+      };
+
+      if (importData.books) {
+        for (const book of importData.books) {
+          await this.saveBook(book);
+        }
+      }
+
+      await importTable('book_parts', importData.book_parts);
+
+      if (importData.chapters) {
+        for (const chapter of importData.chapters) {
+          await this.saveChapter(chapter);
+        }
+      }
+
+      await importTable('wiki_pages', importData.wiki_pages);
+      await importTable('custom_reviewer_profiles', importData.custom_reviewer_profiles);
+      await importTable('ai_profiles', importData.ai_profiles);
+      await importTable('chapter_summaries', importData.chapter_summaries);
+      await importTable('part_summaries', importData.part_summaries);
+      await importTable('chapter_reviews', importData.chapter_reviews);
+      await importTable('book_characters', importData.book_characters);
+      await importTable('wiki_updates', importData.wiki_updates);
+      await importTable('chapter_wiki_mentions', importData.chapter_wiki_mentions);
+      await importTable('image_assets', this.normalizeImageAssetImportRows(importData.image_assets));
+      await importTable('image_wiki_tags', importData.image_wiki_tags);
+      await importTable('chapter_notes', importData.chapter_notes);
+
+      // Re-enable foreign key constraints after import
+      // Use execute() on native platforms for PRAGMA commands
+      if (this.isNative) {
+        await this.db.execute('PRAGMA foreign_keys = ON');
+      } else {
+        this.db.run('PRAGMA foreign_keys = ON');
+      }
+    } finally {
+      this.isImporting = false;
     }
 
-    await importTable('book_parts', importData.book_parts);
-
-    if (importData.chapters) {
-      for (const chapter of importData.chapters) {
-        await this.saveChapter(chapter);
-      }
-    }
-
-    await importTable('wiki_pages', importData.wiki_pages);
-    await importTable('custom_reviewer_profiles', importData.custom_reviewer_profiles);
-    await importTable('ai_profiles', importData.ai_profiles);
-    await importTable('chapter_summaries', importData.chapter_summaries);
-    await importTable('part_summaries', importData.part_summaries);
-    await importTable('chapter_reviews', importData.chapter_reviews);
-    await importTable('book_characters', importData.book_characters);
-    await importTable('wiki_updates', importData.wiki_updates);
-    await importTable('chapter_wiki_mentions', importData.chapter_wiki_mentions);
-    await importTable('image_assets', this.normalizeImageAssetImportRows(importData.image_assets));
-    await importTable('image_wiki_tags', importData.image_wiki_tags);
-    await importTable('chapter_notes', importData.chapter_notes);
-
+    // Save once at the end after all imports are complete
     if (!this.isNative) {
-      this.saveToLocalStorage();
-    }
-
-    // Re-enable foreign key constraints after import
-    // Use execute() on native platforms for PRAGMA commands
-    if (this.isNative) {
-      await this.db.execute('PRAGMA foreign_keys = ON');
-    } else {
-      this.db.run('PRAGMA foreign_keys = ON');
+      console.log('[Database] importDatabase: Saving to IndexedDB...');
+      await this.saveToIndexedDB();
+      console.log('[Database] importDatabase: Save complete');
     }
   }
 
@@ -2420,8 +2431,9 @@ export class AppDatabase {
   }
 
   private saveToLocalStorage() {
-    if (!this.isNative) {
+    if (!this.isNative && !this.isImporting) {
       // Use IndexedDB for persistence (async, but we fire-and-forget for compatibility)
+      // Skip during bulk import to avoid saving 170MB+ hundreds of times
       this.saveToIndexedDB().catch(error => {
         console.error('[AppDatabase] Failed to persist DB to IndexedDB:', error);
       });
