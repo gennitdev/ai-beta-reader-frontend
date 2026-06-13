@@ -20,7 +20,6 @@ import ChapterHeroSection from "@/components/chapter/ChapterHeroSection.vue";
 import ChapterIllustrationsSection from "@/components/chapter/ChapterIllustrationsSection.vue";
 import ChapterStatusBar from "@/components/chapter/ChapterStatusBar.vue";
 import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
-import ImageLightbox from "@/components/images/ImageLightbox.vue";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
 import Modal from "@/components/Modal.vue";
 
@@ -88,7 +87,6 @@ const {
   deletingIllustration,
   chapterCoverImageId,
   settingCoverId,
-  heroLightboxOpen,
   activeImageSource,
   activeImage,
   activeImageTags,
@@ -113,7 +111,6 @@ const {
   handleSaveActiveImageNotes,
   handleSaveActiveImageTags,
   openHeroLightbox,
-  closeHeroLightbox,
 } = useChapterImages(
   () => chapterId.value,
   () => bookId.value
@@ -1271,14 +1268,6 @@ onMounted(async () => {
       </div>
     </template>
   </Modal>
-
-  <!-- Hero image lightbox -->
-  <ImageLightbox
-    :open="heroLightboxOpen"
-    :image-src="heroImageSrc"
-    :caption="chapter?.title || 'Chapter Image'"
-    @close="closeHeroLightbox"
-  />
 
   <!-- Delete Chapter Confirmation Modal -->
   <ConfirmDeleteModal

@@ -1806,7 +1806,8 @@ export class AppDatabase {
         created_by_ai: row[9],
         created_at: row[10],
         updated_at: row[11],
-        is_pinned: row[12]
+        is_pinned: row[12],
+        cover_image_id: row[13]
       }));
     }
   }

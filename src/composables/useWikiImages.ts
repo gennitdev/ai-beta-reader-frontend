@@ -3,6 +3,12 @@ import { useImageLibrary } from '@/composables/useImageLibrary';
 import { useDatabase } from '@/composables/useDatabase';
 import type { ImageAsset, ImageWikiTag } from '@/lib/database';
 
+interface WikiPageOption {
+  id: string;
+  page_name: string;
+  page_type?: string | null;
+}
+
 export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef: () => string | undefined) {
   const {
     desktopImagesAvailable,
@@ -13,18 +19,23 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     getWikiPageCoverImageAsset,
     setWikiPageCoverImageId,
     getImageWikiTags,
+    getWikiPages,
+    setImageWikiTags,
+    updateImageAssetNotes,
   } = useDatabase();
 
   const wikiImages = ref<ImageAsset[]>([]);
   const wikiImagesLoading = ref(false);
   const wikiImageSources = ref<Record<string, string>>({});
   const wikiImageTags = ref<Record<string, ImageWikiTag[]>>({});
+  const bookWikiPages = ref<WikiPageOption[]>([]);
   const wikiImageError = ref<string | null>(null);
   const showImageLightbox = ref(false);
   const activeImageId = ref<string | null>(null);
   const wikiCoverImageId = ref<string | null>(null);
   const settingCoverId = ref<string | null>(null);
-  const heroLightboxOpen = ref(false);
+  const savingImageNotes = ref(false);
+  const savingImageTags = ref(false);
 
   const activeImageSource = computed(() => {
     const id = activeImageId.value;
@@ -82,6 +93,7 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
       wikiImageSources.value = {};
       wikiImageTags.value = {};
       wikiCoverImageId.value = null;
+      bookWikiPages.value = [];
       return;
     }
 
@@ -109,6 +121,22 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
 
       const coverImage = await getWikiPageCoverImageAsset(wikiPageId);
       wikiCoverImageId.value = coverImage?.id ?? null;
+
+      // Load wiki pages for tagging
+      const bookId = bookIdRef();
+      if (bookId) {
+        try {
+          const pages = await getWikiPages(bookId);
+          bookWikiPages.value = pages.map((page: WikiPageOption) => ({
+            id: page.id,
+            page_name: page.page_name,
+            page_type: page.page_type ?? null,
+          }));
+        } catch (error) {
+          console.warn("Failed to load wiki pages for illustration tags", error);
+          bookWikiPages.value = [];
+        }
+      }
     } catch (error) {
       wikiImageError.value =
         error instanceof Error ? error.message : "Failed to load wiki illustrations";
@@ -177,14 +205,54 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     document.body.removeChild(link);
   };
 
-  const openHeroLightbox = () => {
-    if (heroImageSrc.value) {
-      heroLightboxOpen.value = true;
+  const handleSaveActiveImageNotes = async (notes: string) => {
+    const image = activeImage.value;
+    if (!image) return;
+
+    savingImageNotes.value = true;
+    try {
+      await updateImageAssetNotes(image.id, notes);
+      const updatedImage = {
+        ...image,
+        notes,
+        updated_at: new Date().toISOString(),
+      };
+      wikiImages.value = wikiImages.value.map((item) =>
+        item.id === image.id ? updatedImage : item
+      );
+    } catch (error) {
+      wikiImageError.value =
+        error instanceof Error ? error.message : "Failed to save image notes";
+    } finally {
+      savingImageNotes.value = false;
     }
   };
 
-  const closeHeroLightbox = () => {
-    heroLightboxOpen.value = false;
+  const handleSaveActiveImageTags = async (wikiPageIds: string[]) => {
+    const image = activeImage.value;
+    if (!image) return;
+
+    savingImageTags.value = true;
+    try {
+      await setImageWikiTags(image.id, wikiPageIds);
+      wikiImageTags.value = {
+        ...wikiImageTags.value,
+        [image.id]: await getImageWikiTags(image.id),
+      };
+    } catch (error) {
+      wikiImageError.value =
+        error instanceof Error ? error.message : "Failed to save image tags";
+    } finally {
+      savingImageTags.value = false;
+    }
+  };
+
+  const openHeroLightbox = () => {
+    const hero = heroImage.value;
+    if (hero && wikiImageSources.value[hero.id]) {
+      activeImageId.value = hero.id;
+      showImageLightbox.value = true;
+    }
   };
 
   // Set up watchers
@@ -199,12 +267,14 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     wikiImagesLoading,
     wikiImageSources,
     wikiImageTags,
+    bookWikiPages,
     wikiImageError,
     showImageLightbox,
     activeImageId,
     wikiCoverImageId,
     settingCoverId,
-    heroLightboxOpen,
+    savingImageNotes,
+    savingImageTags,
 
     // Computed
     activeImageSource,
@@ -224,7 +294,8 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     goToPrevImage,
     handleSetAsCover,
     handleDownloadImage,
+    handleSaveActiveImageNotes,
+    handleSaveActiveImageTags,
     openHeroLightbox,
-    closeHeroLightbox,
   };
 }

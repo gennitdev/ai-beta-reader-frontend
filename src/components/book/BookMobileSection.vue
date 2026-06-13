@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, toRefs, watch } from 'vue'
 import type { Component } from 'vue'
-import { DocumentTextIcon, BookOpenIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon, TrashIcon, BookmarkIcon } from '@heroicons/vue/24/outline'
-import type { Book } from '@/lib/database'
+import { DocumentTextIcon, BookOpenIcon, PhotoIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon, TrashIcon, BookmarkIcon, ArrowLeftIcon } from '@heroicons/vue/24/outline'
+import type { Book, ImageAsset, ImageWikiTag } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import type { PropType } from 'vue'
 import BookMobileChapterCard from './BookMobileChapterCard.vue'
+import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
 
 const props = defineProps({
   book: {
@@ -159,6 +160,58 @@ const props = defineProps({
   partThumbnails: {
     type: Object as PropType<Record<string, string>>,
     default: () => ({})
+  },
+  bookImages: {
+    type: Array as PropType<ImageAsset[]>,
+    default: () => []
+  },
+  bookImageSources: {
+    type: Object as PropType<Record<string, string>>,
+    default: () => ({})
+  },
+  loadingImages: {
+    type: Boolean,
+    default: false
+  },
+  selectedImageId: {
+    type: String as PropType<string | null>,
+    default: null
+  },
+  selectedImageSrc: {
+    type: String as PropType<string | null>,
+    default: null
+  },
+  selectedImage: {
+    type: Object as PropType<ImageAsset | null>,
+    default: null
+  },
+  selectedImageTags: {
+    type: Array as PropType<ImageWikiTag[]>,
+    default: () => []
+  },
+  wikiPages: {
+    type: Array as PropType<BookWikiPage[]>,
+    default: () => []
+  },
+  savingSelectedImageNotes: {
+    type: Boolean,
+    default: false
+  },
+  savingSelectedImageTags: {
+    type: Boolean,
+    default: false
+  },
+  saveSelectedImageNotes: {
+    type: Function as PropType<(notes: string) => void | Promise<void>>,
+    default: undefined
+  },
+  saveSelectedImageTags: {
+    type: Function as PropType<(wikiPageIds: string[]) => void | Promise<void>>,
+    default: undefined
+  },
+  downloadSelectedImage: {
+    type: Function as PropType<(imageId: string) => void>,
+    default: undefined
   }
 })
 
@@ -181,7 +234,17 @@ const {
   coverLoading,
   coverError,
   chapterThumbnails,
-  partThumbnails
+  partThumbnails,
+  bookImages,
+  bookImageSources,
+  loadingImages,
+  selectedImageId,
+  selectedImageSrc,
+  selectedImage,
+  selectedImageTags,
+  wikiPages,
+  savingSelectedImageNotes,
+  savingSelectedImageTags
 } = toRefs(props)
 
 const selectBookCover = props.selectBookCover
@@ -358,7 +421,19 @@ watch(
         ]"
       >
         <BookOpenIcon class="w-5 h-5 inline mr-2" />
-        Wiki Pages
+        Wiki
+      </router-link>
+      <router-link
+        :to="`/books/${bookId}?tab=images`"
+        :class="[
+          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
+          currentTab === 'images'
+            ? 'bg-white text-blue-700 shadow'
+            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+        ]"
+      >
+        <PhotoIcon class="w-5 h-5 inline mr-2" />
+        Images
       </router-link>
     </div>
 
@@ -517,7 +592,7 @@ watch(
       </div>
     </div>
 
-    <div v-else>
+    <div v-else-if="currentTab === 'wiki'">
       <div v-if="loadingWiki" class="flex justify-center items-center h-64">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
@@ -630,6 +705,83 @@ watch(
           Wiki pages can also be auto-generated when you create chapter summaries.
         </p>
       </div>
+    </div>
+
+    <!-- Images Tab Content -->
+    <div v-else-if="currentTab === 'images'">
+      <!-- Image Detail View -->
+      <div v-if="selectedImageId && selectedImageSrc">
+        <router-link
+          :to="`/books/${bookId}?tab=images`"
+          class="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mb-4"
+        >
+          <ArrowLeftIcon class="w-4 h-4 mr-1" />
+          Back to images
+        </router-link>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <IllustrationDetail
+            :image="selectedImage"
+            :image-src="selectedImageSrc"
+            :tags="selectedImageTags"
+            :wiki-pages="wikiPages"
+            :saving-notes="savingSelectedImageNotes"
+            :saving-tags="savingSelectedImageTags"
+            :can-edit-notes="Boolean(saveSelectedImageNotes)"
+            :can-edit-tags="Boolean(saveSelectedImageTags)"
+            :can-download="Boolean(downloadSelectedImage)"
+            @save-notes="saveSelectedImageNotes?.($event)"
+            @save-tags="saveSelectedImageTags?.($event)"
+            @download="downloadSelectedImage?.($event)"
+          />
+        </div>
+      </div>
+
+      <!-- Image Grid -->
+      <template v-else>
+        <div v-if="loadingImages" class="flex justify-center items-center h-64">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+
+        <div v-else-if="!desktopImagesAvailable && bookImages.length === 0" class="text-center py-16">
+          <PhotoIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No restored images</h3>
+          <p class="text-gray-600 dark:text-gray-400">
+            Add images in the desktop app, back up, then restore here to view them on web.
+          </p>
+        </div>
+
+        <div v-else-if="bookImages.length > 0" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <router-link
+            v-for="image in bookImages"
+            :key="image.id"
+            :to="`/books/${bookId}?tab=images&imageId=${image.id}`"
+            class="relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 cursor-pointer transition-all hover:ring-2 hover:ring-blue-400"
+          >
+            <img
+              v-if="bookImageSources[image.id]"
+              :src="bookImageSources[image.id]"
+              class="h-full w-full object-cover"
+              :alt="image.file_name || 'Book illustration'"
+            />
+            <div v-else class="h-full w-full flex items-center justify-center">
+              <PhotoIcon class="w-8 h-8 text-gray-400" />
+            </div>
+            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+              <p class="text-xs text-white truncate">
+                {{ image.file_name || 'Untitled' }}
+              </p>
+            </div>
+          </router-link>
+        </div>
+
+        <div v-else class="text-center py-16">
+          <PhotoIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No images yet</h3>
+          <p class="text-gray-600 dark:text-gray-400">
+            Add illustrations to your chapters to see them here.
+          </p>
+        </div>
+      </template>
     </div>
   </div>
 

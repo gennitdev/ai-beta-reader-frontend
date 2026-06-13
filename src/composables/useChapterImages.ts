@@ -43,7 +43,6 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
   const illustrationToDelete = ref<string | null>(null);
   const chapterCoverImageId = ref<string | null>(null);
   const settingCoverId = ref<string | null>(null);
-  const heroLightboxOpen = ref(false);
   const chapterImageUploadAvailable = computed(() => canUploadImages());
 
   const activeImageSource = computed(() => {
@@ -341,13 +340,11 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
   };
 
   const openHeroLightbox = () => {
-    if (heroImageSrc.value) {
-      heroLightboxOpen.value = true;
+    const hero = heroImage.value;
+    if (hero && chapterImageSources.value[hero.id]) {
+      activeImageId.value = hero.id;
+      showImageLightbox.value = true;
     }
-  };
-
-  const closeHeroLightbox = () => {
-    heroLightboxOpen.value = false;
   };
 
   // Set up watchers
@@ -375,7 +372,6 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     illustrationToDelete,
     chapterCoverImageId,
     settingCoverId,
-    heroLightboxOpen,
 
     // Computed
     activeImageSource,
@@ -403,6 +399,5 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     handleSetAsCover,
     handleDownloadImage,
     openHeroLightbox,
-    closeHeroLightbox,
   };
 }

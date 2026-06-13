@@ -6,7 +6,8 @@ import { useWikiImages } from '@/composables/useWikiImages'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import WikiPageHeroSection from '@/components/wiki/WikiPageHeroSection.vue'
 import WikiPageIllustrationsSection from '@/components/wiki/WikiPageIllustrationsSection.vue'
-import ImageLightbox from '@/components/images/ImageLightbox.vue'
+import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
+import Modal from '@/components/Modal.vue'
 import type { Book } from '@/lib/database'
 import {
   ArrowLeftIcon,
@@ -82,17 +83,30 @@ const {
   wikiImagesLoading,
   wikiImageSources,
   wikiImageTags,
+  bookWikiPages,
   wikiImageError,
   wikiCoverImageId,
   settingCoverId,
+  showImageLightbox,
+  activeImageSource,
+  activeImage,
+  activeImageTags,
+  activeImageLabel,
   heroImageSrc,
-  heroLightboxOpen,
+  hasNextImage,
+  hasPrevImage,
+  savingImageNotes,
+  savingImageTags,
   refreshWikiImages,
   openImageModal,
+  closeImageModal,
+  goToNextImage,
+  goToPrevImage,
   handleSetAsCover,
   handleDownloadImage,
+  handleSaveActiveImageNotes,
+  handleSaveActiveImageTags,
   openHeroLightbox,
-  closeHeroLightbox,
 } = useWikiImages(
   () => wikiPageId.value,
   () => bookId.value
@@ -794,12 +808,47 @@ watch(
       </div>
     </div>
 
-    <!-- Hero image lightbox -->
-    <ImageLightbox
-      :open="heroLightboxOpen"
-      :image-src="heroImageSrc"
-      :caption="wikiPage?.page_name || 'Wiki Page Image'"
-      @close="closeHeroLightbox"
-    />
+    <!-- Illustration detail modal -->
+    <Modal
+      :show="showImageLightbox"
+      :title="activeImageLabel || 'Illustration'"
+      max-width="4xl"
+      @close="closeImageModal"
+    >
+      <IllustrationDetail
+        :image="activeImage"
+        :image-src="activeImageSource"
+        :wiki-pages="bookWikiPages"
+        :tags="activeImageTags"
+        :saving-notes="savingImageNotes"
+        :saving-tags="savingImageTags"
+        :can-edit-notes="true"
+        :can-edit-tags="true"
+        :can-download="true"
+        @save-notes="handleSaveActiveImageNotes"
+        @save-tags="handleSaveActiveImageTags"
+        @download="handleDownloadImage"
+      />
+      <template #footer>
+        <div class="flex items-center justify-between">
+          <button
+            type="button"
+            class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
+            :disabled="!hasPrevImage"
+            @click="goToPrevImage"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
+            :disabled="!hasNextImage"
+            @click="goToNextImage"
+          >
+            Next
+          </button>
+        </div>
+      </template>
+    </Modal>
   </div>
 </template>

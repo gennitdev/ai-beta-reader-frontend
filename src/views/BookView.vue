@@ -1060,7 +1060,7 @@ onMounted(async () => {
 <template>
   <div class="lg:hidden">
     <BookMobileSection
-      v-if="isOnBookOnly"
+      v-if="isOnBookOnly || (currentTab === 'images' && selectedImageId)"
       :book="book"
       :book-id="bookId"
       :is-editing-book-title="isEditingBookTitle"
@@ -1099,6 +1099,19 @@ onMounted(async () => {
       :delete-book-cover="handleDeleteBookCover"
       :chapter-thumbnails="chapterThumbnails"
       :part-thumbnails="partThumbnails"
+      :book-images="bookImages"
+      :book-image-sources="bookImageSources"
+      :loading-images="loadingImages"
+      :selected-image-id="selectedImageId"
+      :selected-image-src="selectedImageSrc"
+      :selected-image="selectedImage"
+      :selected-image-tags="selectedImageTags"
+      :wiki-pages="wikiPages"
+      :saving-selected-image-notes="savingSelectedImageNotes"
+      :saving-selected-image-tags="savingSelectedImageTags"
+      :save-selected-image-notes="saveSelectedImageNotes"
+      :save-selected-image-tags="saveSelectedImageTags"
+      :download-selected-image="downloadSelectedImage"
     />
     <router-view
       v-else
