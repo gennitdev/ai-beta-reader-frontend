@@ -26,6 +26,7 @@ type DatabaseWikiPage = {
   created_at: string;
   updated_at: string;
   content?: string | null;
+  cover_image_id?: string | null;
 };
 import { BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon } from "@heroicons/vue/24/outline";
 import SearchModal from "@/components/SearchModal.vue";
@@ -60,6 +61,7 @@ const {
   updateImageAssetNotes,
   getImageWikiTags,
   setImageWikiTags,
+  getWikiPageCoverImageAsset,
 } = useDatabase();
 
 const {
@@ -89,6 +91,7 @@ const coverLoading = ref(false);
 const coverError = ref<string | null>(null);
 const chapterThumbnails = ref<Record<string, string>>({});
 const partThumbnails = ref<Record<string, string>>({});
+const wikiPageThumbnails = ref<Record<string, string>>({});
 const bookImages = ref<ImageAsset[]>([]);
 const bookImageSources = ref<Record<string, string>>({});
 const bookImageTags = ref<Record<string, ImageWikiTag[]>>({});
@@ -807,10 +810,28 @@ const loadWiki = async () => {
       created_at: page.created_at,
       updated_at: page.updated_at,
       content_length: typeof page.content === "string" ? page.content.length : 0,
+      cover_image_id: page.cover_image_id ?? null,
     }));
+
+    // Load cover thumbnails for wiki pages that have cover images
+    const thumbnails: Record<string, string> = {};
+    for (const page of wikiPages.value) {
+      if (page.cover_image_id) {
+        try {
+          const coverImage = await getWikiPageCoverImageAsset(page.id);
+          if (coverImage) {
+            thumbnails[page.id] = await getCoverImageSource(coverImage);
+          }
+        } catch (error) {
+          console.warn(`Failed to load cover thumbnail for wiki page ${page.id}:`, error);
+        }
+      }
+    }
+    wikiPageThumbnails.value = thumbnails;
   } catch (error) {
     console.error("Failed to load wiki pages:", error);
     wikiPages.value = [];
+    wikiPageThumbnails.value = {};
   } finally {
     loadingWiki.value = false;
   }
@@ -1053,6 +1074,7 @@ onMounted(async () => {
       :total-word-count="totalWordCount"
       :expanded-summaries="expandedSummaries"
       :wiki-pages-by-type="wikiPagesByType"
+      :wiki-page-thumbnails="wikiPageThumbnails"
       :format-word-count="formatWordCount"
       :word-count-for-chapters="wordCountForChapters"
       :get-summary-preview="getSummaryPreview"
@@ -1114,6 +1136,7 @@ onMounted(async () => {
     :loading-wiki="loadingWiki"
     :has-wiki-pages="hasWikiPages"
     :wiki-pages-by-type="wikiPagesByType"
+    :wiki-page-thumbnails="wikiPageThumbnails"
     :get-type-icon="getTypeIcon"
     :get-type-color="getTypeColor"
     :active-chapter-id="activeChapterId"

@@ -39,4 +39,5 @@ export interface BookWikiPage {
   created_at: string
   updated_at: string
   content_length: number
+  cover_image_id: string | null
 }

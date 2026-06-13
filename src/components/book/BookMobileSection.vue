@@ -60,6 +60,10 @@ const props = defineProps({
     type: Object as PropType<Record<string, BookWikiPage[]>>,
     default: () => ({})
   },
+  wikiPageThumbnails: {
+    type: Object as PropType<Record<string, string>>,
+    default: () => ({})
+  },
   formatWordCount: {
     type: Function as PropType<(count: number) => string>,
     required: true
@@ -542,55 +546,67 @@ watch(
               v-for="page in pages"
               :key="page.id"
               :to="`/m/books/${bookId}/wiki/${page.id}`"
-              class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 p-4 block hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
+              class="flex gap-3 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 p-4 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
             >
-              <div class="flex items-start justify-between mb-2">
-                <div class="flex items-center space-x-2">
-                  <component :is="getTypeIcon(type)" :class="['w-5 h-5', getTypeColor(type)]" />
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                    {{ page.page_name }}
-                  </h3>
+              <div
+                v-if="wikiPageThumbnails[page.id]"
+                class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700"
+              >
+                <img
+                  :src="wikiPageThumbnails[page.id]"
+                  class="h-full w-full object-cover"
+                  :alt="page.page_name"
+                />
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between mb-2">
+                  <div class="flex items-center space-x-2">
+                    <component :is="getTypeIcon(type)" :class="['w-5 h-5', getTypeColor(type)]" />
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                      {{ page.page_name }}
+                    </h3>
+                  </div>
+                  <span
+                    v-if="page.is_major"
+                    class="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full dark:bg-green-900/40 dark:text-green-300"
+                  >
+                    Major
+                  </span>
+                  <button
+                    @click.prevent.stop="toggleWikiPagePinned(page)"
+                    class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-300"
+                    :class="page.is_pinned ? 'text-blue-600 dark:text-blue-300' : ''"
+                    :title="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
+                    :aria-label="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
+                  >
+                    <BookmarkIcon
+                      class="h-5 w-5"
+                      :class="page.is_pinned ? 'fill-current' : ''"
+                    />
+                  </button>
                 </div>
-                <span
-                  v-if="page.is_major"
-                  class="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full dark:bg-green-900/40 dark:text-green-300"
-                >
-                  Major
-                </span>
-                <button
-                  @click.prevent.stop="toggleWikiPagePinned(page)"
-                  class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-300"
-                  :class="page.is_pinned ? 'text-blue-600 dark:text-blue-300' : ''"
-                  :title="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
-                  :aria-label="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
-                >
-                  <BookmarkIcon
-                    class="h-5 w-5"
-                    :class="page.is_pinned ? 'fill-current' : ''"
-                  />
-                </button>
-              </div>
 
-              <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-3">
-                {{ page.summary || 'No summary available yet.' }}
-              </p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-3">
+                  {{ page.summary || 'No summary available yet.' }}
+                </p>
 
-              <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <span>{{ page.content_length ? `${page.content_length} chars` : 'No content' }}</span>
-                <span>Updated {{ new Date(page.updated_at).toLocaleDateString() }}</span>
-              </div>
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <span>{{ page.content_length ? `${page.content_length} chars` : 'No content' }}</span>
+                  <span>Updated {{ new Date(page.updated_at).toLocaleDateString() }}</span>
+                </div>
 
-              <div v-if="page.tags && page.tags.length > 0" class="flex flex-wrap gap-1 mt-2">
-                <span
-                  v-for="tag in page.tags.slice(0, 3)"
-                  :key="tag"
-                  class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
-                >
-                  {{ tag }}
-                </span>
-                <span v-if="page.tags.length > 3" class="text-xs text-gray-500">
-                  +{{ page.tags.length - 3 }} more
-                </span>
+                <div v-if="page.tags && page.tags.length > 0" class="flex flex-wrap gap-1 mt-2">
+                  <span
+                    v-for="tag in page.tags.slice(0, 3)"
+                    :key="tag"
+                    class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
+                  >
+                    {{ tag }}
+                  </span>
+                  <span v-if="page.tags.length > 3" class="text-xs text-gray-500">
+                    +{{ page.tags.length - 3 }} more
+                  </span>
+                </div>
               </div>
             </router-link>
           </div>

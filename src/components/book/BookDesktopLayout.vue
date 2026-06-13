@@ -34,6 +34,7 @@ withDefaults(defineProps<{
   loadingWiki?: boolean
   hasWikiPages?: boolean
   wikiPagesByType?: Record<string, BookWikiPage[]>
+  wikiPageThumbnails?: Record<string, string>
   getTypeIcon: (type: string) => Component
   getTypeColor: (type: string) => string
   activeChapterId?: string
@@ -79,6 +80,7 @@ withDefaults(defineProps<{
   loadingWiki: false,
   hasWikiPages: false,
   wikiPagesByType: () => ({}),
+  wikiPageThumbnails: () => ({}),
   activeChapterId: undefined,
   activeWikiPageId: undefined,
   openCreateWikiModal: () => {},
@@ -138,6 +140,7 @@ withDefaults(defineProps<{
         :loading-wiki="loadingWiki"
         :has-wiki-pages="hasWikiPages"
         :wiki-pages-by-type="wikiPagesByType"
+        :wiki-page-thumbnails="wikiPageThumbnails"
         :get-type-icon="getTypeIcon"
         :get-type-color="getTypeColor"
         :active-chapter-id="activeChapterId"

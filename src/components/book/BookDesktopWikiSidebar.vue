@@ -8,6 +8,7 @@ defineProps<{
   loadingWiki: boolean
   hasWikiPages: boolean
   wikiPagesByType: Record<string, BookWikiPage[]>
+  wikiPageThumbnails?: Record<string, string>
   getTypeIcon: (type: string) => Component
   getTypeColor: (type: string) => string
   activeWikiPageId?: string
@@ -45,48 +46,60 @@ defineProps<{
             v-for="page in pages"
             :key="page.id"
             :to="`/books/${bookId}/wiki/${page.id}`"
-            class="block p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            class="flex gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             :class="
               activeWikiPageId === page.id
                 ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600'
                 : ''
             "
           >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center space-x-2 min-w-0">
-                <h4 class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {{ page.page_name }}
-                </h4>
-                <span
-                  v-if="page.is_major"
-                  class="px-1 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded"
-                >
-                  Major
-                </span>
-              </div>
-              <button
-                @click.prevent.stop="toggleWikiPagePinned(page)"
-                class="ml-2 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-300"
-                :class="page.is_pinned ? 'text-blue-600 dark:text-blue-300' : ''"
-                :title="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
-                :aria-label="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
-              >
-                <BookmarkIcon
-                  class="h-4 w-4"
-                  :class="page.is_pinned ? 'fill-current' : ''"
-                />
-              </button>
-            </div>
-            <p
-              v-if="page.summary"
-              class="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2"
+            <div
+              v-if="wikiPageThumbnails?.[page.id]"
+              class="h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-gray-100 dark:bg-gray-700"
             >
-              {{
-                page.summary.length > 60
-                  ? page.summary.substring(0, 60) + '...'
-                  : page.summary
-              }}
-            </p>
+              <img
+                :src="wikiPageThumbnails[page.id]"
+                class="h-full w-full object-cover"
+                :alt="page.page_name"
+              />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2 min-w-0">
+                  <h4 class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {{ page.page_name }}
+                  </h4>
+                  <span
+                    v-if="page.is_major"
+                    class="px-1 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded"
+                  >
+                    Major
+                  </span>
+                </div>
+                <button
+                  @click.prevent.stop="toggleWikiPagePinned(page)"
+                  class="ml-2 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-300"
+                  :class="page.is_pinned ? 'text-blue-600 dark:text-blue-300' : ''"
+                  :title="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
+                  :aria-label="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
+                >
+                  <BookmarkIcon
+                    class="h-4 w-4"
+                    :class="page.is_pinned ? 'fill-current' : ''"
+                  />
+                </button>
+              </div>
+              <p
+                v-if="page.summary"
+                class="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2"
+              >
+                {{
+                  page.summary.length > 60
+                    ? page.summary.substring(0, 60) + '...'
+                    : page.summary
+                }}
+              </p>
+            </div>
           </router-link>
         </div>
       </div>

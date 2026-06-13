@@ -47,6 +47,7 @@ const props = defineProps<{
   loadingWiki: boolean
   hasWikiPages: boolean
   wikiPagesByType: Record<string, BookWikiPage[]>
+  wikiPageThumbnails?: Record<string, string>
   getTypeIcon: (type: string) => Component
   getTypeColor: (type: string) => string
   activeChapterId?: string
@@ -310,6 +311,7 @@ const closeLightbox = () => {
         :loading-wiki="loadingWiki"
         :has-wiki-pages="hasWikiPages"
         :wiki-pages-by-type="wikiPagesByType"
+        :wiki-page-thumbnails="wikiPageThumbnails"
         :get-type-icon="getTypeIcon"
         :get-type-color="getTypeColor"
         :active-wiki-page-id="activeWikiPageId"
