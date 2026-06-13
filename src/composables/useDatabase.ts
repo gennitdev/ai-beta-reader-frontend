@@ -701,6 +701,28 @@ export function useDatabase() {
     }
   }
 
+  async function setWikiPageCoverImageId(wikiPageId: string, imageId: string | null) {
+    try {
+      await initializeDatabase()
+      await db.setWikiPageCoverImageId(wikiPageId, imageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update wiki page cover'
+      console.error('Set wiki page cover image error:', e)
+      throw e
+    }
+  }
+
+  async function getWikiPageCoverImageAsset(wikiPageId: string): Promise<ImageAsset | null> {
+    try {
+      await initializeDatabase()
+      return await db.getWikiPageCoverImage(wikiPageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get wiki page cover'
+      console.error('Get wiki page cover image error:', e)
+      throw e
+    }
+  }
+
   async function getBookImageAssets(bookId: string): Promise<ImageAsset[]> {
     try {
       await initializeDatabase()
@@ -835,6 +857,8 @@ export function useDatabase() {
     setPartCoverImageId,
     getChapterCoverImageAsset,
     setChapterCoverImageId,
+    getWikiPageCoverImageAsset,
+    setWikiPageCoverImageId,
     getBookImageAssets,
     updateImageAssetNotes,
     getImageWikiTags,

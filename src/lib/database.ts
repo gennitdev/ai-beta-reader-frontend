@@ -455,7 +455,9 @@ export class AppDatabase {
         FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id)
       )`,
       `CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_image ON image_wiki_tags(image_id)`,
-      `CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_wiki_page ON image_wiki_tags(wiki_page_id)`
+      `CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_wiki_page ON image_wiki_tags(wiki_page_id)`,
+      // Add cover_image_id to wiki_pages if not exists
+      `ALTER TABLE wiki_pages ADD COLUMN cover_image_id TEXT`
     ];
 
     for (const migration of migrations) {
@@ -2260,6 +2262,41 @@ export class AppDatabase {
       return imageAssetFromNativeRow(row);
     } else {
       const result = this.db.exec(query, [chapterId]);
+      if (result.length === 0 || result[0].values.length === 0) return null;
+      const row = result[0].values[0];
+      if (!row[0]) return null;
+      return imageAssetFromSqlRow(row);
+    }
+  }
+
+  async setWikiPageCoverImageId(wikiPageId: string, imageId: string | null): Promise<void> {
+    const query = `UPDATE wiki_pages SET cover_image_id = ?, updated_at = ? WHERE id = ?`;
+    const updatedAt = new Date().toISOString();
+
+    if (this.isNative) {
+      await this.db.run(query, [imageId, updatedAt, wikiPageId]);
+    } else {
+      this.db.run(query, [imageId, updatedAt, wikiPageId]);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async getWikiPageCoverImage(wikiPageId: string): Promise<ImageAsset | null> {
+    const query = `
+      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
+      FROM wiki_pages wp
+      LEFT JOIN image_assets ia ON ia.id = wp.cover_image_id
+      WHERE wp.id = ?
+      LIMIT 1
+    `;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [wikiPageId]);
+      const row = result.values && result.values[0];
+      if (!row || !row.id) return null;
+      return imageAssetFromNativeRow(row);
+    } else {
+      const result = this.db.exec(query, [wikiPageId]);
       if (result.length === 0 || result[0].values.length === 0) return null;
       const row = result[0].values[0];
       if (!row[0]) return null;

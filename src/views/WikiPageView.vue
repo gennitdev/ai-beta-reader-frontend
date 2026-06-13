@@ -2,10 +2,12 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
-import { useImageLibrary } from '@/composables/useImageLibrary'
+import { useWikiImages } from '@/composables/useWikiImages'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
-import IllustrationGrid from '@/components/images/IllustrationGrid.vue'
-import type { Book, ImageAsset } from '@/lib/database'
+import WikiPageHeroSection from '@/components/wiki/WikiPageHeroSection.vue'
+import WikiPageIllustrationsSection from '@/components/wiki/WikiPageIllustrationsSection.vue'
+import ImageLightbox from '@/components/images/ImageLightbox.vue'
+import type { Book } from '@/lib/database'
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -15,7 +17,8 @@ import {
   LightBulbIcon,
   BookOpenIcon,
   TrashIcon,
-  BookmarkIcon
+  BookmarkIcon,
+  PhotoIcon
 } from '@heroicons/vue/24/outline'
 
 interface WikiPage {
@@ -71,14 +74,31 @@ const {
   getWikiPageById,
   updateWikiPage,
   deleteWikiPage,
-  getWikiPageImageAssets,
 } = useDatabase()
-const { getImageSource } = useImageLibrary()
+
+// Use wiki images composable
+const {
+  wikiImages,
+  wikiImagesLoading,
+  wikiImageSources,
+  wikiImageTags,
+  wikiImageError,
+  wikiCoverImageId,
+  settingCoverId,
+  heroImageSrc,
+  heroLightboxOpen,
+  refreshWikiImages,
+  openImageModal,
+  handleSetAsCover,
+  handleDownloadImage,
+  openHeroLightbox,
+  closeHeroLightbox,
+} = useWikiImages(
+  () => wikiPageId.value,
+  () => bookId.value
+)
 
 const wikiPage = ref<WikiPage | null>(null)
-const wikiImages = ref<ImageAsset[]>([])
-const wikiImageSources = ref<Record<string, string>>({})
-const loadingWikiImages = ref(false)
 const wikiHistory = ref<WikiUpdate[]>([])
 const characters = ref<Character[]>([])
 const loading = ref(false)
@@ -135,37 +155,6 @@ const bookTitle = computed(() => {
 
 // Computed navigation URLs
 const bookWikiUrl = computed(() => `${routePrefix.value}/${bookId.value}?tab=wiki`)
-const bookImagesUrl = computed(() => `${routePrefix.value}/${bookId.value}?tab=images`)
-
-const loadWikiImages = async () => {
-  if (!wikiPageId.value) return
-
-  loadingWikiImages.value = true
-  try {
-    const images = await getWikiPageImageAssets(wikiPageId.value)
-    wikiImages.value = images
-
-    const sources: Record<string, string> = {}
-    for (const image of images) {
-      try {
-        sources[image.id] = await getImageSource(image)
-      } catch (error) {
-        console.warn('Failed to load wiki illustration source:', error)
-      }
-    }
-    wikiImageSources.value = sources
-  } catch (error) {
-    console.error('Failed to load wiki illustrations:', error)
-    wikiImages.value = []
-    wikiImageSources.value = {}
-  } finally {
-    loadingWikiImages.value = false
-  }
-}
-
-const openWikiImage = (imageId: string) => {
-  router.push(`${bookImagesUrl.value}&imageId=${imageId}`)
-}
 
 const loadWikiPage = async () => {
   loading.value = true
@@ -192,7 +181,7 @@ const loadWikiPage = async () => {
         updated_at: pageData.updated_at
       }
       editedContent.value = pageData.content || ''
-      await loadWikiImages()
+      await refreshWikiImages()
     } else {
       console.error('Wiki page not found')
       router.push(bookWikiUrl.value)
@@ -373,27 +362,40 @@ watch(
 </script>
 
 <template>
-  <div class="max-w-6xl mx-auto p-6">
-    <!-- Header -->
-    <div class="mb-8">
-      <nav class="text-sm breadcrumbs mb-4">
-        <router-link to="/books" class="text-blue-600 hover:text-blue-700">Books</router-link>
-        <span class="mx-2 text-gray-500">></span>
-        <router-link :to="bookWikiUrl" class="text-blue-600 hover:text-blue-700">
-          {{ bookTitle }}
-        </router-link>
-        <span class="mx-2 text-gray-500">></span>
-        <span class="text-gray-700 dark:text-gray-300">{{ wikiPage?.page_name || 'Loading...' }}</span>
-      </nav>
+  <div class="w-full">
+    <!-- Hero Image Section -->
+    <WikiPageHeroSection
+      v-if="heroImageSrc && wikiPage"
+      :hero-image-src="heroImageSrc"
+      :book-title="bookTitle"
+      :page-name="wikiPage.page_name"
+      :page-type="wikiPage.page_type"
+      :is-major="wikiPage.is_major"
+      @open-lightbox="openHeroLightbox"
+      @go-back="goBack"
+    />
 
-      <div class="flex justify-between items-start">
-        <div class="flex items-center space-x-4">
-          <button
-            @click="goBack"
-            :class="isMobileRoute ? 'p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors' : 'lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'"
-          >
-            <ArrowLeftIcon class="w-5 h-5" />
-          </button>
+    <div class="mx-auto max-w-6xl p-6">
+      <!-- Header (only show full header when no hero image) -->
+      <div v-if="!heroImageSrc" class="mb-8">
+        <nav class="breadcrumbs mb-4 text-sm">
+          <router-link to="/books" class="text-blue-600 hover:text-blue-700">Books</router-link>
+          <span class="mx-2 text-gray-500">></span>
+          <router-link :to="bookWikiUrl" class="text-blue-600 hover:text-blue-700">
+            {{ bookTitle }}
+          </router-link>
+          <span class="mx-2 text-gray-500">></span>
+          <span class="text-gray-700 dark:text-gray-300">{{ wikiPage?.page_name || 'Loading...' }}</span>
+        </nav>
+
+        <div class="flex items-start justify-between">
+          <div class="flex items-center space-x-4">
+            <button
+              @click="goBack"
+              :class="isMobileRoute ? 'p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors' : 'lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'"
+            >
+              <ArrowLeftIcon class="w-5 h-5" />
+            </button>
 
           <div v-if="wikiPage" class="flex items-center space-x-3">
             <component :is="getTypeIcon(wikiPage.page_type)" :class="['w-8 h-8', getTypeColor(wikiPage.page_type)]" />
@@ -507,6 +509,112 @@ watch(
       </div>
     </div>
 
+    <!-- Action bar when hero image is present -->
+    <div v-else-if="wikiPage" class="mb-6 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <component :is="getTypeIcon(wikiPage.page_type)" :class="['w-6 h-6', getTypeColor(wikiPage.page_type)]" />
+        <div>
+          <div v-if="isEditingPageName" class="flex items-center space-x-2">
+            <input
+              v-model="editedPageName"
+              @keyup.enter="savePageName"
+              @keyup.esc="cancelEditPageName"
+              type="text"
+              class="text-xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Page name"
+              autofocus
+            />
+            <button
+              @click="savePageName"
+              :disabled="saving"
+              class="px-2 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              Save
+            </button>
+            <button
+              @click="cancelEditPageName"
+              class="px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+            >
+              Cancel
+            </button>
+          </div>
+          <div v-else class="flex items-center gap-2 group">
+            <h1 class="text-xl font-bold text-gray-900 dark:text-white">{{ wikiPage.page_name }}</h1>
+            <button
+              @click="startEditingPageName"
+              class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Rename page"
+            >
+              <PencilIcon class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button
+          @click="togglePinned"
+          :disabled="saving"
+          class="inline-flex items-center px-2 py-1.5 text-sm rounded-md transition-colors disabled:opacity-50"
+          :class="wikiPage.is_pinned
+            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
+        >
+          <BookmarkIcon
+            class="w-4 h-4 mr-1"
+            :class="wikiPage.is_pinned ? 'fill-current' : ''"
+          />
+          {{ wikiPage.is_pinned ? 'Pinned' : 'Pin' }}
+        </button>
+        <template v-if="isEditing">
+          <button
+            @click="cancelEdit"
+            class="px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            @click="saveChanges"
+            :disabled="saving"
+            class="px-2 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 inline-flex items-center"
+          >
+            <span v-if="saving" class="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent mr-1"></span>
+            {{ saving ? 'Saving...' : 'Save' }}
+          </button>
+        </template>
+        <template v-else>
+          <button
+            @click="isEditing = true"
+            class="inline-flex items-center px-2 py-1.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800"
+          >
+            <PencilIcon class="w-4 h-4 mr-1" />
+            Edit
+          </button>
+          <button
+            @click="confirmDelete"
+            class="inline-flex items-center px-2 py-1.5 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-md hover:bg-red-200 dark:hover:bg-red-800"
+          >
+            <TrashIcon class="w-4 h-4 mr-1" />
+            Delete
+          </button>
+        </template>
+      </div>
+    </div>
+
+    <!-- Illustrations Section - at top -->
+    <WikiPageIllustrationsSection
+      v-if="wikiImages.length > 0"
+      :images="wikiImages"
+      :image-sources="wikiImageSources"
+      :image-tags="wikiImageTags"
+      :cover-image-id="wikiCoverImageId"
+      :loading="wikiImagesLoading"
+      :error="wikiImageError"
+      :setting-cover-id="settingCoverId"
+      @open-image="openImageModal"
+      @set-cover="handleSetAsCover"
+      @download="handleDownloadImage"
+    />
+
     <!-- Loading state -->
     <div v-if="loading" class="flex justify-center items-center h-64">
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -547,24 +655,6 @@ watch(
           </div>
         </div>
 
-        <div
-          v-if="loadingWikiImages || wikiImages.length"
-          class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700"
-        >
-          <div class="p-6">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Illustrations</h2>
-            <IllustrationGrid
-              :images="wikiImages"
-              :image-sources="wikiImageSources"
-              :loading="loadingWikiImages"
-              :can-set-cover="false"
-              :can-download="false"
-              :can-delete="false"
-              empty-text="No tagged illustrations yet."
-              @open-image="openWikiImage"
-            />
-          </div>
-        </div>
       </div>
 
       <!-- Sidebar -->
@@ -668,9 +758,10 @@ watch(
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Delete confirmation modal -->
-    <div v-if="showDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <!-- Delete confirmation modal -->
+  <div v-if="showDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
         <div class="flex items-center mb-4">
           <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mr-3">
@@ -702,5 +793,13 @@ watch(
         </div>
       </div>
     </div>
+
+    <!-- Hero image lightbox -->
+    <ImageLightbox
+      :open="heroLightboxOpen"
+      :image-src="heroImageSrc"
+      :caption="wikiPage?.page_name || 'Wiki Page Image'"
+      @close="closeHeroLightbox"
+    />
   </div>
 </template>

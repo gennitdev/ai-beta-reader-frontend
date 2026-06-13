@@ -13,12 +13,15 @@ import {
 import MarkdownRenderer from "@/components/MarkdownRenderer.vue";
 import { useDatabase } from "@/composables/useDatabase";
 import { useImageLibrary } from "@/composables/useImageLibrary";
+import { usePartImages } from "@/composables/usePartImages";
 import {
   generatePartSummary as generatePartSummaryAi,
   type PartSummaryChapterInput,
 } from "@/lib/openai";
 import type { BookPart, ImageAsset } from "@/lib/database";
 import ImageLightbox from "@/components/images/ImageLightbox.vue";
+import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
+import Modal from "@/components/Modal.vue";
 
 interface PartSummaryState {
   summary: string;
@@ -56,7 +59,6 @@ const {
 
 const {
   desktopImagesAvailable,
-  fetchPartImages,
   getImageSource: getPartImageSource,
   fetchPartCover,
   pickPartCover,
@@ -64,6 +66,36 @@ const {
   deleteImage,
   setPartCoverImageId,
 } = useImageLibrary();
+
+// Use part images composable for notes/tags support
+const {
+  partImages,
+  partImagesLoading,
+  partImageSources,
+  partImageTags,
+  bookWikiPages,
+  partImageError,
+  showImageLightbox: partImageModalOpen,
+  activeImage: partActiveImage,
+  activeImageSource: partActiveImageSource,
+  activeImageTags: partActiveImageTags,
+  activeImageLabel: partActiveImageLabel,
+  savingImageNotes: partSavingImageNotes,
+  savingImageTags: partSavingImageTags,
+  hasNextImage: hasNextPartImage,
+  hasPrevImage: hasPrevPartImage,
+  refreshPartImages,
+  openImageModal: openPartImageModal,
+  closeImageModal: closePartImageModal,
+  handleSaveActiveImageNotes: handleSavePartImageNotes,
+  handleSaveActiveImageTags: handleSavePartImageTags,
+  goToNextImage: goToNextPartImage,
+  goToPrevImage: goToPrevPartImage,
+  handleDownloadImage: handleDownloadPartImage,
+} = usePartImages(
+  () => partId.value,
+  () => bookId.value
+);
 
 const part = ref<BookPart | null>(null);
 const chapterEntries = ref<PartChapterEntry[]>([]);
@@ -79,12 +111,6 @@ const generatingSummary = ref(false);
 const savingSummary = ref(false);
 const isEditingSummary = ref(false);
 const errorMessage = ref<string | null>(null);
-const partImages = ref<ImageAsset[]>([]);
-const partImageSources = ref<Record<string, string>>({});
-const partImagesLoading = ref(false);
-const partImageError = ref<string | null>(null);
-const partImageModalOpen = ref(false);
-const partActiveImageId = ref<string | null>(null);
 const partCoverImage = ref<ImageAsset | null>(null);
 const partCoverSrc = ref<string | null>(null);
 const partCoverLoading = ref(false);
@@ -142,18 +168,6 @@ const isMobileRoute = computed(() => route.meta.mobile === true);
 const routePrefix = computed(() => (isMobileRoute.value ? "/m/books" : "/books"));
 const bookUrl = computed(() => `${routePrefix.value}/${bookId.value}`);
 const organizeUrl = computed(() => `/books/${bookId.value}/organize`);
-
-const partActiveImageSource = computed(() => {
-  const id = partActiveImageId.value;
-  if (!id) return null;
-  return partImageSources.value[id] ?? null;
-});
-
-const partActiveImageLabel = computed(() => {
-  if (!partActiveImageId.value) return "";
-  const image = partImages.value.find((entry) => entry.id === partActiveImageId.value);
-  return image?.file_name ?? "";
-});
 
 const totalWordCount = computed(() =>
   chapterEntries.value.reduce((sum, chapter) => sum + (chapter.wordCount || 0), 0),
@@ -304,7 +318,7 @@ async function loadPart() {
     await hydrateChapterEntries(currentPart);
     await loadPartSummaryData(currentPart.id);
     // Load images - works on desktop (filesystem) or web (restored from backup)
-    await refreshPartImages(currentPart.id);
+    await refreshPartImages();
     await loadPartCoverImage(currentPart.id);
     // Load chapter thumbnails
     await loadChapterThumbnailsForPart();
@@ -327,36 +341,6 @@ const loadChapterThumbnailsForPart = async () => {
   } catch (error) {
     console.warn("Failed to load chapter thumbnails:", error);
     chapterThumbnails.value = {};
-  }
-};
-
-const refreshPartImages = async (targetPartId?: string) => {
-  const resolvedPartId = targetPartId ?? partId.value;
-  if (!resolvedPartId) {
-    partImages.value = [];
-    partImageSources.value = {};
-    return;
-  }
-
-  partImagesLoading.value = true;
-  partImageError.value = null;
-  try {
-    const images = await fetchPartImages(resolvedPartId);
-    partImages.value = images;
-    const sources: Record<string, string> = {};
-    for (const image of images) {
-      try {
-        sources[image.id] = await getPartImageSource(image);
-      } catch (error) {
-        // Silently skip images that can't be loaded
-      }
-    }
-    partImageSources.value = sources;
-  } catch (error) {
-    partImageError.value =
-      error instanceof Error ? error.message : "Failed to load part illustrations.";
-  } finally {
-    partImagesLoading.value = false;
   }
 };
 
@@ -439,50 +423,6 @@ const handleDownloadPartCover = () => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-};
-
-const openPartImageModal = (imageId: string) => {
-  if (!partImageSources.value[imageId]) return;
-  partActiveImageId.value = imageId;
-  partImageModalOpen.value = true;
-};
-
-const closePartImageModal = () => {
-  partImageModalOpen.value = false;
-  partActiveImageId.value = null;
-};
-
-const currentPartImageIndex = computed(() => {
-  if (!partActiveImageId.value) return -1;
-  return partImages.value.findIndex((img) => img.id === partActiveImageId.value);
-});
-
-const hasNextPartImage = computed(() => {
-  return (
-    currentPartImageIndex.value >= 0 && currentPartImageIndex.value < partImages.value.length - 1
-  );
-});
-
-const hasPrevPartImage = computed(() => {
-  return currentPartImageIndex.value > 0;
-});
-
-const goToNextPartImage = () => {
-  if (!hasNextPartImage.value) return;
-  const nextIndex = currentPartImageIndex.value + 1;
-  const nextImage = partImages.value[nextIndex];
-  if (nextImage && partImageSources.value[nextImage.id]) {
-    partActiveImageId.value = nextImage.id;
-  }
-};
-
-const goToPrevPartImage = () => {
-  if (!hasPrevPartImage.value) return;
-  const prevIndex = currentPartImageIndex.value - 1;
-  const prevImage = partImages.value[prevIndex];
-  if (prevImage && partImageSources.value[prevImage.id]) {
-    partActiveImageId.value = prevImage.id;
-  }
 };
 
 const openPartCoverLightbox = () => {
@@ -588,15 +528,11 @@ watch(
   () => desktopImagesAvailable.value,
   async () => {
     if (part.value) {
-      await refreshPartImages(part.value.id);
+      await refreshPartImages();
       await loadPartCoverImage(part.value.id);
     }
   },
 );
-
-watch(partId, async () => {
-  await refreshPartImages(partId.value);
-});
 
 onMounted(async () => {
   await loadPart();
@@ -959,13 +895,25 @@ watch([bookId, partId], async () => {
                       Loading...
                     </div>
                   </div>
-                  <div class="border-t border-gray-200 px-3 py-2 text-xs dark:border-gray-700">
+                  <div class="space-y-1 border-t border-gray-200 px-3 py-2 text-xs dark:border-gray-700">
                     <p class="font-medium text-gray-900 dark:text-gray-100">
                       {{ chapterTitleMap.get(image.chapter_id || "") || "Unassigned chapter" }}
                     </p>
-                    <p class="mt-1 truncate text-gray-500 dark:text-gray-400">
+                    <p class="truncate text-gray-500 dark:text-gray-400">
                       {{ image.file_name }}
                     </p>
+                    <div
+                      v-if="partImageTags[image.id]?.length"
+                      class="flex flex-wrap gap-1"
+                    >
+                      <span
+                        v-for="tag in partImageTags[image.id]"
+                        :key="tag.wiki_page_id"
+                        class="max-w-full truncate rounded-full bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                      >
+                        {{ tag.page_name }}
+                      </span>
+                    </div>
                   </div>
                 </button>
               </div>
@@ -1065,16 +1013,47 @@ watch([bookId, partId], async () => {
     </div>
   </div>
 
-  <ImageLightbox
-    :open="partImageModalOpen"
-    :image-src="partActiveImageSource"
-    :caption="partActiveImageLabel"
-    :has-next="hasNextPartImage"
-    :has-prev="hasPrevPartImage"
+  <Modal
+    :show="partImageModalOpen"
+    :title="partActiveImageLabel || 'Illustration'"
+    max-width="4xl"
     @close="closePartImageModal"
-    @next="goToNextPartImage"
-    @prev="goToPrevPartImage"
-  />
+  >
+    <IllustrationDetail
+      :image="partActiveImage"
+      :image-src="partActiveImageSource"
+      :wiki-pages="bookWikiPages"
+      :tags="partActiveImageTags"
+      :saving-notes="partSavingImageNotes"
+      :saving-tags="partSavingImageTags"
+      :can-edit-notes="true"
+      :can-edit-tags="true"
+      :can-download="true"
+      @save-notes="handleSavePartImageNotes"
+      @save-tags="handleSavePartImageTags"
+      @download="handleDownloadPartImage"
+    />
+    <template #footer>
+      <div class="flex items-center justify-between">
+        <button
+          type="button"
+          class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
+          :disabled="!hasPrevPartImage"
+          @click="goToPrevPartImage"
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
+          :disabled="!hasNextPartImage"
+          @click="goToNextPartImage"
+        >
+          Next
+        </button>
+      </div>
+    </template>
+  </Modal>
 
   <ImageLightbox
     :open="partCoverLightboxOpen"
