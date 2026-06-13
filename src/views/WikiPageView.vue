@@ -168,7 +168,9 @@ const bookTitle = computed(() => {
 })
 
 // Computed navigation URLs
-const bookWikiUrl = computed(() => `${routePrefix.value}/${bookId.value}?tab=wiki`)
+// Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
+// BookView handles mobile display via CSS media queries
+const bookWikiUrl = computed(() => `/books/${bookId.value}?tab=wiki`)
 
 const loadWikiPage = async () => {
   loading.value = true

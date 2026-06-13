@@ -166,7 +166,9 @@ const partLabel = computed(() => {
 
 const isMobileRoute = computed(() => route.meta.mobile === true);
 const routePrefix = computed(() => (isMobileRoute.value ? "/m/books" : "/books"));
-const bookUrl = computed(() => `${routePrefix.value}/${bookId.value}`);
+// Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
+// BookView handles mobile display via CSS media queries
+const bookUrl = computed(() => `/books/${bookId.value}`);
 const organizeUrl = computed(() => `/books/${bookId.value}/organize`);
 
 const totalWordCount = computed(() =>

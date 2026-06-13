@@ -406,7 +406,9 @@ const chapterTruncation = computed(() => {
 });
 
 // Computed navigation URLs
-const bookUrl = computed(() => `${routePrefix.value}/${bookId.value}`);
+// Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
+// BookView handles mobile display via CSS media queries
+const bookUrl = computed(() => `/books/${bookId.value}`);
 const backButtonUrl = computed(() => bookUrl.value);
 
 const loadChapter = async () => {
