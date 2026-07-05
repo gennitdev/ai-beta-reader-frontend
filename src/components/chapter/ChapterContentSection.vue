@@ -2,8 +2,8 @@
 import { ref, watch, onUnmounted, type PropType } from "vue";
 import TextEditor from "@/components/TextEditor.vue";
 import MarkdownRenderer from "@/components/MarkdownRenderer.vue";
-import { copyToClipboard } from "@/utils/clipboard";
-import { Capacitor } from "@capacitor/core";
+import { copyToClipboardWithResult } from "@/utils/clipboard";
+import { isNativeMobileRuntime } from "@/utils/platform";
 import {
   ArrowsPointingOutIcon,
   ArrowsPointingInIcon,
@@ -81,14 +81,14 @@ const copyChapterToClipboard = async () => {
   if (!props.chapterText) return;
   try {
     resetChapterCopyState();
-    const success = await copyToClipboard(props.chapterText);
-    if (success) {
+    const result = await copyToClipboardWithResult(props.chapterText);
+    if (result.success) {
       chapterCopied.value = true;
 
-      // Warn on mobile if chapter exceeds word limit
-      const isMobile = Capacitor.isNativePlatform();
+      // Warn only on native mobile runtimes, and prefer clipboard verification
+      const isMobile = isNativeMobileRuntime();
       const wordCount = countWords(props.chapterText);
-      if (isMobile && wordCount > MOBILE_WORD_LIMIT) {
+      if (isMobile && (result.likelyTruncated || (!result.verified && wordCount > MOBILE_WORD_LIMIT))) {
         chapterCopyWarning.value = true;
       }
 

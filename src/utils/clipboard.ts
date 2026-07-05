@@ -1,5 +1,12 @@
 import { Capacitor } from '@capacitor/core'
 import { Clipboard } from '@capacitor/clipboard'
+import { isNativeMobileRuntime } from '@/utils/platform'
+
+export interface ClipboardCopyResult {
+  success: boolean
+  verified: boolean
+  likelyTruncated: boolean
+}
 
 /**
  * Copy text to clipboard with native support for mobile apps.
@@ -7,11 +14,29 @@ import { Clipboard } from '@capacitor/clipboard'
  * large text copying, falls back to web APIs on other platforms.
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
+  const result = await copyToClipboardWithResult(text)
+  return result.success
+}
+
+export async function copyToClipboardWithResult(text: string): Promise<ClipboardCopyResult> {
   // Use native clipboard on iOS/Android for reliable large text copying
   if (Capacitor.isNativePlatform()) {
     try {
       await Clipboard.write({ string: text })
-      return true
+      if (isNativeMobileRuntime()) {
+        try {
+          const result = await Clipboard.read()
+          return {
+            success: true,
+            verified: true,
+            likelyTruncated: result.value !== text,
+          }
+        } catch (error) {
+          console.warn('Native clipboard read-back failed:', error)
+        }
+      }
+
+      return { success: true, verified: false, likelyTruncated: false }
     } catch (error) {
       console.error('Native clipboard write failed:', error)
       // Fall through to web fallbacks
@@ -24,7 +49,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       const blob = new Blob([text], { type: 'text/plain' })
       const clipboardItem = new ClipboardItem({ 'text/plain': blob })
       await navigator.clipboard.write([clipboardItem])
-      return true
+      return { success: true, verified: false, likelyTruncated: false }
     } catch (error) {
       // ClipboardItem may not work in all contexts, fall through
       console.warn('ClipboardItem write failed, trying writeText:', error)
@@ -35,14 +60,18 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text)
-      return true
+      return { success: true, verified: false, likelyTruncated: false }
     } catch (error) {
       console.warn('clipboard.writeText failed, trying execCommand:', error)
     }
   }
 
   // Final fallback: execCommand with textarea
-  return fallbackCopy(text)
+  return {
+    success: fallbackCopy(text),
+    verified: false,
+    likelyTruncated: false,
+  }
 }
 
 /**
