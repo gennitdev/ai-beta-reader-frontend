@@ -151,6 +151,91 @@ const IDB_NAME = 'ai-beta-reader-db';
 const IDB_STORE = 'database';
 const IDB_KEY = 'sqliteDb';
 
+type ImportRow = Record<string, unknown> | unknown[];
+
+interface DatabaseImportData {
+  version: number;
+  books: ImportRow[];
+  chapters: ImportRow[];
+  book_parts: ImportRow[];
+  chapter_summaries: ImportRow[];
+  part_summaries: ImportRow[];
+  wiki_pages: ImportRow[];
+  book_characters: ImportRow[];
+  chapter_reviews: ImportRow[];
+  custom_reviewer_profiles: ImportRow[];
+  ai_profiles: ImportRow[];
+  wiki_updates: ImportRow[];
+  chapter_wiki_mentions: ImportRow[];
+  image_assets: ImportRow[];
+  image_wiki_tags: ImportRow[];
+  chapter_notes: ImportRow[];
+}
+
+interface CapacitorTableSchemaColumn {
+  column?: string;
+}
+
+interface CapacitorExportTable {
+  name?: string;
+  schema?: CapacitorTableSchemaColumn[];
+  values?: unknown[][];
+}
+
+interface CapacitorExportShape {
+  tables?: CapacitorExportTable[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function toImportedBook(row: ImportRow): Book {
+  if (Array.isArray(row)) {
+    return {
+      id: String(row[0]),
+      title: String(row[1]),
+      chapter_order: typeof row[2] === 'string' ? row[2] : '[]',
+      part_order: typeof row[3] === 'string' ? row[3] : '[]',
+      cover_image_id: typeof row[4] === 'string' ? row[4] : null,
+      created_at: String(row[5]),
+    };
+  }
+
+  return {
+    id: String(row.id),
+    title: String(row.title),
+    chapter_order: typeof row.chapter_order === 'string' ? row.chapter_order : '[]',
+    part_order: typeof row.part_order === 'string' ? row.part_order : '[]',
+    cover_image_id: typeof row.cover_image_id === 'string' ? row.cover_image_id : null,
+    created_at: String(row.created_at),
+  };
+}
+
+function toImportedChapter(row: ImportRow): Chapter {
+  if (Array.isArray(row)) {
+    return {
+      id: String(row[0]),
+      book_id: String(row[1]),
+      part_id: typeof row[2] === 'string' ? row[2] : null,
+      title: typeof row[3] === 'string' ? row[3] : undefined,
+      text: String(row[4] ?? ''),
+      word_count: Number(row[5] ?? 0),
+      created_at: String(row[6]),
+    };
+  }
+
+  return {
+    id: String(row.id),
+    book_id: String(row.book_id),
+    part_id: typeof row.part_id === 'string' ? row.part_id : null,
+    title: typeof row.title === 'string' ? row.title : undefined,
+    text: String(row.text ?? ''),
+    word_count: Number(row.word_count ?? 0),
+    created_at: String(row.created_at),
+  };
+}
+
 // Detect if we're running in Electron (uses sql.js like web, not native SQLite)
 function isElectronRuntime(): boolean {
   if (typeof window !== 'undefined' && window.desktopImages) {
@@ -1016,17 +1101,16 @@ export class AppDatabase {
 
   async importDatabase(data: Uint8Array): Promise<void> {
     const jsonString = new TextDecoder().decode(data);
-    let importData = JSON.parse(jsonString);
+    const importData = this.normalizeCapacitorExport(JSON.parse(jsonString));
     console.log('[Database] importDatabase: image_assets count:', importData.image_assets?.length || 0);
     if (importData.image_assets?.length > 0) {
       console.log('[Database] importDatabase: First image_asset:', importData.image_assets[0]);
       // image_data is at index 9 for arrays (added via ALTER TABLE)
-      const hasImageData = importData.image_assets.some((row: any) => Array.isArray(row) ? row[9] : row.image_data);
+      const hasImageData = importData.image_assets.some((row) => Array.isArray(row) ? row[9] : row.image_data);
       console.log('[Database] importDatabase: Any have image_data?', hasImageData);
     }
-    importData = this.normalizeCapacitorExport(importData);
 
-    const run = async (sql: string, params: any[] = []) => {
+    const run = async (sql: string, params: unknown[] = []) => {
       if (this.isNative) {
         await this.db.run(sql, params);
       } else {
@@ -1068,7 +1152,7 @@ export class AppDatabase {
         await run(`DELETE FROM ${table}`);
       }
 
-      const importTable = async (tableName: string, rows: any[]) => {
+      const importTable = async (tableName: string, rows: ImportRow[]) => {
         if (!rows || rows.length === 0) return;
 
         const expectedColumns = await this.getTableColumns(tableName);
@@ -1079,11 +1163,11 @@ export class AppDatabase {
         const insertSql = `INSERT OR REPLACE INTO ${tableName} (${columnList}) VALUES (${placeholders})`;
 
         for (const row of rows) {
-          const rowValues: Record<string, any> = Array.isArray(row)
+          const rowValues: Record<string, unknown> = Array.isArray(row)
             ? expectedColumns.reduce((acc, column, index) => {
                 acc[column] = row[index] ?? null;
                 return acc;
-              }, {} as Record<string, any>)
+              }, {} as Record<string, unknown>)
             : row ?? {};
 
           const values = expectedColumns.map((column) => rowValues[column] ?? null);
@@ -1093,7 +1177,7 @@ export class AppDatabase {
 
       if (importData.books) {
         for (const book of importData.books) {
-          await this.saveBook(book);
+          await this.saveBook(toImportedBook(book));
         }
       }
 
@@ -1101,7 +1185,7 @@ export class AppDatabase {
 
       if (importData.chapters) {
         for (const chapter of importData.chapters) {
-          await this.saveChapter(chapter);
+          await this.saveChapter(toImportedChapter(chapter));
         }
       }
 
@@ -1137,10 +1221,11 @@ export class AppDatabase {
     }
   }
 
-  async importFromNeonExport(jsonData: any): Promise<void> {
+  async importFromNeonExport(jsonData: unknown): Promise<void> {
     // Transform Neon PostgreSQL export to match our schema
     // Neon exports tables as arrays of objects with column names
-    const transformedData: any = {
+    const sourceData = isRecord(jsonData) ? jsonData : {};
+    const transformedData: DatabaseImportData = {
       version: 2,
       books: [],
       chapters: [],
@@ -1154,21 +1239,22 @@ export class AppDatabase {
       ai_profiles: [],
       wiki_updates: [],
       chapter_wiki_mentions: [],
+      image_assets: [],
       image_wiki_tags: [],
       chapter_notes: []
     };
 
     // Map Neon table exports to our format
-    if (jsonData.books) {
-      transformedData.books = jsonData.books.map((b: any) => ({
+    if (Array.isArray(sourceData.books)) {
+      transformedData.books = sourceData.books.filter(isRecord).map((b) => ({
         id: b.id,
         title: b.title,
         created_at: b.created_at
       }));
     }
 
-    if (jsonData.chapters) {
-      transformedData.chapters = jsonData.chapters.map((c: any) => ({
+    if (Array.isArray(sourceData.chapters)) {
+      transformedData.chapters = sourceData.chapters.filter(isRecord).map((c) => ({
         id: c.id,
         book_id: c.book_id,
         title: c.title,
@@ -1179,56 +1265,82 @@ export class AppDatabase {
     }
 
     // Just pass through other tables as-is
-    transformedData.book_parts = jsonData.book_parts || [];
-    transformedData.chapter_summaries = jsonData.chapter_summaries || [];
-    transformedData.part_summaries = jsonData.part_summaries || [];
-    transformedData.wiki_pages = jsonData.wiki_pages || [];
-    transformedData.book_characters = jsonData.book_characters || [];
-    transformedData.chapter_reviews = jsonData.chapter_reviews || [];
-    transformedData.custom_reviewer_profiles = jsonData.custom_reviewer_profiles || [];
-    transformedData.ai_profiles = jsonData.ai_profiles || [];
-    transformedData.wiki_updates = jsonData.wiki_updates || [];
-    transformedData.chapter_wiki_mentions = jsonData.chapter_wiki_mentions || [];
-    transformedData.image_assets = jsonData.image_assets || [];
-    transformedData.image_wiki_tags = jsonData.image_wiki_tags || [];
-    transformedData.chapter_notes = jsonData.chapter_notes || [];
+    transformedData.book_parts = Array.isArray(sourceData.book_parts) ? sourceData.book_parts.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.chapter_summaries = Array.isArray(sourceData.chapter_summaries) ? sourceData.chapter_summaries.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.part_summaries = Array.isArray(sourceData.part_summaries) ? sourceData.part_summaries.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.wiki_pages = Array.isArray(sourceData.wiki_pages) ? sourceData.wiki_pages.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.book_characters = Array.isArray(sourceData.book_characters) ? sourceData.book_characters.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.chapter_reviews = Array.isArray(sourceData.chapter_reviews) ? sourceData.chapter_reviews.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.custom_reviewer_profiles = Array.isArray(sourceData.custom_reviewer_profiles) ? sourceData.custom_reviewer_profiles.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.ai_profiles = Array.isArray(sourceData.ai_profiles) ? sourceData.ai_profiles.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.wiki_updates = Array.isArray(sourceData.wiki_updates) ? sourceData.wiki_updates.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.chapter_wiki_mentions = Array.isArray(sourceData.chapter_wiki_mentions) ? sourceData.chapter_wiki_mentions.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.image_assets = Array.isArray(sourceData.image_assets) ? sourceData.image_assets.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.image_wiki_tags = Array.isArray(sourceData.image_wiki_tags) ? sourceData.image_wiki_tags.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
+    transformedData.chapter_notes = Array.isArray(sourceData.chapter_notes) ? sourceData.chapter_notes.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : [];
 
     // Use the standard import function
     const jsonString = JSON.stringify(transformedData);
     await this.importDatabase(new TextEncoder().encode(jsonString));
   }
 
-  private normalizeCapacitorExport(raw: any) {
-    if (raw && typeof raw === 'object' && 'export' in raw && raw.export?.tables) {
+  private normalizeCapacitorExport(raw: unknown): DatabaseImportData {
+    if (isRecord(raw) && isRecord(raw.export) && Array.isArray(raw.export.tables)) {
       return this.convertCapacitorExport(raw.export);
     }
-    if (raw && typeof raw === 'object' && raw.tables) {
+    if (isRecord(raw) && Array.isArray(raw.tables)) {
       return this.convertCapacitorExport(raw);
     }
-    return raw;
+    const normalized = isRecord(raw) ? raw : {};
+    const readRows = (key: keyof DatabaseImportData): ImportRow[] => {
+      const value = normalized[key];
+      return Array.isArray(value)
+        ? value.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row))
+        : [];
+    };
+
+    return {
+      version: typeof normalized.version === 'number' ? normalized.version : 2,
+      books: readRows('books'),
+      chapters: readRows('chapters'),
+      book_parts: readRows('book_parts'),
+      chapter_summaries: readRows('chapter_summaries'),
+      part_summaries: readRows('part_summaries'),
+      wiki_pages: readRows('wiki_pages'),
+      book_characters: readRows('book_characters'),
+      chapter_reviews: readRows('chapter_reviews'),
+      custom_reviewer_profiles: readRows('custom_reviewer_profiles'),
+      ai_profiles: readRows('ai_profiles'),
+      wiki_updates: readRows('wiki_updates'),
+      chapter_wiki_mentions: readRows('chapter_wiki_mentions'),
+      image_assets: readRows('image_assets'),
+      image_wiki_tags: readRows('image_wiki_tags'),
+      chapter_notes: readRows('chapter_notes'),
+    };
   }
 
-  private convertCapacitorExport(exportData: any) {
-    const tables = Array.isArray(exportData?.tables) ? exportData.tables : [];
+  private convertCapacitorExport(exportData: CapacitorExportShape): DatabaseImportData {
+    const tables = Array.isArray(exportData.tables) ? exportData.tables : [];
     const schemaMap = new Map<string, string[]>();
-    const valueMap = new Map<string, any[][]>();
+    const valueMap = new Map<string, unknown[][]>();
 
-    tables.forEach((table: any) => {
+    tables.forEach((table) => {
       const columns =
-        Array.isArray(table?.schema) && table.schema.length
+        Array.isArray(table.schema) && table.schema.length
           ? table.schema
-              .map((col: any) => col?.column)
-              .filter((column: string | undefined) => Boolean(column && /^[A-Za-z_][A-Za-z0-9_]*$/.test(column as string)))
+              .map((col) => col?.column)
+              .filter((column): column is string => Boolean(column && /^[A-Za-z_][A-Za-z0-9_]*$/.test(column)))
           : [];
+      if (!table.name) return;
       schemaMap.set(table.name, columns);
-      valueMap.set(table.name, Array.isArray(table?.values) ? table.values : []);
+      valueMap.set(table.name, Array.isArray(table.values) ? table.values : []);
     });
 
-    const rowsToObjects = (tableName: string) => {
+    const rowsToObjects = (tableName: string): Record<string, unknown>[] => {
       const columns = schemaMap.get(tableName) ?? [];
       const rows = valueMap.get(tableName) ?? [];
       return rows.map((row) => {
-        const entry: Record<string, any> = {};
+        const entry: Record<string, unknown> = {};
         columns.forEach((column, index) => {
           entry[column] = row?.[index] ?? null;
         });
@@ -1304,17 +1416,19 @@ export class AppDatabase {
       const result = await this.db.query(`PRAGMA table_info(${tableName})`);
       const rows = result?.values ?? [];
       columns = rows
-        .map((row: any) => {
-          if (row?.name) return row.name;
-          if (Array.isArray(row)) return row[1];
+        .map((row: unknown) => {
+          if (isRecord(row) && typeof row.name === 'string') return row.name;
+          if (Array.isArray(row)) return typeof row[1] === 'string' ? row[1] : null;
           return null;
         })
-        .filter((name: string | null) => Boolean(name)) as string[];
+        .filter((name: unknown): name is string => typeof name === 'string');
     } else {
       const result = this.db.exec(`PRAGMA table_info(${tableName})`);
       if (result.length > 0) {
         const nameIndex = result[0].columns.indexOf('name');
-        columns = result[0].values.map((row: any[]) => row[nameIndex]);
+        columns = result[0].values
+          .map((row: unknown[]) => row[nameIndex])
+          .filter((name: unknown): name is string => typeof name === 'string');
       }
     }
 
