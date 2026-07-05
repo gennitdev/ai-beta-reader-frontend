@@ -236,7 +236,7 @@ const loadWikiPage = async () => {
         updated_at: pageData.updated_at
       }
       editedContent.value = pageData.content || ''
-      editedTags.value = wikiPage.value.tags
+      editedTags.value = parseStringArray(pageData.tags)
       newTag.value = ''
       isEditingTags.value = false
       await refreshWikiImages()

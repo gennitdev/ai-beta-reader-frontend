@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import initSqlJs from 'sql.js';
+import type { WikiPageType } from '@/types/bookView';
 
 export interface Book {
   id: string;
@@ -72,6 +73,47 @@ export interface ChapterNote {
   notes: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface CustomReviewerProfile {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WikiPage {
+  id: string;
+  book_id: string;
+  page_name: string;
+  page_type: WikiPageType;
+  content: string;
+  summary: string;
+  aliases: string | null;
+  tags: string | null;
+  is_major: boolean;
+  created_by_ai: boolean;
+  created_at: string;
+  updated_at: string;
+  is_pinned: boolean;
+  cover_image_id?: string | null;
+}
+
+interface SearchChapterResult {
+  id: string;
+  title: string;
+  text: string;
+  word_count: number;
+  position: number;
+}
+
+interface SearchWikiPageResult {
+  id: string;
+  page_name: string;
+  content: string;
+  summary: string;
+  page_type: string;
 }
 
 export type ImageAssetType = 'cover' | 'chapter' | 'part_cover';
@@ -152,6 +194,7 @@ const IDB_STORE = 'database';
 const IDB_KEY = 'sqliteDb';
 
 type ImportRow = Record<string, unknown> | unknown[];
+type QueryRow = Record<string, unknown>;
 
 interface DatabaseImportData {
   version: number;
@@ -184,6 +227,25 @@ interface CapacitorExportTable {
 
 interface CapacitorExportShape {
   tables?: CapacitorExportTable[];
+}
+
+interface QueryResultRowStatement {
+  bind(values?: unknown[]): void;
+  step(): boolean;
+  getAsObject(): Record<string, unknown>;
+  free(): void;
+}
+
+interface AppDatabaseConnection {
+  open(): Promise<void>;
+  close(): Promise<void> | void;
+  execute(sql: string): Promise<unknown>;
+  run(sql: string, params?: unknown[]): Promise<unknown> | void;
+  query(sql: string, params?: unknown[]): Promise<{ values?: QueryRow[] }>;
+  exec(sql: string, params?: unknown[]): Array<{ columns: string[]; values: unknown[][] }>;
+  export(): Uint8Array;
+  exportToJson(mode?: string): Promise<unknown>;
+  prepare(sql: string): QueryResultRowStatement;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -236,6 +298,254 @@ function toImportedChapter(row: ImportRow): Chapter {
   };
 }
 
+function toNativeBook(row: Record<string, unknown>): Book {
+  return {
+    id: String(row.id),
+    title: String(row.title),
+    chapter_order: typeof row.chapter_order === 'string' ? row.chapter_order : '[]',
+    part_order: typeof row.part_order === 'string' ? row.part_order : '[]',
+    cover_image_id: typeof row.cover_image_id === 'string' ? row.cover_image_id : null,
+    created_at: String(row.created_at),
+  };
+}
+
+function toWebBook(row: unknown[]): Book {
+  return {
+    id: String(row[0]),
+    title: String(row[1]),
+    chapter_order: typeof row[2] === 'string' ? row[2] : '[]',
+    part_order: typeof row[3] === 'string' ? row[3] : '[]',
+    cover_image_id: typeof row[4] === 'string' ? row[4] : null,
+    created_at: String(row[5]),
+  };
+}
+
+function toWebChapter(row: unknown[]): Chapter {
+  return {
+    id: String(row[0]),
+    book_id: String(row[1]),
+    part_id: typeof row[2] === 'string' ? row[2] : null,
+    title: typeof row[3] === 'string' ? row[3] : undefined,
+    text: String(row[4] ?? ''),
+    word_count: Number(row[5] ?? 0),
+    created_at: String(row[6]),
+  };
+}
+
+function toNativePart(row: Record<string, unknown>): BookPart {
+  return {
+    id: String(row.id),
+    book_id: String(row.book_id),
+    name: String(row.name),
+    chapter_order: typeof row.chapter_order === 'string' ? row.chapter_order : '[]',
+    cover_image_id: typeof row.cover_image_id === 'string' ? row.cover_image_id : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+function toNativePartFromQueryRow(row: QueryRow): BookPart {
+  return Array.isArray(row)
+    ? toWebPart(row)
+    : toNativePart(row);
+}
+
+function toWebPart(row: unknown[]): BookPart {
+  return {
+    id: String(row[0]),
+    book_id: String(row[1]),
+    name: String(row[2]),
+    chapter_order: typeof row[3] === 'string' ? row[3] : '[]',
+    cover_image_id: typeof row[4] === 'string' ? row[4] : null,
+    created_at: String(row[5]),
+    updated_at: String(row[6]),
+  };
+}
+
+function toWebReview(row: unknown[]): ChapterReview {
+  return {
+    id: String(row[0]),
+    chapter_id: String(row[1]),
+    review_text: String(row[2]),
+    prompt_used: typeof row[3] === 'string' ? row[3] : null,
+    profile_id: typeof row[4] === 'number' ? row[4] : null,
+    profile_name: typeof row[5] === 'string' ? row[5] : null,
+    tone_key: typeof row[6] === 'string' ? row[6] : null,
+    created_at: String(row[7]),
+    updated_at: String(row[8]),
+  };
+}
+
+function toWebSummary(row: unknown[]): ChapterSummary {
+  return {
+    id: String(row[0]),
+    chapter_id: String(row[1]),
+    summary: typeof row[2] === 'string' ? row[2] : null,
+    pov: typeof row[3] === 'string' ? row[3] : null,
+    characters: typeof row[4] === 'string' ? row[4] : null,
+    beats: typeof row[5] === 'string' ? row[5] : null,
+    spoilers_ok: typeof row[6] === 'boolean' ? row[6] : typeof row[6] === 'number' ? Boolean(row[6]) : null,
+    created_at: String(row[7]),
+    updated_at: String(row[8]),
+  };
+}
+
+function toWebPartSummary(row: unknown[]): PartSummary {
+  return {
+    id: String(row[0]),
+    part_id: String(row[1]),
+    summary: typeof row[2] === 'string' ? row[2] : null,
+    characters: typeof row[3] === 'string' ? row[3] : null,
+    beats: typeof row[4] === 'string' ? row[4] : null,
+    created_at: String(row[5]),
+    updated_at: String(row[6]),
+  };
+}
+
+function toWebNote(row: unknown[]): ChapterNote {
+  return {
+    id: String(row[0]),
+    chapter_id: String(row[1]),
+    notes: String(row[2] ?? ''),
+    created_at: String(row[3]),
+    updated_at: String(row[4]),
+  };
+}
+
+function toWebCustomProfile(row: unknown[]): CustomReviewerProfile {
+  return {
+    id: Number(row[0]),
+    name: String(row[1]),
+    description: String(row[2]),
+    created_at: String(row[3]),
+    updated_at: String(row[4]),
+  };
+}
+
+function toWebWikiPage(row: unknown[]): WikiPage {
+  const rawPageType = typeof row[3] === 'string' ? row[3] : 'character';
+  const pageType: WikiPageType = ['character', 'location', 'concept', 'other'].includes(rawPageType)
+    ? rawPageType as WikiPageType
+    : 'character';
+  return {
+    id: String(row[0]),
+    book_id: String(row[1]),
+    page_name: String(row[2]),
+    page_type: pageType,
+    content: String(row[4] ?? ''),
+    summary: String(row[5] ?? ''),
+    aliases: typeof row[6] === 'string' ? row[6] : null,
+    tags: typeof row[7] === 'string' ? row[7] : null,
+    is_major: Boolean(row[8]),
+    created_by_ai: Boolean(row[9]),
+    created_at: String(row[10]),
+    updated_at: String(row[11]),
+    is_pinned: Boolean(row[12]),
+    cover_image_id: typeof row[13] === 'string' ? row[13] : null,
+  };
+}
+
+function readQueryRowValue(row: QueryRow, index: number, key: string): unknown {
+  return Array.isArray(row) ? row[index] : row[key];
+}
+
+function toNativeChapter(row: QueryRow): Chapter {
+  return {
+    id: String(readQueryRowValue(row, 0, 'id')),
+    book_id: String(readQueryRowValue(row, 1, 'book_id')),
+    part_id: typeof readQueryRowValue(row, 2, 'part_id') === 'string' ? readQueryRowValue(row, 2, 'part_id') as string : null,
+    title: typeof readQueryRowValue(row, 3, 'title') === 'string' ? readQueryRowValue(row, 3, 'title') as string : undefined,
+    text: String(readQueryRowValue(row, 4, 'text') ?? ''),
+    word_count: Number(readQueryRowValue(row, 5, 'word_count') ?? 0),
+    created_at: String(readQueryRowValue(row, 6, 'created_at')),
+  };
+}
+
+function toNativeSummary(row: QueryRow): ChapterSummary {
+  return {
+    id: String(readQueryRowValue(row, 0, 'id')),
+    chapter_id: String(readQueryRowValue(row, 1, 'chapter_id')),
+    summary: typeof readQueryRowValue(row, 2, 'summary') === 'string' ? readQueryRowValue(row, 2, 'summary') as string : null,
+    pov: typeof readQueryRowValue(row, 3, 'pov') === 'string' ? readQueryRowValue(row, 3, 'pov') as string : null,
+    characters: typeof readQueryRowValue(row, 4, 'characters') === 'string' ? readQueryRowValue(row, 4, 'characters') as string : null,
+    beats: typeof readQueryRowValue(row, 5, 'beats') === 'string' ? readQueryRowValue(row, 5, 'beats') as string : null,
+    spoilers_ok: typeof readQueryRowValue(row, 6, 'spoilers_ok') === 'boolean'
+      ? readQueryRowValue(row, 6, 'spoilers_ok') as boolean
+      : typeof readQueryRowValue(row, 6, 'spoilers_ok') === 'number'
+        ? Boolean(readQueryRowValue(row, 6, 'spoilers_ok'))
+        : null,
+    created_at: String(readQueryRowValue(row, 7, 'created_at')),
+    updated_at: String(readQueryRowValue(row, 8, 'updated_at')),
+  };
+}
+
+function toNativePartSummary(row: QueryRow): PartSummary {
+  return {
+    id: String(readQueryRowValue(row, 0, 'id')),
+    part_id: String(readQueryRowValue(row, 1, 'part_id')),
+    summary: typeof readQueryRowValue(row, 2, 'summary') === 'string' ? readQueryRowValue(row, 2, 'summary') as string : null,
+    characters: typeof readQueryRowValue(row, 3, 'characters') === 'string' ? readQueryRowValue(row, 3, 'characters') as string : null,
+    beats: typeof readQueryRowValue(row, 4, 'beats') === 'string' ? readQueryRowValue(row, 4, 'beats') as string : null,
+    created_at: String(readQueryRowValue(row, 5, 'created_at')),
+    updated_at: String(readQueryRowValue(row, 6, 'updated_at')),
+  };
+}
+
+function toNativeReview(row: QueryRow): ChapterReview {
+  return {
+    id: String(readQueryRowValue(row, 0, 'id')),
+    chapter_id: String(readQueryRowValue(row, 1, 'chapter_id')),
+    review_text: String(readQueryRowValue(row, 2, 'review_text') ?? ''),
+    prompt_used: typeof readQueryRowValue(row, 3, 'prompt_used') === 'string' ? readQueryRowValue(row, 3, 'prompt_used') as string : null,
+    profile_id: typeof readQueryRowValue(row, 4, 'profile_id') === 'number' ? readQueryRowValue(row, 4, 'profile_id') as number : null,
+    profile_name: typeof readQueryRowValue(row, 5, 'profile_name') === 'string' ? readQueryRowValue(row, 5, 'profile_name') as string : null,
+    tone_key: typeof readQueryRowValue(row, 6, 'tone_key') === 'string' ? readQueryRowValue(row, 6, 'tone_key') as string : null,
+    created_at: String(readQueryRowValue(row, 7, 'created_at')),
+    updated_at: String(readQueryRowValue(row, 8, 'updated_at')),
+  };
+}
+
+function toNativeNote(row: QueryRow): ChapterNote {
+  return {
+    id: String(readQueryRowValue(row, 0, 'id')),
+    chapter_id: String(readQueryRowValue(row, 1, 'chapter_id')),
+    notes: String(readQueryRowValue(row, 2, 'notes') ?? ''),
+    created_at: String(readQueryRowValue(row, 3, 'created_at')),
+    updated_at: String(readQueryRowValue(row, 4, 'updated_at')),
+  };
+}
+
+function toNativeCustomProfile(row: QueryRow): CustomReviewerProfile {
+  return {
+    id: Number(readQueryRowValue(row, 0, 'id')),
+    name: String(readQueryRowValue(row, 1, 'name')),
+    description: String(readQueryRowValue(row, 2, 'description') ?? ''),
+    created_at: String(readQueryRowValue(row, 3, 'created_at')),
+    updated_at: String(readQueryRowValue(row, 4, 'updated_at')),
+  };
+}
+
+function toNativeWikiPage(row: QueryRow): WikiPage {
+  return toWebWikiPage(Array.isArray(row)
+    ? row
+    : [
+        row.id,
+        row.book_id,
+        row.page_name,
+        row.page_type,
+        row.content,
+        row.summary,
+        row.aliases,
+        row.tags,
+        row.is_major,
+        row.created_by_ai,
+        row.created_at,
+        row.updated_at,
+        row.is_pinned,
+        row.cover_image_id,
+      ]);
+}
+
 // Detect if we're running in Electron (uses sql.js like web, not native SQLite)
 function isElectronRuntime(): boolean {
   if (typeof window !== 'undefined' && window.desktopImages) {
@@ -249,7 +559,7 @@ function isElectronRuntime(): boolean {
 }
 
 export class AppDatabase {
-  private db: any;
+  private db!: AppDatabaseConnection;
   private sqlite: SQLiteConnection | null = null;
   private isNative: boolean | null = null; // Determined at init() time
   private tableColumnCache = new Map<string, string[]>();
@@ -273,7 +583,7 @@ export class AppDatabase {
         'no-encryption',
         1,
         false
-      );
+      ) as unknown as AppDatabaseConnection;
       await this.db.open();
     } else {
       // Desktop/Web: Use sql.js (SQLite compiled to WebAssembly)
@@ -304,7 +614,7 @@ export class AppDatabase {
 
       if (savedDb) {
         try {
-          this.db = new SQL.Database(savedDb);
+          this.db = new SQL.Database(savedDb) as unknown as AppDatabaseConnection;
           // If we migrated from localStorage, save to IndexedDB and clear localStorage
           if (migratedFromLocalStorage) {
             await this.saveToIndexedDB();
@@ -313,10 +623,10 @@ export class AppDatabase {
           }
         } catch (error) {
           console.warn('[AppDatabase] Failed to restore DB, starting fresh.', error);
-          this.db = new SQL.Database();
+          this.db = new SQL.Database() as unknown as AppDatabaseConnection;
         }
       } else {
-        this.db = new SQL.Database();
+        this.db = new SQL.Database() as unknown as AppDatabaseConnection;
       }
     }
 
@@ -592,26 +902,12 @@ export class AppDatabase {
       const result = await this.db.query(query);
       if (!result.values) return [];
 
-      return result.values.map((row: any) => ({
-        id: row.id,
-        title: row.title,
-        chapter_order: row.chapter_order || '[]',
-        part_order: row.part_order || '[]',
-        cover_image_id: row.cover_image_id ?? null,
-        created_at: row.created_at
-      }));
+      return result.values.map((row: Record<string, unknown>) => toNativeBook(row));
     } else {
       const result = this.db.exec(query);
       if (result.length === 0) return [];
 
-      return result[0].values.map((row: any[]) => ({
-        id: row[0],
-        title: row[1],
-        chapter_order: (row[2] as string) || '[]',
-        part_order: (row[3] as string) || '[]',
-        cover_image_id: row[4] ?? null,
-        created_at: row[5]
-      }));
+      return result[0].values.map((row: unknown[]) => toWebBook(row));
     }
   }
 
@@ -652,20 +948,12 @@ export class AppDatabase {
 
     if (this.isNative) {
       const result = await this.db.query(query, [bookId]);
-      return result.values || [];
+      return (result.values || []).map((row) => toNativeChapter(row));
     } else {
       const result = this.db.exec(query, [bookId]);
       if (result.length === 0) return [];
 
-      return result[0].values.map((row: any[]) => ({
-        id: row[0],
-        book_id: row[1],
-        part_id: row[2],
-        title: row[3],
-        text: row[4],
-        word_count: row[5],
-        created_at: row[6]
-      }));
+      return result[0].values.map((row: unknown[]) => toWebChapter(row));
     }
   }
 
@@ -677,7 +965,8 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(getPartQuery, [chapterId]);
       if (result.values && result.values[0]) {
-        partId = result.values[0].part_id || null;
+        const value = readQueryRowValue(result.values[0], 0, 'part_id');
+        partId = typeof value === 'string' ? value : null;
       }
     } else {
       const result = this.db.exec(getPartQuery, [chapterId]);
@@ -720,7 +1009,8 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(getBookOrderQuery, [bookId]);
       if (result.values && result.values[0]) {
-        const orderStr = result.values[0].chapter_order || "[]";
+        const orderValue = readQueryRowValue(result.values[0], 0, 'chapter_order');
+        const orderStr = typeof orderValue === 'string' ? orderValue : '[]';
         bookOrder = JSON.parse(orderStr);
       }
     } else {
@@ -748,7 +1038,8 @@ export class AppDatabase {
       if (this.isNative) {
         const result = await this.db.query(getPartOrderQuery, [partId]);
         if (result.values && result.values[0]) {
-          const orderStr = result.values[0].chapter_order || "[]";
+          const orderValue = readQueryRowValue(result.values[0], 0, 'chapter_order');
+          const orderStr = typeof orderValue === 'string' ? orderValue : '[]';
           partOrder = JSON.parse(orderStr);
         }
       } else {
@@ -783,7 +1074,8 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(query, [bookId]);
       if (result.values && result.values[0]) {
-        const orderStr = result.values[0].chapter_order || '[]';
+        const orderValue = readQueryRowValue(result.values[0], 0, 'chapter_order');
+        const orderStr = typeof orderValue === 'string' ? orderValue : '[]';
         currentOrder = JSON.parse(orderStr);
       }
     } else {
@@ -843,23 +1135,12 @@ export class AppDatabase {
 
     if (this.isNative) {
       const result = await this.db.query(query, [bookId]);
-      return (result.values || []).map((row: any) => ({
-        ...row,
-        cover_image_id: row.cover_image_id ?? null
-      }));
+      return (result.values || []).map((row) => toNativePartFromQueryRow(row));
     } else {
       const result = this.db.exec(query, [bookId]);
       if (result.length === 0) return [];
 
-      return result[0].values.map((row: any[]) => ({
-        id: row[0],
-        book_id: row[1],
-        name: row[2],
-        chapter_order: row[3],
-        cover_image_id: row[4] ?? null,
-        created_at: row[5],
-        updated_at: row[6]
-      }));
+      return result[0].values.map((row: unknown[]) => toWebPart(row));
     }
   }
 
@@ -894,7 +1175,8 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(query, [bookId]);
       if (result.values && result.values[0]) {
-        const orderStr = result.values[0].part_order || '[]';
+        const orderValue = readQueryRowValue(result.values[0], 0, 'part_order');
+        const orderStr = typeof orderValue === 'string' ? orderValue : '[]';
         try {
           const parsed = JSON.parse(orderStr);
           if (Array.isArray(parsed)) {
@@ -1475,23 +1757,12 @@ export class AppDatabase {
 
     if (this.isNative) {
       const result = await this.db.query(query, [chapterId]);
-      return result.values?.[0] || null;
+      return result.values?.[0] ? toNativeSummary(result.values[0]) : null;
     } else {
       const result = this.db.exec(query, [chapterId]);
       if (result.length === 0 || result[0].values.length === 0) return null;
 
-      const row = result[0].values[0];
-      return {
-        id: row[0],
-        chapter_id: row[1],
-        summary: row[2],
-        pov: row[3],
-        characters: row[4],
-        beats: row[5],
-        spoilers_ok: row[6],
-        created_at: row[7],
-        updated_at: row[8]
-      };
+      return toWebSummary(result[0].values[0]);
     }
   }
 
@@ -1531,21 +1802,12 @@ export class AppDatabase {
 
     if (this.isNative) {
       const result = await this.db.query(query, [partId]);
-      return result.values?.[0] || null;
+      return result.values?.[0] ? toNativePartSummary(result.values[0]) : null;
     } else {
       const result = this.db.exec(query, [partId]);
       if (result.length === 0 || result[0].values.length === 0) return null;
 
-      const row = result[0].values[0];
-      return {
-        id: row[0],
-        part_id: row[1],
-        summary: row[2],
-        characters: row[3],
-        beats: row[4],
-        created_at: row[5],
-        updated_at: row[6]
-      };
+      return toWebPartSummary(result[0].values[0]);
     }
   }
 
@@ -1599,22 +1861,12 @@ export class AppDatabase {
 
     if (this.isNative) {
       const result = await this.db.query(query, [chapterId]);
-      return result.values || [];
+      return (result.values || []).map((row) => toNativeReview(row));
     } else {
       const result = this.db.exec(query, [chapterId]);
       if (result.length === 0) return [];
 
-      return result[0].values.map((row: any[]) => ({
-        id: row[0],
-        chapter_id: row[1],
-        review_text: row[2],
-        prompt_used: row[3],
-        profile_id: row[4],
-        profile_name: row[5],
-        tone_key: row[6],
-        created_at: row[7],
-        updated_at: row[8]
-      }));
+      return result[0].values.map((row: unknown[]) => toWebReview(row));
     }
   }
 
@@ -1656,19 +1908,12 @@ export class AppDatabase {
 
     if (this.isNative) {
       const result = await this.db.query(query, [chapterId]);
-      return result.values?.[0] || null;
+      return result.values?.[0] ? toNativeNote(result.values[0]) : null;
     } else {
       const result = this.db.exec(query, [chapterId]);
       if (result.length === 0 || result[0].values.length === 0) return null;
 
-      const row = result[0].values[0];
-      return {
-        id: row[0],
-        chapter_id: row[1],
-        notes: row[2],
-        created_at: row[3],
-        updated_at: row[4]
-      };
+      return toWebNote(result[0].values[0]);
     }
   }
 
@@ -1684,23 +1929,17 @@ export class AppDatabase {
   }
 
   // Custom Reviewer Profile methods
-  async getCustomProfiles(): Promise<any[]> {
+  async getCustomProfiles(): Promise<CustomReviewerProfile[]> {
     const query = `SELECT * FROM custom_reviewer_profiles ORDER BY created_at DESC`;
 
     if (this.isNative) {
       const result = await this.db.query(query);
-      return result.values || [];
+      return (result.values || []).map((row) => toNativeCustomProfile(row));
     } else {
       const result = this.db.exec(query);
       if (result.length === 0) return [];
 
-      return result[0].values.map((row: any[]) => ({
-        id: row[0],
-        name: row[1],
-        description: row[2],
-        created_at: row[3],
-        updated_at: row[4]
-      }));
+      return result[0].values.map((row: unknown[]) => toWebCustomProfile(row));
     }
   }
 
@@ -1731,7 +1970,7 @@ export class AppDatabase {
   }) {
     const now = new Date().toISOString();
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (updates.name !== undefined) {
       sets.push('name = ?');
@@ -1818,7 +2057,7 @@ export class AppDatabase {
   }) {
     const now = new Date().toISOString();
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (updates.content !== undefined) {
       sets.push('content = ?');
@@ -1855,90 +2094,45 @@ export class AppDatabase {
     }
   }
 
-  async getWikiPageById(id: string): Promise<any | null> {
+  async getWikiPageById(id: string): Promise<WikiPage | null> {
     const query = `SELECT * FROM wiki_pages WHERE id = ? LIMIT 1`;
 
     if (this.isNative) {
       const result = await this.db.query(query, [id]);
-      return result.values?.[0] || null;
+      return result.values?.[0] ? toNativeWikiPage(result.values[0]) : null;
     } else {
       const result = this.db.exec(query, [id]);
       if (result.length === 0 || result[0].values.length === 0) return null;
 
-      const row = result[0].values[0];
-      return {
-        id: row[0],
-        book_id: row[1],
-        page_name: row[2],
-        page_type: row[3],
-        content: row[4],
-        summary: row[5],
-        aliases: row[6],
-        tags: row[7],
-        is_major: row[8],
-        created_by_ai: row[9],
-        created_at: row[10],
-        updated_at: row[11],
-        is_pinned: row[12]
-      };
+      return toWebWikiPage(result[0].values[0] as unknown[]);
     }
   }
 
-  async getWikiPage(bookId: string, pageName: string): Promise<any | null> {
+  async getWikiPage(bookId: string, pageName: string): Promise<WikiPage | null> {
     const query = `SELECT * FROM wiki_pages WHERE book_id = ? AND page_name = ? LIMIT 1`;
 
     if (this.isNative) {
       const result = await this.db.query(query, [bookId, pageName]);
-      return result.values?.[0] || null;
+      return result.values?.[0] ? toNativeWikiPage(result.values[0]) : null;
     } else {
       const result = this.db.exec(query, [bookId, pageName]);
       if (result.length === 0 || result[0].values.length === 0) return null;
 
-      const row = result[0].values[0];
-      return {
-        id: row[0],
-        book_id: row[1],
-        page_name: row[2],
-        page_type: row[3],
-        content: row[4],
-        summary: row[5],
-        aliases: row[6],
-        tags: row[7],
-        is_major: row[8],
-        created_by_ai: row[9],
-        created_at: row[10],
-        updated_at: row[11],
-        is_pinned: row[12]
-      };
+      return toWebWikiPage(result[0].values[0] as unknown[]);
     }
   }
 
-  async getWikiPages(bookId: string): Promise<any[]> {
+  async getWikiPages(bookId: string): Promise<WikiPage[]> {
     const query = `SELECT * FROM wiki_pages WHERE book_id = ? ORDER BY page_name`;
 
     if (this.isNative) {
       const result = await this.db.query(query, [bookId]);
-      return result.values || [];
+      return (result.values || []).map((row) => toNativeWikiPage(row));
     } else {
       const result = this.db.exec(query, [bookId]);
       if (result.length === 0) return [];
 
-      return result[0].values.map((row: any[]) => ({
-        id: row[0],
-        book_id: row[1],
-        page_name: row[2],
-        page_type: row[3],
-        content: row[4],
-        summary: row[5],
-        aliases: row[6],
-        tags: row[7],
-        is_major: row[8],
-        created_by_ai: row[9],
-        created_at: row[10],
-        updated_at: row[11],
-        is_pinned: row[12],
-        cover_image_id: row[13]
-      }));
+      return result[0].values.map((row: unknown[]) => toWebWikiPage(row));
     }
   }
 
@@ -2014,36 +2208,24 @@ export class AppDatabase {
 
   // Search and Replace methods
   async searchBook(bookId: string, searchTerm: string): Promise<{
-    chapters: Array<{
-      id: string;
-      title: string;
-      text: string;
-      word_count: number;
-      position: number;
-    }>;
-    wikiPages: Array<{
-      id: string;
-      page_name: string;
-      content: string;
-      summary: string;
-      page_type: string;
-    }>;
+    chapters: SearchChapterResult[];
+    wikiPages: SearchWikiPageResult[];
   }> {
     const searchLower = searchTerm.toLowerCase();
-    const chapters: any[] = [];
-    const wikiPages: any[] = [];
+    const chapters: SearchChapterResult[] = [];
+    const wikiPages: SearchWikiPageResult[] = [];
 
     // Search in chapters
     const chaptersQuery = `SELECT id, title, text, word_count FROM chapters WHERE book_id = ?`;
 
     if (this.isNative) {
       const result = await this.db.query(chaptersQuery, [bookId]);
-      result.values?.forEach((row: any, index: number) => {
+      result.values?.forEach((row: Record<string, unknown> | unknown[], index: number) => {
         // Handle both object and array formats from native SQLite
-        const title = (Array.isArray(row) ? row[1] : row.title) || '';
-        const text = (Array.isArray(row) ? row[2] : row.text) || '';
-        const id = Array.isArray(row) ? row[0] : row.id;
-        const wordCount = Array.isArray(row) ? row[3] : row.word_count;
+        const title = String((Array.isArray(row) ? row[1] : row.title) ?? '');
+        const text = String((Array.isArray(row) ? row[2] : row.text) ?? '');
+        const id = String(Array.isArray(row) ? row[0] : row.id);
+        const wordCount = Number(Array.isArray(row) ? row[3] : row.word_count);
         if (
           (title && title.toLowerCase().includes(searchLower)) ||
           text.toLowerCase().includes(searchLower)
@@ -2070,10 +2252,10 @@ export class AppDatabase {
           text.toLowerCase().includes(searchLower)
         ) {
           chapters.push({
-            id: row.id,
+            id: String(row.id),
             title: title,
             text: text,
-            word_count: row.word_count,
+            word_count: Number(row.word_count ?? 0),
             position: position
           });
         }
@@ -2087,13 +2269,13 @@ export class AppDatabase {
 
     if (this.isNative) {
       const result = await this.db.query(wikiQuery, [bookId]);
-      result.values?.forEach((row: any) => {
+      result.values?.forEach((row: Record<string, unknown> | unknown[]) => {
         // Handle both object and array formats from native SQLite
-        const id = Array.isArray(row) ? row[0] : row.id;
-        const pageName = (Array.isArray(row) ? row[1] : row.page_name) || '';
-        const content = (Array.isArray(row) ? row[2] : row.content) || '';
-        const summary = (Array.isArray(row) ? row[3] : row.summary) || '';
-        const pageType = Array.isArray(row) ? row[4] : row.page_type;
+        const id = String(Array.isArray(row) ? row[0] : row.id);
+        const pageName = String((Array.isArray(row) ? row[1] : row.page_name) ?? '');
+        const content = String((Array.isArray(row) ? row[2] : row.content) ?? '');
+        const summary = String((Array.isArray(row) ? row[3] : row.summary) ?? '');
+        const pageType = String((Array.isArray(row) ? row[4] : row.page_type) ?? '');
         if (pageName.toLowerCase().includes(searchLower) ||
             content.toLowerCase().includes(searchLower) ||
             summary.toLowerCase().includes(searchLower)) {
@@ -2118,11 +2300,11 @@ export class AppDatabase {
             content.toLowerCase().includes(searchLower) ||
             summary.toLowerCase().includes(searchLower)) {
           wikiPages.push({
-            id: row.id,
+            id: String(row.id),
             page_name: pageName,
             content: content,
             summary: summary,
-            page_type: row.page_type
+            page_type: String(row.page_type ?? '')
           });
         }
       }
@@ -2444,8 +2626,10 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(getQuery, [chapterId]);
       if (result.values && result.values.length > 0) {
-        currentTitle = (result.values[0][0] as string) ?? null;
-        currentText = result.values[0][1] || '';
+        const titleValue = readQueryRowValue(result.values[0], 0, 'title');
+        const textValue = readQueryRowValue(result.values[0], 1, 'text');
+        currentTitle = typeof titleValue === 'string' ? titleValue : null;
+        currentText = String(textValue ?? '');
       }
     } else {
       const stmt = this.db.prepare(getQuery);
@@ -2499,9 +2683,9 @@ export class AppDatabase {
     if (this.isNative) {
       const result = await this.db.query(getQuery, [wikiPageId]);
       if (result.values && result.values.length > 0) {
-        pageName = result.values[0][0] || '';
-        content = result.values[0][1] || '';
-        summary = result.values[0][2] || '';
+        pageName = String(readQueryRowValue(result.values[0], 0, 'page_name') ?? '');
+        content = String(readQueryRowValue(result.values[0], 1, 'content') ?? '');
+        summary = String(readQueryRowValue(result.values[0], 2, 'summary') ?? '');
       }
     } else {
       const stmt = this.db.prepare(getQuery);
