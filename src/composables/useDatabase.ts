@@ -402,6 +402,7 @@ export function useDatabase() {
     content?: string;
     summary?: string;
     page_name?: string;
+    tags?: string;
     is_pinned?: boolean;
   }) {
     try {

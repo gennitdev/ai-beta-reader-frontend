@@ -1699,6 +1699,7 @@ export class AppDatabase {
     content?: string;
     summary?: string;
     page_name?: string;
+    tags?: string;
     is_pinned?: boolean;
   }) {
     const now = new Date().toISOString();
@@ -1716,6 +1717,10 @@ export class AppDatabase {
     if (updates.page_name !== undefined) {
       sets.push('page_name = ?');
       params.push(updates.page_name);
+    }
+    if (updates.tags !== undefined) {
+      sets.push('tags = ?');
+      params.push(updates.tags);
     }
     if (updates.is_pinned !== undefined) {
       sets.push('is_pinned = ?');

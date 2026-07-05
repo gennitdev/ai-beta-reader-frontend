@@ -119,6 +119,10 @@ const loading = ref(false)
 const loadingHistory = ref(false)
 const showHistory = ref(false)
 const isEditing = ref(false)
+const isEditingTags = ref(false)
+const editedTags = ref<string[]>([])
+const newTag = ref('')
+const savingTags = ref(false)
 
 // Feature flag for wiki history (disabled by default)
 const isHistoryFeatureEnabled = computed(() => import.meta.env.VITE_ENABLE_WIKI_HISTORY === 'true')
@@ -172,6 +176,43 @@ const bookTitle = computed(() => {
 // BookView handles mobile display via CSS media queries
 const bookWikiUrl = computed(() => `/books/${bookId.value}?tab=wiki`)
 
+const parseStringArray = (value: unknown): string[] => {
+  if (!value) return []
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter((entry): entry is string => entry.length > 0)
+  }
+  if (typeof value !== 'string') return []
+
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed)
+      ? parsed
+          .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+          .filter((entry): entry is string => entry.length > 0)
+      : []
+  } catch {
+    return []
+  }
+}
+
+const normalizeTags = (tags: string[]): string[] => {
+  const seen = new Set<string>()
+  const normalized: string[] = []
+
+  for (const tag of tags) {
+    const trimmed = tag.trim()
+    if (!trimmed) continue
+    const key = trimmed.toLocaleLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    normalized.push(trimmed)
+  }
+
+  return normalized
+}
+
 const loadWikiPage = async () => {
   loading.value = true
   try {
@@ -188,8 +229,8 @@ const loadWikiPage = async () => {
         page_type: pageData.page_type || 'character',
         content: pageData.content || '',
         summary: pageData.summary || null,
-        aliases: pageData.aliases ? JSON.parse(pageData.aliases) : [],
-        tags: pageData.tags ? JSON.parse(pageData.tags) : [],
+        aliases: parseStringArray(pageData.aliases),
+        tags: parseStringArray(pageData.tags),
         is_major: pageData.is_major || false,
         is_pinned: Boolean(pageData.is_pinned),
         created_by_ai: pageData.created_by_ai || false,
@@ -197,6 +238,9 @@ const loadWikiPage = async () => {
         updated_at: pageData.updated_at
       }
       editedContent.value = pageData.content || ''
+      editedTags.value = wikiPage.value.tags
+      newTag.value = ''
+      isEditingTags.value = false
       await refreshWikiImages()
     } else {
       console.error('Wiki page not found')
@@ -281,6 +325,54 @@ const cancelEdit = () => {
   if (!wikiPage.value) return
   editedContent.value = wikiPage.value.content
   isEditing.value = false
+}
+
+const startEditingTags = () => {
+  if (!wikiPage.value) return
+  editedTags.value = [...wikiPage.value.tags]
+  newTag.value = ''
+  isEditingTags.value = true
+}
+
+const cancelEditTags = () => {
+  if (!wikiPage.value) return
+  editedTags.value = [...wikiPage.value.tags]
+  newTag.value = ''
+  isEditingTags.value = false
+}
+
+const addTag = () => {
+  const nextTag = newTag.value.trim()
+  if (!nextTag) return
+  editedTags.value = normalizeTags([...editedTags.value, nextTag])
+  newTag.value = ''
+}
+
+const removeTag = (tagToRemove: string) => {
+  editedTags.value = editedTags.value.filter((tag) => tag !== tagToRemove)
+}
+
+const saveTags = async () => {
+  if (!wikiPage.value) return
+
+  const normalizedTags = normalizeTags(editedTags.value)
+  savingTags.value = true
+  try {
+    await updateWikiPage(wikiPageId.value, {
+      tags: JSON.stringify(normalizedTags)
+    })
+
+    wikiPage.value.tags = normalizedTags
+    wikiPage.value.updated_at = new Date().toISOString()
+    editedTags.value = [...normalizedTags]
+    newTag.value = ''
+    isEditingTags.value = false
+  } catch (error) {
+    console.error('Failed to save wiki page tags:', error)
+    alert('Failed to save tags')
+  } finally {
+    savingTags.value = false
+  }
 }
 
 const togglePinned = async () => {
@@ -704,9 +796,74 @@ watch(
                 </div>
               </div>
 
-              <div v-if="wikiPage.tags && wikiPage.tags.length">
-                <span class="font-medium text-gray-700 dark:text-gray-300">Tags:</span>
-                <div class="flex flex-wrap gap-1 mt-1">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="font-medium text-gray-700 dark:text-gray-300">Tags:</span>
+                  <button
+                    v-if="!isEditingTags"
+                    type="button"
+                    class="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    @click="startEditingTags"
+                  >
+                    {{ wikiPage.tags.length ? 'Edit tags' : 'Add tags' }}
+                  </button>
+                </div>
+
+                <div v-if="isEditingTags" class="mt-2 space-y-3">
+                  <div v-if="editedTags.length" class="flex flex-wrap gap-2">
+                    <button
+                      v-for="tag in editedTags"
+                      :key="tag"
+                      type="button"
+                      class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-xs text-blue-800 transition-colors hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
+                      @click="removeTag(tag)"
+                    >
+                      <span>{{ tag }}</span>
+                      <span class="ml-1.5 text-[11px]">x</span>
+                    </button>
+                  </div>
+                  <p v-else class="text-xs text-gray-500 dark:text-gray-400">
+                    No tags yet. Add a few to improve organization.
+                  </p>
+
+                  <div class="flex gap-2">
+                    <input
+                      v-model="newTag"
+                      type="text"
+                      class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      placeholder="Add a tag"
+                      @keyup.enter="addTag"
+                    />
+                    <button
+                      type="button"
+                      class="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                      @click="addTag"
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      :disabled="savingTags"
+                      @click="saveTags"
+                    >
+                      {{ savingTags ? 'Saving...' : 'Save tags' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+                      :disabled="savingTags"
+                      @click="cancelEditTags"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+
+                <div v-else-if="wikiPage.tags.length" class="mt-1 flex flex-wrap gap-1">
                   <span
                     v-for="tag in wikiPage.tags"
                     :key="tag"
@@ -715,6 +872,9 @@ watch(
                     {{ tag }}
                   </span>
                 </div>
+                <p v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  No tags yet.
+                </p>
               </div>
 
               <div>
