@@ -56,7 +56,6 @@ const builtInProfiles = computed(() => Object.values(BUILT_IN_PROFILES))
               class="mt-4 sm:mt-6 inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors"
             >
               View profile details
-              <ArrowTopRightOnSquareIcon class="w-4 h-4 ml-1.5 sm:ml-2" />
             </RouterLink>
           </article>
         </div>
