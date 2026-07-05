@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import { useImageLibrary } from '@/composables/useImageLibrary'
+import type { ImageAsset } from '@/lib/database'
 import JSZip from 'jszip'
 import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 
@@ -119,6 +120,27 @@ const dataUrlToUint8Array = (dataUrl: string): { data: Uint8Array; mimeType: str
   return { data: bytes, mimeType }
 }
 
+const stripFileExtension = (fileName: string): string => {
+  const lastDot = fileName.lastIndexOf('.')
+  return lastDot > 0 ? fileName.slice(0, lastDot) : fileName
+}
+
+const exportImageWithNotes = async (
+  folder: JSZip,
+  image: ImageAsset,
+  fallbackBaseName: string
+) => {
+  const dataUrl = await getImageSource(image)
+  const { data, mimeType } = dataUrlToUint8Array(dataUrl)
+  const ext = mimeType.split('/')[1] || 'png'
+  const imageFileName = image.file_name || `${fallbackBaseName}.${ext}`
+  folder.file(imageFileName, data)
+
+  if (image.notes?.trim()) {
+    folder.file(`${stripFileExtension(imageFileName)}.notes.md`, image.notes)
+  }
+}
+
 const exportUserData = async () => {
   if (isExporting.value) return
 
@@ -152,10 +174,7 @@ const exportUserData = async () => {
           const bookCover = await fetchBookCover(book.id)
           if (bookCover) {
             exportProgress.value = `Exporting book cover for: ${book.title}`
-            const dataUrl = await getImageSource(bookCover)
-            const { data, mimeType } = dataUrlToUint8Array(dataUrl)
-            const ext = mimeType.split('/')[1] || 'png'
-            bookFolder.file(`cover.${ext}`, data)
+            await exportImageWithNotes(bookFolder, bookCover, 'cover')
           }
         } catch (err) {
           console.warn('Failed to export book cover:', err)
@@ -193,6 +212,11 @@ const exportUserData = async () => {
           const chapterInfo = `Title: ${chapter.title || 'Untitled'}\nID: ${chapter.id}\nWord Count: ${chapter.word_count || 0}\nCreated: ${chapter.created_at || 'Unknown'}\n`
           chapterFolder.file('chapter-info.txt', chapterInfo)
 
+          const chapterNotes = await getNotes(chapter.id)
+          if (chapterNotes?.notes?.trim()) {
+            chapterFolder.file('notes.md', chapterNotes.notes)
+          }
+
           // Export chapter images if available
           if (desktopImagesAvailable.value) {
             try {
@@ -203,12 +227,8 @@ const exportUserData = async () => {
                   for (let imgIndex = 0; imgIndex < chapterImages.length; imgIndex++) {
                     const image = chapterImages[imgIndex]
                     try {
-                      const dataUrl = await getImageSource(image)
-                      const { data, mimeType } = dataUrlToUint8Array(dataUrl)
-                      const ext = mimeType.split('/')[1] || 'png'
                       const imgNumber = (imgIndex + 1).toString().padStart(2, '0')
-                      const imgFileName = image.file_name || `image-${imgNumber}.${ext}`
-                      imagesFolder.file(imgFileName, data)
+                      await exportImageWithNotes(imagesFolder, image, `image-${imgNumber}`)
                     } catch (imgErr) {
                       console.warn(`Failed to export image ${image.id}:`, imgErr)
                     }
@@ -256,10 +276,7 @@ const exportUserData = async () => {
               const partCover = await fetchPartCover(part.id)
               if (partCover) {
                 exportProgress.value = `Exporting cover for part: ${partName}`
-                const dataUrl = await getImageSource(partCover)
-                const { data, mimeType } = dataUrlToUint8Array(dataUrl)
-                const ext = mimeType.split('/')[1] || 'png'
-                partFolder.file(`cover.${ext}`, data)
+                await exportImageWithNotes(partFolder, partCover, 'cover')
               }
             } catch (err) {
               console.warn('Failed to export part cover:', err)
