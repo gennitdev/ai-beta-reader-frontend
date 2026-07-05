@@ -29,6 +29,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+defineOptions({
+  name: 'BaseModal',
+})
+
 interface Props {
   show: boolean
   title: string
