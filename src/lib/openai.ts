@@ -408,7 +408,11 @@ export async function updateWikiPagesFromChapter(
   chapterText: string,
   chapterSummary: string,
   characters: string[],
-  getWikiPageFn: (bookId: string, pageName: string) => Promise<any | null>,
+  getWikiPageFn: (bookId: string, pageName: string) => Promise<{
+    id: string;
+    content?: string | null;
+    summary?: string | null;
+  } | null>,
   createWikiPageFn: (page: {
     book_id: string;
     page_name: string;

@@ -413,6 +413,17 @@ const saveChapterOrder = async () => {
   }
 }
 
+const handleUncategorizedReorder = (reorderedChapters: Chapter[]) => {
+  boardUncategorized.value = reorderedChapters
+}
+
+const handlePartChapterReorder = (partId: string, reorderedChapters: Chapter[]) => {
+  boardPartLists.value = {
+    ...boardPartLists.value,
+    [partId]: reorderedChapters,
+  }
+}
+
 const moveChapterToPart = async (chapterId: string, partId: string | null) => {
   try {
     let movedChapter: Chapter | undefined
@@ -555,6 +566,8 @@ watch(
           @move-chapter-up="moveChapterUp"
           @move-chapter-down="moveChapterDown"
           @move-chapter-to-part="moveChapterToPart"
+          @reorder-uncategorized="handleUncategorizedReorder"
+          @reorder-part-chapters="handlePartChapterReorder"
           @save-order="saveChapterOrder"
           @move-part-up="movePartUp"
           @move-part-down="movePartDown"

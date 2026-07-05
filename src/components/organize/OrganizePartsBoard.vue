@@ -32,6 +32,8 @@ const emit = defineEmits<{
   (e: 'move-chapter-up', list: Chapter[], index: number): void
   (e: 'move-chapter-down', list: Chapter[], index: number): void
   (e: 'move-chapter-to-part', chapterId: string, partId: string | null): void
+  (e: 'reorder-uncategorized', chapters: Chapter[]): void
+  (e: 'reorder-part-chapters', partId: string, chapters: Chapter[]): void
   (e: 'save-order'): void
   (e: 'move-part-up', partId: string): void
   (e: 'move-part-down', partId: string): void
@@ -160,10 +162,11 @@ function togglePart(partId: string) {
         </div>
         <div class="bg-white dark:bg-gray-800">
           <draggable
-            v-model="chaptersByPart.uncategorized"
+            :model-value="chaptersByPart.uncategorized"
             item-key="id"
             group="organize-chapters"
             class="divide-y divide-gray-200 dark:divide-gray-700"
+            @update:model-value="emit('reorder-uncategorized', $event)"
             @change="emit('save-order')"
           >
             <template #item="{ element: chapter, index }">
@@ -319,10 +322,11 @@ function togglePart(partId: string) {
         </div>
         <div v-show="expandedPartIds.has(part.id)" class="bg-white dark:bg-gray-800">
           <draggable
-            v-model="part.chapters"
+            :model-value="part.chapters"
             item-key="id"
             group="organize-chapters"
             class="divide-y divide-gray-200 dark:divide-gray-700"
+            @update:model-value="emit('reorder-part-chapters', part.id, $event)"
             @change="emit('save-order')"
           >
             <template #item="{ element: chapter, index }">
