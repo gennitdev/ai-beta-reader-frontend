@@ -160,9 +160,9 @@ const loadProfile = async () => {
     }
 
     console.log('Loaded profile data:', profileData.value)
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Failed to load AI profile:', err)
-    error.value = err.message || 'Failed to load AI profile'
+    error.value = err instanceof Error ? err.message : 'Failed to load AI profile'
   } finally {
     loading.value = false
   }

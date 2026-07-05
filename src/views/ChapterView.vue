@@ -10,7 +10,7 @@ import {
   type PartSummaryChapterInput,
   type PartSummaryOverview,
 } from "@/lib/openai";
-import type { BookPart, PartSummary, ChapterSummary } from "@/lib/database";
+import type { Book, BookPart, Chapter as DatabaseChapter, PartSummary, ChapterSummary } from "@/lib/database";
 import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterNotesPanel from "@/components/chapter/ChapterNotesPanel.vue";
@@ -179,7 +179,7 @@ const chapterSummaryCache = new Map<string, ChapterSummary | null>();
 const partSummaryCache = new Map<string, PartSummary | null>();
 
 const currentBook = computed(
-  () => books.value.find((b: any) => b.id === bookId.value) || null
+  () => books.value.find((b: Book) => b.id === bookId.value) || null
 );
 const currentPart = computed(() => {
   if (!chapter.value?.part_id) return null;
@@ -275,8 +275,8 @@ async function buildChapterSummariesForPart(
   if (!partMeta) return [];
 
   const order = parseIdArray(partMeta.chapter_order);
-  const chapterList = chapters.value.filter((ch: any) => ch.part_id === partMeta.id);
-  const chapterMap = new Map(chapterList.map((ch: any) => [ch.id, ch]));
+  const chapterList = chapters.value.filter((ch: DatabaseChapter) => ch.part_id === partMeta.id);
+  const chapterMap = new Map(chapterList.map((ch: DatabaseChapter) => [ch.id, ch]));
 
   let orderedIds = order.filter((id) => chapterMap.has(id));
   if (!orderedIds.length) {
@@ -286,10 +286,10 @@ async function buildChapterSummariesForPart(
   if (!orderedIds.length) {
     orderedIds = chapterList
       .sort(
-        (a: any, b: any) =>
+        (a: DatabaseChapter, b: DatabaseChapter) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       )
-      .map((ch: any) => ch.id);
+      .map((ch: DatabaseChapter) => ch.id);
   }
 
   const summaries: PartSummaryChapterInput[] = [];
@@ -357,7 +357,7 @@ async function buildPriorChapterSummariesInPart(
   if (!order.includes(currentChapterId)) {
     const bookOrder = parseIdArray(currentBook.value?.chapter_order);
     order = bookOrder.filter((id) => {
-      const chapter = chapters.value.find((ch: any) => ch.id === id);
+      const chapter = chapters.value.find((ch: DatabaseChapter) => ch.id === id);
       return chapter?.part_id === partMeta.id;
     });
   }
@@ -372,8 +372,8 @@ async function buildPriorChapterSummariesInPart(
 
   const chapterMap = new Map(
     chapters.value
-      .filter((chapter: any) => chapter.part_id === partMeta.id)
-      .map((chapter: any) => [chapter.id, chapter])
+      .filter((chapter: DatabaseChapter) => chapter.part_id === partMeta.id)
+      .map((chapter: DatabaseChapter) => [chapter.id, chapter])
   );
 
   const summaries: PartSummaryChapterInput[] = [];
@@ -428,7 +428,7 @@ const loadChapter = async () => {
     parts.value = await getParts(bookId.value);
 
     // Find the current chapter
-    const chapterData = chapters.value.find((ch: any) => ch.id === chapterId.value);
+    const chapterData = chapters.value.find((ch: DatabaseChapter) => ch.id === chapterId.value);
 
     if (chapterData) {
       // Load summary from database if exists
@@ -614,9 +614,9 @@ const generateSummary = async () => {
       await loadCharacters();
     }
     summaryProgress.value = "";
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to generate summary:", error);
-    summaryError.value = error.message || "Unknown error occurred";
+    summaryError.value = error instanceof Error ? error.message : "Unknown error occurred";
     summaryProgress.value = "";
   } finally {
     generatingSummary.value = false;
@@ -852,7 +852,7 @@ const generateReview = async () => {
         if (chId === chapter.value.id) break;
         const summary = await fetchChapterSummary(chId);
         if (summary?.summary) {
-          const chData = chapters.value.find((c: any) => c.id === chId);
+          const chData = chapters.value.find((c: DatabaseChapter) => c.id === chId);
           fallbackSummaries.push({
             id: chId,
             title: chData?.title || chId,
@@ -889,9 +889,10 @@ const generateReview = async () => {
     // Update UI
     // Reload saved reviews
     await loadSavedReviews();
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to generate review:", error);
-    alert(`Failed to generate review: ${error.message || "Unknown error"}`);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    alert(`Failed to generate review: ${message}`);
   } finally {
     generatingReview.value = false;
   }

@@ -19,7 +19,7 @@ import {
   generatePartSummary as generatePartSummaryAi,
   type PartSummaryChapterInput,
 } from "@/lib/openai";
-import type { BookPart, ImageAsset } from "@/lib/database";
+import type { Book, BookPart, Chapter as DatabaseChapter, ImageAsset } from "@/lib/database";
 import ImageLightbox from "@/components/images/ImageLightbox.vue";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
 import Modal from "@/components/Modal.vue";
@@ -124,7 +124,7 @@ const showDeletePartCoverModal = ref(false);
 const deletingPartCover = ref(false);
 const chapterThumbnails = ref<Record<string, string>>({});
 
-const book = computed(() => books.value.find((b: any) => b.id === bookId.value) || null);
+const book = computed(() => books.value.find((b: Book) => b.id === bookId.value) || null);
 const bookTitle = computed(() => book.value?.title ?? bookId.value);
 const partName = computed(() => part.value?.name ?? "");
 
@@ -259,17 +259,17 @@ async function loadPartSummaryData(partIdValue: string) {
 
 async function hydrateChapterEntries(fetchedPart: BookPart) {
   const chapterOrder = parseIdOrder(fetchedPart.chapter_order);
-  const assignedChapters = chapters.value.filter((ch: any) => ch.part_id === fetchedPart.id);
-  const chapterMap = new Map<string, any>(
-    assignedChapters.map((chapter: any) => [chapter.id, chapter]),
+  const assignedChapters = chapters.value.filter((ch: DatabaseChapter) => ch.part_id === fetchedPart.id);
+  const chapterMap = new Map<string, DatabaseChapter>(
+    assignedChapters.map((chapter: DatabaseChapter) => [chapter.id, chapter]),
   );
 
   const sortedByOrder = chapterOrder.filter((id) => chapterMap.has(id));
   const remaining = assignedChapters
-    .filter((chapter: any) => !sortedByOrder.includes(chapter.id))
-    .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    .filter((chapter: DatabaseChapter) => !sortedByOrder.includes(chapter.id))
+    .sort((a: DatabaseChapter, b: DatabaseChapter) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-  const combinedIds = [...sortedByOrder, ...remaining.map((chapter: any) => chapter.id)];
+  const combinedIds = [...sortedByOrder, ...remaining.map((chapter: DatabaseChapter) => chapter.id)];
   const baseEntries = combinedIds
     .map((id, index) => {
       const chapter = chapterMap.get(id);
@@ -517,9 +517,9 @@ const handleGeneratePartSummary = async () => {
     });
     await loadPartSummaryData(part.value.id);
     isEditingSummary.value = false;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to generate part summary:", error);
-    const message = error?.message ?? "Unknown error";
+    const message = error instanceof Error ? error.message : "Unknown error";
     alert(`Failed to generate part summary: ${message}`);
   } finally {
     generatingSummary.value = false;
