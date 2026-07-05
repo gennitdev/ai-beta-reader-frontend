@@ -6,6 +6,13 @@ import { useImageLibrary } from '@/composables/useImageLibrary'
 import type { ImageAsset } from '@/lib/database'
 import JSZip from 'jszip'
 import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
+import {
+  buildMarkdownExportFiles,
+  orderChaptersForBook,
+  orderChaptersForPart,
+  orderParts,
+  sanitizeFileName,
+} from '@/lib/exportHelpers'
 
 const router = useRouter()
 
@@ -184,15 +191,9 @@ const exportUserData = async () => {
       // Get chapters for this book from local database
       await loadChapters(book.id)
       const chaptersData = chapters.value
-      const chapterMap = new Map(chaptersData.map(ch => [ch.id, ch]))
       const partsData = await getParts(book.id)
       const chaptersFolder = bookFolder.folder('chapters')
-      const orderedPartIds = parseJsonArray(book.part_order)
-      const orderedParts = orderedPartIds
-        .map(partId => partsData.find(part => part.id === partId))
-        .filter((part): part is NonNullable<typeof part> => Boolean(part))
-      const remainingParts = partsData.filter(part => !orderedPartIds.includes(part.id))
-      const allParts = [...orderedParts, ...remainingParts]
+      const allParts = orderParts(book, partsData)
       const hasParts = allParts.length > 0
 
       // Track which chapters have been exported (to handle uncategorized)
@@ -255,10 +256,10 @@ const exportUserData = async () => {
           if (!partFolder) continue
 
           // Get ordered chapter IDs for this part
-          const partChapterIds = parseJsonArray(part.chapter_order)
-          const partChapters = partChapterIds
-            .map(id => chapterMap.get(id))
-            .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
+          const partChapters = orderChaptersForPart(
+            part,
+            chaptersData.filter(ch => ch.part_id === part.id),
+          )
 
           // Part info
           const partInfoLines = [
@@ -308,13 +309,7 @@ const exportUserData = async () => {
         }
       } else if (chaptersFolder) {
         // No parts - export chapters in book's chapter_order
-        const bookChapterOrder = parseJsonArray(book.chapter_order)
-        const orderedChapters = bookChapterOrder
-          .map(id => chapterMap.get(id))
-          .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
-        // Add any chapters not in the order
-        const remainingChapters = chaptersData.filter(ch => !bookChapterOrder.includes(ch.id))
-        const allChapters = [...orderedChapters, ...remainingChapters]
+        const allChapters = orderChaptersForBook(book, chaptersData)
 
         const paddingLength = allChapters.length.toString().length
         for (let chapterIndex = 0; chapterIndex < allChapters.length; chapterIndex++) {
@@ -368,26 +363,6 @@ const exportAsMarkdown = async () => {
     const booksData = books.value
     exportProgress.value = `Found ${booksData.length} books. Processing...`
 
-    // Helper to build chapter markdown content
-    const buildChapterMarkdown = async (chapter: typeof chapters.value[0], level: number) => {
-      const headingPrefix = '#'.repeat(level)
-      let content = `${headingPrefix} ${chapter.title || 'Untitled Chapter'}\n\n`
-
-      if (chapter.text) {
-        content += `${chapter.text}\n\n`
-      }
-
-      // Add notes if option is enabled
-      if (includeNotes.value) {
-        const chapterNotes = await getNotes(chapter.id)
-        if (chapterNotes?.notes) {
-          content += `---\n\n**Notes:**\n\n${chapterNotes.notes}\n\n`
-        }
-      }
-
-      return content
-    }
-
     for (let i = 0; i < booksData.length; i++) {
       const book = booksData[i]
       exportProgress.value = `Processing book ${i + 1}/${booksData.length}: ${book.title}`
@@ -395,106 +370,29 @@ const exportAsMarkdown = async () => {
       // Get chapters for this book
       await loadChapters(book.id)
       const chaptersData = chapters.value
-      const chapterMap = new Map(chaptersData.map(ch => [ch.id, ch]))
       const partsData = await getParts(book.id)
-
-      const orderedPartIds = parseJsonArray(book.part_order)
-      const orderedParts = orderedPartIds
-        .map(partId => partsData.find(part => part.id === partId))
-        .filter((part): part is NonNullable<typeof part> => Boolean(part))
-      const remainingParts = partsData.filter(part => !orderedPartIds.includes(part.id))
-      const allParts = [...orderedParts, ...remainingParts]
-      const hasParts = allParts.length > 0
-
-      // Track which chapters have been exported (for finding uncategorized)
-      const exportedChapterIds = new Set<string>()
-
-      if (markdownGranularity.value === 'part' && hasParts) {
-        // Export one file per part, organized in a book folder
-        const bookFolder = zip.folder(sanitizeFileName(book.title))
-        if (!bookFolder) continue
-
-        const partPaddingLength = allParts.length.toString().length
-
-        for (let partIndex = 0; partIndex < allParts.length; partIndex++) {
-          const part = allParts[partIndex]
-          const partName = part.name || `Part ${partIndex + 1}`
-          const partNumber = (partIndex + 1).toString().padStart(partPaddingLength, '0')
-
-          let markdown = `# ${book.title}\n\n## ${partName}\n\n`
-
-          const partChapterIds = parseJsonArray(part.chapter_order)
-          const partChapters = partChapterIds
-            .map(id => chapterMap.get(id))
-            .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
-
-          for (const chapter of partChapters) {
-            exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
-            markdown += await buildChapterMarkdown(chapter, 3)
-            exportedChapterIds.add(chapter.id)
-          }
-
-          const fileName = `${partNumber} - ${sanitizeFileName(partName)}.md`
-          bookFolder.file(fileName, markdown)
-        }
-
-        // Handle uncategorized chapters in a separate file
-        const uncategorizedChapters = chaptersData.filter(ch => !exportedChapterIds.has(ch.id))
-        if (uncategorizedChapters.length > 0) {
-          let markdown = `# ${book.title}\n\n## Uncategorized Chapters\n\n`
-          for (const chapter of uncategorizedChapters) {
-            exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
-            markdown += await buildChapterMarkdown(chapter, 3)
-          }
-          bookFolder.file('Uncategorized.md', markdown)
-        }
-      } else {
-        // Export one file per book (default behavior, or fallback when no parts)
-        let markdown = `# ${book.title}\n\n`
-
-        if (hasParts) {
-          for (const part of allParts) {
-            const partName = part.name || 'Untitled Part'
-            markdown += `## ${partName}\n\n`
-
-            const partChapterIds = parseJsonArray(part.chapter_order)
-            const partChapters = partChapterIds
-              .map(id => chapterMap.get(id))
-              .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
-
-            for (const chapter of partChapters) {
-              exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
-              markdown += await buildChapterMarkdown(chapter, 3)
-              exportedChapterIds.add(chapter.id)
-            }
-          }
-
-          // Handle uncategorized chapters
-          const uncategorizedChapters = chaptersData.filter(ch => !exportedChapterIds.has(ch.id))
-          if (uncategorizedChapters.length > 0) {
-            markdown += `## Uncategorized Chapters\n\n`
-            for (const chapter of uncategorizedChapters) {
-              exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
-              markdown += await buildChapterMarkdown(chapter, 3)
-            }
-          }
-        } else {
-          // No parts - export chapters in book's chapter_order
-          const bookChapterOrder = parseJsonArray(book.chapter_order)
-          const orderedChapters = bookChapterOrder
-            .map(id => chapterMap.get(id))
-            .filter((ch): ch is NonNullable<typeof ch> => Boolean(ch))
-          const remainingChapters = chaptersData.filter(ch => !bookChapterOrder.includes(ch.id))
-          const allChapters = [...orderedChapters, ...remainingChapters]
-
-          for (const chapter of allChapters) {
-            exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
-            markdown += await buildChapterMarkdown(chapter, 2)
+      const chapterNotesById: Record<string, string> = {}
+      if (includeNotes.value) {
+        for (const chapter of chaptersData) {
+          exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
+          const chapterNotes = await getNotes(chapter.id)
+          if (chapterNotes?.notes?.trim()) {
+            chapterNotesById[chapter.id] = chapterNotes.notes
           }
         }
+      }
 
-        const fileName = `${sanitizeFileName(book.title)}.md`
-        zip.file(fileName, markdown)
+      const files = buildMarkdownExportFiles({
+        book,
+        chapters: chaptersData,
+        parts: partsData,
+        chapterNotesById,
+        granularity: markdownGranularity.value,
+        includeNotes: includeNotes.value,
+      })
+
+      for (const file of files) {
+        zip.file(file.path, file.content)
       }
     }
 
@@ -530,21 +428,6 @@ const handleExport = () => {
     exportAsMarkdown()
   } else {
     exportUserData()
-  }
-}
-
-const sanitizeFileName = (name: string): string => {
-  return name.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')
-}
-
-const parseJsonArray = (value?: string | null): string[] => {
-  if (!value) return []
-
-  try {
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
   }
 }
 
