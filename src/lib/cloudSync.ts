@@ -81,6 +81,44 @@ export interface CloudProvider {
   isWebSdkReady?(): boolean;
 }
 
+interface GoogleTokenClient {
+  requestAccessToken(options: { prompt: string }): void;
+}
+
+interface GoogleTokenResponse {
+  access_token?: string;
+  error?: string;
+}
+
+interface GoogleTokenClientConfig {
+  client_id: string;
+  scope: string;
+  callback: (response: GoogleTokenResponse) => void;
+}
+
+interface GoogleOauth2Namespace {
+  initTokenClient?: (config: GoogleTokenClientConfig) => GoogleTokenClient;
+  default?: {
+    initTokenClient?: (config: GoogleTokenClientConfig) => GoogleTokenClient;
+  };
+  _default?: {
+    initTokenClient?: (config: GoogleTokenClientConfig) => GoogleTokenClient;
+  };
+}
+
+interface CloudSyncWindow extends Window {
+  google?: {
+    accounts?: {
+      oauth2?: GoogleOauth2Namespace;
+    };
+  };
+  CloudSyncDebug?: string[];
+}
+
+function getCloudSyncWindow(): CloudSyncWindow | null {
+  return typeof window === 'undefined' ? null : window as CloudSyncWindow;
+}
+
 /**
  * Google Drive cloud provider implementation
  * Uses Google Identity Services (GIS) - new recommended approach
@@ -93,7 +131,7 @@ export class GoogleDriveProvider implements CloudProvider {
   private CLIENT_ID = ''; // Set this in your app
   private readonly nativeClientId: string | null;
   private SCOPES = 'https://www.googleapis.com/auth/drive.file';
-  private tokenClient: any = null;
+  private tokenClient: GoogleTokenClient | null = null;
   private gisLoadingPromise: Promise<void> | null = null;
   private debugLog: string[] = [];
   private readonly webRedirectUri: string;
@@ -128,8 +166,9 @@ export class GoogleDriveProvider implements CloudProvider {
     const entry = extra !== undefined ? `${message} ${JSON.stringify(extra)}` : message;
     console.log(`[CloudSync] ${entry}`);
     this.debugLog = [...this.debugLog, entry].slice(-200);
-    if (typeof window !== 'undefined') {
-      (window as any).CloudSyncDebug = this.debugLog;
+    const cloudSyncWindow = getCloudSyncWindow();
+    if (cloudSyncWindow) {
+      cloudSyncWindow.CloudSyncDebug = this.debugLog;
       window.dispatchEvent(new CustomEvent('cloud-sync-debug', { detail: entry }));
     }
   }
@@ -142,7 +181,7 @@ export class GoogleDriveProvider implements CloudProvider {
     }
 
     // Check for Electron by looking for the electronOAuth bridge
-    const isElectron = typeof window !== 'undefined' && !!(window as any).electronOAuth;
+    const isElectron = !!getCloudSyncWindow()?.electronOAuth;
 
     if (isElectron) {
       await this.authenticateElectron();
@@ -194,7 +233,7 @@ export class GoogleDriveProvider implements CloudProvider {
     }
 
     // Use loopback OAuth
-    const electronOAuth = (window as any).electronOAuth;
+    const electronOAuth = getCloudSyncWindow()?.electronOAuth;
     if (!electronOAuth) {
       throw new Error('Electron OAuth bridge not available');
     }
@@ -218,6 +257,9 @@ export class GoogleDriveProvider implements CloudProvider {
 
     if (!result.success) {
       throw new Error(result.error || 'OAuth authentication failed');
+    }
+    if (!result.tokens) {
+      throw new Error('OAuth authentication succeeded without returning tokens');
     }
 
     this.debug('authenticateElectron() received tokens');
@@ -371,8 +413,7 @@ export class GoogleDriveProvider implements CloudProvider {
 
     return new Promise<void>((resolve, reject) => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const googleAccounts: any = (window as any).google?.accounts;
+        const googleAccounts = getCloudSyncWindow()?.google?.accounts;
         if (!googleAccounts?.oauth2?.initTokenClient) {
           reject(new Error('Google Identity Services is unavailable in this environment'));
           return;
@@ -382,11 +423,15 @@ export class GoogleDriveProvider implements CloudProvider {
         this.tokenClient = googleAccounts.oauth2.initTokenClient({
           client_id: this.CLIENT_ID,
           scope: this.SCOPES,
-          callback: (response: any) => {
+          callback: (response: GoogleTokenResponse) => {
             this.debug('Token client callback', response);
             if (response.error) {
               console.error('Auth error:', response);
               reject(new Error(response.error));
+              return;
+            }
+            if (!response.access_token) {
+              reject(new Error('Google Identity Services response did not include an access token'));
               return;
             }
 
@@ -590,7 +635,7 @@ export class GoogleDriveProvider implements CloudProvider {
       return Promise.reject(new Error('Window is undefined'));
     }
 
-    if ((window as any).google?.accounts?.oauth2) {
+    if (getCloudSyncWindow()?.google?.accounts?.oauth2) {
       this.debug('GIS already present');
       this.webSdkReady = true;
       return Promise.resolve();
@@ -636,7 +681,7 @@ export class GoogleDriveProvider implements CloudProvider {
   async ensureWebSdkReady(): Promise<void> {
     // On Electron, we use loopback OAuth (no GIS SDK needed)
     // On native mobile, we use native OAuth (no GIS SDK needed)
-    const isElectron = typeof window !== 'undefined' && !!(window as any).electronOAuth;
+    const isElectron = !!getCloudSyncWindow()?.electronOAuth;
     if (isElectron || Capacitor.isNativePlatform()) {
       return;
     }
@@ -649,7 +694,7 @@ export class GoogleDriveProvider implements CloudProvider {
 
   isWebSdkReady(): boolean {
     // Electron uses loopback OAuth (always ready)
-    const isElectron = typeof window !== 'undefined' && !!(window as any).electronOAuth;
+    const isElectron = !!getCloudSyncWindow()?.electronOAuth;
     if (isElectron) {
       return true;
     }
@@ -684,7 +729,7 @@ export class GoogleDriveProvider implements CloudProvider {
 
       script.onload = () => {
         this.debug('loadGisForNative: script onload');
-        const oauth2 = (window as any).google?.accounts?.oauth2;
+        const oauth2 = getCloudSyncWindow()?.google?.accounts?.oauth2;
         if (oauth2 && oauth2._default && !oauth2.default) {
           oauth2.default = oauth2._default;
         }
@@ -715,7 +760,7 @@ export class GoogleDriveProvider implements CloudProvider {
         script.addEventListener('error', () => wrappedReject(new Error('Failed to load Google Identity Services')));
 
         const checkLoop = () => {
-          const oauth2 = (window as any).google?.accounts?.oauth2;
+          const oauth2 = getCloudSyncWindow()?.google?.accounts?.oauth2;
           if (oauth2 && (oauth2.initTokenClient || oauth2.default?.initTokenClient)) {
             if (!oauth2.initTokenClient && oauth2.default?.initTokenClient) {
               oauth2.initTokenClient = oauth2.default.initTokenClient.bind(oauth2.default);
@@ -741,7 +786,7 @@ export class GoogleDriveProvider implements CloudProvider {
       const existingScript = document.querySelector<HTMLScriptElement>('script[data-google-identity]');
 
       if (existingScript) {
-        if ((window as any).google?.accounts?.oauth2) {
+        if (getCloudSyncWindow()?.google?.accounts?.oauth2) {
           this.debug('loadGisForWeb: existing GIS present');
           resolve();
           return;
