@@ -51,6 +51,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  updateWikiEnabled: {
+    type: Boolean,
+    default: true,
+  },
   summaryProgress: {
     type: String,
     default: '',
@@ -83,6 +87,7 @@ const props = defineProps({
 
 const emit = defineEmits<{
   (e: 'update:editedSummary', value: string): void
+  (e: 'update:updateWikiEnabled', value: boolean): void
   (e: 'start-edit'): void
   (e: 'cancel-edit'): void
   (e: 'save'): void
@@ -120,6 +125,21 @@ const hasBeats = computed(() => props.chapterBeats && props.chapterBeats.length 
           </button>
         </div>
       </div>
+
+      <label
+        class="mb-4 flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300"
+      >
+        <input
+          :checked="updateWikiEnabled"
+          type="checkbox"
+          class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+          :disabled="generatingSummary || isEditingSummary"
+          @change="emit('update:updateWikiEnabled', ($event.target as HTMLInputElement).checked)"
+        />
+        <span>
+          Update wiki pages for detected characters and locations
+        </span>
+      </label>
 
       <!-- Progress indicator -->
       <div v-if="generatingSummary" class="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">

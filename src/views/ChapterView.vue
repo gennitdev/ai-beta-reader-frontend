@@ -152,6 +152,7 @@ const generatingReview = ref(false);
 const generatingSummary = ref(false);
 const summaryProgress = ref<string>("");
 const summaryError = ref<string | null>(null);
+const CHAPTER_SUMMARY_WIKI_UPDATES_KEY = "chapter_summary_update_wiki_enabled";
 
 interface WikiUpdateResult {
   entityName: string;
@@ -189,6 +190,7 @@ const isEditingSummary = ref(false);
 const editedSummary = ref("");
 const savingSummary = ref(false);
 const showSummaryPanel = ref(false);
+const updateWikiOnSummary = ref(true);
 
 // Notes editing state
 const isEditingNotes = ref(false);
@@ -591,109 +593,23 @@ const generateSummary = async () => {
     chapter.value.spoilers_ok = result.spoilers_ok;
     editedSummary.value = result.summary;
 
-    // Step 4: Update wiki pages for characters and locations
-    const wikiResults: WikiUpdateResult[] = [];
-    const generatedLocations = Array.isArray(result.locations) ? result.locations : [];
-    const totalEntities = generatedCharacters.length + generatedLocations.length;
-
-    // Helper function to process wiki entities
-    const processWikiEntity = async (
-      entityName: string,
-      entityType: 'character' | 'location',
-      currentIndex: number
-    ) => {
-      summaryProgress.value = `Updating wiki: ${entityName} (${currentIndex + 1} of ${totalEntities})...`;
-
-      try {
-        // Check if wiki page exists
-        const existingPage = await getWikiPage(bookId.value, entityName);
-
-        // Generate wiki content
-        const { generateWikiContent } = await import("@/lib/openai");
-        const wikiResult = await generateWikiContent(
-          apiKey,
-          entityName,
-          chapter.value!.text,
-          result.summary,
-          existingPage?.content || null,
-          entityType
-        );
-
-        if (existingPage) {
-          if (wikiResult.hasChanges) {
-            await updateWikiPage(existingPage.id, {
-              content: wikiResult.content,
-              summary: wikiResult.summary
-            });
-            await trackWikiUpdate({
-              wiki_page_id: existingPage.id,
-              chapter_id: chapter.value!.id,
-              update_type: wikiResult.hasContradictions ? 'update_with_contradictions' : 'update',
-              change_summary: wikiResult.changeSummary,
-              contradiction_notes: wikiResult.contradictions
-            });
-            wikiResults.push({
-              entityName,
-              entityType,
-              wikiPageId: existingPage.id,
-              updateType: 'updated'
-            });
-          } else {
-            wikiResults.push({
-              entityName,
-              entityType,
-              wikiPageId: existingPage.id,
-              updateType: 'unchanged'
-            });
-          }
-          await addChapterWikiMention(chapter.value!.id, existingPage.id);
-        } else {
-          const newPageId = await createWikiPage({
-            book_id: bookId.value,
-            page_name: entityName,
-            content: wikiResult.content,
-            summary: wikiResult.summary,
-            page_type: entityType,
-            created_by_ai: true
-          });
-          await trackWikiUpdate({
-            wiki_page_id: newPageId,
-            chapter_id: chapter.value!.id,
-            update_type: 'created',
-            change_summary: `Created ${entityType} page for ${entityName}`
-          });
-          await addChapterWikiMention(chapter.value!.id, newPageId);
-          wikiResults.push({
-            entityName,
-            entityType,
-            wikiPageId: newPageId,
-            updateType: 'created'
-          });
-        }
-      } catch (wikiError) {
-        console.error(`Failed to update wiki for ${entityName}:`, wikiError);
-        // Continue with other entities
+    if (updateWikiOnSummary.value) {
+      const wikiResults = await updateWikiFromGeneratedSummary(
+        apiKey,
+        result.summary,
+        generatedCharacters,
+        Array.isArray(result.locations) ? result.locations : []
+      );
+      wikiUpdateResults.value = wikiResults;
+      if (wikiResults.length > 0) {
+        showWikiUpdateResults.value = true;
       }
-    };
-
-    // Process characters
-    for (let i = 0; i < generatedCharacters.length; i++) {
-      await processWikiEntity(generatedCharacters[i], 'character', i);
     }
 
-    // Process locations
-    for (let i = 0; i < generatedLocations.length; i++) {
-      await processWikiEntity(generatedLocations[i], 'location', generatedCharacters.length + i);
-    }
-
-    wikiUpdateResults.value = wikiResults;
-    if (wikiResults.length > 0) {
-      showWikiUpdateResults.value = true;
-    }
-
-    // Reload character wiki info
     summaryProgress.value = "Finishing up...";
-    await loadCharacters();
+    if (updateWikiOnSummary.value) {
+      await loadCharacters();
+    }
     summaryProgress.value = "";
   } catch (error: any) {
     console.error("Failed to generate summary:", error);
@@ -702,6 +618,104 @@ const generateSummary = async () => {
   } finally {
     generatingSummary.value = false;
   }
+};
+
+const updateWikiFromGeneratedSummary = async (
+  apiKey: string,
+  chapterSummary: string,
+  generatedCharacters: string[],
+  generatedLocations: string[]
+): Promise<WikiUpdateResult[]> => {
+  const currentChapter = chapter.value;
+  if (!currentChapter) return [];
+
+  const wikiResults: WikiUpdateResult[] = [];
+  const totalEntities = generatedCharacters.length + generatedLocations.length;
+
+  const processWikiEntity = async (
+    entityName: string,
+    entityType: 'character' | 'location',
+    currentIndex: number
+  ) => {
+    summaryProgress.value = `Updating wiki: ${entityName} (${currentIndex + 1} of ${totalEntities})...`;
+
+    try {
+      const existingPage = await getWikiPage(bookId.value, entityName);
+      const { generateWikiContent } = await import("@/lib/openai");
+      const wikiResult = await generateWikiContent(
+        apiKey,
+        entityName,
+        currentChapter.text,
+        chapterSummary,
+        existingPage?.content || null,
+        entityType
+      );
+
+      if (existingPage) {
+        if (wikiResult.hasChanges) {
+          await updateWikiPage(existingPage.id, {
+            content: wikiResult.content,
+            summary: wikiResult.summary
+          });
+          await trackWikiUpdate({
+            wiki_page_id: existingPage.id,
+            chapter_id: chapter.value!.id,
+            update_type: wikiResult.hasContradictions ? 'update_with_contradictions' : 'update',
+            change_summary: wikiResult.changeSummary,
+            contradiction_notes: wikiResult.contradictions
+          });
+          wikiResults.push({
+            entityName,
+            entityType,
+            wikiPageId: existingPage.id,
+            updateType: 'updated'
+          });
+        } else {
+          wikiResults.push({
+            entityName,
+            entityType,
+            wikiPageId: existingPage.id,
+            updateType: 'unchanged'
+          });
+        }
+        await addChapterWikiMention(currentChapter.id, existingPage.id);
+      } else {
+        const newPageId = await createWikiPage({
+          book_id: bookId.value,
+          page_name: entityName,
+          content: wikiResult.content,
+          summary: wikiResult.summary,
+          page_type: entityType,
+          created_by_ai: true
+        });
+        await trackWikiUpdate({
+          wiki_page_id: newPageId,
+          chapter_id: currentChapter.id,
+          update_type: 'created',
+          change_summary: `Created ${entityType} page for ${entityName}`
+        });
+        await addChapterWikiMention(currentChapter.id, newPageId);
+        wikiResults.push({
+          entityName,
+          entityType,
+          wikiPageId: newPageId,
+          updateType: 'created'
+        });
+      }
+    } catch (wikiError) {
+      console.error(`Failed to update wiki for ${entityName}:`, wikiError);
+    }
+  };
+
+  for (let i = 0; i < generatedCharacters.length; i++) {
+    await processWikiEntity(generatedCharacters[i], 'character', i);
+  }
+
+  for (let i = 0; i < generatedLocations.length; i++) {
+    await processWikiEntity(generatedLocations[i], 'location', generatedCharacters.length + i);
+  }
+
+  return wikiResults;
 };
 
 const startEditingSummary = () => {
@@ -1068,10 +1082,18 @@ const togglePromptExpansion = (reviewId: string) => {
 };
 
 onMounted(async () => {
+  const storedUpdateWikiPreference = localStorage.getItem(CHAPTER_SUMMARY_WIKI_UPDATES_KEY);
+  if (storedUpdateWikiPreference !== null) {
+    updateWikiOnSummary.value = storedUpdateWikiPreference === "true";
+  }
   await loadChapter();
   await loadSavedReviews();
   await loadCharacters();
   await loadCustomProfiles();
+});
+
+watch(updateWikiOnSummary, (value) => {
+  localStorage.setItem(CHAPTER_SUMMARY_WIKI_UPDATES_KEY, String(value));
 });
 </script>
 
@@ -1170,6 +1192,7 @@ onMounted(async () => {
           :edited-summary="editedSummary"
           :generating-summary="generatingSummary"
           :saving-summary="savingSummary"
+          :update-wiki-enabled="updateWikiOnSummary"
           :summary-progress="summaryProgress"
           :summary-error="summaryError"
           :wiki-update-results="wikiUpdateResults"
@@ -1178,6 +1201,7 @@ onMounted(async () => {
           :route-prefix="routePrefix"
           :book-id="bookId"
           @update:editedSummary="editedSummary = $event"
+          @update:updateWikiEnabled="updateWikiOnSummary = $event"
           @start-edit="startEditingSummary"
           @cancel-edit="cancelEditingSummary"
           @save="saveSummary"
