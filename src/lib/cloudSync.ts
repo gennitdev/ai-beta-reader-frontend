@@ -9,6 +9,57 @@ import { loadTokens, saveTokens, clearTokens } from './tokenStorage';
 // Prefix to identify compressed backups
 const COMPRESSED_PREFIX = 'GZ1:';
 
+type BackupImageAssetRow = Record<string, unknown> | unknown[];
+
+function getBackupImageField(row: BackupImageAssetRow, field: string): unknown {
+  if (!Array.isArray(row)) {
+    return row[field];
+  }
+
+  const fieldIndexMap: Record<string, number> = {
+    id: 0,
+    book_id: 1,
+    chapter_id: 2,
+    asset_type: 3,
+    file_name: 4,
+    file_path: 5,
+    mime_type: 6,
+    image_data: 7,
+    notes: 8,
+    created_at: 9,
+    updated_at: 10,
+  };
+
+  return row[fieldIndexMap[field]] ?? null;
+}
+
+function setBackupImageField(row: BackupImageAssetRow, field: string, value: unknown): BackupImageAssetRow {
+  if (!Array.isArray(row)) {
+    return {
+      ...row,
+      [field]: value,
+    };
+  }
+
+  const fieldIndexMap: Record<string, number> = {
+    id: 0,
+    book_id: 1,
+    chapter_id: 2,
+    asset_type: 3,
+    file_name: 4,
+    file_path: 5,
+    mime_type: 6,
+    image_data: 7,
+    notes: 8,
+    created_at: 9,
+    updated_at: 10,
+  };
+
+  const nextRow = [...row];
+  nextRow[fieldIndexMap[field]] = value;
+  return nextRow;
+}
+
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const DEFAULT_REDIRECT_URI = 'https://www.beta-bot.net/oauth2redirect';
 
@@ -773,12 +824,9 @@ export class CloudSync {
           console.log('[CloudSync] First image_asset row:', exportJson.image_assets[0]);
         }
 
-        // image_assets is an array of arrays (raw SQL rows)
+        // image_assets may contain object rows (current export) or positional rows (older backups)
         // Process images in batches to avoid memory exhaustion
         if (exportJson.image_assets && Array.isArray(exportJson.image_assets)) {
-          // Get column indices - image_assets columns are:
-          // id(0), book_id(1), chapter_id(2), asset_type(3), file_name(4), file_path(5), mime_type(6), created_at(7), updated_at(8), image_data(9)
-          // Note: image_data is at index 9 because it was added via ALTER TABLE (appended to end)
           const BATCH_SIZE = 5; // Process 5 images at a time to limit memory
           const totalImages = exportJson.image_assets.length;
 
@@ -788,16 +836,16 @@ export class CloudSync {
 
             for (let j = i; j < batchEnd; j++) {
               const row = exportJson.image_assets[j];
-              const filePath = row[5]; // file_path is at index 5
-              const mimeType = row[6]; // mime_type is at index 6
-              let imageData = row[9]; // image_data is at index 9
+              const filePath = getBackupImageField(row, 'file_path');
+              const mimeType = getBackupImageField(row, 'mime_type');
+              let imageData = getBackupImageField(row, 'image_data');
 
               // If no image_data stored, try to read from filesystem
               if (!imageData && filePath) {
                 try {
                   const result = await window.desktopImages.readImageData({
-                    relativePath: filePath,
-                    mimeType: mimeType,
+                    relativePath: String(filePath),
+                    mimeType: mimeType == null ? null : String(mimeType),
                   });
                   imageData = result.dataUrl;
                   console.log(`Read image: ${filePath}`);
@@ -806,8 +854,7 @@ export class CloudSync {
                 }
               }
 
-              // Update row in place to avoid creating new arrays
-              row[9] = imageData;
+              exportJson.image_assets[j] = setBackupImageField(row, 'image_data', imageData);
             }
 
             // Small delay to allow garbage collection between batches
@@ -934,14 +981,14 @@ export class CloudSync {
 
       if (isMobileWithoutImageSupport && importJson.image_assets?.length > 0) {
         console.log('[CloudSync] Mobile detected - stripping image data to save memory');
-        for (const row of importJson.image_assets) {
-          row[9] = null; // Clear image_data at index 9
-        }
+        importJson.image_assets = importJson.image_assets.map((row: BackupImageAssetRow) =>
+          setBackupImageField(row, 'image_data', null)
+        );
       }
 
       if (importJson.image_assets?.length > 0) {
         console.log('[CloudSync] Restore: First image_asset:', importJson.image_assets[0]);
-        const hasImageData = importJson.image_assets.some((row: any[]) => row[9]); // image_data at index 9
+        const hasImageData = importJson.image_assets.some((row: BackupImageAssetRow) => getBackupImageField(row, 'image_data'));
         console.log('[CloudSync] Restore: Any rows have image_data?', hasImageData);
       }
 
@@ -953,15 +1000,15 @@ export class CloudSync {
             const processedAssets = [];
 
             for (const row of importJson.image_assets) {
-              const filePath = row[5]; // file_path is at index 5
-              const imageData = row[9]; // image_data is at index 9 (added via ALTER TABLE)
+              const filePath = getBackupImageField(row, 'file_path');
+              const imageData = getBackupImageField(row, 'image_data');
 
               // Write image to filesystem if we have data
               if (imageData && filePath) {
                 try {
                   await window.desktopImages.writeImageData({
-                    relativePath: filePath,
-                    dataUrl: imageData,
+                    relativePath: String(filePath),
+                    dataUrl: String(imageData),
                   });
                   imagesWritten++;
                   console.log(`Wrote image: ${filePath}`);
@@ -972,9 +1019,7 @@ export class CloudSync {
 
               // On desktop, clear image_data since it's now on filesystem
               // This keeps the database smaller
-              const newRow = [...row];
-              newRow[9] = null; // image_data is at index 9
-              processedAssets.push(newRow);
+              processedAssets.push(setBackupImageField(row, 'image_data', null));
             }
 
             importJson.image_assets = processedAssets;
