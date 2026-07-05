@@ -5,10 +5,8 @@ import { useDatabase } from "@/composables/useDatabase";
 import { useChapterImages } from "@/composables/useChapterImages";
 import { useChapterSummaryContext } from "@/composables/useChapterSummaryContext";
 import {
-  generateChapterSummary,
-  generateReview as generateAIReview,
-  BUILT_IN_PROFILES,
-} from "@/lib/openai";
+  useChapterMutationFlow,
+} from "@/composables/useChapterMutationFlow";
 import type { Book, BookPart, Chapter as DatabaseChapter } from "@/lib/database";
 import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
@@ -150,20 +148,7 @@ const savingChapter = ref(false);
 const isEditing = ref(false);
 const editedText = ref("");
 const editedTitle = ref("");
-const generatingReview = ref(false);
-const generatingSummary = ref(false);
-const summaryProgress = ref<string>("");
-const summaryError = ref<string | null>(null);
 const CHAPTER_SUMMARY_WIKI_UPDATES_KEY = "chapter_summary_update_wiki_enabled";
-
-interface WikiUpdateResult {
-  entityName: string;
-  entityType: 'character' | 'location' | 'concept' | 'other';
-  wikiPageId: string;
-  updateType: 'created' | 'updated' | 'unchanged';
-}
-const wikiUpdateResults = ref<WikiUpdateResult[]>([]);
-const showWikiUpdateResults = ref(false);
 const reviewTone = ref<string>("fanficnet");
 const customProfiles = ref<CustomReviewerProfile[]>([]);
 const savedReviews = ref<Review[]>([]);
@@ -203,14 +188,12 @@ const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ??
 // Summary editing state
 const isEditingSummary = ref(false);
 const editedSummary = ref("");
-const savingSummary = ref(false);
 const showSummaryPanel = ref(false);
 const updateWikiOnSummary = ref(true);
 
 // Notes editing state
 const isEditingNotes = ref(false);
 const editedNotes = ref("");
-const savingNotes = ref(false);
 const showNotesPanel = ref(false);
 
 // Illustrations panel state
@@ -277,6 +260,52 @@ const chapterTruncation = computed(() => {
 // BookView handles mobile display via CSS media queries
 const bookUrl = computed(() => `/books/${bookId.value}`);
 const backButtonUrl = computed(() => bookUrl.value);
+
+const {
+  generatingReview,
+  generatingSummary,
+  savingSummary,
+  savingNotes,
+  summaryProgress,
+  summaryError,
+  wikiUpdateResults,
+  showWikiUpdateResults,
+  saveSummary,
+  saveNotes,
+  generateSummary,
+  generateReview,
+} = useChapterMutationFlow({
+  chapter,
+  bookId,
+  currentBookTitle: () => currentBook.value?.title || bookId.value,
+  currentBookChapterOrder: () => parseIdArray(currentBook.value?.chapter_order),
+  currentPart,
+  currentPartNumber,
+  reviewTone,
+  customProfiles,
+  editedSummary,
+  editedNotes,
+  normalizeCharacterList,
+  buildPriorPartSummaries,
+  buildPriorChapterSummariesInPart,
+  buildPriorChapterSummariesInBook,
+  invalidateChapterSummary,
+  saveSummaryToDb: dbSaveSummary,
+  saveNotesToDb: dbSaveNotes,
+  saveReviewToDb: saveReview,
+  createWikiPage,
+  updateWikiPage,
+  getWikiPage,
+  trackWikiUpdate,
+  addChapterWikiMention,
+  reloadCharacters: async () => {
+    await loadCharacters();
+  },
+  reloadReviews: async () => {
+    await loadSavedReviews();
+  },
+  openSettings: () => router.push("/settings"),
+});
 
 const loadChapter = async () => {
   loading.value = true;
@@ -384,204 +413,6 @@ const saveChapter = async () => {
   }
 };
 
-const generateSummary = async () => {
-  if (!chapter.value) return;
-
-  // Reset state
-  summaryProgress.value = "";
-  summaryError.value = null;
-  wikiUpdateResults.value = [];
-  showWikiUpdateResults.value = false;
-
-  try {
-    generatingSummary.value = true;
-
-    // Get OpenAI API key from localStorage
-    const apiKey = localStorage.getItem("openai_api_key");
-    if (!apiKey) {
-      alert("Please add your OpenAI API key in Settings first");
-      router.push("/settings");
-      return;
-    }
-
-    // Step 1: Build context
-    summaryProgress.value = "Building context from previous chapters...";
-    const book = currentBook.value;
-    const chapterOrder = parseIdArray(book?.chapter_order);
-    const isFirstChapter = chapterOrder[0] === chapter.value.id;
-
-    const priorPartSummaries = await buildPriorPartSummaries(chapter.value.part_id ?? null);
-    const priorChapterSummaries = await buildPriorChapterSummariesInPart(
-      currentPart.value,
-      chapter.value.id
-    );
-
-    // Step 2: Generate summary
-    summaryProgress.value = "Generating chapter summary...";
-    const result = await generateChapterSummary(
-      apiKey,
-      chapter.value.text,
-      chapter.value.title || chapter.value.id,
-      chapter.value.id,
-      bookId.value,
-      book?.title || bookId.value,
-      isFirstChapter,
-      {
-        partName: currentPart.value?.name ?? null,
-        partNumber: currentPartNumber.value,
-        priorPartSummaries,
-        priorChapterSummaries
-      }
-    );
-
-    const generatedCharacters = normalizeCharacterList(result.characters);
-    const beatsArray = Array.isArray(result.beats) ? result.beats : [];
-
-    // Step 3: Save summary
-    summaryProgress.value = "Saving summary...";
-    await dbSaveSummary({
-      chapter_id: chapter.value.id,
-      summary: result.summary,
-      pov: result.pov,
-      characters: generatedCharacters,
-      beats: beatsArray,
-      spoilers_ok: result.spoilers_ok,
-    });
-    invalidateChapterSummary(chapter.value.id);
-
-    // Update UI immediately so user sees the summary
-    chapter.value.summary = result.summary;
-    chapter.value.pov = result.pov;
-    chapter.value.characters = generatedCharacters.length ? generatedCharacters : null;
-    chapter.value.beats = beatsArray.length ? beatsArray : null;
-    chapter.value.spoilers_ok = result.spoilers_ok;
-    editedSummary.value = result.summary;
-
-    if (updateWikiOnSummary.value) {
-      const wikiResults = await updateWikiFromGeneratedSummary(
-        apiKey,
-        result.summary,
-        generatedCharacters,
-        Array.isArray(result.locations) ? result.locations : []
-      );
-      wikiUpdateResults.value = wikiResults;
-      if (wikiResults.length > 0) {
-        showWikiUpdateResults.value = true;
-      }
-    }
-
-    summaryProgress.value = "Finishing up...";
-    if (updateWikiOnSummary.value) {
-      await loadCharacters();
-    }
-    summaryProgress.value = "";
-  } catch (error: unknown) {
-    console.error("Failed to generate summary:", error);
-    summaryError.value = error instanceof Error ? error.message : "Unknown error occurred";
-    summaryProgress.value = "";
-  } finally {
-    generatingSummary.value = false;
-  }
-};
-
-const updateWikiFromGeneratedSummary = async (
-  apiKey: string,
-  chapterSummary: string,
-  generatedCharacters: string[],
-  generatedLocations: string[]
-): Promise<WikiUpdateResult[]> => {
-  const currentChapter = chapter.value;
-  if (!currentChapter) return [];
-
-  const wikiResults: WikiUpdateResult[] = [];
-  const totalEntities = generatedCharacters.length + generatedLocations.length;
-
-  const processWikiEntity = async (
-    entityName: string,
-    entityType: 'character' | 'location',
-    currentIndex: number
-  ) => {
-    summaryProgress.value = `Updating wiki: ${entityName} (${currentIndex + 1} of ${totalEntities})...`;
-
-    try {
-      const existingPage = await getWikiPage(bookId.value, entityName);
-      const { generateWikiContent } = await import("@/lib/openai");
-      const wikiResult = await generateWikiContent(
-        apiKey,
-        entityName,
-        currentChapter.text,
-        chapterSummary,
-        existingPage?.content || null,
-        entityType
-      );
-
-      if (existingPage) {
-        if (wikiResult.hasChanges) {
-          await updateWikiPage(existingPage.id, {
-            content: wikiResult.content,
-            summary: wikiResult.summary
-          });
-          await trackWikiUpdate({
-            wiki_page_id: existingPage.id,
-            chapter_id: chapter.value!.id,
-            update_type: wikiResult.hasContradictions ? 'update_with_contradictions' : 'update',
-            change_summary: wikiResult.changeSummary,
-            contradiction_notes: wikiResult.contradictions
-          });
-          wikiResults.push({
-            entityName,
-            entityType,
-            wikiPageId: existingPage.id,
-            updateType: 'updated'
-          });
-        } else {
-          wikiResults.push({
-            entityName,
-            entityType,
-            wikiPageId: existingPage.id,
-            updateType: 'unchanged'
-          });
-        }
-        await addChapterWikiMention(currentChapter.id, existingPage.id);
-      } else {
-        const newPageId = await createWikiPage({
-          book_id: bookId.value,
-          page_name: entityName,
-          content: wikiResult.content,
-          summary: wikiResult.summary,
-          page_type: entityType,
-          created_by_ai: true
-        });
-        await trackWikiUpdate({
-          wiki_page_id: newPageId,
-          chapter_id: currentChapter.id,
-          update_type: 'created',
-          change_summary: `Created ${entityType} page for ${entityName}`
-        });
-        await addChapterWikiMention(currentChapter.id, newPageId);
-        wikiResults.push({
-          entityName,
-          entityType,
-          wikiPageId: newPageId,
-          updateType: 'created'
-        });
-      }
-    } catch (wikiError) {
-      console.error(`Failed to update wiki for ${entityName}:`, wikiError);
-    }
-  };
-
-  for (let i = 0; i < generatedCharacters.length; i++) {
-    await processWikiEntity(generatedCharacters[i], 'character', i);
-  }
-
-  for (let i = 0; i < generatedLocations.length; i++) {
-    await processWikiEntity(generatedLocations[i], 'location', generatedCharacters.length + i);
-  }
-
-  return wikiResults;
-};
-
 const startEditingSummary = () => {
   if (!chapter.value?.summary) return;
   editedSummary.value = chapter.value.summary;
@@ -593,30 +424,10 @@ const cancelEditingSummary = () => {
   editedSummary.value = "";
 };
 
-const saveSummary = async () => {
-  if (!chapter.value) return;
-
-  try {
-    savingSummary.value = true;
-
-    // Update summary in database
-    await dbSaveSummary({
-      chapter_id: chapter.value.id,
-      summary: editedSummary.value,
-      pov: chapter.value.pov,
-      characters: chapter.value.characters || [],
-      beats: chapter.value.beats || [],
-      spoilers_ok: chapter.value.spoilers_ok || false,
-    });
-
-    // Update UI
-    chapter.value.summary = editedSummary.value;
+const handleSaveSummary = async () => {
+  const didSave = await saveSummary();
+  if (didSave) {
     isEditingSummary.value = false;
-  } catch (error) {
-    console.error("Failed to save summary:", error);
-    alert("Failed to save summary");
-  } finally {
-    savingSummary.value = false;
   }
 };
 
@@ -631,117 +442,10 @@ const cancelEditingNotes = () => {
   editedNotes.value = chapter.value?.notes || "";
 };
 
-const saveNotes = async () => {
-  if (!chapter.value) return;
-
-  try {
-    savingNotes.value = true;
-
-    // Save notes to database
-    await dbSaveNotes(chapter.value.id, editedNotes.value);
-
-    // Update UI
-    chapter.value.notes = editedNotes.value;
+const handleSaveNotes = async () => {
+  const didSave = await saveNotes();
+  if (didSave) {
     isEditingNotes.value = false;
-  } catch (error) {
-    console.error("Failed to save notes:", error);
-    alert("Failed to save notes");
-  } finally {
-    savingNotes.value = false;
-  }
-};
-
-const generateReview = async () => {
-  if (!chapter.value) return;
-
-  try {
-    generatingReview.value = true;
-
-    // Get OpenAI API key
-    const apiKey = localStorage.getItem("openai_api_key");
-    if (!apiKey) {
-      alert("Please add your OpenAI API key in Settings first");
-      router.push("/settings");
-      return;
-    }
-
-    // Determine which profile to use
-    let profile;
-    let isCustomProfile = false;
-    let customProfileId: number | null = null;
-    let profileName = "";
-
-    if (reviewTone.value.startsWith("custom-")) {
-      // Custom profile
-      isCustomProfile = true;
-      customProfileId = parseInt(reviewTone.value.replace("custom-", ""));
-      const customProfile = customProfiles.value.find((p) => p.id === customProfileId);
-      if (!customProfile) {
-        alert("Selected custom profile not found");
-        return;
-      }
-      profileName = customProfile.name;
-      profile = {
-        id: `custom-${customProfileId}`,
-        name: customProfile.name,
-        tone_key: `custom-${customProfileId}`,
-        system_prompt: `You are a beta reader with this personality and approach: ${customProfile.description}. Please review the following chapter providing feedback in this style.`,
-        is_system: false,
-      };
-    } else {
-      // Built-in profile
-      const builtInProfile = BUILT_IN_PROFILES[reviewTone.value as keyof typeof BUILT_IN_PROFILES];
-      if (!builtInProfile) {
-        alert("Selected profile not found");
-        return;
-      }
-      profileName = builtInProfile.name;
-      profile = builtInProfile;
-    }
-
-    const priorPartSummaries =
-      await buildPriorPartSummaries(chapter.value.part_id ?? null);
-    let currentPartChapterSummaries = await buildPriorChapterSummariesInPart(
-      currentPart.value,
-      chapter.value.id
-    );
-
-    if (!chapter.value.part_id) {
-      currentPartChapterSummaries = await buildPriorChapterSummariesInBook(chapter.value.id);
-    }
-
-    // Generate review
-    const result = await generateAIReview(
-      apiKey,
-      chapter.value.text,
-      chapter.value.title || chapter.value.id,
-      chapter.value.id,
-      profile,
-      {
-        priorPartSummaries,
-        currentPartChapterSummaries
-      }
-    );
-
-    // Save to database
-    await saveReview({
-      chapter_id: chapter.value.id,
-      review_text: result.reviewText,
-      prompt_used: result.promptUsed,
-      profile_id: isCustomProfile ? customProfileId : null,
-      profile_name: profileName,
-      tone_key: reviewTone.value,
-    });
-
-    // Update UI
-    // Reload saved reviews
-    await loadSavedReviews();
-  } catch (error: unknown) {
-    console.error("Failed to generate review:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    alert(`Failed to generate review: ${message}`);
-  } finally {
-    generatingReview.value = false;
   }
 };
 
@@ -1055,8 +759,8 @@ watch(updateWikiOnSummary, (value) => {
           @update:updateWikiEnabled="updateWikiOnSummary = $event"
           @start-edit="startEditingSummary"
           @cancel-edit="cancelEditingSummary"
-          @save="saveSummary"
-          @generate="generateSummary"
+          @save="handleSaveSummary"
+          @generate="() => generateSummary(updateWikiOnSummary)"
           @character-click="navigateToWiki"
           @dismiss-wiki-results="showWikiUpdateResults = false"
         />
@@ -1070,7 +774,7 @@ watch(updateWikiOnSummary, (value) => {
           @update:editedNotes="editedNotes = $event"
           @start-edit="startEditingNotes"
           @cancel-edit="cancelEditingNotes"
-          @save="saveNotes"
+          @save="handleSaveNotes"
         />
 
         <ChapterContentSection

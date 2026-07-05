@@ -16,30 +16,15 @@ import { useDatabase } from "@/composables/useDatabase";
 import { useImageLibrary } from "@/composables/useImageLibrary";
 import { usePartImages } from "@/composables/usePartImages";
 import {
+  usePartSummaryContext,
+} from "@/composables/usePartSummaryContext";
+import {
   generatePartSummary as generatePartSummaryAi,
-  type PartSummaryChapterInput,
 } from "@/lib/openai";
-import type { Book, BookPart, Chapter as DatabaseChapter, ImageAsset } from "@/lib/database";
+import type { Book, BookPart, ImageAsset } from "@/lib/database";
 import ImageLightbox from "@/components/images/ImageLightbox.vue";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
 import Modal from "@/components/Modal.vue";
-
-interface PartSummaryState {
-  summary: string;
-  characters: string[];
-  beats: string[];
-  updatedAt: string | null;
-}
-
-interface PartChapterEntry {
-  id: string;
-  title: string | null;
-  wordCount: number;
-  position: number;
-  summary: string | null;
-  characters: string[];
-  beats: string[];
-}
 
 const route = useRoute();
 const router = useRouter();
@@ -102,14 +87,6 @@ const {
 );
 
 const part = ref<BookPart | null>(null);
-const chapterEntries = ref<PartChapterEntry[]>([]);
-const partSummary = ref<PartSummaryState>({
-  summary: "",
-  characters: [],
-  beats: [],
-  updatedAt: null,
-});
-const editedSummary = ref("");
 const loading = ref(false);
 const generatingSummary = ref(false);
 const savingSummary = ref(false);
@@ -127,40 +104,25 @@ const chapterThumbnails = ref<Record<string, string>>({});
 const book = computed(() => books.value.find((b: Book) => b.id === bookId.value) || null);
 const bookTitle = computed(() => book.value?.title ?? bookId.value);
 const partName = computed(() => part.value?.name ?? "");
-
-function parseIdOrder(order: string | null | undefined): string[] {
-  if (!order) return [];
-  try {
-    const parsed = JSON.parse(order);
-    if (Array.isArray(parsed)) {
-      return parsed.filter((value: unknown): value is string => typeof value === "string");
-    }
-  } catch {
-    // Ignore parse errors and fallback to empty order
-  }
-  return [];
-}
-
-function parseJsonArray(value: unknown): string[] {
-  if (!value) return [];
-  let raw: unknown = value;
-  if (typeof value === "string") {
-    try {
-      raw = JSON.parse(value);
-    } catch {
-      return [];
-    }
-  }
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
-    .filter((entry): entry is string => entry.length > 0);
-}
-
-const partNumber = computed(() => {
-  const order = parseIdOrder(book.value?.part_order);
-  const index = order.indexOf(partId.value);
-  return index >= 0 ? index + 1 : null;
+const {
+  chapterEntries,
+  partSummary,
+  editedSummary,
+  partNumber,
+  totalWordCount,
+  summarizedChapterCount,
+  summaryCoverage,
+  availableChapterSummaries,
+  hasPartSummary,
+  chapterTitleMap,
+  loadPartSummaryData,
+  hydrateChapterEntries,
+} = usePartSummaryContext({
+  book,
+  partId,
+  chapters,
+  getPartSummary,
+  getSummary,
 });
 
 const partLabel = computed(() => {
@@ -175,42 +137,6 @@ const routePrefix = computed(() => (isMobileRoute.value ? "/m/books" : "/books")
 const bookUrl = computed(() => `/books/${bookId.value}`);
 const organizeUrl = computed(() => `/books/${bookId.value}/organize`);
 
-const totalWordCount = computed(() =>
-  chapterEntries.value.reduce((sum, chapter) => sum + (chapter.wordCount || 0), 0),
-);
-
-const summarizedChapterCount = computed(
-  () =>
-    chapterEntries.value.filter((chapter) => chapter.summary && chapter.summary.trim().length > 0)
-      .length,
-);
-
-const summaryCoverage = computed(() => {
-  const total = chapterEntries.value.length;
-  if (total === 0) return "0/0";
-  return `${summarizedChapterCount.value}/${total}`;
-});
-
-const availableChapterSummaries = computed<PartSummaryChapterInput[]>(() =>
-  chapterEntries.value
-    .filter((chapter) => chapter.summary && chapter.summary.trim().length > 0)
-    .map((chapter) => ({
-      id: chapter.id,
-      title: chapter.title ? chapter.title : `Chapter ${chapter.position}`,
-      summary: chapter.summary!.trim(),
-    })),
-);
-
-const hasPartSummary = computed(() => partSummary.value.summary.trim().length > 0);
-
-const chapterTitleMap = computed(() => {
-  const map = new Map<string, string>();
-  chapterEntries.value.forEach((entry) => {
-    map.set(entry.id, entry.title ? entry.title : `Chapter ${entry.position}`);
-  });
-  return map;
-});
-
 function truncateSummary(text: string, limit = 200) {
   if (text.length <= limit) return text;
   return `${text.slice(0, limit).trimEnd()}…`;
@@ -221,86 +147,6 @@ function formatDateTime(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleString();
-}
-
-async function loadPartSummaryData(partIdValue: string) {
-  try {
-    const summaryData = await getPartSummary(partIdValue);
-    if (summaryData) {
-      const characters = parseJsonArray(summaryData.characters);
-      const beats = parseJsonArray(summaryData.beats);
-      partSummary.value = {
-        summary: summaryData.summary || "",
-        characters,
-        beats,
-        updatedAt: summaryData.updated_at || summaryData.created_at || null,
-      };
-      editedSummary.value = summaryData.summary || "";
-    } else {
-      partSummary.value = {
-        summary: "",
-        characters: [],
-        beats: [],
-        updatedAt: null,
-      };
-      editedSummary.value = "";
-    }
-  } catch (error) {
-    console.error("Failed to load part summary:", error);
-    partSummary.value = {
-      summary: "",
-      characters: [],
-      beats: [],
-      updatedAt: null,
-    };
-    editedSummary.value = "";
-  }
-}
-
-async function hydrateChapterEntries(fetchedPart: BookPart) {
-  const chapterOrder = parseIdOrder(fetchedPart.chapter_order);
-  const assignedChapters = chapters.value.filter((ch: DatabaseChapter) => ch.part_id === fetchedPart.id);
-  const chapterMap = new Map<string, DatabaseChapter>(
-    assignedChapters.map((chapter: DatabaseChapter) => [chapter.id, chapter]),
-  );
-
-  const sortedByOrder = chapterOrder.filter((id) => chapterMap.has(id));
-  const remaining = assignedChapters
-    .filter((chapter: DatabaseChapter) => !sortedByOrder.includes(chapter.id))
-    .sort((a: DatabaseChapter, b: DatabaseChapter) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-  const combinedIds = [...sortedByOrder, ...remaining.map((chapter: DatabaseChapter) => chapter.id)];
-  const baseEntries = combinedIds
-    .map((id, index) => {
-      const chapter = chapterMap.get(id);
-      if (!chapter) return null;
-      return {
-        id: chapter.id,
-        title: chapter.title || null,
-        wordCount: chapter.word_count || 0,
-        position: index + 1,
-      };
-    })
-    .filter(
-      (entry): entry is { id: string; title: string | null; wordCount: number; position: number } =>
-        entry !== null,
-    );
-
-  const enriched = await Promise.all(
-    baseEntries.map(async (entry) => {
-      const summaryData = await getSummary(entry.id);
-      const characters = summaryData ? parseJsonArray(summaryData.characters) : [];
-      const beats = summaryData ? parseJsonArray(summaryData.beats) : [];
-      return {
-        ...entry,
-        summary: summaryData?.summary ?? null,
-        characters,
-        beats,
-      } satisfies PartChapterEntry;
-    }),
-  );
-
-  chapterEntries.value = enriched;
 }
 
 async function loadPart() {

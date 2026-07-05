@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
+    "test:unit": "vitest run",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "copy:wasm": "cp node_modules/sql.js/dist/sql-wasm.wasm public/",
@@ -71,6 +72,7 @@
     "typescript": "~5.8.0",
     "vite": "^7.0.6",
     "vite-plugin-vue-devtools": "^8.0.0",
+    "vitest": "^4.1.9",
     "vue-tsc": "^3.0.4"
   }
 }
