@@ -6,6 +6,7 @@ import {
   ArrowDownTrayIcon,
   SparklesIcon,
   PencilIcon,
+  PlusIcon,
   CheckCircleIcon,
   ClockIcon,
   TrashIcon,
@@ -526,6 +527,15 @@ const openChapter = (chapterId: string) => {
   router.push(`${routePrefix.value}/${bookId.value}/chapters/${chapterId}`);
 };
 
+const createNewChapterInPart = () => {
+  if (!part.value) return;
+
+  router.push({
+    path: `/books/${bookId.value}/chapter-editor`,
+    query: { partId: part.value.id },
+  });
+};
+
 watch(
   () => desktopImagesAvailable.value,
   async () => {
@@ -933,16 +943,34 @@ watch([bookId, partId], async () => {
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
                 Chapters in this Part
               </h2>
-              <p class="text-sm text-gray-500 dark:text-gray-400">
-                {{ summarizedChapterCount }} of {{ chapterEntries.length }} chapters summarized
-              </p>
+              <div class="flex items-center gap-3">
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ summarizedChapterCount }} of {{ chapterEntries.length }} chapters summarized
+                </p>
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                  @click="createNewChapterInPart"
+                >
+                  <PlusIcon class="mr-2 h-4 w-4" />
+                  Add Chapter in Part
+                </button>
+              </div>
             </div>
 
             <div
               v-if="chapterEntries.length === 0"
               class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400"
             >
-              No chapters are currently assigned to this part.
+              <p>No chapters are currently assigned to this part.</p>
+              <button
+                type="button"
+                class="mt-4 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                @click="createNewChapterInPart"
+              >
+                <PlusIcon class="mr-2 h-4 w-4" />
+                Add First Chapter in Part
+              </button>
             </div>
 
             <div v-else class="space-y-4">
