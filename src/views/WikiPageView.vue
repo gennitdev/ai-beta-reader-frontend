@@ -19,7 +19,6 @@ import {
   BookOpenIcon,
   TrashIcon,
   BookmarkIcon,
-  PhotoIcon
 } from '@heroicons/vue/24/outline'
 
 interface WikiPage {
@@ -66,7 +65,6 @@ const wikiPageId = computed(() => route.params.wikiPageId as string)
 
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true)
-const routePrefix = computed(() => (isMobileRoute.value ? '/m/books' : '/books'))
 
 // Use local database
 const {

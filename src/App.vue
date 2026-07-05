@@ -9,7 +9,7 @@ import type { Book } from '@/lib/database'
 
 const route = useRoute()
 const router = useRouter()
-const { books, chapters, loadBooks, loadChapters, getParts, getWikiPage, searchBook, replaceInChapter, replaceInWikiPage } = useDatabase()
+const { books, chapters, loadBooks, loadChapters, getParts, searchBook, replaceInChapter, replaceInWikiPage } = useDatabase()
 
 // Parts data for breadcrumbs
 const parts = ref<Array<{ id: string; name: string }>>([])
@@ -167,7 +167,6 @@ const breadcrumbs = computed(() => {
           const partLabel = part?.name || partId
           crumbs.push({ label: partLabel })
         } else if (path.includes('/wiki/')) {
-          const wikiPageId = route.params.wikiPageId as string
           crumbs.push({ label: 'Wiki' })
         } else if (path.includes('/organize')) {
           crumbs.push({ label: 'Organize Chapters' })

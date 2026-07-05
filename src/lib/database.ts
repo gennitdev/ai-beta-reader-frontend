@@ -468,7 +468,7 @@ export class AppDatabase {
         } else {
           this.db.run(migration);
         }
-      } catch (e) {
+      } catch {
         // Column already exists, ignore error
         // SQLite throws error if column exists, which is expected
       }

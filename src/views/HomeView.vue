@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, LightBulbIcon, CogIcon } from '@heroicons/vue/24/outline'
 import heroImage from '@/assets/art-attack-RpSTMkZGKyE-unsplash.jpg'
@@ -11,8 +11,6 @@ const { books, loadBooks } = useDatabase()
 // Only show the detailed steps when the user clicks.
 const showDetailedSteps = ref(false)
 const isLoading = ref(true)
-
-const hasBooks = computed(() => books.value.length > 0)
 
 onMounted(async () => {
   await loadBooks()

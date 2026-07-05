@@ -63,12 +63,6 @@ const generateBookId = () => {
   newBook.value.id = title + '-' + Date.now().toString(36)
 }
 
-const formatWordCount = (count?: number) => {
-  if (!count) return '0'
-  if (count < 1000) return count.toString()
-  return (count / 1000).toFixed(1) + 'k'
-}
-
 const getChapterCount = (book: Book): number => {
   if (!book.chapter_order) return 0
   try {

@@ -418,7 +418,7 @@ const moveChapterToPart = async (chapterId: string, partId: string | null) => {
     let movedChapter: Chapter | undefined
 
     // Remove from current list
-    const sourceEntry = Object.entries(boardPartLists.value).find(([, list]) => {
+    Object.entries(boardPartLists.value).find(([, list]) => {
       const index = list.findIndex((chapter) => chapter.id === chapterId)
       if (index !== -1) {
         movedChapter = list.splice(index, 1)[0]
@@ -494,10 +494,6 @@ const movePartUp = async (partId: string) => {
 
 const movePartDown = async (partId: string) => {
   await movePart(partId, 'down')
-}
-
-const onChapterMove = () => {
-  // Drag and drop reordering is finalized via the change handlers that call saveChapterOrder.
 }
 
 const handleNewPartNameUpdate = (value: string) => {

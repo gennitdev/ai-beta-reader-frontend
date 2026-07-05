@@ -54,9 +54,6 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const showFullPrompt = ref(false)
 
-// Mobile detection
-const isMobileRoute = computed(() => route.meta?.mobile === true)
-
 // Computed properties for display
 const formattedCreatedDate = computed(() => {
   if (!profileData.value?.profile.created_at) return 'Unknown'

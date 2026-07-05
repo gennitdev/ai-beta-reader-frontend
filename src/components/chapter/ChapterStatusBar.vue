@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckCircleIcon, DocumentTextIcon, PhotoIcon } from "@heroicons/vue/24/outline";
+import { CheckCircleIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
 
 defineProps<{
   wordCount: number;

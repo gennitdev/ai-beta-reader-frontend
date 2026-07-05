@@ -694,18 +694,6 @@ export class GoogleDriveProvider implements CloudProvider {
       this.debug('loadGisForNative: script appended, waiting for readiness');
 
       await new Promise<void>((resolve, reject) => {
-        const checkReady = () => {
-          const oauth2 = (window as any).google?.accounts?.oauth2;
-          if (oauth2 && (oauth2.initTokenClient || oauth2.default?.initTokenClient)) {
-            if (!oauth2.initTokenClient && oauth2.default?.initTokenClient) {
-              oauth2.initTokenClient = oauth2.default.initTokenClient.bind(oauth2.default);
-            }
-            resolve();
-            return;
-          }
-          setTimeout(checkReady, 50);
-        };
-
         const timeoutId = setTimeout(() => {
           console.error('[CloudSync] loadGisForNative: timeout waiting for GIS readiness');
           this.debug('loadGisForNative: timeout waiting for readiness');

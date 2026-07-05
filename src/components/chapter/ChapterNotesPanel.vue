@@ -3,7 +3,7 @@ import { PencilIcon, DocumentTextIcon } from '@heroicons/vue/24/outline'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
-const props = defineProps({
+defineProps({
   chapterNotes: {
     type: String,
     default: '',

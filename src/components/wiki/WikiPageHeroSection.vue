@@ -6,7 +6,7 @@ import {
   BookOpenIcon,
 } from '@heroicons/vue/24/outline'
 
-const props = defineProps<{
+defineProps<{
   heroImageSrc: string | null;
   bookTitle: string;
   pageName: string;
