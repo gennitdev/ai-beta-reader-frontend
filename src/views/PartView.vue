@@ -43,6 +43,9 @@ interface PartChapterEntry {
 
 const route = useRoute();
 const router = useRouter();
+defineEmits<{
+  (event: 'wiki-page-pin-changed', payload: { id: string; isPinned: boolean; updatedAt: string }): void;
+}>();
 
 const bookId = computed(() => (route.params.bookId || route.params.id) as string);
 const partId = computed(() => route.params.partId as string);
