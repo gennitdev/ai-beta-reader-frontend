@@ -185,7 +185,7 @@ export function useDatabase() {
   }
 
   // Import from JSON file
-  async function importFromJSON(jsonData: any) {
+  async function importFromJSON(jsonData: unknown) {
     try {
       loading.value = true
       error.value = null

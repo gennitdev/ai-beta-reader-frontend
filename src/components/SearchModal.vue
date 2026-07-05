@@ -166,9 +166,30 @@ import Modal from './Modal.vue'
 import HighlightedText from './HighlightedText.vue'
 
 interface SearchService {
-  searchBook: (bookId: string, query: string) => Promise<{ chapters: any[]; wikiPages: any[] }>
-  replaceInChapter: (chapterId: string, searchTerm: string, replaceTerm: string) => Promise<any>
-  replaceInWikiPage: (wikiPageId: string, searchTerm: string, replaceTerm: string) => Promise<any>
+  searchBook: (bookId: string, query: string) => Promise<SearchResults>
+  replaceInChapter: (chapterId: string, searchTerm: string, replaceTerm: string) => Promise<void>
+  replaceInWikiPage: (wikiPageId: string, searchTerm: string, replaceTerm: string) => Promise<void>
+}
+
+interface SearchChapterResult {
+  id: string
+  title: string
+  text: string
+  word_count: number
+  position: number
+}
+
+interface SearchWikiPageResult {
+  id: string
+  page_name: string
+  content: string
+  summary: string
+  page_type: string
+}
+
+interface SearchResults {
+  chapters: SearchChapterResult[]
+  wikiPages: SearchWikiPageResult[]
 }
 
 interface Props {
@@ -190,22 +211,7 @@ const replaceTerm = ref('')
 const isSearching = ref(false)
 const replacingItemId = ref<string | null>(null) // Track which specific item is being replaced
 const searchInputRef = ref<HTMLInputElement | null>(null)
-const searchResults = ref<{
-  chapters: Array<{
-    id: string
-    title: string
-    text: string
-    word_count: number
-    position: number
-  }>
-  wikiPages: Array<{
-    id: string
-    page_name: string
-    content: string
-    summary: string
-    page_type: string
-  }>
-}>({
+const searchResults = ref<SearchResults>({
   chapters: [],
   wikiPages: []
 })

@@ -5,7 +5,7 @@ import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
 import { primaryNavItems } from '@/config/navigation'
-import type { Book } from '@/lib/database'
+import type { Book, Chapter } from '@/lib/database'
 
 const route = useRoute()
 const router = useRouter()
@@ -128,7 +128,7 @@ const breadcrumbs = computed(() => {
 
     if (bookId) {
       // Find the book title
-      const book = books.value.find((b: any) => b.id === bookId)
+      const book = books.value.find((b: Book) => b.id === bookId)
       const bookTitle = book?.title || bookId
 
       // Add book breadcrumb if we're deeper than just /books/:id
@@ -145,11 +145,11 @@ const breadcrumbs = computed(() => {
         if (path.includes('/chapters/')) {
           const chapterId = route.params.chapterId as string
           // Try to find the chapter title
-          const chapter = chapters.value.find((ch: any) => ch.id === chapterId)
+          const chapter = chapters.value.find((ch: Chapter) => ch.id === chapterId)
 
           // If chapter belongs to a part, add part breadcrumb first
           if (chapter?.part_id) {
-            const part = parts.value.find((p: any) => p.id === chapter.part_id)
+            const part = parts.value.find((p) => p.id === chapter.part_id)
             if (part) {
               crumbs.push({
                 label: part.name,
@@ -163,7 +163,7 @@ const breadcrumbs = computed(() => {
         } else if (path.includes('/parts/')) {
           const partId = route.params.partId as string
           // Find the part name
-          const part = parts.value.find((p: any) => p.id === partId)
+          const part = parts.value.find((p) => p.id === partId)
           const partLabel = part?.name || partId
           crumbs.push({ label: partLabel })
         } else if (path.includes('/wiki/')) {

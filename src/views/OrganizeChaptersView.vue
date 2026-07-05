@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import OrganizeHeader from '@/components/organize/OrganizeHeader.vue'
 import OrganizePartsBoard from '@/components/organize/OrganizePartsBoard.vue'
-import type { Book as DatabaseBook, BookPart } from '@/lib/database'
+import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter } from '@/lib/database'
 import type { Chapter, OrganizedPart, ChaptersByPart } from '@/types/organize'
 
 const route = useRoute()
@@ -248,7 +248,7 @@ const loadData = async () => {
       partNameMap.set(part.id, part.name)
     })
 
-    const chapterPromises = dbChapters.value.map(async (ch: any, index: number) => {
+    const chapterPromises = dbChapters.value.map(async (ch: DatabaseChapter, index: number) => {
       const summary = await getSummary(ch.id)
       return {
         id: ch.id,
