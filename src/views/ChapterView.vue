@@ -3,14 +3,13 @@ import { ref, onMounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useChapterImages } from "@/composables/useChapterImages";
+import { useChapterSummaryContext } from "@/composables/useChapterSummaryContext";
 import {
   generateChapterSummary,
   generateReview as generateAIReview,
   BUILT_IN_PROFILES,
-  type PartSummaryChapterInput,
-  type PartSummaryOverview,
 } from "@/lib/openai";
-import type { Book, BookPart, Chapter as DatabaseChapter, PartSummary, ChapterSummary } from "@/lib/database";
+import type { Book, BookPart, Chapter as DatabaseChapter } from "@/lib/database";
 import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterNotesPanel from "@/components/chapter/ChapterNotesPanel.vue";
@@ -175,15 +174,28 @@ const showDeleteModal = ref(false);
 const deletingChapter = ref(false);
 const parts = ref<BookPart[]>([]);
 
-const chapterSummaryCache = new Map<string, ChapterSummary | null>();
-const partSummaryCache = new Map<string, PartSummary | null>();
-
 const currentBook = computed(
   () => books.value.find((b: Book) => b.id === bookId.value) || null
 );
 const currentPart = computed(() => {
   if (!chapter.value?.part_id) return null;
   return parts.value.find((part) => part.id === chapter.value?.part_id) || null;
+});
+
+const {
+  getPartNumber,
+  clearSummaryCaches,
+  primeChapterSummary,
+  invalidateChapterSummary,
+  buildPriorPartSummaries,
+  buildPriorChapterSummariesInPart,
+  buildPriorChapterSummariesInBook,
+} = useChapterSummaryContext({
+  getCurrentBook: () => currentBook.value,
+  getParts: () => parts.value,
+  getChapters: () => chapters.value,
+  getSummary,
+  getPartSummary,
 });
 
 const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ?? null));
@@ -242,156 +254,6 @@ function parseIdArray(value: string | null | undefined): string[] {
   return [];
 }
 
-function getPartNumber(partId: string | null): number | null {
-  if (!partId) return null;
-  const order = parseIdArray(currentBook.value?.part_order);
-  const index = order.indexOf(partId);
-  return index >= 0 ? index + 1 : null;
-}
-
-async function fetchChapterSummary(chapterId: string) {
-  if (chapterSummaryCache.has(chapterId)) {
-    return chapterSummaryCache.get(chapterId) || null;
-  }
-  const summary = await getSummary(chapterId);
-  chapterSummaryCache.set(chapterId, summary || null);
-  return summary || null;
-}
-
-async function fetchPartSummaryById(partId: string) {
-  if (partSummaryCache.has(partId)) {
-    return partSummaryCache.get(partId) || null;
-  }
-  const summary = await getPartSummary(partId);
-  partSummaryCache.set(partId, summary || null);
-  return summary || null;
-}
-
-async function buildChapterSummariesForPart(
-  partId: string,
-  partMetaOverride?: BookPart
-): Promise<PartSummaryChapterInput[]> {
-  const partMeta = partMetaOverride ?? parts.value.find((part) => part.id === partId);
-  if (!partMeta) return [];
-
-  const order = parseIdArray(partMeta.chapter_order);
-  const chapterList = chapters.value.filter((ch: DatabaseChapter) => ch.part_id === partMeta.id);
-  const chapterMap = new Map(chapterList.map((ch: DatabaseChapter) => [ch.id, ch]));
-
-  let orderedIds = order.filter((id) => chapterMap.has(id));
-  if (!orderedIds.length) {
-    const bookOrder = parseIdArray(currentBook.value?.chapter_order);
-    orderedIds = bookOrder.filter((id) => chapterMap.has(id));
-  }
-  if (!orderedIds.length) {
-    orderedIds = chapterList
-      .sort(
-        (a: DatabaseChapter, b: DatabaseChapter) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      )
-      .map((ch: DatabaseChapter) => ch.id);
-  }
-
-  const summaries: PartSummaryChapterInput[] = [];
-  for (const id of orderedIds) {
-    const summaryData = await fetchChapterSummary(id);
-    if (summaryData?.summary) {
-      const chapterInfo = chapterMap.get(id);
-      summaries.push({
-        id,
-        title: chapterInfo?.title || id,
-        summary: summaryData.summary
-      });
-    }
-  }
-  return summaries;
-}
-
-async function buildPriorPartSummaries(
-  currentPartId: string | null
-): Promise<PartSummaryOverview[]> {
-  const result: PartSummaryOverview[] = [];
-  const partOrder = parseIdArray(currentBook.value?.part_order);
-  if (!partOrder.length) return result;
-
-  const currentIndex = currentPartId ? partOrder.indexOf(currentPartId) : -1;
-  const targetIds =
-    currentIndex > 0 ? partOrder.slice(0, currentIndex) : currentIndex === -1 ? partOrder : [];
-
-  for (const partId of targetIds) {
-    const partMeta = parts.value.find((part) => part.id === partId);
-    if (!partMeta) continue;
-
-    const summaryRecord = await fetchPartSummaryById(partId);
-    let summaryText = summaryRecord?.summary?.trim();
-
-    if (!summaryText) {
-      const chapterSummaries = await buildChapterSummariesForPart(partId, partMeta);
-      if (chapterSummaries.length) {
-        summaryText = chapterSummaries
-          .map((entry) => `${entry.title} (${entry.id})\n${entry.summary}`)
-          .join("\n\n");
-      }
-    }
-
-    if (summaryText) {
-      result.push({
-        partId,
-        partTitle: partMeta.name,
-        summary: summaryText,
-        partNumber: getPartNumber(partId)
-      });
-    }
-  }
-
-  return result;
-}
-
-async function buildPriorChapterSummariesInPart(
-  partMeta: BookPart | null,
-  currentChapterId: string
-): Promise<PartSummaryChapterInput[]> {
-  if (!partMeta) return [];
-
-  let order = parseIdArray(partMeta.chapter_order);
-  if (!order.includes(currentChapterId)) {
-    const bookOrder = parseIdArray(currentBook.value?.chapter_order);
-    order = bookOrder.filter((id) => {
-      const chapter = chapters.value.find((ch: DatabaseChapter) => ch.id === id);
-      return chapter?.part_id === partMeta.id;
-    });
-  }
-
-  const priorIds: string[] = [];
-  for (const id of order) {
-    if (id === currentChapterId) break;
-    priorIds.push(id);
-  }
-
-  if (!priorIds.length) return [];
-
-  const chapterMap = new Map(
-    chapters.value
-      .filter((chapter: DatabaseChapter) => chapter.part_id === partMeta.id)
-      .map((chapter: DatabaseChapter) => [chapter.id, chapter])
-  );
-
-  const summaries: PartSummaryChapterInput[] = [];
-  for (const id of priorIds) {
-    const summaryData = await fetchChapterSummary(id);
-    if (summaryData?.summary) {
-      const chapterInfo = chapterMap.get(id);
-      summaries.push({
-        id,
-        title: chapterInfo?.title || id,
-        summary: summaryData.summary
-      });
-    }
-  }
-
-  return summaries;
-}
-
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true);
 const routePrefix = computed(() => (isMobileRoute.value ? "/m/books" : "/books"));
@@ -419,8 +281,7 @@ const backButtonUrl = computed(() => bookUrl.value);
 const loadChapter = async () => {
   loading.value = true;
   try {
-    chapterSummaryCache.clear();
-    partSummaryCache.clear();
+    clearSummaryCaches();
 
     // Load books and chapters from database
     await loadBooks();
@@ -433,7 +294,7 @@ const loadChapter = async () => {
     if (chapterData) {
       // Load summary from database if exists
       const summaryData = await getSummary(chapterData.id);
-      chapterSummaryCache.set(chapterData.id, summaryData || null);
+      primeChapterSummary(chapterData.id, summaryData || null);
       const parsedCharacters = summaryData?.characters ? JSON.parse(summaryData.characters) : [];
       const normalizedCharacters = normalizeCharacterList(parsedCharacters);
       const parsedBeats = summaryData?.beats ? JSON.parse(summaryData.beats) : [];
@@ -586,7 +447,7 @@ const generateSummary = async () => {
       beats: beatsArray,
       spoilers_ok: result.spoilers_ok,
     });
-    chapterSummaryCache.delete(chapter.value.id);
+    invalidateChapterSummary(chapter.value.id);
 
     // Update UI immediately so user sees the summary
     chapter.value.summary = result.summary;
@@ -846,21 +707,7 @@ const generateReview = async () => {
     );
 
     if (!chapter.value.part_id) {
-      const fallbackSummaries: PartSummaryChapterInput[] = [];
-      const chapterOrder = parseIdArray(currentBook.value?.chapter_order);
-      for (const chId of chapterOrder) {
-        if (chId === chapter.value.id) break;
-        const summary = await fetchChapterSummary(chId);
-        if (summary?.summary) {
-          const chData = chapters.value.find((c: DatabaseChapter) => c.id === chId);
-          fallbackSummaries.push({
-            id: chId,
-            title: chData?.title || chId,
-            summary: summary.summary
-          });
-        }
-      }
-      currentPartChapterSummaries = fallbackSummaries;
+      currentPartChapterSummaries = await buildPriorChapterSummariesInBook(chapter.value.id);
     }
 
     // Generate review
