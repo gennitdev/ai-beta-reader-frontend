@@ -589,7 +589,7 @@ watch([bookId, partId], async () => {
           <section
             class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
           >
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div class="flex flex-col gap-4">
               <div>
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Part Summary</h2>
                 <p
@@ -599,11 +599,11 @@ watch([bookId, partId], async () => {
                   Updated {{ formatDateTime(partSummary.updatedAt) }}
                 </p>
               </div>
-              <div class="flex flex-wrap gap-3">
+              <div class="flex flex-col gap-3">
                 <button
                   @click="handleGeneratePartSummary"
                   :disabled="generatingSummary || chapterEntries.length === 0"
-                  class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span
                     v-if="generatingSummary"
@@ -621,7 +621,7 @@ watch([bookId, partId], async () => {
                 <button
                   v-if="hasPartSummary && !isEditingSummary"
                   @click="startEditingSummary"
-                  class="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                  class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                 >
                   <PencilIcon class="mr-2 h-4 w-4" />
                   Edit
@@ -785,23 +785,21 @@ watch([bookId, partId], async () => {
             <!-- Left column: chapters in this part -->
             <div class="order-1 lg:col-span-2">
           <section>
-            <div class="mb-4 flex items-center justify-between">
+            <div class="mb-4 space-y-3">
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
                 Chapters in this Part
               </h2>
-              <div class="flex items-center gap-3">
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ summarizedChapterCount }} of {{ chapterEntries.length }} chapters summarized
-                </p>
-                <button
-                  type="button"
-                  class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                  @click="createNewChapterInPart"
-                >
-                  <PlusIcon class="mr-2 h-4 w-4" />
-                  Add Chapter in Part
-                </button>
-              </div>
+              <p class="text-sm text-gray-500 dark:text-gray-400">
+                {{ summarizedChapterCount }} of {{ chapterEntries.length }} chapters summarized
+              </p>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                @click="createNewChapterInPart"
+              >
+                <PlusIcon class="mr-2 h-4 w-4" />
+                Add Chapter in Part
+              </button>
             </div>
 
             <div
@@ -811,7 +809,7 @@ watch([bookId, partId], async () => {
               <p>No chapters are currently assigned to this part.</p>
               <button
                 type="button"
-                class="mt-4 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                class="mt-4 inline-flex items-center whitespace-nowrap rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                 @click="createNewChapterInPart"
               >
                 <PlusIcon class="mr-2 h-4 w-4" />
