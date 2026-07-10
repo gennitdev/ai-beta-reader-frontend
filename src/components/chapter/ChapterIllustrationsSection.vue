@@ -12,6 +12,7 @@ defineProps<{
   error: string | null;
   settingCoverId: string | null;
   canAddImages: boolean;
+  layout?: 'grid' | 'panel';
 }>();
 
 const emit = defineEmits<{
@@ -25,9 +26,13 @@ const emit = defineEmits<{
 
 <template>
   <section
-    class="mt-4 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900"
+    class="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+    :class="layout === 'panel' ? 'p-4' : 'mt-4 p-6'"
   >
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      class="flex flex-col gap-4"
+      :class="layout === 'panel' ? '' : 'sm:flex-row sm:items-center sm:justify-between'"
+    >
       <div>
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
           Chapter Illustrations
@@ -39,7 +44,8 @@ const emit = defineEmits<{
       <button
         v-if="canAddImages"
         type="button"
-        class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        class="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        :class="layout === 'panel' ? 'w-full' : ''"
         :disabled="adding"
         @click="emit('add-images')"
       >
@@ -66,6 +72,7 @@ const emit = defineEmits<{
       :can-set-cover="true"
       :can-download="true"
       :can-delete="true"
+      :layout="layout"
       empty-text="No illustrations yet."
       @open-image="emit('open-image', $event)"
       @set-cover="emit('set-cover', $event)"

@@ -702,21 +702,6 @@ watch(
       </div>
     </div>
 
-    <!-- Illustrations Section - at top -->
-    <WikiPageIllustrationsSection
-      v-if="wikiImages.length > 0"
-      :images="wikiImages"
-      :image-sources="wikiImageSources"
-      :image-tags="wikiImageTags"
-      :cover-image-id="wikiCoverImageId"
-      :loading="wikiImagesLoading"
-      :error="wikiImageError"
-      :setting-cover-id="settingCoverId"
-      @open-image="openImageModal"
-      @set-cover="handleSetAsCover"
-      @download="handleDownloadImage"
-    />
-
     <!-- Loading state -->
     <div v-if="loading" class="flex justify-center items-center h-64">
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -926,6 +911,22 @@ watch(
             </div>
           </div>
         </div>
+
+        <!-- Illustrations -->
+        <WikiPageIllustrationsSection
+          v-if="wikiImages.length > 0"
+          layout="panel"
+          :images="wikiImages"
+          :image-sources="wikiImageSources"
+          :image-tags="wikiImageTags"
+          :cover-image-id="wikiCoverImageId"
+          :loading="wikiImagesLoading"
+          :error="wikiImageError"
+          :setting-cover-id="settingCoverId"
+          @open-image="openImageModal"
+          @set-cover="handleSetAsCover"
+          @download="handleDownloadImage"
+        />
       </div>
     </div>
   </div>

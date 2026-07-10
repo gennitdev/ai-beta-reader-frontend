@@ -693,46 +693,29 @@ watch(updateWikiOnSummary, (value) => {
     />
 
     <div class="w-full max-w-6xl md:mx-auto px-4 lg:px-8">
-      <!-- Chapter Illustrations - at top below title -->
-      <ChapterIllustrationsSection
-        v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
-        :images="chapterImages"
-        :image-sources="chapterImageSources"
-        :image-tags="chapterImageTags"
-        :cover-image-id="chapterCoverImageId"
-        :loading="chapterImagesLoading"
-        :adding="addingChapterImages"
-        :error="chapterImageError"
-        :setting-cover-id="settingCoverId"
-        :can-add-images="chapterImageUploadAvailable"
-        @add-images="handleAddIllustrations"
-        @open-image="openImageModal"
-        @set-cover="handleSetAsCover"
-        @download="handleDownloadImage"
-        @delete="requestDeleteIllustration"
-      />
+      <div class="lg:grid lg:grid-cols-3 lg:gap-8">
+        <div class="lg:col-span-2">
+          <ChapterStatusBar
+            :word-count="chapter?.word_count || 0"
+            :has-summary="Boolean(chapter?.summary)"
+            :has-notes="Boolean(chapter?.notes)"
+            :show-summary-panel="showSummaryPanel"
+            :show-notes-panel="showNotesPanel"
+            :has-illustrations="chapterImages.length > 0"
+            :show-illustrations-panel="showIllustrationsPanel || chapterImages.length > 0"
+            :desktop-images-available="desktopImagesAvailable"
+            @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
+            @toggle-notes-panel="showNotesPanel = !showNotesPanel"
+            @toggle-illustrations-panel="showIllustrationsPanel = !showIllustrationsPanel"
+          />
+          <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
+            <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+          </div>
 
-      <ChapterStatusBar
-        :word-count="chapter?.word_count || 0"
-        :has-summary="Boolean(chapter?.summary)"
-        :has-notes="Boolean(chapter?.notes)"
-        :show-summary-panel="showSummaryPanel"
-        :show-notes-panel="showNotesPanel"
-        :has-illustrations="chapterImages.length > 0"
-        :show-illustrations-panel="showIllustrationsPanel || chapterImages.length > 0"
-        :desktop-images-available="desktopImagesAvailable"
-        @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
-        @toggle-notes-panel="showNotesPanel = !showNotesPanel"
-        @toggle-illustrations-panel="showIllustrationsPanel = !showIllustrationsPanel"
-      />
-      <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
-        <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-      </div>
-
-      <div
-        v-else-if="chapter"
-        class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-6 sm:divide-y-0"
-      >
+          <div
+            v-else-if="chapter"
+            class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-6 sm:divide-y-0"
+          >
         <ChapterSummaryPanel
           v-if="showSummaryPanel"
           :chapter-summary="chapter.summary || ''"
@@ -800,6 +783,31 @@ watch(updateWikiOnSummary, (value) => {
           @toggle-review="toggleReviewExpansion"
           @toggle-prompt="togglePromptExpansion"
         />
+          </div>
+        </div>
+
+        <aside
+          v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
+          class="mt-6 lg:mt-0"
+        >
+          <ChapterIllustrationsSection
+            layout="panel"
+            :images="chapterImages"
+            :image-sources="chapterImageSources"
+            :image-tags="chapterImageTags"
+            :cover-image-id="chapterCoverImageId"
+            :loading="chapterImagesLoading"
+            :adding="addingChapterImages"
+            :error="chapterImageError"
+            :setting-cover-id="settingCoverId"
+            :can-add-images="chapterImageUploadAvailable"
+            @add-images="handleAddIllustrations"
+            @open-image="openImageModal"
+            @set-cover="handleSetAsCover"
+            @download="handleDownloadImage"
+            @delete="requestDeleteIllustration"
+          />
+        </aside>
       </div>
     </div>
   </div>
