@@ -583,8 +583,11 @@ watch([bookId, partId], async () => {
             </div>
           </div>
 
+          <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
+            <!-- Right column: part summary + illustrations -->
+            <div class="order-2 space-y-8">
           <section
-            class="mb-10 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+            class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
           >
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -705,7 +708,7 @@ watch([bookId, partId], async () => {
 
           <section
             v-if="desktopImagesAvailable || partImages.length > 0"
-            class="mb-10 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+            class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
           >
             <div class="mb-4">
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
@@ -725,7 +728,7 @@ watch([bookId, partId], async () => {
               Loading images...
             </div>
             <div v-else>
-              <div v-if="partImages.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div v-if="partImages.length" class="grid grid-cols-1 gap-3">
                 <button
                   v-for="image in partImages"
                   :key="image.id"
@@ -777,7 +780,10 @@ watch([bookId, partId], async () => {
               </div>
             </div>
           </section>
+            </div>
 
+            <!-- Left column: chapters in this part -->
+            <div class="order-1 lg:col-span-2">
           <section>
             <div class="mb-4 flex items-center justify-between">
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
@@ -878,6 +884,8 @@ watch([bookId, partId], async () => {
               </div>
             </div>
           </section>
+            </div>
+          </div>
         </template>
       </div>
     </div>
