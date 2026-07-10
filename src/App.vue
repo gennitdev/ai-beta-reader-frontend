@@ -185,8 +185,8 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
 </script>
 
 <template>
-  <div class="h-screen bg-gray-50 dark:bg-gray-900 flex">
-    <div class="flex-1 flex flex-col min-w-0">
+  <div class="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 flex">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- Header -->
       <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 safe-area-top">
         <div class="px-4 sm:px-6">
@@ -420,7 +420,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
       </header>
 
       <!-- Main content -->
-      <main class="flex-1 overflow-y-auto">
+      <main class="flex-1 min-h-0 overflow-y-auto">
         <RouterView />
       </main>
 
