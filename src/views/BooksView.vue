@@ -129,11 +129,11 @@ watch(
         <!-- Cover image or gradient fallback -->
         <div
           v-if="bookCoverSources[book.id]"
-          class="w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
+          class="aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
         >
           <img
             :src="bookCoverSources[book.id]"
-            class="w-full"
+            class="h-full w-full object-cover"
             :alt="`${book.title} cover`"
           />
         </div>
