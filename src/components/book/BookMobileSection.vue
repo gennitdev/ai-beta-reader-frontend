@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, toRefs, watch } from 'vue'
+import { computed, ref, toRefs, watch } from 'vue'
 import type { Component } from 'vue'
-import { DocumentTextIcon, BookOpenIcon, PhotoIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon, TrashIcon, BookmarkIcon, ArrowLeftIcon } from '@heroicons/vue/24/outline'
+import { DocumentTextIcon, BookOpenIcon, PhotoIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon, TrashIcon, BookmarkIcon, ArrowLeftIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
 import type { Book, ImageAsset, ImageWikiTag } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import type { PropType } from 'vue'
@@ -262,6 +262,47 @@ const openLightbox = () => {
 const closeLightbox = () => {
   showLightbox.value = false
 }
+
+// Wiki type filter (mirrors the desktop sidebar's secondary select)
+type WikiTypeFilter = 'all' | 'character' | 'location' | 'concept' | 'other'
+const showWikiTypeDropdown = ref(false)
+const wikiTypeFilter = ref<WikiTypeFilter>('all')
+
+const wikiTypeOptions: { id: WikiTypeFilter; label: string }[] = [
+  { id: 'all', label: 'All Types' },
+  { id: 'character', label: 'Characters' },
+  { id: 'location', label: 'Locations' },
+  { id: 'concept', label: 'Concepts' },
+  { id: 'other', label: 'Other' }
+]
+
+const wikiTypeIcon = (id: WikiTypeFilter): Component =>
+  id === 'all' ? BookOpenIcon : props.getTypeIcon(id)
+
+const currentWikiTypeOption = () =>
+  wikiTypeOptions.find((option) => option.id === wikiTypeFilter.value) || wikiTypeOptions[0]
+
+const selectWikiType = (id: WikiTypeFilter) => {
+  wikiTypeFilter.value = id
+  showWikiTypeDropdown.value = false
+}
+
+const hasAnyWikiPages = computed(() =>
+  Object.values(wikiPagesByType.value).some((pages) => pages.length > 0)
+)
+
+const filteredWikiPagesByType = computed<Record<string, BookWikiPage[]>>(() => {
+  if (wikiTypeFilter.value === 'all') {
+    return wikiPagesByType.value
+  }
+  const key = wikiTypeFilter.value
+  const pages = wikiPagesByType.value[key]
+  return pages && pages.length ? { [key]: pages } : {}
+})
+
+const hasFilteredWikiPages = computed(() =>
+  Object.values(filteredWikiPagesByType.value).some((pages) => pages.length > 0)
+)
 
 const expandedMobileParts = ref<Set<string>>(new Set())
 
@@ -597,7 +638,56 @@ watch(
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
 
-      <div v-else-if="Object.keys(wikiPagesByType).length > 0" class="space-y-8">
+      <template v-else>
+        <div v-if="hasAnyWikiPages" class="relative mb-6">
+          <button
+            @click="showWikiTypeDropdown = !showWikiTypeDropdown"
+            class="w-full flex items-center justify-between px-4 py-3 text-base font-medium bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm"
+          >
+            <span class="flex items-center">
+              <component
+                :is="wikiTypeIcon(wikiTypeFilter)"
+                :class="['w-5 h-5 mr-2', wikiTypeFilter === 'all' ? 'text-blue-600 dark:text-blue-400' : getTypeColor(wikiTypeFilter)]"
+              />
+              <span class="text-gray-900 dark:text-white">{{ currentWikiTypeOption().label }}</span>
+            </span>
+            <ChevronDownIcon
+              :class="['w-5 h-5 text-gray-500 transition-transform', showWikiTypeDropdown ? 'rotate-180' : '']"
+            />
+          </button>
+
+          <div
+            v-if="showWikiTypeDropdown"
+            class="fixed inset-0 z-0"
+            @click="showWikiTypeDropdown = false"
+          ></div>
+
+          <div
+            v-if="showWikiTypeDropdown"
+            class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+          >
+            <button
+              v-for="option in wikiTypeOptions"
+              :key="option.id"
+              type="button"
+              @click="selectWikiType(option.id)"
+              :class="[
+                'flex w-full items-center px-4 py-3 text-base transition-colors',
+                wikiTypeFilter === option.id
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+              ]"
+            >
+              <component
+                :is="wikiTypeIcon(option.id)"
+                :class="['w-5 h-5 mr-2', option.id === 'all' ? '' : getTypeColor(option.id)]"
+              />
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="hasFilteredWikiPages" class="space-y-8">
         <div class="flex justify-end">
           <button
             @click="openCreateWikiModal"
@@ -607,7 +697,7 @@ watch(
             New Wiki Page
           </button>
         </div>
-        <div v-for="(pages, type) in wikiPagesByType" :key="type" class="space-y-4">
+        <div v-for="(pages, type) in filteredWikiPagesByType" :key="type" class="space-y-4">
           <div class="flex items-center space-x-2">
             <component :is="getTypeIcon(type)" :class="['w-6 h-6', getTypeColor(type)]" />
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white capitalize">
@@ -688,23 +778,41 @@ watch(
         </div>
       </div>
 
-      <div v-else class="text-center py-16">
-        <BookOpenIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No wiki pages yet</h3>
-        <p class="text-gray-600 dark:text-gray-400 mb-4">
-          Create wiki pages to track characters, locations, and concepts in your book.
-        </p>
-        <button
-          @click="openCreateWikiModal"
-          class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <PlusIcon class="w-5 h-5 mr-2" />
-          Create Wiki Page
-        </button>
-        <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">
-          Wiki pages can also be auto-generated when you create chapter summaries.
-        </p>
-      </div>
+        <div v-else-if="hasAnyWikiPages" class="text-center py-16">
+          <BookOpenIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No {{ wikiTypeFilter }} pages yet
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-4">
+            Try a different type, or add a new page.
+          </p>
+          <button
+            @click="openCreateWikiModal"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <PlusIcon class="w-5 h-5 mr-2" />
+            New Wiki Page
+          </button>
+        </div>
+
+        <div v-else class="text-center py-16">
+          <BookOpenIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No wiki pages yet</h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-4">
+            Create wiki pages to track characters, locations, and concepts in your book.
+          </p>
+          <button
+            @click="openCreateWikiModal"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <PlusIcon class="w-5 h-5 mr-2" />
+            Create Wiki Page
+          </button>
+          <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            Wiki pages can also be auto-generated when you create chapter summaries.
+          </p>
+        </div>
+      </template>
     </div>
 
     <!-- Images Tab Content -->

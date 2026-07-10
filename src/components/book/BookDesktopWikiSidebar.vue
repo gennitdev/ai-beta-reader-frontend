@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { Component } from 'vue'
+import { computed, type Component } from 'vue'
 import { BookmarkIcon, BookOpenIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import type { BookWikiPage } from '@/types/bookView'
 
-defineProps<{
+const props = defineProps<{
   bookId: string
   loadingWiki: boolean
   hasWikiPages: boolean
@@ -14,7 +14,13 @@ defineProps<{
   activeWikiPageId?: string
   toggleWikiPagePinned: (page: BookWikiPage) => void | Promise<void>
   openCreateWikiModal?: () => void
+  filterActive?: boolean
+  filterLabel?: string
 }>()
+
+const hasFilteredPages = computed(() =>
+  Object.values(props.wikiPagesByType).some((pages) => pages.length > 0)
+)
 </script>
 
 <template>
@@ -23,7 +29,7 @@ defineProps<{
       <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
     </div>
 
-    <div v-else-if="hasWikiPages" class="space-y-4">
+    <div v-else-if="hasFilteredPages" class="space-y-4">
       <button
         v-if="openCreateWikiModal"
         @click="openCreateWikiModal"
@@ -103,6 +109,24 @@ defineProps<{
           </router-link>
         </div>
       </div>
+    </div>
+
+    <div v-else-if="hasWikiPages && filterActive" class="text-center py-8">
+      <BookOpenIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
+      <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+        No {{ filterLabel }} pages yet
+      </h3>
+      <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+        Try a different type, or add a new page.
+      </p>
+      <button
+        v-if="openCreateWikiModal"
+        @click="openCreateWikiModal"
+        class="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      >
+        <PlusIcon class="w-4 h-4 mr-1" />
+        New Wiki Page
+      </button>
     </div>
 
     <div v-else class="text-center py-8">
