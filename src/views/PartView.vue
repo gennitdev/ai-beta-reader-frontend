@@ -22,7 +22,6 @@ import {
   generatePartSummary as generatePartSummaryAi,
 } from "@/lib/openai";
 import type { Book, BookPart, ImageAsset } from "@/lib/database";
-import ImageLightbox from "@/components/images/ImageLightbox.vue";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
 import Modal from "@/components/Modal.vue";
 
@@ -71,15 +70,12 @@ const {
   activeImageLabel: partActiveImageLabel,
   savingImageNotes: partSavingImageNotes,
   savingImageTags: partSavingImageTags,
-  hasNextImage: hasNextPartImage,
-  hasPrevImage: hasPrevPartImage,
   refreshPartImages,
   openImageModal: openPartImageModal,
+  openImageAsset: openPartCoverImageModal,
   closeImageModal: closePartImageModal,
   handleSaveActiveImageNotes: handleSavePartImageNotes,
   handleSaveActiveImageTags: handleSavePartImageTags,
-  goToNextImage: goToNextPartImage,
-  goToPrevImage: goToPrevPartImage,
   handleDownloadImage: handleDownloadPartImage,
 } = usePartImages(
   () => partId.value,
@@ -96,7 +92,6 @@ const partCoverImage = ref<ImageAsset | null>(null);
 const partCoverSrc = ref<string | null>(null);
 const partCoverLoading = ref(false);
 const partCoverError = ref<string | null>(null);
-const partCoverLightboxOpen = ref(false);
 const showDeletePartCoverModal = ref(false);
 const deletingPartCover = ref(false);
 const chapterThumbnails = ref<Record<string, string>>({});
@@ -278,13 +273,9 @@ const handleDownloadPartCover = () => {
 };
 
 const openPartCoverLightbox = () => {
-  if (partCoverSrc.value) {
-    partCoverLightboxOpen.value = true;
+  if (partCoverImage.value && partCoverSrc.value) {
+    openPartCoverImageModal(partCoverImage.value, partCoverSrc.value);
   }
-};
-
-const closePartCoverLightbox = () => {
-  partCoverLightboxOpen.value = false;
 };
 
 const goBack = () => {
@@ -912,34 +903,7 @@ watch([bookId, partId], async () => {
       @save-tags="handleSavePartImageTags"
       @download="handleDownloadPartImage"
     />
-    <template #footer>
-      <div class="flex items-center justify-between">
-        <button
-          type="button"
-          class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
-          :disabled="!hasPrevPartImage"
-          @click="goToPrevPartImage"
-        >
-          Previous
-        </button>
-        <button
-          type="button"
-          class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
-          :disabled="!hasNextPartImage"
-          @click="goToNextPartImage"
-        >
-          Next
-        </button>
-      </div>
-    </template>
   </Modal>
-
-  <ImageLightbox
-    :open="partCoverLightboxOpen"
-    :image-src="partCoverSrc"
-    :caption="`${partLabel}${partName ? ': ' + partName : ''} - Cover`"
-    @close="closePartCoverLightbox"
-  />
 
   <!-- Delete Part Cover Confirmation Modal -->
   <teleport to="body">

@@ -94,8 +94,6 @@ const {
   savingImageNotes,
   savingImageTags,
   heroImageSrc,
-  hasNextImage,
-  hasPrevImage,
   illustrationToDeleteName,
   refreshChapterImages,
   handleAddIllustrations,
@@ -104,8 +102,6 @@ const {
   handleDeleteIllustration,
   openImageModal,
   closeImageModal,
-  goToNextImage,
-  goToPrevImage,
   handleSetAsCover,
   handleDownloadImage,
   handleSaveActiveImageNotes,
@@ -828,26 +824,6 @@ watch(updateWikiOnSummary, (value) => {
       @save-tags="handleSaveActiveImageTags"
       @download="handleDownloadImage"
     />
-    <template #footer>
-      <div class="flex items-center justify-between">
-        <button
-          type="button"
-          class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
-          :disabled="!hasPrevImage"
-          @click="goToPrevImage"
-        >
-          Previous
-        </button>
-        <button
-          type="button"
-          class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
-          :disabled="!hasNextImage"
-          @click="goToNextImage"
-        >
-          Next
-        </button>
-      </div>
-    </template>
   </Modal>
 
   <!-- Delete Chapter Confirmation Modal -->
