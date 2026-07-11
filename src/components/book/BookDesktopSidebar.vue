@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { Component } from 'vue'
 import {
   BookOpenIcon,
@@ -80,6 +80,43 @@ const sectionOptions = [
   { id: 'wiki', label: 'Wiki Pages', icon: BookOpenIcon, route: (bookId: string) => `/books/${bookId}?tab=wiki` },
   { id: 'images', label: 'Images', icon: PhotoIcon, route: (bookId: string) => `/books/${bookId}?tab=images` }
 ]
+
+// Secondary filter shown when the Wiki Pages section is active
+type WikiTypeFilter = 'all' | 'character' | 'location' | 'concept' | 'other'
+const showWikiTypeDropdown = ref(false)
+const wikiTypeFilter = ref<WikiTypeFilter>('all')
+
+const wikiTypeOptions: { id: WikiTypeFilter; label: string }[] = [
+  { id: 'all', label: 'All Types' },
+  { id: 'character', label: 'Characters' },
+  { id: 'location', label: 'Locations' },
+  { id: 'concept', label: 'Concepts' },
+  { id: 'other', label: 'Other' }
+]
+
+const wikiTypeIcon = (id: WikiTypeFilter): Component =>
+  id === 'all' ? BookOpenIcon : props.getTypeIcon(id)
+
+const currentWikiTypeOption = () =>
+  wikiTypeOptions.find((option) => option.id === wikiTypeFilter.value) || wikiTypeOptions[0]
+
+const closeWikiTypeDropdown = () => {
+  showWikiTypeDropdown.value = false
+}
+
+const selectWikiType = (id: WikiTypeFilter) => {
+  wikiTypeFilter.value = id
+  closeWikiTypeDropdown()
+}
+
+const filteredWikiPagesByType = computed<Record<string, BookWikiPage[]>>(() => {
+  if (wikiTypeFilter.value === 'all') {
+    return props.wikiPagesByType
+  }
+  const key = wikiTypeFilter.value
+  const pages = props.wikiPagesByType[key]
+  return pages && pages.length ? { [key]: pages } : {}
+})
 
 const currentSectionLabel = () => {
   const section = sectionOptions.find((option) => option.id === props.currentTab)
@@ -282,6 +319,63 @@ const closeLightbox = () => {
         </Transition>
       </div>
 
+      <div v-if="currentTab === 'wiki'" class="relative mb-2">
+        <button
+          @click="showWikiTypeDropdown = !showWikiTypeDropdown"
+          class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium bg-gray-50 dark:bg-gray-700/60 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+        >
+          <span class="flex items-center">
+            <component
+              :is="wikiTypeIcon(wikiTypeFilter)"
+              :class="['w-4 h-4 mr-2', wikiTypeFilter === 'all' ? 'text-blue-600 dark:text-blue-400' : getTypeColor(wikiTypeFilter)]"
+            />
+            <span class="text-gray-900 dark:text-white">{{ currentWikiTypeOption().label }}</span>
+          </span>
+          <ChevronDownIcon
+            :class="['w-4 h-4 text-gray-500 transition-transform', showWikiTypeDropdown ? 'rotate-180' : '']"
+          />
+        </button>
+
+        <div
+          v-if="showWikiTypeDropdown"
+          class="fixed inset-0 z-0"
+          @click="closeWikiTypeDropdown"
+        ></div>
+
+        <Transition
+          enter-active-class="transition ease-out duration-100"
+          enter-from-class="transform opacity-0 scale-95"
+          enter-to-class="transform opacity-100 scale-100"
+          leave-active-class="transition ease-in duration-75"
+          leave-from-class="transform opacity-100 scale-100"
+          leave-to-class="transform opacity-0 scale-95"
+        >
+          <div
+            v-if="showWikiTypeDropdown"
+            class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 py-1"
+          >
+            <button
+              v-for="option in wikiTypeOptions"
+              :key="option.id"
+              type="button"
+              @click="selectWikiType(option.id)"
+              :class="[
+                'flex w-full items-center px-3 py-2 text-sm transition-colors',
+                wikiTypeFilter === option.id
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600'
+              ]"
+            >
+              <component
+                :is="wikiTypeIcon(option.id)"
+                :class="['w-4 h-4 mr-2', option.id === 'all' ? '' : getTypeColor(option.id)]"
+              />
+              {{ option.label }}
+            </button>
+          </div>
+        </Transition>
+      </div>
+
       <BookDesktopChapterSidebar
         v-if="currentTab === 'chapters'"
         :book-id="bookId"
@@ -310,13 +404,15 @@ const closeLightbox = () => {
         :book-id="bookId"
         :loading-wiki="loadingWiki"
         :has-wiki-pages="hasWikiPages"
-        :wiki-pages-by-type="wikiPagesByType"
+        :wiki-pages-by-type="filteredWikiPagesByType"
         :wiki-page-thumbnails="wikiPageThumbnails"
         :get-type-icon="getTypeIcon"
         :get-type-color="getTypeColor"
         :active-wiki-page-id="activeWikiPageId"
         :toggle-wiki-page-pinned="toggleWikiPagePinned"
         :open-create-wiki-modal="openCreateWikiModal"
+        :filter-active="wikiTypeFilter !== 'all'"
+        :filter-label="wikiTypeFilter"
       />
 
       <BookDesktopImagesSidebar

@@ -33,23 +33,33 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
   const savingImageNotes = ref(false);
   const savingImageTags = ref(false);
 
+  // An image opened in the modal that is not part of the illustration list
+  // (e.g. the part cover, which is stored as a separate asset).
+  const externalImage = ref<ImageAsset | null>(null);
+  const externalImageSource = ref<string | null>(null);
+  const externalImageTags = ref<ImageWikiTag[]>([]);
+
   const activeImageSource = computed(() => {
+    if (externalImage.value) return externalImageSource.value;
     const id = activeImageId.value;
     if (!id) return null;
     return partImageSources.value[id] ?? null;
   });
 
   const activeImage = computed(() => {
+    if (externalImage.value) return externalImage.value;
     if (!activeImageId.value) return null;
     return partImages.value.find((item) => item.id === activeImageId.value) ?? null;
   });
 
   const activeImageTags = computed(() => {
+    if (externalImage.value) return externalImageTags.value;
     if (!activeImageId.value) return [];
     return partImageTags.value[activeImageId.value] ?? [];
   });
 
   const activeImageLabel = computed(() => {
+    if (externalImage.value) return externalImage.value.file_name ?? "";
     if (!activeImageId.value) return "";
     const image = partImages.value.find((item) => item.id === activeImageId.value);
     return image?.file_name ?? "";
@@ -123,13 +133,32 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
 
   const openImageModal = (imageId: string) => {
     if (!partImageSources.value[imageId]) return;
+    externalImage.value = null;
+    externalImageSource.value = null;
+    externalImageTags.value = [];
     activeImageId.value = imageId;
     showImageLightbox.value = true;
+  };
+
+  const openImageAsset = async (asset: ImageAsset, source: string) => {
+    activeImageId.value = null;
+    externalImage.value = asset;
+    externalImageSource.value = source;
+    externalImageTags.value = [];
+    showImageLightbox.value = true;
+    try {
+      externalImageTags.value = await getImageWikiTags(asset.id);
+    } catch (error) {
+      console.warn("Failed to load image tags", error);
+    }
   };
 
   const closeImageModal = () => {
     showImageLightbox.value = false;
     activeImageId.value = null;
+    externalImage.value = null;
+    externalImageSource.value = null;
+    externalImageTags.value = [];
   };
 
   const handleSaveActiveImageNotes = async (notes: string) => {
@@ -144,9 +173,13 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
         notes,
         updated_at: new Date().toISOString(),
       };
-      partImages.value = partImages.value.map((item) =>
-        item.id === image.id ? updatedImage : item
-      );
+      if (externalImage.value && externalImage.value.id === image.id) {
+        externalImage.value = updatedImage;
+      } else {
+        partImages.value = partImages.value.map((item) =>
+          item.id === image.id ? updatedImage : item
+        );
+      }
     } catch (error) {
       partImageError.value =
         error instanceof Error ? error.message : "Failed to save image notes";
@@ -162,10 +195,15 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
     savingImageTags.value = true;
     try {
       await setImageWikiTags(image.id, wikiPageIds);
-      partImageTags.value = {
-        ...partImageTags.value,
-        [image.id]: await getImageWikiTags(image.id),
-      };
+      const refreshedTags = await getImageWikiTags(image.id);
+      if (externalImage.value && externalImage.value.id === image.id) {
+        externalImageTags.value = refreshedTags;
+      } else {
+        partImageTags.value = {
+          ...partImageTags.value,
+          [image.id]: refreshedTags,
+        };
+      }
     } catch (error) {
       partImageError.value =
         error instanceof Error ? error.message : "Failed to save image tags";
@@ -193,10 +231,13 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
   };
 
   const handleDownloadImage = (imageId: string) => {
-    const imageSrc = partImageSources.value[imageId];
+    const isExternal = externalImage.value?.id === imageId;
+    const imageSrc = isExternal ? externalImageSource.value : partImageSources.value[imageId];
     if (!imageSrc) return;
 
-    const image = partImages.value.find((img) => img.id === imageId);
+    const image = isExternal
+      ? externalImage.value
+      : partImages.value.find((img) => img.id === imageId);
     const fileName = image?.file_name || `illustration-${imageId}.jpg`;
 
     const link = document.createElement("a");
@@ -237,6 +278,7 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
     // Methods
     refreshPartImages,
     openImageModal,
+    openImageAsset,
     closeImageModal,
     handleSaveActiveImageNotes,
     handleSaveActiveImageTags,

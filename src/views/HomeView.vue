@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, LightBulbIcon, CogIcon } from '@heroicons/vue/24/outline'
+import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
 import heroImage from '@/assets/art-attack-RpSTMkZGKyE-unsplash.jpg'
 import { useDatabase } from '@/composables/useDatabase'
 
@@ -42,60 +42,6 @@ const quickSteps = [
   { step: '4', title: 'Review!', description: 'AI knows your whole story', highlight: true },
 ]
 
-const privacyHighlights = [
-  {
-    icon: DocumentTextIcon,
-    title: 'Local Storage',
-    description: 'Works offline. Your data never leaves your device',
-  },
-  {
-    icon: SparklesIcon,
-    title: 'Your OpenAI Key',
-    description: 'Use your own API key. Full control over costs',
-  },
-  {
-    icon: ChatBubbleLeftRightIcon,
-    title: 'Encrypted Backups',
-    description: 'Optional sync to your Google Drive, encrypted',
-  },
-  {
-    icon: CogIcon,
-    title: 'Full Privacy',
-    description: 'No servers storing your creative work',
-  },
-]
-
-const quickOverviewSteps = [
-  {
-    number: '1',
-    title: 'Create Book',
-    description: 'Start your project',
-    wrapperClass: 'bg-blue-50 dark:bg-gray-800',
-    badgeClass: 'bg-blue-600',
-  },
-  {
-    number: '2',
-    title: 'Write',
-    description: 'Add chapters',
-    wrapperClass: 'bg-blue-50 dark:bg-gray-800',
-    badgeClass: 'bg-blue-600',
-  },
-  {
-    number: '3',
-    title: 'Summarize',
-    description: 'AI tracks story',
-    wrapperClass: 'bg-blue-50 dark:bg-gray-800',
-    badgeClass: 'bg-blue-600',
-  },
-  {
-    number: '4',
-    title: '✨ Review',
-    description: 'Get feedback',
-    wrapperClass: 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700',
-    badgeClass: 'bg-indigo-600',
-  },
-]
-
 const detailedSteps = [
   {
     number: '1',
@@ -132,8 +78,8 @@ const detailedSteps = [
     <div v-if="isLoading" class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
     </div>
-    <!-- Mobile landing page - only shown when user has no books -->
-    <div v-else class="lg:hidden">
+    <!-- Landing page - only shown when user has no books -->
+    <div v-else>
       <div class="h-64 sm:h-80 overflow-hidden">
         <img
           :src="heroImage"
@@ -266,135 +212,6 @@ const detailedSteps = [
         </div>
       </div>
     </div>
-
-    <!-- Desktop landing page - only shown when user has no books -->
-    <div v-if="!isLoading" class="hidden lg:flex min-h-[calc(100vh-4rem)]">
-      <div class="w-1/3 relative overflow-hidden">
-        <img
-          :src="heroImage"
-          alt="Creative writing inspiration"
-          class="w-full h-full object-cover"
-        />
-        <div class="absolute inset-0 bg-gradient-to-r from-transparent to-black/10"></div>
-      </div>
-
-      <div class="w-2/3 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 relative overflow-y-auto">
-        <div class="px-8 xl:px-12 py-8 lg:py-12 max-w-4xl">
-            <div class="mb-8">
-              <h1 class="text-4xl lg:text-5xl xl:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight space-grotesk-logo">
-                Beta-bot
-              </h1>
-              <p class="text-lg lg:text-xl text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
-                Your AI Beta Reader. Get intelligent feedback on your creative writing. Organize your manuscripts, track your progress, and receive AI-powered reviews that understand your story's context.
-              </p>
-              <div class="bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
-                <p class="text-sm text-blue-900 dark:text-blue-100 font-semibold mb-2">
-                  🔒 Privacy-First Local Storage
-                </p>
-                <p class="text-sm text-blue-800 dark:text-blue-200">
-                  All your data stays on your device. Optional encrypted backups to your own Google Drive. You provide your own OpenAI API key for AI features - no third-party servers see your work.
-                </p>
-              </div>
-
-              <div class="flex flex-wrap gap-4 mb-10">
-                <button
-                  @click="handleGetStarted"
-                  class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-lg"
-                >
-                  Get Started
-                </button>
-                <router-link
-                  to="/docs"
-                  class="inline-flex items-center justify-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                >
-                  <BookOpenIcon class="w-5 h-5 mr-2" />
-                  See How It Works
-                </router-link>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-              <div
-                v-for="feature in privacyHighlights"
-                :key="feature.title"
-                class="flex items-start space-x-2 bg-white dark:bg-gray-800 p-3 rounded-lg"
-              >
-                <component :is="feature.icon" class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">{{ feature.title }}</h3>
-                  <p class="text-gray-600 dark:text-gray-300 text-xs">{{ feature.description }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="border-t border-gray-200 dark:border-gray-700 pt-8">
-              <div class="flex items-center justify-between mb-6">
-                <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Quick Overview</h2>
-                <router-link
-                  to="/docs"
-                  class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium text-sm flex items-center"
-                >
-                  View Full Tutorial with Screenshots
-                  <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
-                </router-link>
-              </div>
-
-              <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div
-                  v-for="step in quickOverviewSteps"
-                  :key="step.number"
-                  :class="['rounded-lg p-3', step.wrapperClass]"
-                >
-                  <div class="flex items-start space-x-2">
-                    <span
-                      :class="[
-                        'flex-shrink-0 w-5 h-5 text-white rounded-full flex items-center justify-center text-xs font-bold',
-                        step.badgeClass
-                      ]"
-                    >
-                      {{ step.number }}
-                    </span>
-                    <div>
-                      <h3 class="font-semibold text-sm text-gray-900 dark:text-white">{{ step.title }}</h3>
-                      <p class="text-xs text-gray-600 dark:text-gray-300">{{ step.description }}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                The AI automatically understands your entire story through chapter summaries - no need to explain backstory!
-                <router-link to="/docs" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 ml-1">See it in action →</router-link>
-              </p>
-
-              <div class="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p class="font-semibold text-gray-900 dark:text-white mb-2">Core Features:</p>
-                  <ul class="text-gray-600 dark:text-gray-300 space-y-1">
-                    <li class="flex items-center"><span class="mr-2">•</span>Rich markdown editor</li>
-                    <li class="flex items-center"><span class="mr-2">•</span>Multiple review styles</li>
-                    <li class="flex items-center"><span class="mr-2">•</span>Chapter organization</li>
-                  </ul>
-                </div>
-                <div>
-                  <p class="font-semibold text-gray-900 dark:text-white mb-2">Advanced Tools:</p>
-                  <ul class="text-gray-600 dark:text-gray-300 space-y-1">
-                    <li class="flex items-center"><span class="mr-2">•</span>Custom AI profiles</li>
-                    <li class="flex items-center"><span class="mr-2">•</span>Character wikis</li>
-                    <li class="flex items-center"><span class="mr-2">•</span>Search & replace</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="absolute bottom-4 right-4 text-xs text-gray-500 dark:text-gray-400">
-            Illustration by <a href="https://unsplash.com/@artattackzone?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Art Attack</a>
-          </div>
-        </div>
-      </div>
     </div>
 
 </template>

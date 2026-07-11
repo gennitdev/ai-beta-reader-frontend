@@ -129,17 +129,17 @@ watch(
         <!-- Cover image or gradient fallback -->
         <div
           v-if="bookCoverSources[book.id]"
-          class="w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
+          class="aspect-[9/16] w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
         >
           <img
             :src="bookCoverSources[book.id]"
-            class="w-full"
+            class="h-full w-full object-cover"
             :alt="`${book.title} cover`"
           />
         </div>
         <div
           v-else
-          class="aspect-[16/9] w-full bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
+          class="aspect-[9/16] w-full bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
         >
           <BookOpenIcon class="w-16 h-16 text-blue-300 dark:text-blue-600 opacity-60" />
         </div>

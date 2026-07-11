@@ -13,6 +13,9 @@ defineProps<{
   canDownload?: boolean
   canDelete?: boolean
   emptyText?: string
+  // 'grid' (default) is a responsive multi-column grid; 'panel' is a single
+  // column for use inside a narrow side panel.
+  layout?: 'grid' | 'panel'
 }>()
 
 const emit = defineEmits<{
@@ -32,7 +35,11 @@ const emit = defineEmits<{
       Loading illustrations...
     </div>
 
-    <div v-else-if="images.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+    <div
+      v-else-if="images.length"
+      class="grid gap-3"
+      :class="layout === 'panel' ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'"
+    >
       <div
         v-for="image in images"
         :key="image.id"

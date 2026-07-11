@@ -91,15 +91,11 @@ const {
   activeImageTags,
   activeImageLabel,
   heroImageSrc,
-  hasNextImage,
-  hasPrevImage,
   savingImageNotes,
   savingImageTags,
   refreshWikiImages,
   openImageModal,
   closeImageModal,
-  goToNextImage,
-  goToPrevImage,
   handleSetAsCover,
   handleDownloadImage,
   handleSaveActiveImageNotes,
@@ -706,21 +702,6 @@ watch(
       </div>
     </div>
 
-    <!-- Illustrations Section - at top -->
-    <WikiPageIllustrationsSection
-      v-if="wikiImages.length > 0"
-      :images="wikiImages"
-      :image-sources="wikiImageSources"
-      :image-tags="wikiImageTags"
-      :cover-image-id="wikiCoverImageId"
-      :loading="wikiImagesLoading"
-      :error="wikiImageError"
-      :setting-cover-id="settingCoverId"
-      @open-image="openImageModal"
-      @set-cover="handleSetAsCover"
-      @download="handleDownloadImage"
-    />
-
     <!-- Loading state -->
     <div v-if="loading" class="flex justify-center items-center h-64">
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -930,6 +911,22 @@ watch(
             </div>
           </div>
         </div>
+
+        <!-- Illustrations -->
+        <WikiPageIllustrationsSection
+          v-if="wikiImages.length > 0"
+          layout="panel"
+          :images="wikiImages"
+          :image-sources="wikiImageSources"
+          :image-tags="wikiImageTags"
+          :cover-image-id="wikiCoverImageId"
+          :loading="wikiImagesLoading"
+          :error="wikiImageError"
+          :setting-cover-id="settingCoverId"
+          @open-image="openImageModal"
+          @set-cover="handleSetAsCover"
+          @download="handleDownloadImage"
+        />
       </div>
     </div>
   </div>
@@ -989,26 +986,6 @@ watch(
         @save-tags="handleSaveActiveImageTags"
         @download="handleDownloadImage"
       />
-      <template #footer>
-        <div class="flex items-center justify-between">
-          <button
-            type="button"
-            class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
-            :disabled="!hasPrevImage"
-            @click="goToPrevImage"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:text-white"
-            :disabled="!hasNextImage"
-            @click="goToNextImage"
-          >
-            Next
-          </button>
-        </div>
-      </template>
     </Modal>
   </div>
 </template>
