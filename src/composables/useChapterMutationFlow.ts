@@ -88,6 +88,7 @@ interface ChapterMutationFlowOptions {
     wikiPageId: string,
     linkSource?: 'ai_summary' | 'manual',
   ) => Promise<void>
+  reloadWikiLinks: () => Promise<void>
   reloadCharacters: () => Promise<void>
   reloadReviews: () => Promise<void>
   openSettings: () => void
@@ -320,6 +321,7 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
         if (wikiResults.length > 0) {
           showWikiUpdateResults.value = true
         }
+        await options.reloadWikiLinks()
       }
 
       summaryProgress.value = 'Finishing up...'

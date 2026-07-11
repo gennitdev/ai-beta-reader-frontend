@@ -8,9 +8,12 @@ import FontSizeControl from '@/components/reading/FontSizeControl.vue'
 import WikiPageHeroSection from '@/components/wiki/WikiPageHeroSection.vue'
 import WikiPageIllustrationsSection from '@/components/wiki/WikiPageIllustrationsSection.vue'
 import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
+import AutocompleteMultiSelect, {
+  type AutocompleteOption,
+} from '@/components/links/AutocompleteMultiSelect.vue'
 import Modal from '@/components/Modal.vue'
 import { useReadingFontSize } from '@/composables/useReadingFontSize'
-import type { Book } from '@/lib/database'
+import type { Book, Chapter as DatabaseChapter, WikiPageChapterLink } from '@/lib/database'
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -71,10 +74,14 @@ const isMobileRoute = computed(() => route.meta?.mobile === true)
 // Use local database
 const {
   books,
+  chapters,
   loadBooks,
+  loadChapters,
   getWikiPageById,
   updateWikiPage,
   deleteWikiPage,
+  getWikiPageChapterLinks,
+  setWikiPageChapterLinks,
 } = useDatabase()
 
 // Use wiki images composable
@@ -112,6 +119,11 @@ const { fontSize } = useReadingFontSize()
 const wikiPage = ref<WikiPage | null>(null)
 const wikiHistory = ref<WikiUpdate[]>([])
 const characters = ref<Character[]>([])
+const linkedChapters = ref<WikiPageChapterLink[]>([])
+const loadingLinkedChapters = ref(false)
+const isEditingLinkedChapters = ref(false)
+const selectedLinkedChapterIds = ref<string[]>([])
+const savingLinkedChapters = ref(false)
 const loading = ref(false)
 const loadingHistory = ref(false)
 const showHistory = ref(false)
@@ -173,6 +185,8 @@ const bookTitle = computed(() => {
 // BookView handles mobile display via CSS media queries
 const bookWikiUrl = computed(() => `/books/${bookId.value}?tab=wiki`)
 
+const currentBook = computed(() => books.value.find((book: Book) => book.id === bookId.value) || null)
+
 const parseStringArray = (value: unknown): string[] => {
   if (!value) return []
   if (Array.isArray(value)) {
@@ -210,11 +224,47 @@ const normalizeTags = (tags: string[]): string[] => {
   return normalized
 }
 
+const parseIdArray = (value: string | null | undefined): string[] => {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((entry): entry is string => typeof entry === 'string')
+    }
+  } catch {
+    // Ignore parse errors and fall back to empty array.
+  }
+  return []
+}
+
+const chapterOptions = computed<AutocompleteOption[]>(() => {
+  const chapterOrder = parseIdArray(currentBook.value?.chapter_order)
+  const chapterMap = new Map(chapters.value.map((chapter: DatabaseChapter) => [chapter.id, chapter]))
+  const orderedIds = [
+    ...chapterOrder.filter((id) => chapterMap.has(id)),
+    ...chapters.value
+      .map((chapter) => chapter.id)
+      .filter((id) => !chapterOrder.includes(id)),
+  ]
+
+  return orderedIds.reduce<AutocompleteOption[]>((options, id, index) => {
+      const chapter = chapterMap.get(id)
+      if (!chapter) return options
+      options.push({
+        id: chapter.id,
+        label: chapter.title || `Chapter ${index + 1}`,
+        detail: `Ch ${index + 1}`,
+      })
+      return options
+    }, [])
+})
+
 const loadWikiPage = async () => {
   loading.value = true
   try {
     // Load books for breadcrumb
     await loadBooks()
+    await loadChapters(bookId.value)
 
     // Load wiki page from local database
     const pageData = await getWikiPageById(wikiPageId.value)
@@ -254,6 +304,27 @@ const loadWikiPage = async () => {
 const loadCharacters = async () => {
   // TODO: Load characters from local database if needed
   characters.value = []
+}
+
+const loadLinkedChapters = async () => {
+  if (!wikiPageId.value) {
+    linkedChapters.value = []
+    selectedLinkedChapterIds.value = []
+    return
+  }
+
+  loadingLinkedChapters.value = true
+  try {
+    const links = await getWikiPageChapterLinks(wikiPageId.value)
+    linkedChapters.value = links
+    selectedLinkedChapterIds.value = links.map((link) => link.chapter_id)
+  } catch (error) {
+    console.error('Failed to load linked chapters:', error)
+    linkedChapters.value = []
+    selectedLinkedChapterIds.value = []
+  } finally {
+    loadingLinkedChapters.value = false
+  }
 }
 
 const loadWikiHistory = async () => {
@@ -453,15 +524,49 @@ const toggleHistory = () => {
   }
 }
 
+const startEditingLinkedChapters = () => {
+  selectedLinkedChapterIds.value = linkedChapters.value.map((link) => link.chapter_id)
+  isEditingLinkedChapters.value = true
+}
+
+const cancelEditingLinkedChapters = () => {
+  selectedLinkedChapterIds.value = linkedChapters.value.map((link) => link.chapter_id)
+  isEditingLinkedChapters.value = false
+}
+
+const saveLinkedChapters = async () => {
+  if (!wikiPage.value) return
+
+  savingLinkedChapters.value = true
+  try {
+    await setWikiPageChapterLinks(wikiPage.value.id, selectedLinkedChapterIds.value, 'manual')
+    await loadLinkedChapters()
+    isEditingLinkedChapters.value = false
+  } catch (error) {
+    console.error('Failed to save linked chapters:', error)
+    alert('Failed to save linked chapters')
+  } finally {
+    savingLinkedChapters.value = false
+  }
+}
+
+const openLinkedChapter = (chapterId: string) => {
+  const prefix = isMobileRoute.value ? '/m/books' : '/books'
+  router.push(`${prefix}/${bookId.value}/chapters/${chapterId}`)
+}
+
 onMounted(() => {
   loadWikiPage()
   loadCharacters()
+  loadLinkedChapters()
 })
 
 watch(
   () => wikiPageId.value,
   () => {
     loadWikiPage()
+    isEditingLinkedChapters.value = false
+    loadLinkedChapters()
   }
 )
 </script>
@@ -874,6 +979,79 @@ watch(
                 <span class="ml-2 text-gray-400 dark:text-gray-100">{{ formatDate(wikiPage.updated_at) }}</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+          <div class="p-6">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Source Chapters</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Chapters linked to this wiki page as source material.
+                </p>
+              </div>
+              <button
+                v-if="!isEditingLinkedChapters"
+                type="button"
+                class="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                @click="startEditingLinkedChapters"
+              >
+                {{ linkedChapters.length ? 'Edit links' : 'Add links' }}
+              </button>
+            </div>
+
+            <div v-if="loadingLinkedChapters" class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+              Loading links...
+            </div>
+
+            <div v-else-if="isEditingLinkedChapters" class="mt-4 space-y-3">
+              <AutocompleteMultiSelect
+                :options="chapterOptions"
+                :selected-ids="selectedLinkedChapterIds"
+                :disabled="savingLinkedChapters"
+                placeholder="Link a chapter..."
+                empty-message="No chapters match this search."
+                @update:selected-ids="selectedLinkedChapterIds = $event"
+              />
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="savingLinkedChapters"
+                  @click="saveLinkedChapters"
+                >
+                  {{ savingLinkedChapters ? 'Saving...' : 'Save links' }}
+                </button>
+                <button
+                  type="button"
+                  class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+                  :disabled="savingLinkedChapters"
+                  @click="cancelEditingLinkedChapters"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <div v-else-if="linkedChapters.length" class="mt-4 space-y-2">
+              <button
+                v-for="link in linkedChapters"
+                :key="link.chapter_id"
+                type="button"
+                class="flex w-full items-center justify-between rounded-lg bg-blue-50 px-3 py-2 text-left text-sm text-blue-800 ring-1 ring-inset ring-blue-200 transition hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-200 dark:ring-blue-700 dark:hover:bg-blue-900/50"
+                @click="openLinkedChapter(link.chapter_id)"
+              >
+                <span class="truncate pr-3">{{ link.chapter_title || link.chapter_id }}</span>
+                <span class="shrink-0 text-xs text-blue-500 dark:text-blue-300">
+                  {{ link.link_source === 'ai_summary' ? 'AI' : 'Manual' }}
+                </span>
+              </button>
+            </div>
+
+            <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+              No source chapters linked yet.
+            </p>
           </div>
         </div>
 

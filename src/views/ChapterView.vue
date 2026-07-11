@@ -20,7 +20,11 @@ import FontSizeControl from "@/components/reading/FontSizeControl.vue";
 import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
 import { useReadingFontSize } from "@/composables/useReadingFontSize";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
+import AutocompleteMultiSelect, {
+  type AutocompleteOption,
+} from "@/components/links/AutocompleteMultiSelect.vue";
 import Modal from "@/components/Modal.vue";
+import type { ChapterWikiLink } from "@/lib/database";
 
 interface Chapter {
   id: string;
@@ -132,6 +136,8 @@ const {
   getWikiPages,
   trackWikiUpdate,
   addChapterWikiMention,
+  getChapterWikiLinks,
+  setChapterWikiLinks,
   getCustomProfiles,
   saveReview,
   getReviews,
@@ -153,6 +159,11 @@ const savedReviews = ref<Review[]>([]);
 const loadingReviews = ref(false);
 const deletingReviewId = ref<string | null>(null);
 const characters = ref<Character[]>([]);
+const linkedWikiPages = ref<ChapterWikiLink[]>([]);
+const loadingLinkedWikiPages = ref(false);
+const isEditingLinkedWikiPages = ref(false);
+const savingLinkedWikiPages = ref(false);
+const selectedLinkedWikiPageIds = ref<string[]>([]);
 const showDeleteModal = ref(false);
 const deletingChapter = ref(false);
 const parts = ref<BookPart[]>([]);
@@ -256,6 +267,14 @@ const chapterTruncation = computed(() => {
   return getTruncatedText(chapter.value.text);
 });
 
+const linkedWikiPageOptions = computed<AutocompleteOption[]>(() =>
+  bookWikiPages.value.map((page) => ({
+    id: page.id,
+    label: page.page_name,
+    detail: page.page_type ?? undefined,
+  }))
+);
+
 // Computed navigation URLs
 // Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
 // BookView handles mobile display via CSS media queries
@@ -299,6 +318,9 @@ const {
   getWikiPage,
   trackWikiUpdate,
   addChapterWikiMention,
+  reloadWikiLinks: async () => {
+    await loadLinkedWikiPages();
+  },
   reloadCharacters: async () => {
     await loadCharacters();
   },
@@ -521,6 +543,27 @@ const loadCharacters = async () => {
   }
 };
 
+const loadLinkedWikiPages = async () => {
+  if (!chapterId.value) {
+    linkedWikiPages.value = [];
+    selectedLinkedWikiPageIds.value = [];
+    return;
+  }
+
+  loadingLinkedWikiPages.value = true;
+  try {
+    const links = await getChapterWikiLinks(chapterId.value);
+    linkedWikiPages.value = links;
+    selectedLinkedWikiPageIds.value = links.map((link) => link.wiki_page_id);
+  } catch (error) {
+    console.error("Failed to load chapter wiki links:", error);
+    linkedWikiPages.value = [];
+    selectedLinkedWikiPageIds.value = [];
+  } finally {
+    loadingLinkedWikiPages.value = false;
+  }
+};
+
 const loadCustomProfiles = async () => {
   try {
     const profiles = await getCustomProfiles();
@@ -541,6 +584,37 @@ const navigateToWiki = (characterName: string) => {
   if (character?.has_wiki_page && character.wiki_page_id) {
     router.push(`${routePrefix.value}/${bookId.value}/wiki/${character.wiki_page_id}`);
   }
+};
+
+const startEditingLinkedWikiPages = () => {
+  selectedLinkedWikiPageIds.value = linkedWikiPages.value.map((link) => link.wiki_page_id);
+  isEditingLinkedWikiPages.value = true;
+};
+
+const cancelEditingLinkedWikiPages = () => {
+  selectedLinkedWikiPageIds.value = linkedWikiPages.value.map((link) => link.wiki_page_id);
+  isEditingLinkedWikiPages.value = false;
+};
+
+const saveLinkedWikiPages = async () => {
+  if (!chapter.value) return;
+
+  savingLinkedWikiPages.value = true;
+  try {
+    await setChapterWikiLinks(chapter.value.id, selectedLinkedWikiPageIds.value, "manual");
+    await loadLinkedWikiPages();
+    await loadCharacters();
+    isEditingLinkedWikiPages.value = false;
+  } catch (error) {
+    console.error("Failed to save chapter wiki links:", error);
+    alert("Failed to save linked wiki pages");
+  } finally {
+    savingLinkedWikiPages.value = false;
+  }
+};
+
+const openLinkedWikiPage = (wikiPageId: string) => {
+  router.push(`${routePrefix.value}/${bookId.value}/wiki/${wikiPageId}`);
 };
 
 const formatDate = (dateString: string) => {
@@ -645,12 +719,21 @@ onMounted(async () => {
   await loadChapter();
   await loadSavedReviews();
   await loadCharacters();
+  await loadLinkedWikiPages();
   await loadCustomProfiles();
 });
 
 watch(updateWikiOnSummary, (value) => {
   localStorage.setItem(CHAPTER_SUMMARY_WIKI_UPDATES_KEY, String(value));
 });
+
+watch(
+  () => chapterId.value,
+  () => {
+    isEditingLinkedWikiPages.value = false;
+    loadLinkedWikiPages();
+  }
+);
 </script>
 
 <template>
@@ -793,6 +876,79 @@ watch(updateWikiOnSummary, (value) => {
         </div>
 
         <aside class="mt-6 space-y-6 lg:mt-0">
+          <section class="rounded-lg border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800">
+            <div class="p-6">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Linked Wiki Pages</h3>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Track which wiki pages this chapter supports.
+                  </p>
+                </div>
+                <button
+                  v-if="!isEditingLinkedWikiPages"
+                  type="button"
+                  class="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  @click="startEditingLinkedWikiPages"
+                >
+                  {{ linkedWikiPages.length ? "Edit links" : "Add links" }}
+                </button>
+              </div>
+
+              <div v-if="loadingLinkedWikiPages" class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                Loading links...
+              </div>
+
+              <div v-else-if="isEditingLinkedWikiPages" class="mt-4 space-y-3">
+                <AutocompleteMultiSelect
+                  :options="linkedWikiPageOptions"
+                  :selected-ids="selectedLinkedWikiPageIds"
+                  :disabled="savingLinkedWikiPages"
+                  placeholder="Link a wiki page..."
+                  empty-message="No wiki pages match this search."
+                  @update:selected-ids="selectedLinkedWikiPageIds = $event"
+                />
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="savingLinkedWikiPages"
+                    @click="saveLinkedWikiPages"
+                  >
+                    {{ savingLinkedWikiPages ? "Saving..." : "Save links" }}
+                  </button>
+                  <button
+                    type="button"
+                    class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+                    :disabled="savingLinkedWikiPages"
+                    @click="cancelEditingLinkedWikiPages"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+
+              <div v-else-if="linkedWikiPages.length" class="mt-4 flex flex-wrap gap-2">
+                <button
+                  v-for="link in linkedWikiPages"
+                  :key="link.wiki_page_id"
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-200 transition hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-200 dark:ring-blue-700 dark:hover:bg-blue-900/50"
+                  @click="openLinkedWikiPage(link.wiki_page_id)"
+                >
+                  <span>{{ link.page_name }}</span>
+                  <span class="text-xs capitalize text-blue-500 dark:text-blue-300">
+                    {{ link.page_type }}
+                  </span>
+                </button>
+              </div>
+
+              <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                No linked wiki pages yet.
+              </p>
+            </div>
+          </section>
+
           <ChapterIllustrationsSection
             v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
             layout="panel"
