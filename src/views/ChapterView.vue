@@ -793,8 +793,6 @@ watch(updateWikiOnSummary, (value) => {
         </div>
 
         <aside class="mt-6 space-y-6 lg:mt-0">
-          <FontSizeControl v-model="fontSize" />
-
           <ChapterIllustrationsSection
             v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
             layout="panel"
@@ -813,6 +811,8 @@ watch(updateWikiOnSummary, (value) => {
             @download="handleDownloadImage"
             @delete="requestDeleteIllustration"
           />
+
+          <FontSizeControl v-model="fontSize" variant="panel" />
         </aside>
       </div>
     </div>

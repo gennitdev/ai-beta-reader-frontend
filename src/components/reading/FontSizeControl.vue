@@ -1,13 +1,29 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { ReadingFontSize } from '@/composables/useReadingFontSize'
 
-defineProps<{
-  modelValue: ReadingFontSize
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: ReadingFontSize
+    /**
+     * 'card'  — matches sidebar info cards (rounded-lg, gray-800, shadow).
+     * 'panel' — matches the chapter illustration panel (rounded-xl, darker
+     *           gray-900, no shadow, extra top padding).
+     */
+    variant?: 'card' | 'panel'
+  }>(),
+  { variant: 'card' }
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: ReadingFontSize): void
 }>()
+
+const containerClass = computed(() =>
+  props.variant === 'panel'
+    ? 'rounded-xl border border-gray-200 bg-white p-4 pt-5 dark:border-gray-700 dark:bg-gray-900'
+    : 'rounded-lg border border-gray-200 bg-white p-4 shadow-md dark:border-gray-700 dark:bg-gray-800'
+)
 
 const options: { key: ReadingFontSize; label: string; sizeClass: string }[] = [
   { key: 'small', label: 'A', sizeClass: 'text-xs' },
@@ -17,9 +33,7 @@ const options: { key: ReadingFontSize; label: string; sizeClass: string }[] = [
 </script>
 
 <template>
-  <div
-    class="rounded-lg border border-gray-200 bg-white p-4 shadow-md dark:border-gray-700 dark:bg-gray-800"
-  >
+  <div :class="containerClass">
     <h3 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Text size</h3>
     <div
       class="inline-flex w-full overflow-hidden rounded-md border border-gray-300 dark:border-gray-600"
