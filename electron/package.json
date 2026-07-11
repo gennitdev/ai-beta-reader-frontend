@@ -16,7 +16,9 @@
   "scripts": {
     "build": "tsc && electron-rebuild",
     "electron:start-live": "node ./live-runner.js",
-    "electron:start": "npm run build && electron --inspect=5858 ./",
+    "electron:start": "electron ./",
+    "electron:start:build": "npm run build && electron ./",
+    "electron:start:debug": "electron --inspect=5858 ./",
     "electron:pack": "npm run build && electron-builder build --dir -c ./electron-builder.config.json",
     "electron:make": "npm run build && electron-builder build -c ./electron-builder.config.json"
   },
@@ -37,7 +39,11 @@
     "electron": "^26.2.2",
     "electron-builder": "~23.6.0",
     "electron-rebuild": "^3.2.9",
+    "node-gyp": "^10.2.0",
     "typescript": "^5.0.4"
+  },
+  "overrides": {
+    "node-gyp": "^10.2.0"
   },
   "keywords": [
     "capacitor",

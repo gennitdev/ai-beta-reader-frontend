@@ -88,6 +88,11 @@ interface ChapterMutationFlowOptions {
     wikiPageId: string,
     linkSource?: 'ai_summary' | 'manual',
   ) => Promise<void>
+  ensureChapterWikiLinks: (
+    chapterId: string,
+    wikiPageIds: string[],
+    linkSource?: 'ai_summary' | 'manual',
+  ) => Promise<void>
   reloadWikiLinks: () => Promise<void>
   reloadCharacters: () => Promise<void>
   reloadReviews: () => Promise<void>
@@ -319,6 +324,11 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
         )
         wikiUpdateResults.value = wikiResults
         if (wikiResults.length > 0) {
+          await options.ensureChapterWikiLinks(
+            chapter.id,
+            wikiResults.map((wikiResult) => wikiResult.wikiPageId),
+            'ai_summary',
+          )
           showWikiUpdateResults.value = true
         }
         await options.reloadWikiLinks()

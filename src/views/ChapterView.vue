@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, onBeforeUnmount, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useChapterImages } from "@/composables/useChapterImages";
@@ -20,11 +20,14 @@ import FontSizeControl from "@/components/reading/FontSizeControl.vue";
 import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
 import { useReadingFontSize } from "@/composables/useReadingFontSize";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
-import AutocompleteMultiSelect, {
-  type AutocompleteOption,
-} from "@/components/links/AutocompleteMultiSelect.vue";
+import { type AutocompleteOption } from "@/components/links/AutocompleteMultiSelect.vue";
+import ChapterWikiLinksCard from "@/components/links/ChapterWikiLinksCard.vue";
 import Modal from "@/components/Modal.vue";
 import type { ChapterWikiLink } from "@/lib/database";
+import {
+  CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+  type ChapterWikiLinksChangedDetail,
+} from "@/utils/chapterWikiLinkEvents";
 
 interface Chapter {
   id: string;
@@ -138,6 +141,7 @@ const {
   addChapterWikiMention,
   getChapterWikiLinks,
   setChapterWikiLinks,
+  ensureChapterWikiLinks,
   getCustomProfiles,
   saveReview,
   getReviews,
@@ -318,6 +322,7 @@ const {
   getWikiPage,
   trackWikiUpdate,
   addChapterWikiMention,
+  ensureChapterWikiLinks,
   reloadWikiLinks: async () => {
     await loadLinkedWikiPages();
   },
@@ -582,7 +587,10 @@ const getCharacterWikiInfo = (characterName: string) => {
 const navigateToWiki = (characterName: string) => {
   const character = getCharacterWikiInfo(characterName);
   if (character?.has_wiki_page && character.wiki_page_id) {
-    router.push(`${routePrefix.value}/${bookId.value}/wiki/${character.wiki_page_id}`);
+    router.push({
+      path: `${routePrefix.value}/${bookId.value}/wiki/${character.wiki_page_id}`,
+      query: { fromChapterId: chapterId.value },
+    });
   }
 };
 
@@ -613,8 +621,12 @@ const saveLinkedWikiPages = async () => {
   }
 };
 
-const openLinkedWikiPage = (wikiPageId: string) => {
-  router.push(`${routePrefix.value}/${bookId.value}/wiki/${wikiPageId}`);
+const handleChapterWikiLinksChanged = async (event: Event) => {
+  const customEvent = event as CustomEvent<ChapterWikiLinksChangedDetail>;
+  const detail = customEvent.detail;
+  if (!detail || !detail.chapterIds.includes(chapterId.value)) return;
+
+  await Promise.all([loadLinkedWikiPages(), loadCharacters()]);
 };
 
 const formatDate = (dateString: string) => {
@@ -721,6 +733,17 @@ onMounted(async () => {
   await loadCharacters();
   await loadLinkedWikiPages();
   await loadCustomProfiles();
+  window.addEventListener(
+    CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+    handleChapterWikiLinksChanged as EventListener,
+  );
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+    handleChapterWikiLinksChanged as EventListener,
+  );
 });
 
 watch(updateWikiOnSummary, (value) => {
@@ -872,82 +895,44 @@ watch(
           @toggle-review="toggleReviewExpansion"
           @toggle-prompt="togglePromptExpansion"
         />
+
+        <div class="mt-6 lg:hidden">
+          <ChapterWikiLinksCard
+            :route-prefix="routePrefix"
+            :book-id="bookId"
+            :chapter-id="chapterId"
+            :links="linkedWikiPages"
+            :options="linkedWikiPageOptions"
+            :selected-ids="selectedLinkedWikiPageIds"
+            :loading="loadingLinkedWikiPages"
+            :is-editing="isEditingLinkedWikiPages"
+            :saving="savingLinkedWikiPages"
+            @start-edit="startEditingLinkedWikiPages"
+            @cancel-edit="cancelEditingLinkedWikiPages"
+            @save="saveLinkedWikiPages"
+            @update:selected-ids="selectedLinkedWikiPageIds = $event"
+          />
+        </div>
           </div>
         </div>
 
         <aside class="mt-6 space-y-6 lg:mt-0">
-          <section class="rounded-lg border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800">
-            <div class="p-6">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Linked Wiki Pages</h3>
-                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Track which wiki pages this chapter supports.
-                  </p>
-                </div>
-                <button
-                  v-if="!isEditingLinkedWikiPages"
-                  type="button"
-                  class="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                  @click="startEditingLinkedWikiPages"
-                >
-                  {{ linkedWikiPages.length ? "Edit links" : "Add links" }}
-                </button>
-              </div>
-
-              <div v-if="loadingLinkedWikiPages" class="mt-4 text-sm text-gray-500 dark:text-gray-400">
-                Loading links...
-              </div>
-
-              <div v-else-if="isEditingLinkedWikiPages" class="mt-4 space-y-3">
-                <AutocompleteMultiSelect
-                  :options="linkedWikiPageOptions"
-                  :selected-ids="selectedLinkedWikiPageIds"
-                  :disabled="savingLinkedWikiPages"
-                  placeholder="Link a wiki page..."
-                  empty-message="No wiki pages match this search."
-                  @update:selected-ids="selectedLinkedWikiPageIds = $event"
-                />
-                <div class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="savingLinkedWikiPages"
-                    @click="saveLinkedWikiPages"
-                  >
-                    {{ savingLinkedWikiPages ? "Saving..." : "Save links" }}
-                  </button>
-                  <button
-                    type="button"
-                    class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
-                    :disabled="savingLinkedWikiPages"
-                    @click="cancelEditingLinkedWikiPages"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-
-              <div v-else-if="linkedWikiPages.length" class="mt-4 flex flex-wrap gap-2">
-                <button
-                  v-for="link in linkedWikiPages"
-                  :key="link.wiki_page_id"
-                  type="button"
-                  class="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-200 transition hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-200 dark:ring-blue-700 dark:hover:bg-blue-900/50"
-                  @click="openLinkedWikiPage(link.wiki_page_id)"
-                >
-                  <span>{{ link.page_name }}</span>
-                  <span class="text-xs capitalize text-blue-500 dark:text-blue-300">
-                    {{ link.page_type }}
-                  </span>
-                </button>
-              </div>
-
-              <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
-                No linked wiki pages yet.
-              </p>
-            </div>
-          </section>
+          <ChapterWikiLinksCard
+            class="hidden lg:block"
+            :route-prefix="routePrefix"
+            :book-id="bookId"
+            :chapter-id="chapterId"
+            :links="linkedWikiPages"
+            :options="linkedWikiPageOptions"
+            :selected-ids="selectedLinkedWikiPageIds"
+            :loading="loadingLinkedWikiPages"
+            :is-editing="isEditingLinkedWikiPages"
+            :saving="savingLinkedWikiPages"
+            @start-edit="startEditingLinkedWikiPages"
+            @cancel-edit="cancelEditingLinkedWikiPages"
+            @save="saveLinkedWikiPages"
+            @update:selected-ids="selectedLinkedWikiPageIds = $event"
+          />
 
           <ChapterIllustrationsSection
             v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"

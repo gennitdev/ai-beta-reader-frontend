@@ -540,6 +540,21 @@ export function useDatabase() {
     }
   }
 
+  async function ensureChapterWikiLinks(
+    chapterId: string,
+    wikiPageIds: string[],
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ) {
+    try {
+      await initializeDatabase()
+      await db.ensureChapterWikiLinks(chapterId, wikiPageIds, linkSource)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to ensure chapter wiki links'
+      console.error('Ensure chapter wiki links error:', e)
+      throw e
+    }
+  }
+
   async function setWikiPageChapterLinks(
     wikiPageId: string,
     chapterIds: string[],
@@ -904,6 +919,7 @@ export function useDatabase() {
     getChapterWikiLinks,
     getWikiPageChapterLinks,
     setChapterWikiLinks,
+    ensureChapterWikiLinks,
     setWikiPageChapterLinks,
 
     // Parts operations

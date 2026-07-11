@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import { useWikiImages } from '@/composables/useWikiImages'
@@ -14,6 +14,10 @@ import AutocompleteMultiSelect, {
 import Modal from '@/components/Modal.vue'
 import { useReadingFontSize } from '@/composables/useReadingFontSize'
 import type { Book, Chapter as DatabaseChapter, WikiPageChapterLink } from '@/lib/database'
+import {
+  CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+  type ChapterWikiLinksChangedDetail,
+} from '@/utils/chapterWikiLinkEvents'
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -184,6 +188,9 @@ const bookTitle = computed(() => {
 // Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
 // BookView handles mobile display via CSS media queries
 const bookWikiUrl = computed(() => `/books/${bookId.value}?tab=wiki`)
+const originatingChapterId = computed(() =>
+  typeof route.query.fromChapterId === 'string' ? route.query.fromChapterId : null,
+)
 
 const currentBook = computed(() => books.value.find((book: Book) => book.id === bookId.value) || null)
 
@@ -479,6 +486,17 @@ const togglePinned = async () => {
 }
 
 const goBack = () => {
+  if (originatingChapterId.value) {
+    const prefix = isMobileRoute.value ? '/m/books' : '/books'
+    router.push(`${prefix}/${bookId.value}/chapters/${originatingChapterId.value}`)
+    return
+  }
+
+  if (typeof window !== 'undefined' && window.history.length > 1) {
+    router.back()
+    return
+  }
+
   router.push(bookWikiUrl.value)
 }
 
@@ -550,15 +568,29 @@ const saveLinkedChapters = async () => {
   }
 }
 
-const openLinkedChapter = (chapterId: string) => {
-  const prefix = isMobileRoute.value ? '/m/books' : '/books'
-  router.push(`${prefix}/${bookId.value}/chapters/${chapterId}`)
+const handleChapterWikiLinksChanged = async (event: Event) => {
+  const customEvent = event as CustomEvent<ChapterWikiLinksChangedDetail>
+  const detail = customEvent.detail
+  if (!detail || !detail.wikiPageIds.includes(wikiPageId.value)) return
+
+  await loadLinkedChapters()
 }
 
 onMounted(() => {
   loadWikiPage()
   loadCharacters()
   loadLinkedChapters()
+  window.addEventListener(
+    CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+    handleChapterWikiLinksChanged as EventListener,
+  )
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+    handleChapterWikiLinksChanged as EventListener,
+  )
 })
 
 watch(
@@ -602,9 +634,10 @@ watch(
           <div class="flex items-center space-x-4">
             <button
               @click="goBack"
-              :class="isMobileRoute ? 'p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors' : 'lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'"
+              :class="isMobileRoute ? 'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white' : 'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white'"
             >
-              <ArrowLeftIcon class="w-5 h-5" />
+              <ArrowLeftIcon class="h-5 w-5" />
+              <span>{{ originatingChapterId ? 'Back to chapter' : 'Back' }}</span>
             </button>
 
           <div v-if="wikiPage" class="flex items-center space-x-3">
@@ -1035,18 +1068,24 @@ watch(
             </div>
 
             <div v-else-if="linkedChapters.length" class="mt-4 space-y-2">
-              <button
+              <RouterLink
                 v-for="link in linkedChapters"
                 :key="link.chapter_id"
-                type="button"
-                class="flex w-full items-center justify-between rounded-lg bg-blue-50 px-3 py-2 text-left text-sm text-blue-800 ring-1 ring-inset ring-blue-200 transition hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-200 dark:ring-blue-700 dark:hover:bg-blue-900/50"
-                @click="openLinkedChapter(link.chapter_id)"
+                :to="`${isMobileRoute ? '/m/books' : '/books'}/${bookId}/chapters/${link.chapter_id}`"
+                class="flex w-full items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40"
               >
-                <span class="truncate pr-3">{{ link.chapter_title || link.chapter_id }}</span>
-                <span class="shrink-0 text-xs text-blue-500 dark:text-blue-300">
-                  {{ link.link_source === 'ai_summary' ? 'AI' : 'Manual' }}
+                <div class="min-w-0">
+                  <div class="truncate font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 dark:text-blue-200">
+                    {{ link.chapter_title || link.chapter_id }}
+                  </div>
+                  <div class="mt-0.5 text-xs text-blue-500 dark:text-blue-300">
+                    {{ link.link_source === 'ai_summary' ? 'Linked from summary generation' : 'Manually linked chapter' }}
+                  </div>
+                </div>
+                <span class="ml-3 shrink-0 text-xs font-medium text-blue-600 dark:text-blue-300">
+                  Open
                 </span>
-              </button>
+              </RouterLink>
             </div>
 
             <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">

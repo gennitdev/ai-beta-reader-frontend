@@ -10,6 +10,7 @@ import {
   type DatabaseImportData,
   type ImportRow,
 } from '@/lib/databaseImportExport';
+import { dispatchChapterWikiLinksChanged } from '@/utils/chapterWikiLinkEvents';
 
 export interface Book {
   id: string;
@@ -717,6 +718,7 @@ export class AppDatabase {
 
     await this.createTables();
     await this.runMigrations();
+    await this.ensureChapterWikiMentionsSchema();
   }
 
   private async createTables() {
@@ -966,6 +968,65 @@ export class AppDatabase {
     if (!this.isNative) {
       this.saveToLocalStorage();
     }
+  }
+
+  private async getTableColumnNames(tableName: string): Promise<Set<string>> {
+    const query = `PRAGMA table_info(${tableName})`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query);
+      return new Set((result.values || []).map((row) => String(row.name)));
+    }
+
+    const result = this.db.exec(query);
+    if (result.length === 0) {
+      return new Set();
+    }
+
+    return new Set(result[0].values.map((row: unknown[]) => String(row[1])));
+  }
+
+  private async ensureChapterWikiMentionsSchema(): Promise<void> {
+    const columns = await this.getTableColumnNames('chapter_wiki_mentions');
+    const statements: string[] = [];
+
+    if (!columns.has('link_source')) {
+      statements.push(`ALTER TABLE chapter_wiki_mentions ADD COLUMN link_source TEXT DEFAULT 'manual'`);
+    }
+
+    if (!columns.has('updated_at')) {
+      statements.push(`ALTER TABLE chapter_wiki_mentions ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
+    }
+
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_chapter ON chapter_wiki_mentions(chapter_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_wiki_page ON chapter_wiki_mentions(wiki_page_id)`);
+
+    for (const statement of statements) {
+      try {
+        if (this.isNative) {
+          await this.db.execute(statement);
+        } else {
+          this.db.run(statement);
+        }
+      } catch (error) {
+        console.warn('[AppDatabase] Failed to ensure chapter_wiki_mentions schema:', statement, error);
+      }
+    }
+
+    if (!this.isNative) {
+      this.saveToLocalStorage();
+    }
+  }
+
+  private async getChapterWikiMentionsCapabilities(): Promise<{
+    hasLinkSource: boolean;
+    hasUpdatedAt: boolean;
+  }> {
+    const columns = await this.getTableColumnNames('chapter_wiki_mentions');
+    return {
+      hasLinkSource: columns.has('link_source'),
+      hasUpdatedAt: columns.has('updated_at'),
+    };
   }
 
   async saveBook(book: Book) {
@@ -2176,7 +2237,13 @@ export class AppDatabase {
   }
 
   async getChapterWikiMentions(chapterId: string): Promise<ChapterWikiMention[]> {
-    const query = `SELECT id, chapter_id, wiki_page_id, link_source, created_at, updated_at
+    await this.ensureChapterWikiMentionsSchema();
+    const { hasLinkSource, hasUpdatedAt } = await this.getChapterWikiMentionsCapabilities();
+
+    const query = `SELECT id, chapter_id, wiki_page_id,
+                   ${hasLinkSource ? 'link_source' : "NULL AS link_source"},
+                   created_at,
+                   ${hasUpdatedAt ? 'updated_at' : "NULL AS updated_at"}
                    FROM chapter_wiki_mentions
                    WHERE chapter_id = ?
                    ORDER BY created_at ASC`;
@@ -2193,7 +2260,13 @@ export class AppDatabase {
   }
 
   async getChapterWikiLinks(chapterId: string): Promise<ChapterWikiLink[]> {
-    const query = `SELECT w.id AS wiki_page_id, w.page_name, w.page_type, m.link_source, m.created_at, m.updated_at
+    await this.ensureChapterWikiMentionsSchema();
+    const { hasLinkSource, hasUpdatedAt } = await this.getChapterWikiMentionsCapabilities();
+
+    const query = `SELECT w.id AS wiki_page_id, w.page_name, w.page_type,
+                   ${hasLinkSource ? 'm.link_source' : "NULL AS link_source"},
+                   m.created_at,
+                   ${hasUpdatedAt ? 'm.updated_at' : "NULL AS updated_at"}
                    FROM chapter_wiki_mentions m
                    INNER JOIN wiki_pages w ON w.id = m.wiki_page_id
                    WHERE m.chapter_id = ?
@@ -2211,7 +2284,13 @@ export class AppDatabase {
   }
 
   async getWikiPageChapterLinks(wikiPageId: string): Promise<WikiPageChapterLink[]> {
-    const query = `SELECT c.id AS chapter_id, c.title, c.part_id, m.link_source, m.created_at, m.updated_at
+    await this.ensureChapterWikiMentionsSchema();
+    const { hasLinkSource, hasUpdatedAt } = await this.getChapterWikiMentionsCapabilities();
+
+    const query = `SELECT c.id AS chapter_id, c.title, c.part_id,
+                   ${hasLinkSource ? 'm.link_source' : "NULL AS link_source"},
+                   m.created_at,
+                   ${hasUpdatedAt ? 'm.updated_at' : "NULL AS updated_at"}
                    FROM chapter_wiki_mentions m
                    INNER JOIN chapters c ON c.id = m.chapter_id
                    WHERE m.wiki_page_id = ?
@@ -2233,18 +2312,33 @@ export class AppDatabase {
     wikiPageId: string,
     linkSource: ChapterWikiLinkSource = 'manual',
   ) {
+    await this.ensureChapterWikiMentionsSchema();
+    const { hasLinkSource, hasUpdatedAt } = await this.getChapterWikiMentionsCapabilities();
+
     const id = `mention-${chapterId}-${wikiPageId}`;
     const now = new Date().toISOString();
-    const query = `INSERT OR REPLACE INTO chapter_wiki_mentions (
-                     id, chapter_id, wiki_page_id, link_source, created_at, updated_at
-                   )
-                   VALUES (
-                     ?, ?, ?, ?,
-                     COALESCE((SELECT created_at FROM chapter_wiki_mentions WHERE id = ?), ?),
-                     ?
-                   )`;
+    const columns = ['id', 'chapter_id', 'wiki_page_id'];
+    const values = ['?', '?', '?'];
+    const params: unknown[] = [id, chapterId, wikiPageId];
 
-    const params = [id, chapterId, wikiPageId, linkSource, id, now, now];
+    if (hasLinkSource) {
+      columns.push('link_source');
+      values.push('?');
+      params.push(linkSource);
+    }
+
+    columns.push('created_at');
+    values.push(`COALESCE((SELECT created_at FROM chapter_wiki_mentions WHERE id = ?), ?)`);
+    params.push(id, now);
+
+    if (hasUpdatedAt) {
+      columns.push('updated_at');
+      values.push('?');
+      params.push(now);
+    }
+
+    const query = `INSERT OR REPLACE INTO chapter_wiki_mentions (${columns.join(', ')})
+                   VALUES (${values.join(', ')})`;
 
     if (this.isNative) {
       await this.db.run(query, params);
@@ -2252,6 +2346,11 @@ export class AppDatabase {
       this.db.run(query, params);
       this.saveToLocalStorage();
     }
+
+    dispatchChapterWikiLinksChanged({
+      chapterIds: [chapterId],
+      wikiPageIds: [wikiPageId],
+    });
   }
 
   async setChapterWikiLinks(
@@ -2259,10 +2358,17 @@ export class AppDatabase {
     wikiPageIds: string[],
     linkSource: ChapterWikiLinkSource = 'manual',
   ): Promise<void> {
+    await this.ensureChapterWikiMentionsSchema();
+    const { hasLinkSource, hasUpdatedAt } = await this.getChapterWikiMentionsCapabilities();
+
     const uniqueWikiPageIds = Array.from(new Set(wikiPageIds));
     const existingLinks = await this.getChapterWikiMentions(chapterId);
     const existingByWikiPageId = new Map(existingLinks.map((link) => [link.wiki_page_id, link]));
     const nextWikiPageIdSet = new Set(uniqueWikiPageIds);
+    const affectedWikiPageIds = new Set([
+      ...existingLinks.map((link) => link.wiki_page_id),
+      ...uniqueWikiPageIds,
+    ]);
     const now = new Date().toISOString();
 
     const run = async (sql: string, params: unknown[] = []) => {
@@ -2282,23 +2388,112 @@ export class AppDatabase {
     for (const wikiPageId of uniqueWikiPageIds) {
       const existingLink = existingByWikiPageId.get(wikiPageId);
       const id = `mention-${chapterId}-${wikiPageId}`;
+      const columns = ['id', 'chapter_id', 'wiki_page_id'];
+      const values = ['?', '?', '?'];
+      const params: unknown[] = [id, chapterId, wikiPageId];
+
+      if (hasLinkSource) {
+        columns.push('link_source');
+        values.push('?');
+        params.push(linkSource);
+      }
+
+      columns.push('created_at');
+      values.push('?');
+      params.push(existingLink?.created_at ?? now);
+
+      if (hasUpdatedAt) {
+        columns.push('updated_at');
+        values.push('?');
+        params.push(now);
+      }
+
       await run(
-        `INSERT OR REPLACE INTO chapter_wiki_mentions (
-           id, chapter_id, wiki_page_id, link_source, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          id,
-          chapterId,
-          wikiPageId,
-          linkSource,
-          existingLink?.created_at ?? now,
-          now,
-        ],
+        `INSERT OR REPLACE INTO chapter_wiki_mentions (${columns.join(', ')})
+         VALUES (${values.join(', ')})`,
+        params,
       );
     }
 
     if (!this.isNative) {
       this.saveToLocalStorage();
+    }
+
+    dispatchChapterWikiLinksChanged({
+      chapterIds: [chapterId],
+      wikiPageIds: Array.from(affectedWikiPageIds),
+    });
+  }
+
+  async ensureChapterWikiLinks(
+    chapterId: string,
+    wikiPageIds: string[],
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ): Promise<void> {
+    await this.ensureChapterWikiMentionsSchema();
+    const { hasLinkSource, hasUpdatedAt } = await this.getChapterWikiMentionsCapabilities();
+
+    const uniqueWikiPageIds = Array.from(new Set(wikiPageIds));
+    if (uniqueWikiPageIds.length === 0) {
+      return;
+    }
+
+    const existingLinks = await this.getChapterWikiMentions(chapterId);
+    const existingByWikiPageId = new Map(existingLinks.map((link) => [link.wiki_page_id, link]));
+    const insertedWikiPageIds: string[] = [];
+    const now = new Date().toISOString();
+
+    const run = async (sql: string, params: unknown[] = []) => {
+      if (this.isNative) {
+        await this.db.run(sql, params);
+      } else {
+        this.db.run(sql, params);
+      }
+    };
+
+    for (const wikiPageId of uniqueWikiPageIds) {
+      if (existingByWikiPageId.has(wikiPageId)) {
+        continue;
+      }
+
+      const id = `mention-${chapterId}-${wikiPageId}`;
+      const columns = ['id', 'chapter_id', 'wiki_page_id'];
+      const values = ['?', '?', '?'];
+      const params: unknown[] = [id, chapterId, wikiPageId];
+
+      if (hasLinkSource) {
+        columns.push('link_source');
+        values.push('?');
+        params.push(linkSource);
+      }
+
+      columns.push('created_at');
+      values.push('?');
+      params.push(now);
+
+      if (hasUpdatedAt) {
+        columns.push('updated_at');
+        values.push('?');
+        params.push(now);
+      }
+
+      await run(
+        `INSERT OR REPLACE INTO chapter_wiki_mentions (${columns.join(', ')})
+         VALUES (${values.join(', ')})`,
+        params,
+      );
+      insertedWikiPageIds.push(wikiPageId);
+    }
+
+    if (!this.isNative && insertedWikiPageIds.length > 0) {
+      this.saveToLocalStorage();
+    }
+
+    if (insertedWikiPageIds.length > 0) {
+      dispatchChapterWikiLinksChanged({
+        chapterIds: [chapterId],
+        wikiPageIds: insertedWikiPageIds,
+      });
     }
   }
 
@@ -2307,10 +2502,17 @@ export class AppDatabase {
     chapterIds: string[],
     linkSource: ChapterWikiLinkSource = 'manual',
   ): Promise<void> {
+    await this.ensureChapterWikiMentionsSchema();
+    const { hasLinkSource, hasUpdatedAt } = await this.getChapterWikiMentionsCapabilities();
+
     const uniqueChapterIds = Array.from(new Set(chapterIds));
     const existingLinks = await this.getWikiPageChapterLinks(wikiPageId);
     const existingByChapterId = new Map(existingLinks.map((link) => [link.chapter_id, link]));
     const nextChapterIdSet = new Set(uniqueChapterIds);
+    const affectedChapterIds = new Set([
+      ...existingLinks.map((link) => link.chapter_id),
+      ...uniqueChapterIds,
+    ]);
     const now = new Date().toISOString();
 
     const run = async (sql: string, params: unknown[] = []) => {
@@ -2333,24 +2535,41 @@ export class AppDatabase {
     for (const chapterId of uniqueChapterIds) {
       const existingLink = existingByChapterId.get(chapterId);
       const id = `mention-${chapterId}-${wikiPageId}`;
+      const columns = ['id', 'chapter_id', 'wiki_page_id'];
+      const values = ['?', '?', '?'];
+      const params: unknown[] = [id, chapterId, wikiPageId];
+
+      if (hasLinkSource) {
+        columns.push('link_source');
+        values.push('?');
+        params.push(linkSource);
+      }
+
+      columns.push('created_at');
+      values.push('?');
+      params.push(existingLink?.created_at ?? now);
+
+      if (hasUpdatedAt) {
+        columns.push('updated_at');
+        values.push('?');
+        params.push(now);
+      }
+
       await run(
-        `INSERT OR REPLACE INTO chapter_wiki_mentions (
-           id, chapter_id, wiki_page_id, link_source, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          id,
-          chapterId,
-          wikiPageId,
-          linkSource,
-          existingLink?.created_at ?? now,
-          now,
-        ],
+        `INSERT OR REPLACE INTO chapter_wiki_mentions (${columns.join(', ')})
+         VALUES (${values.join(', ')})`,
+        params,
       );
     }
 
     if (!this.isNative) {
       this.saveToLocalStorage();
     }
+
+    dispatchChapterWikiLinksChanged({
+      chapterIds: Array.from(affectedChapterIds),
+      wikiPageIds: [wikiPageId],
+    });
   }
 
   // Search and Replace methods
