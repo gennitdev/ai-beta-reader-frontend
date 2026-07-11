@@ -47,6 +47,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  readingLayout: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const md = new MarkdownIt({
@@ -127,7 +131,7 @@ const fontSizeClass = computed(() => {
 <template>
   <div
     class="prose prose-gray dark:prose-invert max-w-none"
-    :class="[fontSizeClass]"
+    :class="[fontSizeClass, { 'markdown-body': readingLayout }]"
     v-html="renderedHtml"
   />
 </template>
@@ -160,5 +164,40 @@ const fontSizeClass = computed(() => {
 /* Blockquote styles */
 :deep(blockquote) {
   @apply border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic;
+}
+
+/* Reading layout: enhanced typography for long-form chapter prose */
+.markdown-body {
+  padding: 2rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.65;
+  letter-spacing: -0.01em;
+  color: #334155; /* slate-700 for light mode */
+}
+
+.dark .markdown-body {
+  color: #e2e8f0; /* softer off-white to prevent glare on dark */
+}
+
+/* Generous paragraph spacing so the eye rests between thoughts */
+.markdown-body :deep(p) {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+/* Blockquotes / emphasized thought callouts */
+.markdown-body :deep(blockquote) {
+  margin: 1.5rem 0;
+  padding: 0.75rem 1.2rem;
+  background-color: rgba(0, 0, 0, 0.04);
+  border-left: 3px solid #f0a975; /* warm accent line */
+  border-radius: 4px;
+  font-style: italic;
+  color: #475569;
+}
+
+.dark .markdown-body :deep(blockquote) {
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
 }
 </style>

@@ -37,6 +37,10 @@ const props = defineProps({
     type: Number,
     default: 50000,
   },
+  fontSize: {
+    type: String,
+    default: "medium",
+  },
 });
 
 const emit = defineEmits<{
@@ -185,7 +189,7 @@ onUnmounted(() => {
 
       <div v-else class="prose prose-gray max-w-none dark:prose-invert">
         <template v-if="!showFullChapterText && truncatedChapterText.needsTruncation">
-          <MarkdownRenderer :text="truncatedChapterText.truncated" />
+          <MarkdownRenderer :text="truncatedChapterText.truncated" :font-size="fontSize" reading-layout />
           <div class="not-prose">
             <span class="text-gray-500">...</span>
             <button
@@ -197,7 +201,7 @@ onUnmounted(() => {
           </div>
         </template>
         <template v-else>
-          <MarkdownRenderer :text="chapterText" />
+          <MarkdownRenderer :text="chapterText" :font-size="fontSize" reading-layout />
           <div v-if="truncatedChapterText.needsTruncation" class="not-prose">
             <button
               @click="toggleFullChapter(false)"
@@ -231,7 +235,7 @@ onUnmounted(() => {
                 <span class="sr-only">Exit fullscreen reading mode</span>
               </button>
               <div class="prose prose-lg max-w-none dark:prose-invert">
-                <MarkdownRenderer :text="chapterText" />
+                <MarkdownRenderer :text="chapterText" :font-size="fontSize" reading-layout />
               </div>
             </div>
           </div>

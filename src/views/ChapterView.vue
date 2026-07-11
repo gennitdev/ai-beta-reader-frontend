@@ -16,7 +16,9 @@ import ChapterReviewsSection from "@/components/chapter/ChapterReviewsSection.vu
 import ChapterHeroSection from "@/components/chapter/ChapterHeroSection.vue";
 import ChapterIllustrationsSection from "@/components/chapter/ChapterIllustrationsSection.vue";
 import ChapterStatusBar from "@/components/chapter/ChapterStatusBar.vue";
+import FontSizeControl from "@/components/reading/FontSizeControl.vue";
 import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
+import { useReadingFontSize } from "@/composables/useReadingFontSize";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
 import Modal from "@/components/Modal.vue";
 
@@ -194,6 +196,9 @@ const showNotesPanel = ref(false);
 
 // Illustrations panel state
 const showIllustrationsPanel = ref(false);
+
+// Reading font-size preference (shared with wiki pages, persisted)
+const { fontSize } = useReadingFontSize();
 
 // Text truncation state
 const showFullChapterText = ref(false);
@@ -762,6 +767,7 @@ watch(updateWikiOnSummary, (value) => {
           :chapter-text="chapter.text"
           :show-full-chapter-text="showFullChapterText"
           :truncated-chapter-text="chapterTruncation"
+          :font-size="fontSize"
           @update:editedText="editedText = $event"
           @toggle-full-chapter="showFullChapterText = $event"
         />
@@ -786,11 +792,11 @@ watch(updateWikiOnSummary, (value) => {
           </div>
         </div>
 
-        <aside
-          v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
-          class="mt-6 lg:mt-0"
-        >
+        <aside class="mt-6 space-y-6 lg:mt-0">
+          <FontSizeControl v-model="fontSize" />
+
           <ChapterIllustrationsSection
+            v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
             layout="panel"
             :images="chapterImages"
             :image-sources="chapterImageSources"
