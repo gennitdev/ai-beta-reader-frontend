@@ -4,10 +4,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import { useWikiImages } from '@/composables/useWikiImages'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import FontSizeControl from '@/components/reading/FontSizeControl.vue'
 import WikiPageHeroSection from '@/components/wiki/WikiPageHeroSection.vue'
 import WikiPageIllustrationsSection from '@/components/wiki/WikiPageIllustrationsSection.vue'
 import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
 import Modal from '@/components/Modal.vue'
+import { useReadingFontSize } from '@/composables/useReadingFontSize'
 import type { Book } from '@/lib/database'
 import {
   ArrowLeftIcon,
@@ -106,6 +108,7 @@ const {
   () => bookId.value
 )
 
+const { fontSize } = useReadingFontSize()
 const wikiPage = ref<WikiPage | null>(null)
 const wikiHistory = ref<WikiUpdate[]>([])
 const characters = ref<Character[]>([])
@@ -731,7 +734,9 @@ watch(
                 :text="wikiPage.content"
                 :characters="characters"
                 :book-id="bookId"
+                :font-size="fontSize"
                 :enable-wiki-links="true"
+                reading-layout
               />
             </div>
 
@@ -746,6 +751,9 @@ watch(
 
       <!-- Sidebar -->
       <div class="space-y-6">
+        <!-- Reading text size -->
+        <FontSizeControl v-if="!isEditing && wikiPage.content" v-model="fontSize" />
+
         <!-- Page Info -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
           <div class="p-6">
