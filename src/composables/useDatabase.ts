@@ -1,5 +1,17 @@
 import { ref, onMounted } from 'vue'
-import { db, type Book, type Chapter, type ChapterSummary, type ChapterReview, type ChapterNote, type ImageAsset, type ImageWikiTag } from '@/lib/database'
+import {
+  db,
+  type Book,
+  type Chapter,
+  type ChapterNote,
+  type ChapterReview,
+  type ChapterSummary,
+  type ChapterWikiLink,
+  type ChapterWikiLinkSource,
+  type ImageAsset,
+  type ImageWikiTag,
+  type WikiPageChapterLink,
+} from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 
 const isInitialized = ref(false)
@@ -476,13 +488,69 @@ export function useDatabase() {
     }
   }
 
-  async function addChapterWikiMention(chapterId: string, wikiPageId: string) {
+  async function addChapterWikiMention(
+    chapterId: string,
+    wikiPageId: string,
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ) {
     try {
       await initializeDatabase()
-      await db.addChapterWikiMention(chapterId, wikiPageId)
+      await db.addChapterWikiMention(chapterId, wikiPageId, linkSource)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to add wiki mention'
       console.error('Add wiki mention error:', e)
+      throw e
+    }
+  }
+
+  async function getChapterWikiLinks(chapterId: string): Promise<ChapterWikiLink[]> {
+    try {
+      await initializeDatabase()
+      return await db.getChapterWikiLinks(chapterId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get chapter wiki links'
+      console.error('Get chapter wiki links error:', e)
+      return []
+    }
+  }
+
+  async function getWikiPageChapterLinks(wikiPageId: string): Promise<WikiPageChapterLink[]> {
+    try {
+      await initializeDatabase()
+      return await db.getWikiPageChapterLinks(wikiPageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get wiki page chapter links'
+      console.error('Get wiki page chapter links error:', e)
+      return []
+    }
+  }
+
+  async function setChapterWikiLinks(
+    chapterId: string,
+    wikiPageIds: string[],
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ) {
+    try {
+      await initializeDatabase()
+      await db.setChapterWikiLinks(chapterId, wikiPageIds, linkSource)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update chapter wiki links'
+      console.error('Set chapter wiki links error:', e)
+      throw e
+    }
+  }
+
+  async function setWikiPageChapterLinks(
+    wikiPageId: string,
+    chapterIds: string[],
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ) {
+    try {
+      await initializeDatabase()
+      await db.setWikiPageChapterLinks(wikiPageId, chapterIds, linkSource)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update wiki page chapter links'
+      console.error('Set wiki page chapter links error:', e)
       throw e
     }
   }
@@ -833,6 +901,10 @@ export function useDatabase() {
     deleteWikiPage,
     trackWikiUpdate,
     addChapterWikiMention,
+    getChapterWikiLinks,
+    getWikiPageChapterLinks,
+    setChapterWikiLinks,
+    setWikiPageChapterLinks,
 
     // Parts operations
     createPart,

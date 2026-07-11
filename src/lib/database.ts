@@ -148,6 +148,35 @@ export interface ImageWikiTag {
   created_at: string;
 }
 
+export type ChapterWikiLinkSource = 'ai_summary' | 'manual';
+
+export interface ChapterWikiMention {
+  id: string;
+  chapter_id: string;
+  wiki_page_id: string;
+  link_source: ChapterWikiLinkSource | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface ChapterWikiLink {
+  wiki_page_id: string;
+  page_name: string;
+  page_type: WikiPageType;
+  link_source: ChapterWikiLinkSource | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface WikiPageChapterLink {
+  chapter_id: string;
+  chapter_title: string | null;
+  part_id: string | null;
+  link_source: ChapterWikiLinkSource | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 function imageAssetFromSqlRow(row: unknown[]): ImageAsset {
   return {
     id: String(row[0]),
@@ -506,6 +535,102 @@ function toNativeWikiPage(row: QueryRow): WikiPage {
       ]);
 }
 
+function toChapterWikiMentionLinkSource(value: unknown): ChapterWikiLinkSource | null {
+  return value === 'ai_summary' || value === 'manual' ? value : null;
+}
+
+function toWebChapterWikiMention(row: unknown[]): ChapterWikiMention {
+  return {
+    id: String(row[0]),
+    chapter_id: String(row[1]),
+    wiki_page_id: String(row[2]),
+    link_source: toChapterWikiMentionLinkSource(row[3]),
+    created_at: String(row[4]),
+    updated_at: typeof row[5] === 'string' ? row[5] : null,
+  };
+}
+
+function toNativeChapterWikiMention(row: QueryRow): ChapterWikiMention {
+  return {
+    id: String(readQueryRowValue(row, 0, 'id')),
+    chapter_id: String(readQueryRowValue(row, 1, 'chapter_id')),
+    wiki_page_id: String(readQueryRowValue(row, 2, 'wiki_page_id')),
+    link_source: toChapterWikiMentionLinkSource(readQueryRowValue(row, 3, 'link_source')),
+    created_at: String(readQueryRowValue(row, 4, 'created_at')),
+    updated_at:
+      typeof readQueryRowValue(row, 5, 'updated_at') === 'string'
+        ? (readQueryRowValue(row, 5, 'updated_at') as string)
+        : null,
+  };
+}
+
+function toWebChapterWikiLink(row: unknown[]): ChapterWikiLink {
+  const rawPageType = typeof row[2] === 'string' ? row[2] : 'character';
+  const pageType: WikiPageType = ['character', 'location', 'concept', 'other'].includes(rawPageType)
+    ? (rawPageType as WikiPageType)
+    : 'character';
+
+  return {
+    wiki_page_id: String(row[0]),
+    page_name: String(row[1]),
+    page_type: pageType,
+    link_source: toChapterWikiMentionLinkSource(row[3]),
+    created_at: String(row[4]),
+    updated_at: typeof row[5] === 'string' ? row[5] : null,
+  };
+}
+
+function toNativeChapterWikiLink(row: QueryRow): ChapterWikiLink {
+  const rawPageType = readQueryRowValue(row, 2, 'page_type');
+  const pageType: WikiPageType =
+    typeof rawPageType === 'string' && ['character', 'location', 'concept', 'other'].includes(rawPageType)
+      ? (rawPageType as WikiPageType)
+      : 'character';
+
+  return {
+    wiki_page_id: String(readQueryRowValue(row, 0, 'wiki_page_id')),
+    page_name: String(readQueryRowValue(row, 1, 'page_name')),
+    page_type: pageType,
+    link_source: toChapterWikiMentionLinkSource(readQueryRowValue(row, 3, 'link_source')),
+    created_at: String(readQueryRowValue(row, 4, 'created_at')),
+    updated_at:
+      typeof readQueryRowValue(row, 5, 'updated_at') === 'string'
+        ? (readQueryRowValue(row, 5, 'updated_at') as string)
+        : null,
+  };
+}
+
+function toWebWikiPageChapterLink(row: unknown[]): WikiPageChapterLink {
+  return {
+    chapter_id: String(row[0]),
+    chapter_title: typeof row[1] === 'string' ? row[1] : null,
+    part_id: typeof row[2] === 'string' ? row[2] : null,
+    link_source: toChapterWikiMentionLinkSource(row[3]),
+    created_at: String(row[4]),
+    updated_at: typeof row[5] === 'string' ? row[5] : null,
+  };
+}
+
+function toNativeWikiPageChapterLink(row: QueryRow): WikiPageChapterLink {
+  return {
+    chapter_id: String(readQueryRowValue(row, 0, 'chapter_id')),
+    chapter_title:
+      typeof readQueryRowValue(row, 1, 'title') === 'string'
+        ? (readQueryRowValue(row, 1, 'title') as string)
+        : null,
+    part_id:
+      typeof readQueryRowValue(row, 2, 'part_id') === 'string'
+        ? (readQueryRowValue(row, 2, 'part_id') as string)
+        : null,
+    link_source: toChapterWikiMentionLinkSource(readQueryRowValue(row, 3, 'link_source')),
+    created_at: String(readQueryRowValue(row, 4, 'created_at')),
+    updated_at:
+      typeof readQueryRowValue(row, 5, 'updated_at') === 'string'
+        ? (readQueryRowValue(row, 5, 'updated_at') as string)
+        : null,
+  };
+}
+
 // Detect if we're running in Electron (uses sql.js like web, not native SQLite)
 function isElectronRuntime(): boolean {
   if (typeof window !== 'undefined' && window.desktopImages) {
@@ -725,7 +850,9 @@ export class AppDatabase {
         id TEXT PRIMARY KEY,
         chapter_id TEXT NOT NULL,
         wiki_page_id TEXT NOT NULL,
+        link_source TEXT DEFAULT 'manual',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (chapter_id) REFERENCES chapters(id),
         FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id)
       );
@@ -768,6 +895,8 @@ export class AppDatabase {
       CREATE INDEX IF NOT EXISTS idx_image_assets_chapter ON image_assets(chapter_id);
       CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_image ON image_wiki_tags(image_id);
       CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_wiki_page ON image_wiki_tags(wiki_page_id);
+      CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_chapter ON chapter_wiki_mentions(chapter_id);
+      CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_wiki_page ON chapter_wiki_mentions(wiki_page_id);
     `;
 
     if (this.isNative) {
@@ -813,7 +942,12 @@ export class AppDatabase {
       `CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_image ON image_wiki_tags(image_id)`,
       `CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_wiki_page ON image_wiki_tags(wiki_page_id)`,
       // Add cover_image_id to wiki_pages if not exists
-      `ALTER TABLE wiki_pages ADD COLUMN cover_image_id TEXT`
+      `ALTER TABLE wiki_pages ADD COLUMN cover_image_id TEXT`,
+      // Add metadata to chapter/wiki links
+      `ALTER TABLE chapter_wiki_mentions ADD COLUMN link_source TEXT DEFAULT 'manual'`,
+      `ALTER TABLE chapter_wiki_mentions ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+      `CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_chapter ON chapter_wiki_mentions(chapter_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_wiki_page ON chapter_wiki_mentions(wiki_page_id)`
     ];
 
     for (const migration of migrations) {
@@ -2041,18 +2175,180 @@ export class AppDatabase {
     }
   }
 
-  async addChapterWikiMention(chapterId: string, wikiPageId: string) {
+  async getChapterWikiMentions(chapterId: string): Promise<ChapterWikiMention[]> {
+    const query = `SELECT id, chapter_id, wiki_page_id, link_source, created_at, updated_at
+                   FROM chapter_wiki_mentions
+                   WHERE chapter_id = ?
+                   ORDER BY created_at ASC`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [chapterId]);
+      return (result.values || []).map((row) => toNativeChapterWikiMention(row));
+    } else {
+      const result = this.db.exec(query, [chapterId]);
+      if (result.length === 0) return [];
+
+      return result[0].values.map((row: unknown[]) => toWebChapterWikiMention(row));
+    }
+  }
+
+  async getChapterWikiLinks(chapterId: string): Promise<ChapterWikiLink[]> {
+    const query = `SELECT w.id AS wiki_page_id, w.page_name, w.page_type, m.link_source, m.created_at, m.updated_at
+                   FROM chapter_wiki_mentions m
+                   INNER JOIN wiki_pages w ON w.id = m.wiki_page_id
+                   WHERE m.chapter_id = ?
+                   ORDER BY w.page_name COLLATE NOCASE ASC`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [chapterId]);
+      return (result.values || []).map((row) => toNativeChapterWikiLink(row));
+    } else {
+      const result = this.db.exec(query, [chapterId]);
+      if (result.length === 0) return [];
+
+      return result[0].values.map((row: unknown[]) => toWebChapterWikiLink(row));
+    }
+  }
+
+  async getWikiPageChapterLinks(wikiPageId: string): Promise<WikiPageChapterLink[]> {
+    const query = `SELECT c.id AS chapter_id, c.title, c.part_id, m.link_source, m.created_at, m.updated_at
+                   FROM chapter_wiki_mentions m
+                   INNER JOIN chapters c ON c.id = m.chapter_id
+                   WHERE m.wiki_page_id = ?
+                   ORDER BY c.created_at ASC`;
+
+    if (this.isNative) {
+      const result = await this.db.query(query, [wikiPageId]);
+      return (result.values || []).map((row) => toNativeWikiPageChapterLink(row));
+    } else {
+      const result = this.db.exec(query, [wikiPageId]);
+      if (result.length === 0) return [];
+
+      return result[0].values.map((row: unknown[]) => toWebWikiPageChapterLink(row));
+    }
+  }
+
+  async addChapterWikiMention(
+    chapterId: string,
+    wikiPageId: string,
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ) {
     const id = `mention-${chapterId}-${wikiPageId}`;
     const now = new Date().toISOString();
-    const query = `INSERT OR IGNORE INTO chapter_wiki_mentions (id, chapter_id, wiki_page_id, created_at)
-                   VALUES (?, ?, ?, ?)`;
+    const query = `INSERT OR REPLACE INTO chapter_wiki_mentions (
+                     id, chapter_id, wiki_page_id, link_source, created_at, updated_at
+                   )
+                   VALUES (
+                     ?, ?, ?, ?,
+                     COALESCE((SELECT created_at FROM chapter_wiki_mentions WHERE id = ?), ?),
+                     ?
+                   )`;
 
-    const params = [id, chapterId, wikiPageId, now];
+    const params = [id, chapterId, wikiPageId, linkSource, id, now, now];
 
     if (this.isNative) {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
+      this.saveToLocalStorage();
+    }
+  }
+
+  async setChapterWikiLinks(
+    chapterId: string,
+    wikiPageIds: string[],
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ): Promise<void> {
+    const uniqueWikiPageIds = Array.from(new Set(wikiPageIds));
+    const existingLinks = await this.getChapterWikiMentions(chapterId);
+    const existingByWikiPageId = new Map(existingLinks.map((link) => [link.wiki_page_id, link]));
+    const nextWikiPageIdSet = new Set(uniqueWikiPageIds);
+    const now = new Date().toISOString();
+
+    const run = async (sql: string, params: unknown[] = []) => {
+      if (this.isNative) {
+        await this.db.run(sql, params);
+      } else {
+        this.db.run(sql, params);
+      }
+    };
+
+    for (const existingLink of existingLinks) {
+      if (!nextWikiPageIdSet.has(existingLink.wiki_page_id)) {
+        await run(`DELETE FROM chapter_wiki_mentions WHERE id = ?`, [existingLink.id]);
+      }
+    }
+
+    for (const wikiPageId of uniqueWikiPageIds) {
+      const existingLink = existingByWikiPageId.get(wikiPageId);
+      const id = `mention-${chapterId}-${wikiPageId}`;
+      await run(
+        `INSERT OR REPLACE INTO chapter_wiki_mentions (
+           id, chapter_id, wiki_page_id, link_source, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          chapterId,
+          wikiPageId,
+          linkSource,
+          existingLink?.created_at ?? now,
+          now,
+        ],
+      );
+    }
+
+    if (!this.isNative) {
+      this.saveToLocalStorage();
+    }
+  }
+
+  async setWikiPageChapterLinks(
+    wikiPageId: string,
+    chapterIds: string[],
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ): Promise<void> {
+    const uniqueChapterIds = Array.from(new Set(chapterIds));
+    const existingLinks = await this.getWikiPageChapterLinks(wikiPageId);
+    const existingByChapterId = new Map(existingLinks.map((link) => [link.chapter_id, link]));
+    const nextChapterIdSet = new Set(uniqueChapterIds);
+    const now = new Date().toISOString();
+
+    const run = async (sql: string, params: unknown[] = []) => {
+      if (this.isNative) {
+        await this.db.run(sql, params);
+      } else {
+        this.db.run(sql, params);
+      }
+    };
+
+    for (const existingLink of existingLinks) {
+      if (!nextChapterIdSet.has(existingLink.chapter_id)) {
+        await run(
+          `DELETE FROM chapter_wiki_mentions WHERE chapter_id = ? AND wiki_page_id = ?`,
+          [existingLink.chapter_id, wikiPageId],
+        );
+      }
+    }
+
+    for (const chapterId of uniqueChapterIds) {
+      const existingLink = existingByChapterId.get(chapterId);
+      const id = `mention-${chapterId}-${wikiPageId}`;
+      await run(
+        `INSERT OR REPLACE INTO chapter_wiki_mentions (
+           id, chapter_id, wiki_page_id, link_source, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          chapterId,
+          wikiPageId,
+          linkSource,
+          existingLink?.created_at ?? now,
+          now,
+        ],
+      );
+    }
+
+    if (!this.isNative) {
       this.saveToLocalStorage();
     }
   }

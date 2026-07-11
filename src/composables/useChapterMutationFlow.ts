@@ -83,7 +83,11 @@ interface ChapterMutationFlowOptions {
     change_summary?: string
     contradiction_notes?: string
   }) => Promise<void>
-  addChapterWikiMention: (chapterId: string, wikiPageId: string) => Promise<void>
+  addChapterWikiMention: (
+    chapterId: string,
+    wikiPageId: string,
+    linkSource?: 'ai_summary' | 'manual',
+  ) => Promise<void>
   reloadCharacters: () => Promise<void>
   reloadReviews: () => Promise<void>
   openSettings: () => void
@@ -157,7 +161,7 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
               updateType: 'unchanged',
             })
           }
-          await options.addChapterWikiMention(currentChapter.id, existingPage.id)
+          await options.addChapterWikiMention(currentChapter.id, existingPage.id, 'ai_summary')
         } else {
           const newPageId = await options.createWikiPage({
             book_id: options.bookId.value,
@@ -173,7 +177,7 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
             update_type: 'created',
             change_summary: `Created ${entityType} page for ${entityName}`,
           })
-          await options.addChapterWikiMention(currentChapter.id, newPageId)
+          await options.addChapterWikiMention(currentChapter.id, newPageId, 'ai_summary')
           wikiResults.push({
             entityName,
             entityType,
