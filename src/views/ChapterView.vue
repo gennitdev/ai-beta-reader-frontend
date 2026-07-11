@@ -917,23 +917,6 @@ watch(
         </div>
 
         <aside class="mt-6 space-y-6 lg:mt-0">
-          <ChapterWikiLinksCard
-            class="hidden lg:block"
-            :route-prefix="routePrefix"
-            :book-id="bookId"
-            :chapter-id="chapterId"
-            :links="linkedWikiPages"
-            :options="linkedWikiPageOptions"
-            :selected-ids="selectedLinkedWikiPageIds"
-            :loading="loadingLinkedWikiPages"
-            :is-editing="isEditingLinkedWikiPages"
-            :saving="savingLinkedWikiPages"
-            @start-edit="startEditingLinkedWikiPages"
-            @cancel-edit="cancelEditingLinkedWikiPages"
-            @save="saveLinkedWikiPages"
-            @update:selected-ids="selectedLinkedWikiPageIds = $event"
-          />
-
           <ChapterIllustrationsSection
             v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
             layout="panel"
@@ -951,6 +934,23 @@ watch(
             @set-cover="handleSetAsCover"
             @download="handleDownloadImage"
             @delete="requestDeleteIllustration"
+          />
+
+          <ChapterWikiLinksCard
+            class="hidden lg:block"
+            :route-prefix="routePrefix"
+            :book-id="bookId"
+            :chapter-id="chapterId"
+            :links="linkedWikiPages"
+            :options="linkedWikiPageOptions"
+            :selected-ids="selectedLinkedWikiPageIds"
+            :loading="loadingLinkedWikiPages"
+            :is-editing="isEditingLinkedWikiPages"
+            :saving="savingLinkedWikiPages"
+            @start-edit="startEditingLinkedWikiPages"
+            @cancel-edit="cancelEditingLinkedWikiPages"
+            @save="saveLinkedWikiPages"
+            @update:selected-ids="selectedLinkedWikiPageIds = $event"
           />
 
           <FontSizeControl v-model="fontSize" variant="panel" />

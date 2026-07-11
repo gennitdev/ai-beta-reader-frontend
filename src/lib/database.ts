@@ -947,7 +947,8 @@ export class AppDatabase {
       `ALTER TABLE wiki_pages ADD COLUMN cover_image_id TEXT`,
       // Add metadata to chapter/wiki links
       `ALTER TABLE chapter_wiki_mentions ADD COLUMN link_source TEXT DEFAULT 'manual'`,
-      `ALTER TABLE chapter_wiki_mentions ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE chapter_wiki_mentions ADD COLUMN updated_at TIMESTAMP`,
+      `UPDATE chapter_wiki_mentions SET updated_at = created_at WHERE updated_at IS NULL`,
       `CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_chapter ON chapter_wiki_mentions(chapter_id)`,
       `CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_wiki_page ON chapter_wiki_mentions(wiki_page_id)`
     ];
@@ -995,7 +996,8 @@ export class AppDatabase {
     }
 
     if (!columns.has('updated_at')) {
-      statements.push(`ALTER TABLE chapter_wiki_mentions ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
+      statements.push(`ALTER TABLE chapter_wiki_mentions ADD COLUMN updated_at TIMESTAMP`);
+      statements.push(`UPDATE chapter_wiki_mentions SET updated_at = created_at WHERE updated_at IS NULL`);
     }
 
     statements.push(`CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_chapter ON chapter_wiki_mentions(chapter_id)`);

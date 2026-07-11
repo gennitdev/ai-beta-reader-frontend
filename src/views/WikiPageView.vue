@@ -1015,6 +1015,22 @@ watch(
           </div>
         </div>
 
+        <!-- Illustrations -->
+        <WikiPageIllustrationsSection
+          v-if="wikiImages.length > 0"
+          layout="panel"
+          :images="wikiImages"
+          :image-sources="wikiImageSources"
+          :image-tags="wikiImageTags"
+          :cover-image-id="wikiCoverImageId"
+          :loading="wikiImagesLoading"
+          :error="wikiImageError"
+          :setting-cover-id="settingCoverId"
+          @open-image="openImageModal"
+          @set-cover="handleSetAsCover"
+          @download="handleDownloadImage"
+        />
+
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
           <div class="p-6">
             <div class="flex items-center justify-between gap-3">
@@ -1136,22 +1152,6 @@ watch(
             </div>
           </div>
         </div>
-
-        <!-- Illustrations -->
-        <WikiPageIllustrationsSection
-          v-if="wikiImages.length > 0"
-          layout="panel"
-          :images="wikiImages"
-          :image-sources="wikiImageSources"
-          :image-tags="wikiImageTags"
-          :cover-image-id="wikiCoverImageId"
-          :loading="wikiImagesLoading"
-          :error="wikiImageError"
-          :setting-cover-id="settingCoverId"
-          @open-image="openImageModal"
-          @set-cover="handleSetAsCover"
-          @download="handleDownloadImage"
-        />
       </div>
     </div>
   </div>
