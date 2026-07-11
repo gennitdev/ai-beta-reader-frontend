@@ -175,8 +175,12 @@ const fontSizeClass = computed(() => {
   color: #334155; /* slate-700 for light mode */
 }
 
-.dark .markdown-body {
-  color: #e2e8f0; /* softer off-white to prevent glare on dark */
+/* Dark mode is driven by prefers-color-scheme (Tailwind's default "media"
+   strategy — there is no .dark class on the page). */
+@media (prefers-color-scheme: dark) {
+  .markdown-body {
+    color: #e2e8f0; /* softer off-white to prevent glare on dark */
+  }
 }
 
 /* Generous paragraph spacing so the eye rests between thoughts */
@@ -196,8 +200,10 @@ const fontSizeClass = computed(() => {
   color: #475569;
 }
 
-.dark .markdown-body :deep(blockquote) {
-  background-color: rgba(255, 255, 255, 0.04);
-  color: #cbd5e1;
+@media (prefers-color-scheme: dark) {
+  .markdown-body :deep(blockquote) {
+    background-color: rgba(255, 255, 255, 0.04);
+    color: #cbd5e1;
+  }
 }
 </style>
