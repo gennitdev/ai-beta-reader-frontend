@@ -918,7 +918,7 @@ watch(
           </div>
         </div>
 
-        <aside class="mt-6 space-y-6 lg:mt-0">
+        <aside class="mt-6 space-y-6">
           <ChapterIllustrationsSection
             v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
             layout="panel"
