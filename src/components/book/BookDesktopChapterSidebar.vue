@@ -36,25 +36,22 @@ defineProps<{
     <div v-else-if="hasChapters" class="divide-y divide-gray-200 dark:divide-gray-800">
       <div v-for="part in chaptersByPart.parts" :key="part.id" class="overflow-hidden">
         <button
+          type="button"
           @click="togglePart(part.id)"
-          class="w-full text-left transition-colors focus:outline-none"
+          class="w-full text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+          :aria-expanded="expandedParts.has(part.id)"
+          :aria-controls="`sidebar-part-${part.id}`"
         >
-          <div class="relative overflow-hidden rounded-lg mx-2 my-2">
-            <div
-              v-if="partThumbnails[part.id]"
-              class="aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
-            >
+          <div
+            v-if="partThumbnails[part.id]"
+            class="relative mx-2 my-2 overflow-hidden rounded-lg"
+          >
+            <div class="aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-gray-700">
               <img
                 :src="partThumbnails[part.id]"
                 class="h-full w-full object-cover"
                 alt=""
               />
-            </div>
-            <div
-              v-else
-              class="aspect-[16/9] w-full bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 dark:from-indigo-900/40 dark:via-purple-900/30 dark:to-pink-900/40 flex items-center justify-center"
-            >
-              <BookOpenIcon class="w-12 h-12 text-indigo-300 dark:text-indigo-600 opacity-60" />
             </div>
 
             <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-3 py-3 pt-8">
@@ -97,10 +94,61 @@ defineProps<{
               </div>
             </div>
           </div>
+
+          <div
+            v-else
+            class="mx-2 my-2 rounded-lg border border-gray-200 bg-white px-3 py-3 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex min-w-0 items-center gap-3">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-500 dark:bg-indigo-900/30 dark:text-indigo-300">
+                  <BookOpenIcon class="h-5 w-5" />
+                </div>
+                <div class="min-w-0">
+                  <h4 class="truncate font-medium text-gray-900 dark:text-white">
+                    {{ part.name }}
+                  </h4>
+                  <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                    {{ (sidebarPartLists[part.id]?.length || 0) }} chapter{{
+                      (sidebarPartLists[part.id]?.length || 0) !== 1 ? 's' : ''
+                    }}
+                    ·
+                    {{
+                      formatWordCount(
+                        wordCountForChapters(sidebarPartLists[part.id] || [])
+                      )
+                    }}
+                    words
+                    ·
+                    <router-link
+                      :to="`/books/${bookId}/parts/${part.id}`"
+                      class="text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                      @click.stop="expandPart(part.id)"
+                    >View</router-link>
+                  </p>
+                </div>
+              </div>
+              <svg
+                :class="expandedParts.has(part.id) ? 'rotate-180' : ''"
+                class="h-5 w-5 flex-shrink-0 text-gray-500 transition-transform dark:text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 9l-7 7-7-7"
+                ></path>
+              </svg>
+            </div>
+          </div>
         </button>
 
         <div
           v-if="expandedParts.has(part.id)"
+          :id="`sidebar-part-${part.id}`"
           class="bg-white dark:bg-gray-800"
         >
           <div class="pr-2 pt-3 pb-2 flex justify-end border-t border-gray-200 dark:border-gray-700">
