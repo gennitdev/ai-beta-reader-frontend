@@ -1,5 +1,8 @@
 # AI Beta Reader Frontend
 
+[![CI](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend/branch/main/graph/badge.svg)](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend)
+
 A Vue.js frontend for the AI Beta Reader application. Manage your books and chapters, edit content with a rich markdown editor, generate AI summaries, and get contextual feedback on your writing.
 
 ## Tech Stack
