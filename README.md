@@ -60,7 +60,9 @@ The browser, desktop, and Android targets share the same application and portabl
 
 ### AI-Powered Features
 
-- **Smart Chapter Summaries**: Auto-generate structured summaries that track plot points, characters, and key events to maintain continuity across long manuscripts
+- **Smart Chapter Summaries**: Auto-generate structured summaries that track plot points, characters, locations, and key events to maintain continuity across long manuscripts
+  - A checkbox lets you update wiki pages for characters and locations detected while generating or regenerating a summary
+  - Missing pages are created, existing pages are refreshed with new chapter information, and each result is linked back to its source chapter
 - **Contextual AI Reviews**: Get intelligent feedback that understands your entire story:
   - Reviews use summaries of previous chapters as context
   - No need to explain backstory - the AI already knows what happened
@@ -130,7 +132,14 @@ Create personalized reviewer profiles with custom prompts to get the exact type 
 
 ### Character Wiki System
 
-Automatically generated character sheets that track relationships and development..
+Wiki pages can be maintained by hand or updated as part of chapter summary generation. Before selecting **Generate** or **Regenerate**, use the **Update wiki pages for detected characters and locations** checkbox to control whether the AI should:
+
+- Create pages for newly detected characters and locations
+- Add relevant chapter information to existing pages
+- Record the source chapter and a history entry for each creation or update
+- Resolve nicknames, titles, and other alternate names to an existing canonical page
+
+After generation, the summary panel reports which pages were created, updated, or left unchanged and provides links to review them.
 
 ![Auto-generated Character Sheet with Change History](./src/assets/screenshots/auto-generated-character-sheet-with-change-history.png)
 
@@ -234,7 +243,8 @@ See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secre
 
 ### Search, Wiki, and Story Bible
 
-- Wiki pages track concepts/characters with update history.
+- Wiki pages track characters, locations, concepts, and other story information with update history.
+- Summary generation can optionally create or update detected character and location pages, then link them to the source chapter.
 - Cross-document search covers chapters + wiki entries.
 - Find/replace spans every chapter to keep continuity.
 - Chapters can be grouped into parts; reorder via drag & drop (Pinia stores keep UI state in sync).
