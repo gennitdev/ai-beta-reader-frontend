@@ -129,7 +129,7 @@ const props = defineProps({
     type: Function as PropType<() => void>,
     default: () => {}
   },
-  desktopImagesAvailable: {
+  canSelectImages: {
     type: Boolean,
     default: false
   },
@@ -229,7 +229,7 @@ const {
   totalWordCount,
   expandedSummaries,
   wikiPagesByType,
-  desktopImagesAvailable,
+  canSelectImages,
   coverImageSrc,
   coverLoading,
   coverError,
@@ -385,7 +385,7 @@ watch(
     </div>
 
     <div
-      v-if="desktopImagesAvailable || coverImageSrc"
+      v-if="canSelectImages || coverImageSrc"
       class="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
     >
       <div class="flex gap-4">
@@ -407,9 +407,9 @@ watch(
         </div>
         <div class="flex flex-1 flex-col justify-between">
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {{ desktopImagesAvailable ? 'Covers stay on your device when you use the desktop app.' : 'Restored cover image.' }}
+            {{ canSelectImages ? 'Covers are stored locally on this device.' : 'Restored cover image.' }}
           </p>
-          <div v-if="desktopImagesAvailable" class="mt-2 flex items-center gap-2">
+          <div v-if="canSelectImages" class="mt-2 flex items-center gap-2">
             <button
               type="button"
               class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -850,11 +850,11 @@ watch(
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
 
-        <div v-else-if="!desktopImagesAvailable && bookImages.length === 0" class="text-center py-16">
+        <div v-else-if="!canSelectImages && bookImages.length === 0" class="text-center py-16">
           <PhotoIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No restored images</h3>
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No images yet</h3>
           <p class="text-gray-600 dark:text-gray-400">
-            Add images in the desktop app, back up, then restore here to view them on web.
+            Images added to chapters and covers will appear here.
           </p>
         </div>
 

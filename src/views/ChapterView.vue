@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, onBeforeUnmount, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useChapterImages } from "@/composables/useChapterImages";
@@ -20,7 +20,14 @@ import FontSizeControl from "@/components/reading/FontSizeControl.vue";
 import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
 import { useReadingFontSize } from "@/composables/useReadingFontSize";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
+import { type AutocompleteOption } from "@/components/links/AutocompleteMultiSelect.vue";
+import ChapterWikiLinksCard from "@/components/links/ChapterWikiLinksCard.vue";
 import Modal from "@/components/Modal.vue";
+import type { ChapterWikiLink } from "@/lib/database";
+import {
+  CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+  type ChapterWikiLinksChangedDetail,
+} from "@/utils/chapterWikiLinkEvents";
 
 interface Chapter {
   id: string;
@@ -75,7 +82,6 @@ const chapterId = computed(() => route.params.chapterId as string);
 
 // Use chapter images composable
 const {
-  desktopImagesAvailable,
   chapterImageUploadAvailable,
   chapterImages,
   chapterImagesLoading,
@@ -132,6 +138,9 @@ const {
   getWikiPages,
   trackWikiUpdate,
   addChapterWikiMention,
+  getChapterWikiLinks,
+  setChapterWikiLinks,
+  ensureChapterWikiLinks,
   getCustomProfiles,
   saveReview,
   getReviews,
@@ -153,6 +162,11 @@ const savedReviews = ref<Review[]>([]);
 const loadingReviews = ref(false);
 const deletingReviewId = ref<string | null>(null);
 const characters = ref<Character[]>([]);
+const linkedWikiPages = ref<ChapterWikiLink[]>([]);
+const loadingLinkedWikiPages = ref(false);
+const isEditingLinkedWikiPages = ref(false);
+const savingLinkedWikiPages = ref(false);
+const selectedLinkedWikiPageIds = ref<string[]>([]);
 const showDeleteModal = ref(false);
 const deletingChapter = ref(false);
 const parts = ref<BookPart[]>([]);
@@ -256,6 +270,14 @@ const chapterTruncation = computed(() => {
   return getTruncatedText(chapter.value.text);
 });
 
+const linkedWikiPageOptions = computed<AutocompleteOption[]>(() =>
+  bookWikiPages.value.map((page) => ({
+    id: page.id,
+    label: page.page_name,
+    detail: page.page_type ?? undefined,
+  }))
+);
+
 // Computed navigation URLs
 // Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
 // BookView handles mobile display via CSS media queries
@@ -299,6 +321,10 @@ const {
   getWikiPage,
   trackWikiUpdate,
   addChapterWikiMention,
+  ensureChapterWikiLinks,
+  reloadWikiLinks: async () => {
+    await loadLinkedWikiPages();
+  },
   reloadCharacters: async () => {
     await loadCharacters();
   },
@@ -521,6 +547,27 @@ const loadCharacters = async () => {
   }
 };
 
+const loadLinkedWikiPages = async () => {
+  if (!chapterId.value) {
+    linkedWikiPages.value = [];
+    selectedLinkedWikiPageIds.value = [];
+    return;
+  }
+
+  loadingLinkedWikiPages.value = true;
+  try {
+    const links = await getChapterWikiLinks(chapterId.value);
+    linkedWikiPages.value = links;
+    selectedLinkedWikiPageIds.value = links.map((link) => link.wiki_page_id);
+  } catch (error) {
+    console.error("Failed to load chapter wiki links:", error);
+    linkedWikiPages.value = [];
+    selectedLinkedWikiPageIds.value = [];
+  } finally {
+    loadingLinkedWikiPages.value = false;
+  }
+};
+
 const loadCustomProfiles = async () => {
   try {
     const profiles = await getCustomProfiles();
@@ -539,8 +586,46 @@ const getCharacterWikiInfo = (characterName: string) => {
 const navigateToWiki = (characterName: string) => {
   const character = getCharacterWikiInfo(characterName);
   if (character?.has_wiki_page && character.wiki_page_id) {
-    router.push(`${routePrefix.value}/${bookId.value}/wiki/${character.wiki_page_id}`);
+    router.push({
+      path: `${routePrefix.value}/${bookId.value}/wiki/${character.wiki_page_id}`,
+      query: { fromChapterId: chapterId.value },
+    });
   }
+};
+
+const startEditingLinkedWikiPages = () => {
+  selectedLinkedWikiPageIds.value = linkedWikiPages.value.map((link) => link.wiki_page_id);
+  isEditingLinkedWikiPages.value = true;
+};
+
+const cancelEditingLinkedWikiPages = () => {
+  selectedLinkedWikiPageIds.value = linkedWikiPages.value.map((link) => link.wiki_page_id);
+  isEditingLinkedWikiPages.value = false;
+};
+
+const saveLinkedWikiPages = async () => {
+  if (!chapter.value) return;
+
+  savingLinkedWikiPages.value = true;
+  try {
+    await setChapterWikiLinks(chapter.value.id, selectedLinkedWikiPageIds.value, "manual");
+    await loadLinkedWikiPages();
+    await loadCharacters();
+    isEditingLinkedWikiPages.value = false;
+  } catch (error) {
+    console.error("Failed to save chapter wiki links:", error);
+    alert("Failed to save linked wiki pages");
+  } finally {
+    savingLinkedWikiPages.value = false;
+  }
+};
+
+const handleChapterWikiLinksChanged = async (event: Event) => {
+  const customEvent = event as CustomEvent<ChapterWikiLinksChangedDetail>;
+  const detail = customEvent.detail;
+  if (!detail || !detail.chapterIds.includes(chapterId.value)) return;
+
+  await Promise.all([loadLinkedWikiPages(), loadCharacters()]);
 };
 
 const formatDate = (dateString: string) => {
@@ -645,12 +730,32 @@ onMounted(async () => {
   await loadChapter();
   await loadSavedReviews();
   await loadCharacters();
+  await loadLinkedWikiPages();
   await loadCustomProfiles();
+  window.addEventListener(
+    CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+    handleChapterWikiLinksChanged as EventListener,
+  );
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+    handleChapterWikiLinksChanged as EventListener,
+  );
 });
 
 watch(updateWikiOnSummary, (value) => {
   localStorage.setItem(CHAPTER_SUMMARY_WIKI_UPDATES_KEY, String(value));
 });
+
+watch(
+  () => chapterId.value,
+  () => {
+    isEditingLinkedWikiPages.value = false;
+    loadLinkedWikiPages();
+  }
+);
 </script>
 
 <template>
@@ -708,7 +813,7 @@ watch(updateWikiOnSummary, (value) => {
             :show-notes-panel="showNotesPanel"
             :has-illustrations="chapterImages.length > 0"
             :show-illustrations-panel="showIllustrationsPanel || chapterImages.length > 0"
-            :desktop-images-available="desktopImagesAvailable"
+            :can-select-images="chapterImageUploadAvailable"
             @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
             @toggle-notes-panel="showNotesPanel = !showNotesPanel"
             @toggle-illustrations-panel="showIllustrationsPanel = !showIllustrationsPanel"
@@ -789,6 +894,24 @@ watch(updateWikiOnSummary, (value) => {
           @toggle-review="toggleReviewExpansion"
           @toggle-prompt="togglePromptExpansion"
         />
+
+        <div class="mt-6 lg:hidden">
+          <ChapterWikiLinksCard
+            :route-prefix="routePrefix"
+            :book-id="bookId"
+            :chapter-id="chapterId"
+            :links="linkedWikiPages"
+            :options="linkedWikiPageOptions"
+            :selected-ids="selectedLinkedWikiPageIds"
+            :loading="loadingLinkedWikiPages"
+            :is-editing="isEditingLinkedWikiPages"
+            :saving="savingLinkedWikiPages"
+            @start-edit="startEditingLinkedWikiPages"
+            @cancel-edit="cancelEditingLinkedWikiPages"
+            @save="saveLinkedWikiPages"
+            @update:selected-ids="selectedLinkedWikiPageIds = $event"
+          />
+        </div>
           </div>
         </div>
 
@@ -810,6 +933,23 @@ watch(updateWikiOnSummary, (value) => {
             @set-cover="handleSetAsCover"
             @download="handleDownloadImage"
             @delete="requestDeleteIllustration"
+          />
+
+          <ChapterWikiLinksCard
+            class="hidden lg:block"
+            :route-prefix="routePrefix"
+            :book-id="bookId"
+            :chapter-id="chapterId"
+            :links="linkedWikiPages"
+            :options="linkedWikiPageOptions"
+            :selected-ids="selectedLinkedWikiPageIds"
+            :loading="loadingLinkedWikiPages"
+            :is-editing="isEditingLinkedWikiPages"
+            :saving="savingLinkedWikiPages"
+            @start-edit="startEditingLinkedWikiPages"
+            @cancel-edit="cancelEditingLinkedWikiPages"
+            @save="saveLinkedWikiPages"
+            @update:selected-ids="selectedLinkedWikiPageIds = $event"
           />
 
           <FontSizeControl v-model="fontSize" variant="panel" />

@@ -1,63 +1,29 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { gzipSync, gunzipSync } from 'fflate';
 import { Encryption } from './encryption';
-import { db } from './database';
+import { db, type ImageAsset } from './database';
 import { performNativeGoogleOAuth } from './googleOAuth';
 import type { GoogleOAuthTokens } from './googleOAuth';
 import { loadTokens, saveTokens, clearTokens } from './tokenStorage';
+import {
+  ElectronImageContentStore,
+  IndexedDbImageContentStore,
+  inspectImageContent,
+  type ImageContentStore,
+} from './imageContentStore';
+import {
+  enrichImageRowsForBackup,
+  restoreImageRows,
+  stripImageDataFromRows,
+} from './cloudSyncImageAssets';
+import type { ImportRow } from './databaseImportExport';
 
 // Prefix to identify compressed backups
 const COMPRESSED_PREFIX = 'GZ1:';
 
-type BackupImageAssetRow = Record<string, unknown> | unknown[];
-
-function getBackupImageField(row: BackupImageAssetRow, field: string): unknown {
-  if (!Array.isArray(row)) {
-    return row[field];
-  }
-
-  const fieldIndexMap: Record<string, number> = {
-    id: 0,
-    book_id: 1,
-    chapter_id: 2,
-    asset_type: 3,
-    file_name: 4,
-    file_path: 5,
-    mime_type: 6,
-    image_data: 7,
-    notes: 8,
-    created_at: 9,
-    updated_at: 10,
-  };
-
-  return row[fieldIndexMap[field]] ?? null;
-}
-
-function setBackupImageField(row: BackupImageAssetRow, field: string, value: unknown): BackupImageAssetRow {
-  if (!Array.isArray(row)) {
-    return {
-      ...row,
-      [field]: value,
-    };
-  }
-
-  const fieldIndexMap: Record<string, number> = {
-    id: 0,
-    book_id: 1,
-    chapter_id: 2,
-    asset_type: 3,
-    file_name: 4,
-    file_path: 5,
-    mime_type: 6,
-    image_data: 7,
-    notes: 8,
-    created_at: 9,
-    updated_at: 10,
-  };
-
-  const nextRow = [...row];
-  nextRow[fieldIndexMap[field]] = value;
-  return nextRow;
+interface BackupPayload {
+  image_assets?: ImportRow[];
+  [key: string]: unknown;
 }
 
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
@@ -117,6 +83,16 @@ interface CloudSyncWindow extends Window {
 
 function getCloudSyncWindow(): CloudSyncWindow | null {
   return typeof window === 'undefined' ? null : window as CloudSyncWindow;
+}
+
+function createRuntimeImageContentStore(): ImageContentStore | null {
+  if (typeof window !== 'undefined' && window.desktopImages) {
+    return new ElectronImageContentStore(window.desktopImages);
+  }
+  if (!Capacitor.isNativePlatform()) {
+    return new IndexedDbImageContentStore();
+  }
+  return null;
 }
 
 /**
@@ -846,52 +822,26 @@ export class CloudSync {
     console.log('Exporting database...');
     const dbData = await db.exportDatabase();
 
-    // Enrich with image data if on desktop
+    // Enrich temporary export rows from the active image content store. Live
+    // browser/Electron SQLite rows keep image_data null.
     let enrichedData = dbData;
-    if (typeof window !== 'undefined' && window.desktopImages) {
-      console.log('[CloudSync] Reading image files for backup...');
+    const imageContentStore = createRuntimeImageContentStore();
+    if (imageContentStore) {
+      console.log('[CloudSync] Reading image content for backup...');
       try {
-        const exportJson = JSON.parse(new TextDecoder().decode(dbData));
+        const exportJson = JSON.parse(new TextDecoder().decode(dbData)) as BackupPayload;
         console.log('[CloudSync] Export has image_assets:', exportJson.image_assets?.length || 0, 'items');
-        if (exportJson.image_assets?.length > 0) {
-          console.log('[CloudSync] First image_asset row:', exportJson.image_assets[0]);
-        }
-
-        // image_assets may contain object rows (current export) or positional rows (older backups)
-        // Process images in batches to avoid memory exhaustion
-        if (exportJson.image_assets && Array.isArray(exportJson.image_assets)) {
-          const BATCH_SIZE = 5; // Process 5 images at a time to limit memory
-          const totalImages = exportJson.image_assets.length;
-
-          for (let i = 0; i < totalImages; i += BATCH_SIZE) {
-            const batchEnd = Math.min(i + BATCH_SIZE, totalImages);
-            console.log(`Processing images ${i + 1}-${batchEnd} of ${totalImages}...`);
-
-            for (let j = i; j < batchEnd; j++) {
-              const row = exportJson.image_assets[j];
-              const filePath = getBackupImageField(row, 'file_path');
-              const mimeType = getBackupImageField(row, 'mime_type');
-              let imageData = getBackupImageField(row, 'image_data');
-
-              // If no image_data stored, try to read from filesystem
-              if (!imageData && filePath) {
-                try {
-                  const result = await window.desktopImages.readImageData({
-                    relativePath: String(filePath),
-                    mimeType: mimeType == null ? null : String(mimeType),
-                  });
-                  imageData = result.dataUrl;
-                  console.log(`Read image: ${filePath}`);
-                } catch (err) {
-                  console.warn(`Failed to read image ${filePath}:`, err);
-                }
-              }
-
-              exportJson.image_assets[j] = setBackupImageField(row, 'image_data', imageData);
-            }
-
-            // Small delay to allow garbage collection between batches
-            await new Promise(resolve => setTimeout(resolve, 10));
+        if (Array.isArray(exportJson.image_assets) && exportJson.image_assets.length > 0) {
+          const result = await enrichImageRowsForBackup(
+            exportJson.image_assets,
+            imageContentStore,
+          );
+          exportJson.image_assets = result.rows;
+          if (result.missingImageIds.length > 0) {
+            console.warn(
+              '[CloudSync] Backup contains image metadata with no local content:',
+              result.missingImageIds,
+            );
           }
         }
 
@@ -903,9 +853,11 @@ export class CloudSync {
         exportJson.image_assets = [];
 
         enrichedData = new TextEncoder().encode(jsonString);
-      } catch (err) {
-        console.warn('Failed to enrich backup with images:', err);
-        // Continue with original data
+      } catch (error) {
+        console.error('Failed to enrich backup with images:', error);
+        throw new Error(
+          `Failed to prepare images for backup: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
 
@@ -998,76 +950,52 @@ export class CloudSync {
     }
 
     try {
-      // On desktop, write image files to filesystem before importing
       let dataToImport = decrypted;
-      const importJson = JSON.parse(new TextDecoder().decode(decrypted));
+      const importJson = JSON.parse(new TextDecoder().decode(decrypted)) as BackupPayload;
 
       // Free the decrypted buffer now that we've parsed it
       decrypted = new Uint8Array(0);
 
       console.log('[CloudSync] Restore: image_assets in backup:', importJson.image_assets?.length || 0, 'items');
 
-      // On mobile (native platform without desktop image support), strip image data to save memory
-      // Images can't be stored on mobile anyway, so we only restore the metadata
-      const isMobileWithoutImageSupport = Capacitor.isNativePlatform() &&
-        !(typeof window !== 'undefined' && window.desktopImages);
-
-      if (isMobileWithoutImageSupport && importJson.image_assets?.length > 0) {
-        console.log('[CloudSync] Mobile detected - stripping image data to save memory');
-        importJson.image_assets = importJson.image_assets.map((row: BackupImageAssetRow) =>
-          setBackupImageField(row, 'image_data', null)
-        );
-      }
-
-      if (importJson.image_assets?.length > 0) {
-        console.log('[CloudSync] Restore: First image_asset:', importJson.image_assets[0]);
-        const hasImageData = importJson.image_assets.some((row: BackupImageAssetRow) => getBackupImageField(row, 'image_data'));
-        console.log('[CloudSync] Restore: Any rows have image_data?', hasImageData);
-      }
-
-      if (typeof window !== 'undefined' && window.desktopImages) {
-        console.log('[CloudSync] Writing image files from backup (desktop mode)...');
-        try {
-          if (importJson.image_assets && Array.isArray(importJson.image_assets)) {
-            let imagesWritten = 0;
-            const processedAssets = [];
-
-            for (const row of importJson.image_assets) {
-              const filePath = getBackupImageField(row, 'file_path');
-              const imageData = getBackupImageField(row, 'image_data');
-
-              // Write image to filesystem if we have data
-              if (imageData && filePath) {
-                try {
-                  await window.desktopImages.writeImageData({
-                    relativePath: String(filePath),
-                    dataUrl: String(imageData),
-                  });
-                  imagesWritten++;
-                  console.log(`Wrote image: ${filePath}`);
-                } catch (err) {
-                  console.warn(`Failed to write image ${filePath}:`, err);
-                }
-              }
-
-              // On desktop, clear image_data since it's now on filesystem
-              // This keeps the database smaller
-              processedAssets.push(setBackupImageField(row, 'image_data', null));
-            }
-
-            importJson.image_assets = processedAssets;
-            dataToImport = new TextEncoder().encode(JSON.stringify(importJson));
-            console.log(`Wrote ${imagesWritten} images to filesystem`);
+      const restoreStore = createRuntimeImageContentStore();
+      let restoredAssets: ImageAsset[] = [];
+      if (Array.isArray(importJson.image_assets) && importJson.image_assets.length > 0) {
+        if (restoreStore) {
+          console.log('[CloudSync] Writing image content from backup...');
+          const result = await restoreImageRows(importJson.image_assets, restoreStore);
+          importJson.image_assets = result.rows;
+          restoredAssets = result.assets;
+          if (result.missingImageIds.length > 0) {
+            console.warn(
+              '[CloudSync] Restore contains image metadata with no embedded content:',
+              result.missingImageIds,
+            );
           }
-        } catch (err) {
-          console.warn('Failed to process images from backup:', err);
-          // Continue with original data
+        } else {
+          console.log('[CloudSync] Native platform without image storage - stripping image data');
+          const result = stripImageDataFromRows(importJson.image_assets);
+          importJson.image_assets = result.rows;
+          restoredAssets = result.assets;
         }
+        dataToImport = new TextEncoder().encode(JSON.stringify(importJson));
       }
-      // On web, image_data stays in the database for display
 
       // Import the data into the database
       await db.importDatabase(dataToImport);
+
+      if (restoreStore && restoredAssets.length > 0) {
+        const reconciliation = await inspectImageContent(restoreStore, restoredAssets);
+        if (reconciliation.missingImageIds.length > 0) {
+          console.warn('[CloudSync] Restored image content is missing:', reconciliation.missingImageIds);
+        }
+        if (reconciliation.orphanedImageIds.length > 0) {
+          console.warn(
+            '[CloudSync] Unreferenced image content retained for manual reconciliation:',
+            reconciliation.orphanedImageIds,
+          );
+        }
+      }
 
       console.log('✅ Database restored successfully!');
       return true;

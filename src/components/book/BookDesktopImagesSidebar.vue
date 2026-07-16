@@ -4,7 +4,7 @@ import type { ImageAsset } from '@/lib/database'
 
 defineProps<{
   bookId: string
-  desktopImagesAvailable: boolean
+  canSelectImages: boolean
   bookImages: ImageAsset[]
   bookImageSources: Record<string, string>
   loadingImages: boolean
@@ -18,13 +18,13 @@ defineProps<{
       <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
     </div>
 
-    <div v-else-if="!desktopImagesAvailable && bookImages.length === 0" class="text-center py-8">
+    <div v-else-if="!canSelectImages && bookImages.length === 0" class="text-center py-8">
       <PhotoIcon class="w-8 h-8 text-gray-400 mx-auto mb-3" />
       <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
-        No restored images
+        No images yet
       </h3>
       <p class="text-xs text-gray-600 dark:text-gray-400">
-        Add images in the desktop app, back up, then restore here to view them on web.
+        Images added to chapters and covers will appear here.
       </p>
     </div>
 

@@ -58,6 +58,7 @@ function createMutationFlow() {
     getWikiPage: vi.fn(async () => null),
     trackWikiUpdate: vi.fn(async () => undefined),
     addChapterWikiMention: vi.fn(async () => undefined),
+    ensureChapterWikiLinks: vi.fn(async () => undefined),
     reloadCharacters: vi.fn(async () => undefined),
     reloadReviews: vi.fn(async () => undefined),
     openSettings: vi.fn(),

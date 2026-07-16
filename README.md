@@ -10,7 +10,7 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 - **Frontend:** Vue 3 (Composition API) + TypeScript + Vite
 - **Styling:** Tailwind CSS + Headless UI + Heroicons
 - **State & Data:** Pinia, @tanstack/vue-query
-- **Local Storage:** `sql.js` (browser) / `@capacitor-community/sqlite` (native)
+- **Local Database:** `sql.js` + IndexedDB persistence (browser and Electron) / `@capacitor-community/sqlite` (Android)
 - **Cloud Sync:** Google Drive via OAuth 2.0 (GIS for web, PKCE + App Links for native)
 - **AI Services:** OpenAI (GPT‑4o Mini) for summaries & reviews
 - **Native Platforms:** Capacitor for Android, Electron for desktop (macOS/Windows/Linux)
@@ -39,19 +39,20 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 
 ### Continuity Management & Storage
 
-- **Local-first data**: Every project lives in a local SQLite database (browser or device). Nothing leaves the device unless you explicitly back up.
-- **Encrypted backups**: `ai-beta-reader-backup.enc` is AES-encrypted with your password before uploading to Google Drive.
-- **Drive restore**: Restore the same encrypted blob from any device (web or Android). Native uses PKCE OAuth and App Links to re-enter the app after Google consent.
+- **Local-first data**: Every project lives in a local SQLite database. Backups are user-initiated; AI features send the selected manuscript context to the configured AI service when invoked.
+- **Encrypted backups**: The database snapshot is compressed, encrypted with a password-derived AES-GCM key, and uploaded to Google Drive as `ai-beta-reader-backup.enc`.
+- **Cross-platform restore**: Browser, Electron, and Android use the same versioned JSON snapshot format. Android uses PKCE OAuth and App Links to re-enter the app after Google consent.
 - **Story bible**: Character sheets, wiki pages, change history, and cross-document search keep continuity intact.
 - **Find & replace**: Rename characters/places everywhere in one shot.
 - **Drag & drop parts**: Reorder chapters and group them into parts.
 
-### Chapter Illustrations (Desktop Only)
+### Chapter Illustrations
 
-- **Image management**: Add multiple illustrations per chapter in the Electron desktop app
+- **Browser and Electron image management**: Add and manage chapter illustrations plus book, part, and chapter covers
+- **Local binary storage**: Browser images are stored as IndexedDB `Blob` records; Electron images live in the app-data directory
 - **Chapter covers**: Set any illustration as the chapter's cover image for visual navigation
 - **Lightbox viewer**: View images full-screen with download option
-- **Local storage**: Images stored locally on desktop (not synced to cloud backup)
+- **Storage and backup**: Drive backup embeds image data in the encrypted snapshot so browser and Electron restores preserve the image library.
 
 ## Screenshots
 
@@ -109,7 +110,7 @@ Find and replace text across all chapters and wiki pages to maintain consistency
 
 ## Prerequisites for Self Hosting Beta-bot
 
-- Node.js 18+
+- Node.js 20.19+ or 22.12+
 - Google Cloud project with Drive API enabled and OAuth clients (web + Android)
 - AI Beta Reader Express backend running
 
@@ -162,18 +163,19 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 
 ### Local-first Database
 
-- **Browser builds** load `sql.js` (WASM SQLite). The database is cached in `localStorage` (`sqliteDb` key).
-- **Native builds** use `@capacitor-community/sqlite`. Data lives in the device sandbox at `ai-beta-reader`.
+- **Browser and Electron builds** run `sql.js` (SQLite compiled to WebAssembly). The exported SQLite bytes are persisted in IndexedDB under the `ai-beta-reader-db` database. Existing installs with the legacy `localStorage.sqliteDb` value migrate it to IndexedDB during startup.
+- **Android builds** use `@capacitor-community/sqlite`. Data lives in the device sandbox in the `ai-beta-reader` database.
 - All user actions (adding books, editing chapters, creating wiki entries) mutate the local DB immediately.
-- When you export/import, the app serialises the entire database to JSON for portability.
+- Export/import serializes the database tables to a versioned JSON snapshot for portability between storage engines.
+- Browser image bytes live in the IndexedDB `imageBlobs` object store. SQLite keeps only image metadata during normal use; legacy base64 rows migrate automatically in restartable batches.
 
 ### Google Drive Backup & Restore
 
 1. **Backup** (`User Settings → Back up to Drive`)
-   - Prompts for a password (used to encrypt the JSON dump via `CryptoJS.AES`).
+   - Prompts for a password. The app gzip-compresses the JSON snapshot, derives a key with PBKDF2, and encrypts it with AES-GCM through the Web Crypto API. Restore retains compatibility with older CryptoJS-encrypted backups.
    - Uploads `ai-beta-reader-backup.enc` with Drive scope `drive.file`.
    - Re-running backup overwrites the same file id (Drive `files.update`).
-   - Mobile + desktop both emit the exact same snapshot format; you can restore a phone backup on web and vice versa.
+   - Browser, Electron, and Android emit the same database snapshot format. Browser and Electron add local image data to the encrypted snapshot; Android currently preserves image metadata but does not provide local image-binary storage.
    - Want to sanity-check a backup before restoring? See `docs/cloud-sync.md#verifying-a-backup-locally` for a tiny Node script that prints record counts.
 
 2. **Restore** (`User Settings → Restore from Drive`)
@@ -181,13 +183,14 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
      - **Web**: Google Identity Services token client (`response_type=token`).
      - **Android**: Custom PKCE helper opens Chrome via App Launcher, listens for App Link redirect (`com.googleusercontent.apps...:/oauth2redirect`), exchanges code for tokens, caches refresh token with `@capacitor/preferences`.
    - Downloads the encrypted blob, decrypts with the password you provide, and hydrates the local DB.
+   - Electron writes restored image data to its filesystem. The browser writes it to IndexedDB Blob storage. Android strips image binary data during restore and keeps the metadata.
    - Foreign key constraints are disabled temporarily during import to avoid ordering errors.
    - Nothing gets uploaded automatically—restore only reads from Drive. You decide when to back up.
 
 3. **Security**
    - Backups stay in your Google Drive. Only the authenticated account (or anyone you explicitly share the file with) can download it.
    - The encryption password is never stored; losing it makes the backup unreadable.
-  - Native access tokens are stored using Capacitor Preferences; revoke them via Android’s Developer Options if needed.
+   - Native access tokens are stored using Capacitor Preferences; revoke them via Android’s Developer Options if needed.
 
 See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secrets, SHA‑1 mismatches, status bar overlays, etc.).
 
@@ -236,9 +239,9 @@ cd electron && npm run electron:start  # run desktop app (after npm run build)
     - Custom URI scheme enabled (`com.googleusercontent.apps.<client-id>:/oauth2redirect`)
   - Status bar height is handled via `@capacitor/status-bar` to avoid UI overlap.
 - **Electron Desktop**: Run `npm run build` then `cd electron && npm run electron:start`.
-  - Desktop-only features: chapter illustrations, image management
-  - Uses `@capacitor-community/electron` for native SQLite and filesystem access
-  - Images stored in app data directory, not synced to cloud
+  - Uses the same `sql.js` + IndexedDB database persistence as the browser build.
+  - Uses an Electron preload/IPC bridge for native file selection and image filesystem access.
+  - Image files live in the Electron app-data directory and are embedded in user-initiated encrypted Drive backups.
 
 ## Troubleshooting Cheat Sheet
 

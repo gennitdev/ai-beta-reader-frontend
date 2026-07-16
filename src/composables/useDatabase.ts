@@ -1,5 +1,17 @@
 import { ref, onMounted } from 'vue'
-import { db, type Book, type Chapter, type ChapterSummary, type ChapterReview, type ChapterNote, type ImageAsset, type ImageWikiTag } from '@/lib/database'
+import {
+  db,
+  type Book,
+  type Chapter,
+  type ChapterNote,
+  type ChapterReview,
+  type ChapterSummary,
+  type ChapterWikiLink,
+  type ChapterWikiLinkSource,
+  type ImageAsset,
+  type ImageWikiTag,
+  type WikiPageChapterLink,
+} from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 
 const isInitialized = ref(false)
@@ -9,39 +21,48 @@ const chapters = ref<Chapter[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const cloudSyncReady = ref(true)
+let initializationPromise: Promise<void> | null = null
 
 // Initialize database once on app load
 export async function initializeDatabase() {
   if (isInitialized.value) return
+  if (initializationPromise) return initializationPromise
 
-  await db.init()
+  initializationPromise = (async () => {
+    await db.init()
 
-  // Initialize Google Drive sync if credentials are available
-  const webClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID_WEB ?? import.meta.env.VITE_GOOGLE_CLIENT_ID
-  if (webClientId) {
-    const provider = new GoogleDriveProvider(webClientId, {
-      nativeClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID_NATIVE,
-      nativeRedirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI_NATIVE,
-    })
-    cloudSync.value = new CloudSync(provider)
-    cloudSyncReady.value = cloudSync.value.isWebSdkReady()
-    console.log('[useDatabase] Initial cloudSyncReady:', cloudSyncReady.value)
-
-    // On Electron/web, preload the GIS SDK so cloud sync is ready
-    if (!cloudSyncReady.value && cloudSync.value.ensureWebSdkReady) {
-      console.log('[useDatabase] Starting GIS preload...')
-      cloudSync.value.ensureWebSdkReady().then(() => {
-        const ready = cloudSync.value?.isWebSdkReady() ?? false
-        console.log('[useDatabase] GIS preload complete, isWebSdkReady:', ready)
-        cloudSyncReady.value = ready
-        console.log('[useDatabase] cloudSyncReady updated to:', cloudSyncReady.value)
-      }).catch((err) => {
-        console.warn('[useDatabase] Failed to preload GIS SDK:', err)
+    // Initialize Google Drive sync if credentials are available
+    const webClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID_WEB ?? import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (webClientId) {
+      const provider = new GoogleDriveProvider(webClientId, {
+        nativeClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID_NATIVE,
+        nativeRedirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI_NATIVE,
       })
-    }
-  }
+      cloudSync.value = new CloudSync(provider)
+      cloudSyncReady.value = cloudSync.value.isWebSdkReady()
+      console.log('[useDatabase] Initial cloudSyncReady:', cloudSyncReady.value)
 
-  isInitialized.value = true
+      // On Electron/web, preload the GIS SDK so cloud sync is ready
+      if (!cloudSyncReady.value && cloudSync.value.ensureWebSdkReady) {
+        console.log('[useDatabase] Starting GIS preload...')
+        cloudSync.value.ensureWebSdkReady().then(() => {
+          const ready = cloudSync.value?.isWebSdkReady() ?? false
+          console.log('[useDatabase] GIS preload complete, isWebSdkReady:', ready)
+          cloudSyncReady.value = ready
+          console.log('[useDatabase] cloudSyncReady updated to:', cloudSyncReady.value)
+        }).catch((err) => {
+          console.warn('[useDatabase] Failed to preload GIS SDK:', err)
+        })
+      }
+    }
+
+    isInitialized.value = true
+  })().catch((initializationError) => {
+    initializationPromise = null
+    throw initializationError
+  })
+
+  return initializationPromise
 }
 
 export function useDatabase() {
@@ -476,13 +497,84 @@ export function useDatabase() {
     }
   }
 
-  async function addChapterWikiMention(chapterId: string, wikiPageId: string) {
+  async function addChapterWikiMention(
+    chapterId: string,
+    wikiPageId: string,
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ) {
     try {
       await initializeDatabase()
-      await db.addChapterWikiMention(chapterId, wikiPageId)
+      await db.addChapterWikiMention(chapterId, wikiPageId, linkSource)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to add wiki mention'
       console.error('Add wiki mention error:', e)
+      throw e
+    }
+  }
+
+  async function getChapterWikiLinks(chapterId: string): Promise<ChapterWikiLink[]> {
+    try {
+      await initializeDatabase()
+      return await db.getChapterWikiLinks(chapterId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get chapter wiki links'
+      console.error('Get chapter wiki links error:', e)
+      return []
+    }
+  }
+
+  async function getWikiPageChapterLinks(wikiPageId: string): Promise<WikiPageChapterLink[]> {
+    try {
+      await initializeDatabase()
+      return await db.getWikiPageChapterLinks(wikiPageId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to get wiki page chapter links'
+      console.error('Get wiki page chapter links error:', e)
+      return []
+    }
+  }
+
+  async function setChapterWikiLinks(
+    chapterId: string,
+    wikiPageIds: string[],
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ) {
+    try {
+      await initializeDatabase()
+      await db.setChapterWikiLinks(chapterId, wikiPageIds, linkSource)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update chapter wiki links'
+      console.error('Set chapter wiki links error:', e)
+      throw e
+    }
+  }
+
+  async function ensureChapterWikiLinks(
+    chapterId: string,
+    wikiPageIds: string[],
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ) {
+    try {
+      await initializeDatabase()
+      await db.ensureChapterWikiLinks(chapterId, wikiPageIds, linkSource)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to ensure chapter wiki links'
+      console.error('Ensure chapter wiki links error:', e)
+      throw e
+    }
+  }
+
+  async function setWikiPageChapterLinks(
+    wikiPageId: string,
+    chapterIds: string[],
+    linkSource: ChapterWikiLinkSource = 'manual',
+  ) {
+    try {
+      await initializeDatabase()
+      await db.setWikiPageChapterLinks(wikiPageId, chapterIds, linkSource)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update wiki page chapter links'
+      console.error('Set wiki page chapter links error:', e)
       throw e
     }
   }
@@ -833,6 +925,11 @@ export function useDatabase() {
     deleteWikiPage,
     trackWikiUpdate,
     addChapterWikiMention,
+    getChapterWikiLinks,
+    getWikiPageChapterLinks,
+    setChapterWikiLinks,
+    ensureChapterWikiLinks,
+    setWikiPageChapterLinks,
 
     // Parts operations
     createPart,

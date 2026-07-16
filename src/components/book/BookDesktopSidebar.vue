@@ -58,7 +58,7 @@ const props = defineProps<{
   saveBookTitle: () => void
   cancelEditingBookTitle: () => void
   updateEditingBookTitle: (value: string) => void
-  desktopImagesAvailable: boolean
+  canSelectImages: boolean
   coverImageSrc?: string | null
   coverLoading: boolean
   coverError?: string | null
@@ -239,7 +239,7 @@ const closeLightbox = () => {
       </div>
 
       <div
-        v-if="desktopImagesAvailable"
+        v-if="canSelectImages"
         class="mb-3 flex items-center gap-2"
       >
         <button
@@ -418,7 +418,7 @@ const closeLightbox = () => {
       <BookDesktopImagesSidebar
         v-else-if="currentTab === 'images'"
         :book-id="bookId"
-        :desktop-images-available="desktopImagesAvailable"
+        :can-select-images="canSelectImages"
         :book-images="bookImages"
         :book-image-sources="bookImageSources"
         :loading-images="loadingImages"

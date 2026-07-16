@@ -11,7 +11,7 @@ interface WikiPageOption {
 
 export function usePartImages(partIdRef: () => string | undefined, bookIdRef: () => string | undefined) {
   const {
-    desktopImagesAvailable,
+    canStoreImages,
     fetchPartImages,
     getImageSource,
   } = useImageLibrary();
@@ -249,13 +249,12 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
   };
 
   // Set up watchers
-  watch(() => desktopImagesAvailable.value, () => {
+  watch(() => canStoreImages.value, () => {
     refreshPartImages();
   });
 
   return {
     // State
-    desktopImagesAvailable,
     partImages,
     partImagesLoading,
     partImageSources,
