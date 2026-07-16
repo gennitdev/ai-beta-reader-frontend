@@ -10,7 +10,15 @@ import type { Book, Chapter } from '@/lib/database'
 
 const route = useRoute()
 const router = useRouter()
-const { books, chapters, loadBooks, loadChapters, getParts, searchBook, replaceInChapter, replaceInWikiPage } = useDatabase()
+const {
+  books,
+  chapters,
+  loadBooks,
+  loadChapters,
+  getParts,
+  findReplaceMatches,
+  replaceFindReplaceMatches,
+} = useDatabase()
 
 // Parts data for breadcrumbs
 const parts = ref<Array<{ id: string; name: string }>>([])
@@ -20,15 +28,8 @@ const showSearchModal = ref(false)
 
 // Search service for the modal
 const searchService = {
-  searchBook: async (bookId: string, query: string) => {
-    return await searchBook(bookId, query)
-  },
-  replaceInChapter: async (chapterId: string, searchText: string, replaceText: string) => {
-    await replaceInChapter(chapterId, searchText, replaceText)
-  },
-  replaceInWikiPage: async (wikiPageId: string, searchText: string, replaceText: string) => {
-    await replaceInWikiPage(wikiPageId, searchText, replaceText)
-  }
+  findReplaceMatches,
+  replaceFindReplaceMatches,
 }
 
 const isSideNavOpen = ref(false)
@@ -431,7 +432,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
         v-if="currentBookId"
         :show="showSearchModal"
         :book-id="currentBookId"
-        :search-service="searchService as any"
+        :search-service="searchService"
         @close="showSearchModal = false"
       />
 

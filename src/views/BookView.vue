@@ -53,9 +53,8 @@ const {
   updateWikiPage,
   updateChapterOrders,
   updatePartOrder,
-  searchBook,
-  replaceInChapter,
-  replaceInWikiPage,
+  findReplaceMatches,
+  replaceFindReplaceMatches,
   setBookCoverImageId,
   getBookImageAssets,
   updateImageAssetNotes,
@@ -109,15 +108,8 @@ const expandedParts = ref<Set<string>>(new Set());
 
 // Search service using local database
 const searchService = {
-  searchBook: async (bookId: string, query: string) => {
-    return await searchBook(bookId, query);
-  },
-  replaceInChapter: async (chapterId: string, searchText: string, replaceText: string) => {
-    await replaceInChapter(chapterId, searchText, replaceText);
-  },
-  replaceInWikiPage: async (wikiPageId: string, searchText: string, replaceText: string) => {
-    await replaceInWikiPage(wikiPageId, searchText, replaceText);
-  },
+  findReplaceMatches,
+  replaceFindReplaceMatches,
 };
 
 // Drag and drop state
@@ -1201,7 +1193,7 @@ onMounted(async () => {
   <SearchModal
     :show="showSearchModal"
     :book-id="bookId"
-    :search-service="searchService as any"
+    :search-service="searchService"
     @close="showSearchModal = false"
     @refresh="refreshData"
   />
