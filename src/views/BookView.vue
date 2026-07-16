@@ -66,6 +66,7 @@ const {
 
 const {
   desktopImagesAvailable,
+  imageManagementAvailable,
   fetchBookCover,
   pickNewBookCover,
   getImageSource: getCoverImageSource,
@@ -1102,7 +1103,7 @@ onMounted(async () => {
       :update-editing-book-title="updateEditingBookTitle"
       :get-type-icon="getTypeIcon"
       :get-type-color="getTypeColor"
-      :desktop-images-available="desktopImagesAvailable"
+      :desktop-images-available="imageManagementAvailable"
       :cover-image-src="bookCoverSrc"
       :cover-loading="coverLoading"
       :cover-error="coverError"
@@ -1173,7 +1174,7 @@ onMounted(async () => {
     :save-book-title="saveBookTitle"
     :cancel-editing-book-title="cancelEditingBookTitle"
     :update-editing-book-title="updateEditingBookTitle"
-    :desktop-images-available="desktopImagesAvailable"
+    :desktop-images-available="imageManagementAvailable"
     :cover-image-src="bookCoverSrc"
     :cover-loading="coverLoading"
     :cover-error="coverError"

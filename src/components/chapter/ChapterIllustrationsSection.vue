@@ -38,7 +38,7 @@ const emit = defineEmits<{
           Chapter Illustrations
         </h2>
         <p class="text-sm text-gray-500 dark:text-gray-400">
-          {{ canAddImages ? "Images live locally inside the desktop app." : "Restored images are available for viewing." }}
+          {{ canAddImages ? "Images are stored locally on this device." : "Restored images are available for viewing." }}
         </p>
       </div>
       <button

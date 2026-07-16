@@ -82,7 +82,6 @@ const chapterId = computed(() => route.params.chapterId as string);
 
 // Use chapter images composable
 const {
-  desktopImagesAvailable,
   chapterImageUploadAvailable,
   chapterImages,
   chapterImagesLoading,
@@ -814,7 +813,7 @@ watch(
             :show-notes-panel="showNotesPanel"
             :has-illustrations="chapterImages.length > 0"
             :show-illustrations-panel="showIllustrationsPanel || chapterImages.length > 0"
-            :desktop-images-available="desktopImagesAvailable"
+            :desktop-images-available="chapterImageUploadAvailable"
             @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
             @toggle-notes-panel="showNotesPanel = !showNotesPanel"
             @toggle-illustrations-panel="showIllustrationsPanel = !showIllustrationsPanel"

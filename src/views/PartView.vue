@@ -47,6 +47,7 @@ const {
 
 const {
   desktopImagesAvailable,
+  imageManagementAvailable,
   getImageSource: getPartImageSource,
   fetchPartCover,
   pickPartCover,
@@ -470,7 +471,7 @@ watch([bookId, partId], async () => {
             </div>
             <!-- Cover action buttons -->
             <div
-              v-if="desktopImagesAvailable"
+              v-if="imageManagementAvailable"
               class="absolute right-4 top-4 flex items-center gap-2 sm:right-6 lg:right-8"
             >
               <button
@@ -513,7 +514,7 @@ watch([bookId, partId], async () => {
 
           <!-- Add cover prompt (when no cover) -->
           <div
-            v-else-if="desktopImagesAvailable"
+            v-else-if="imageManagementAvailable"
             class="mb-8 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center dark:border-gray-700 dark:bg-gray-800/50"
           >
             <div class="mx-auto max-w-md">
@@ -707,7 +708,7 @@ watch([bookId, partId], async () => {
           </section>
 
           <section
-            v-if="desktopImagesAvailable || partImages.length > 0"
+            v-if="imageManagementAvailable || partImages.length > 0"
             class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
           >
             <div class="mb-4">

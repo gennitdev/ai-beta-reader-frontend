@@ -407,7 +407,7 @@ watch(
         </div>
         <div class="flex flex-1 flex-col justify-between">
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {{ desktopImagesAvailable ? 'Covers stay on your device when you use the desktop app.' : 'Restored cover image.' }}
+            {{ desktopImagesAvailable ? 'Covers are stored locally on this device.' : 'Restored cover image.' }}
           </p>
           <div v-if="desktopImagesAvailable" class="mt-2 flex items-center gap-2">
             <button
@@ -852,9 +852,9 @@ watch(
 
         <div v-else-if="!desktopImagesAvailable && bookImages.length === 0" class="text-center py-16">
           <PhotoIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No restored images</h3>
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No images yet</h3>
           <p class="text-gray-600 dark:text-gray-400">
-            Add images in the desktop app, back up, then restore here to view them on web.
+            Images added to chapters and covers will appear here.
           </p>
         </div>
 

@@ -1362,6 +1362,7 @@ export class AppDatabase {
     } else {
       this.db.run(query, [imageId, now, partId]);
       this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 
@@ -2760,6 +2761,7 @@ export class AppDatabase {
     } else {
       this.db.run(query, params);
       this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 
@@ -2783,6 +2785,7 @@ export class AppDatabase {
       this.db.run(deleteTagsQuery, [imageId]);
       this.db.run(deleteQuery, [imageId]);
       this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 
@@ -2945,6 +2948,7 @@ export class AppDatabase {
     } else {
       this.db.run(query, [imageId, bookId]);
       this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 
@@ -2979,6 +2983,7 @@ export class AppDatabase {
     } else {
       this.db.run(query, [imageId, chapterId]);
       this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 

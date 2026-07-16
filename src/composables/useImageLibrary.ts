@@ -1,4 +1,4 @@
-import { ref, onBeforeUnmount } from 'vue'
+import { computed, ref, onBeforeUnmount } from 'vue'
 import type { ImageAsset, ImageAssetType } from '@/lib/database'
 import type { DesktopImageMetadata } from '@/shims/desktop-images'
 import { useDatabase } from './useDatabase'
@@ -12,6 +12,86 @@ import {
 
 function sanitizeBridgeAvailability(): boolean {
   return typeof window !== 'undefined' && Boolean(window.desktopImages) && isDesktopAppRuntime()
+}
+
+const SUPPORTED_BROWSER_IMAGE_TYPES = new Set([
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+])
+export const MAX_BROWSER_IMAGE_BYTES = 20 * 1024 * 1024
+
+function browserImageStorageAvailable(): boolean {
+  return typeof window !== 'undefined'
+    && typeof document !== 'undefined'
+    && Boolean(globalThis.indexedDB)
+    && typeof globalThis.crypto?.randomUUID === 'function'
+}
+
+export function validateBrowserImage(file: File): void {
+  if (file.size === 0) {
+    throw new Error(`${file.name} is empty and cannot be added.`)
+  }
+  if (!SUPPORTED_BROWSER_IMAGE_TYPES.has(file.type)) {
+    throw new Error(`${file.name} is not a supported PNG, JPEG, GIF, or WebP image.`)
+  }
+  if (file.size > MAX_BROWSER_IMAGE_BYTES) {
+    throw new Error(`${file.name} exceeds the 20 MB image limit.`)
+  }
+}
+
+async function decodeBrowserImage(file: File): Promise<void> {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file)
+    try {
+      if (bitmap.width < 1 || bitmap.height < 1) throw new Error('Image has no pixels')
+    } finally {
+      bitmap.close()
+    }
+    return
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const source = URL.createObjectURL(file)
+    const image = new Image()
+    image.onload = () => {
+      URL.revokeObjectURL(source)
+      resolve()
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(source)
+      reject(new Error('Image could not be decoded'))
+    }
+    image.src = source
+  })
+}
+
+export async function validateBrowserImageContents(
+  file: File,
+  decode: (candidate: File) => Promise<void> = decodeBrowserImage,
+): Promise<void> {
+  try {
+    await decode(file)
+  } catch {
+    throw new Error(`${file.name} could not be read as an image.`)
+  }
+}
+
+function selectBrowserImages(allowMultiple: boolean): Promise<File[]> {
+  if (!browserImageStorageAvailable()) {
+    throw new Error('Image storage is not available in this browser context.')
+  }
+
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = [...SUPPORTED_BROWSER_IMAGE_TYPES].join(',')
+    input.multiple = allowMultiple
+    input.addEventListener('change', () => resolve(Array.from(input.files ?? [])), { once: true })
+    input.addEventListener('cancel', () => resolve([]), { once: true })
+    input.click()
+  })
 }
 
 function createAssetFromMetadata(
@@ -49,6 +129,9 @@ export function useImageLibrary() {
   } = useDatabase()
 
   const desktopImagesAvailable = ref(sanitizeBridgeAvailability())
+  const imageManagementAvailable = computed(
+    () => desktopImagesAvailable.value || browserImageStorageAvailable(),
+  )
   const browserImageStore = new IndexedDbImageContentStore()
   const imageSourceCache = new Map<string, { source: string; shouldRevoke: boolean }>()
 
@@ -112,15 +195,15 @@ export function useImageLibrary() {
   }
 
   async function addImagesToChapter(bookId: string, chapterId: string) {
-    const bridge = ensureBridge()
-    const response = await bridge.pickChapterImages({
-      bookId,
-      chapterId,
-      allowMultiple: true,
-    })
-    if (response.canceled || !response.images.length) {
-      return []
+    if (!desktopImagesAvailable.value) {
+      const files = await selectBrowserImages(true)
+      return files.length > 0
+        ? addImagesFromFiles(files, { bookId, chapterId, assetType: 'chapter' })
+        : []
     }
+
+    const response = await ensureBridge().pickChapterImages({ bookId, chapterId, allowMultiple: true })
+    if (response.canceled || !response.images.length) return []
     const saved: ImageAsset[] = []
     for (const item of response.images) {
       const asset = createAssetFromMetadata(item, {
@@ -134,38 +217,48 @@ export function useImageLibrary() {
     return saved
   }
 
-  // Browser file ingestion. The UI remains gated until the parity phase.
   async function addImagesFromFiles(
     files: FileList | File[],
     options: { bookId: string; chapterId?: string | null; assetType: ImageAssetType }
   ): Promise<ImageAsset[]> {
+    const selectedFiles = Array.from(files)
+    selectedFiles.forEach(validateBrowserImage)
+    await Promise.all(selectedFiles.map((file) => validateBrowserImageContents(file)))
     const saved: ImageAsset[] = []
 
-    for (const file of Array.from(files)) {
-      const id = crypto.randomUUID()
-      const now = new Date().toISOString()
-      const asset: ImageAsset = {
-        id,
-        book_id: options.bookId,
-        chapter_id: options.chapterId ?? null,
-        asset_type: options.assetType,
-        file_name: file.name,
-        file_path: `web/${id}/${file.name}`, // Virtual path for web
-        mime_type: file.type || null,
-        image_data: null,
-        notes: '',
-        created_at: now,
-        updated_at: now,
-      }
+    try {
+      for (const file of selectedFiles) {
+        const id = crypto.randomUUID()
+        const now = new Date().toISOString()
+        const asset: ImageAsset = {
+          id,
+          book_id: options.bookId,
+          chapter_id: options.chapterId ?? null,
+          asset_type: options.assetType,
+          file_name: file.name,
+          file_path: `web/${id}/${encodeURIComponent(file.name)}`,
+          mime_type: file.type || null,
+          image_data: null,
+          notes: '',
+          created_at: now,
+          updated_at: now,
+        }
 
-      await browserImageStore.write(asset, file)
-      try {
-        await saveImageAssetRecord(asset)
-      } catch (error) {
-        await browserImageStore.delete(asset).catch(() => undefined)
-        throw error
+        await browserImageStore.write(asset, file)
+        try {
+          await saveImageAssetRecord(asset)
+        } catch (error) {
+          await browserImageStore.delete(asset).catch(() => undefined)
+          throw error
+        }
+        saved.push(asset)
       }
-      saved.push(asset)
+    } catch (error) {
+      await Promise.all(saved.map(async (asset) => {
+        await deleteImageAssetRecord(asset.id).catch(() => undefined)
+        await browserImageStore.delete(asset).catch(() => undefined)
+      }))
+      throw error
     }
 
     return saved
@@ -177,7 +270,7 @@ export function useImageLibrary() {
 
   // Check if new images can be uploaded
   function canUploadImages(): boolean {
-    return desktopImagesAvailable.value
+    return imageManagementAvailable.value
   }
 
   async function deleteImage(image: ImageAsset) {
@@ -229,20 +322,31 @@ export function useImageLibrary() {
   }
 
   async function pickNewBookCover(bookId: string) {
-    const bridge = ensureBridge()
     const previousCover = await getBookCoverImageAsset(bookId)
-    const response = await bridge.pickBookCover({ bookId })
-    if (response.canceled || !response.image) {
-      return null
+    let asset: ImageAsset
+
+    if (desktopImagesAvailable.value) {
+      const response = await ensureBridge().pickBookCover({ bookId })
+      if (response.canceled || !response.image) return null
+      asset = createAssetFromMetadata(response.image, {
+        bookId,
+        chapterId: null,
+        assetType: 'cover',
+      })
+      await saveImageAssetRecord(asset)
+    } else {
+      const files = await selectBrowserImages(false)
+      if (files.length === 0) return null
+      const saved = await addImagesFromFiles(files, { bookId, assetType: 'cover' })
+      asset = saved[0]
     }
 
-    const asset = createAssetFromMetadata(response.image, {
-      bookId,
-      chapterId: null,
-      assetType: 'cover',
-    })
-    await saveImageAssetRecord(asset)
-    await setBookCoverImageId(bookId, asset.id)
+    try {
+      await setBookCoverImageId(bookId, asset.id)
+    } catch (error) {
+      await deleteImage(asset)
+      throw error
+    }
 
     if (previousCover) {
       await deleteImage(previousCover)
@@ -256,21 +360,31 @@ export function useImageLibrary() {
   }
 
   async function pickPartCover(bookId: string, partId: string) {
-    const bridge = ensureBridge()
     const previousCover = await getPartCoverImageAsset(partId)
-    // Reuse pickBookCover dialog - it just picks an image
-    const response = await bridge.pickBookCover({ bookId })
-    if (response.canceled || !response.image) {
-      return null
+    let asset: ImageAsset
+
+    if (desktopImagesAvailable.value) {
+      const response = await ensureBridge().pickBookCover({ bookId })
+      if (response.canceled || !response.image) return null
+      asset = createAssetFromMetadata(response.image, {
+        bookId,
+        chapterId: null,
+        assetType: 'part_cover',
+      })
+      await saveImageAssetRecord(asset)
+    } else {
+      const files = await selectBrowserImages(false)
+      if (files.length === 0) return null
+      const saved = await addImagesFromFiles(files, { bookId, assetType: 'part_cover' })
+      asset = saved[0]
     }
 
-    const asset = createAssetFromMetadata(response.image, {
-      bookId,
-      chapterId: null,
-      assetType: 'part_cover',
-    })
-    await saveImageAssetRecord(asset)
-    await setPartCoverImageId(partId, asset.id)
+    try {
+      await setPartCoverImageId(partId, asset.id)
+    } catch (error) {
+      await deleteImage(asset)
+      throw error
+    }
 
     if (previousCover) {
       await deleteImage(previousCover)
@@ -304,6 +418,7 @@ export function useImageLibrary() {
 
   return {
     desktopImagesAvailable,
+    imageManagementAvailable,
     refreshAvailability,
     addImagesToChapter,
     addImagesFromFiles,
