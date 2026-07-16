@@ -136,3 +136,69 @@ describe('usePartSummaryContext', () => {
     expect(getPartSummary).toHaveBeenCalledWith('part-1')
   })
 })
+
+function ctx(overrides: Partial<Parameters<typeof usePartSummaryContext>[0]> = {}) {
+  return usePartSummaryContext({
+    book: computed(() => createBook()),
+    partId: computed(() => 'part-1'),
+    chapters: ref(createChapters()),
+    getPartSummary: async () => null,
+    getSummary: async () => null,
+    ...overrides,
+  })
+}
+
+describe('usePartSummaryContext — additional coverage', () => {
+  it('computes the part number and chapter title map', async () => {
+    const c = ctx()
+    expect(c.partNumber.value).toBe(1)
+
+    await c.hydrateChapterEntries(createPart())
+    expect(c.chapterTitleMap.value.get('chapter-2')).toBe('Second')
+    expect(c.summaryCoverage.value).toBe('0/2')
+  })
+
+  it('returns null part number when the part is not in the order', () => {
+    const c = ctx({ partId: computed(() => 'missing-part') })
+    expect(c.partNumber.value).toBeNull()
+  })
+
+  it('resets the summary when none is stored', async () => {
+    const c = ctx()
+    await c.loadPartSummaryData('part-1')
+    expect(c.partSummary.value).toEqual({ summary: '', characters: [], beats: [], updatedAt: null })
+    expect(c.hasPartSummary.value).toBe(false)
+  })
+
+  it('resets and logs when loading the part summary throws', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const c = ctx({
+      getPartSummary: async () => {
+        throw new Error('db down')
+      },
+    })
+    await c.loadPartSummaryData('part-1')
+    expect(c.partSummary.value.summary).toBe('')
+    expect(error).toHaveBeenCalled()
+  })
+
+  it('appends chapters not in the part order using created_at ordering', async () => {
+    const part: BookPart = { ...createPart(), chapter_order: '[]' }
+    const chapters = createChapters().map((ch) =>
+      ch.id === 'chapter-3' ? { ...ch, part_id: 'part-1' } : ch,
+    )
+    const c = ctx({ chapters: ref(chapters) })
+    await c.hydrateChapterEntries(part)
+    // Empty order -> all three sorted by created_at (chapter-2 < chapter-1 < chapter-3).
+    expect(c.chapterEntries.value.map((e) => e.id)).toEqual(['chapter-2', 'chapter-1', 'chapter-3'])
+    expect(c.totalWordCount.value).toBe(600)
+  })
+
+  it('parseJsonArray tolerates malformed and non-array input', () => {
+    const { parseJsonArray } = ctx()
+    expect(parseJsonArray('{not json')).toEqual([])
+    expect(parseJsonArray('{"a":1}')).toEqual([])
+    expect(parseJsonArray(null)).toEqual([])
+    expect(parseJsonArray(['  a  ', 1, ''])).toEqual(['a'])
+  })
+})
