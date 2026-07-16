@@ -140,9 +140,14 @@ defineProps<{
 
       <div
         v-if="sidebarUncategorized.length > 0"
-        class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+        :class="chaptersByPart.parts.length > 0
+          ? 'border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden'
+          : ''"
       >
-        <div class="px-2 py-3 bg-gray-50 dark:bg-gray-700">
+        <div
+          v-if="chaptersByPart.parts.length > 0"
+          class="px-2 py-3 bg-gray-50 dark:bg-gray-700"
+        >
           <h4 class="font-medium text-gray-900 dark:text-white">Uncategorized</h4>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {{ sidebarUncategorized.length }} chapter{{

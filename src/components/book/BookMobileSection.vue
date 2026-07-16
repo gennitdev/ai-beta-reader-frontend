@@ -565,7 +565,7 @@ watch(
         </section>
 
         <section
-          v-if="chaptersByPart.uncategorized.length > 0"
+          v-if="chaptersByPart.parts.length > 0 && chaptersByPart.uncategorized.length > 0"
           class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
         >
           <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
