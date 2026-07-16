@@ -122,12 +122,12 @@ const sections = ref<Section[]>([
   {
     id: 'search-replace',
     title: 'Search and Replace for Continuity',
-    description: 'Find and replace text across all chapters and wiki pages to maintain consistency throughout your manuscript.',
+    description: 'Review individual matches before replacing text across the entire manuscript, or limit the operation to the current chapter or wiki page.',
     screenshots: [
       {
         src: findAndReplaceForContinuityFixes,
         alt: 'Find and replace',
-        caption: 'Find and replace text across all chapters to maintain consistency throughout your manuscript.'
+        caption: 'Review matches by document and field, then replace one, selected matches, or every match in a document.'
       }
     ]
   }
