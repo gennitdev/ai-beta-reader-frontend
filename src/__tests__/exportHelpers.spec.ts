@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMarkdownExportFiles } from '@/lib/exportHelpers'
+import { buildMarkdownExportFiles, parseJsonArray } from '@/lib/exportHelpers'
 import type { Book, BookPart, Chapter } from '@/lib/database'
 
 function createBook(): Book {
@@ -99,6 +99,25 @@ describe('buildMarkdownExportFiles', () => {
     ])
   })
 
+  it('creates a single book file with part headings and an uncategorized section', () => {
+    const files = buildMarkdownExportFiles({
+      book: createBook(),
+      chapters: createChapters(),
+      parts: createParts(),
+      chapterNotesById: {},
+      granularity: 'book',
+      includeNotes: false,
+    })
+
+    expect(files).toHaveLength(1)
+    expect(files[0].path).toBe('Book___One.md')
+    const content = files[0].content
+    expect(content).toContain('## Second Part')
+    expect(content).toContain('## First Part')
+    expect(content).toContain('## Uncategorized Chapters')
+    expect(content).toContain('### Beta')
+  })
+
   it('creates a single ordered book file and omits notes when disabled', () => {
     const files = buildMarkdownExportFiles({
       book: {
@@ -121,5 +140,18 @@ describe('buildMarkdownExportFiles', () => {
           '# Book / One\n\n## Gamma\n\nGamma text\n\n## Alpha\n\nAlpha text\n\n## Beta\n\nBeta text\n\n',
       },
     ])
+  })
+})
+
+describe('parseJsonArray', () => {
+  it('returns the string entries of a JSON array', () => {
+    expect(parseJsonArray('["a","b"]')).toEqual(['a', 'b'])
+  })
+
+  it('returns an empty array for nullish, malformed, or non-array input', () => {
+    expect(parseJsonArray(null)).toEqual([])
+    expect(parseJsonArray(undefined)).toEqual([])
+    expect(parseJsonArray('{bad')).toEqual([])
+    expect(parseJsonArray('{"a":1}')).toEqual([])
   })
 })
