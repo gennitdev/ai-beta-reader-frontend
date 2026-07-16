@@ -1,20 +1,54 @@
-# AI Beta Reader Frontend
+# AI Beta Reader
 
 [![CI](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend/branch/main/graph/badge.svg)](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend)
 
-A Vue.js frontend for the AI Beta Reader application. Manage your books and chapters, edit content with a rich markdown editor, generate AI summaries, and get contextual feedback on your writing.
+A local-first writing application for managing books and chapters, editing content with a rich markdown editor, generating AI summaries, and getting contextual feedback on your writing.
+
+This repository contains the complete application code for the browser, Electron desktop, and Android builds. No separate application backend or API server is required: writing data is stored locally, AI requests are sent directly to OpenAI using the API key configured by the user, and optional encrypted backups communicate directly with Google Drive.
 
 ## Tech Stack
 
-- **Frontend:** Vue 3 (Composition API) + TypeScript + Vite
+- **Application:** Vue 3 (Composition API) + TypeScript + Vite
 - **Styling:** Tailwind CSS + Headless UI + Heroicons
 - **State & Data:** Pinia, @tanstack/vue-query
 - **Local Database:** `sql.js` + IndexedDB persistence (browser and Electron) / `@capacitor-community/sqlite` (Android)
 - **Cloud Sync:** Google Drive via OAuth 2.0 (GIS for web, PKCE + App Links for native)
 - **AI Services:** OpenAI (GPT‑4o Mini) for summaries & reviews
 - **Native Platforms:** Capacitor for Android, Electron for desktop (macOS/Windows/Linux)
-- **Backend Repository:** [ai-beta-reader-backend](https://github.com/gennitdev/ai-beta-reader-backend)
+
+## Architecture
+
+```mermaid
+flowchart TB
+  app["Shared Vue 3 + TypeScript application<br/>UI · Pinia · composables · services"]
+
+  app --> web["Browser<br/>Vite web app"]
+  app --> electron["Desktop<br/>Electron shell"]
+  app --> android["Android<br/>Capacitor shell"]
+
+  subgraph local["Local-first platform storage"]
+    webDb["Browser data<br/>sql.js SQLite snapshot + image Blobs in IndexedDB"]
+    electronDb["Electron data<br/>sql.js SQLite snapshot in IndexedDB"]
+    electronImages["Electron images<br/>app-data filesystem via preload / IPC"]
+    androidDb["Android data<br/>native SQLite in the device sandbox"]
+  end
+
+  web --> webDb
+  electron --> electronDb
+  electron --> electronImages
+  android --> androidDb
+
+  app -->|"AI features only; user-supplied key"| openai["OpenAI API"]
+
+  webDb --> backup["User-initiated backup / restore<br/>versioned JSON · gzip · AES-GCM"]
+  electronDb --> backup
+  electronImages --> backup
+  androidDb --> backup
+  backup -->|"optional OAuth integration"| drive["Google Drive API"]
+```
+
+The browser, desktop, and Android targets share the same application and portable backup format. Platform adapters only change how the local SQLite database and image binaries are stored. OpenAI and Google Drive are contacted directly from the running client; there is no application server between them.
 
 ## Features
 
@@ -111,8 +145,8 @@ Review individual matches before replacing text across your entire manuscript, o
 ## Prerequisites for Self Hosting Beta-bot
 
 - Node.js 20.19+ or 22.12+
-- Google Cloud project with Drive API enabled and OAuth clients (web + Android)
-- AI Beta Reader Express backend running
+- An OpenAI API key, entered in the app, to use AI summaries and reviews
+- Optional: a Google Cloud project with the Drive API enabled and appropriate OAuth clients if you want Google Drive backup and restore
 
 ## Setup
 
@@ -122,8 +156,8 @@ Review individual matches before replacing text across your entire manuscript, o
    npm install
    ```
 
-2. **Configure environment variables:**
-   Copy `.env.example` to `.env.local` and supply your Google OAuth web + Android client IDs. Adjust `VITE_API_BASE_URL` if you run a different backend origin.
+2. **Optional: configure Google Drive backup and restore:**
+   Copy `.env.example` to `.env.local` and supply the Google OAuth client IDs for the platforms you intend to run. You can skip this step when Drive sync is not needed.
 
 3. **Start development server:**
 
@@ -148,16 +182,11 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 | `VITE_GOOGLE_REDIRECT_URI_NATIVE` | Custom redirect scheme from the Android client | `com.googleusercontent.apps.…:/oauth2redirect` |
 | `VITE_GOOGLE_CLIENT_SECRET` | **Optional** – only required if you re-use the web client in native builds (not recommended) | |
 
-### Backend API
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VITE_API_BASE_URL` | Backend API base URL | `http://localhost:3001` |
-
 ### Notes
 
-- All frontend environment variables must be prefixed `VITE_`.
+- All environment variables exposed to the Vite application must be prefixed `VITE_`.
 - `.env.local` is git-ignored; replicate values in Vercel → Project → Environment Variables for production/preview builds.
+- The app does not require `VITE_API_BASE_URL` or a separately running Express server.
 
 ## How the App Works
 
@@ -258,6 +287,5 @@ cd electron && npm run electron:start  # run desktop app (after npm run build)
 ## Need More Detail?
 
 - [docs/cloud-sync.md](docs/cloud-sync.md) – end-to-end Google Drive setup, OAuth nuances, debugging steps.
-- [ai-beta-reader-backend](https://github.com/gennitdev/ai-beta-reader-backend) – REST endpoints and AI worker integration.
 
 Happy writing! ✍️📚
