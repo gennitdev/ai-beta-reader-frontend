@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useDatabase } from '@/composables/useDatabase'
+import { initializeDatabase, useDatabase } from '@/composables/useDatabase'
 import { useImageLibrary } from '@/composables/useImageLibrary'
 import type { ImageAsset } from '@/lib/database'
 import JSZip from 'jszip'
-import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon, CircleStackIcon } from '@heroicons/vue/24/outline'
 import {
   buildMarkdownExportFiles,
   orderChaptersForBook,
@@ -13,6 +13,12 @@ import {
   orderParts,
   sanitizeFileName,
 } from '@/lib/exportHelpers'
+import {
+  formatStorageBytes,
+  getBrowserStorageSnapshot,
+  requestPersistentBrowserStorage,
+  type BrowserStorageSnapshot,
+} from '@/lib/browserStorage'
 
 const router = useRouter()
 
@@ -34,11 +40,40 @@ const {
 // Image library for exporting images
 const {
   desktopImagesAvailable,
+  imageManagementAvailable,
   fetchBookCover,
   fetchPartCover,
   fetchChapterImages,
   getImageBlob,
 } = useImageLibrary()
+
+const browserStorage = ref<BrowserStorageSnapshot | null>(null)
+const loadingBrowserStorage = ref(false)
+const browserStorageMessage = ref('')
+const showBrowserStorage = computed(
+  () => imageManagementAvailable.value && !desktopImagesAvailable.value,
+)
+const browserStoragePercent = computed(() => {
+  const usage = browserStorage.value?.usage
+  const quota = browserStorage.value?.quota
+  if (usage == null || quota == null || quota <= 0) return null
+  return Math.min(100, (usage / quota) * 100)
+})
+
+const refreshBrowserStorage = async () => {
+  if (!showBrowserStorage.value) return
+  loadingBrowserStorage.value = true
+  browserStorage.value = await getBrowserStorageSnapshot()
+  loadingBrowserStorage.value = false
+}
+
+const makeBrowserStoragePersistent = async () => {
+  const persisted = await requestPersistentBrowserStorage()
+  browserStorageMessage.value = persisted
+    ? 'This browser granted persistent storage.'
+    : 'Persistent storage was not granted. Keep encrypted backups in case browser data is cleared.'
+  await refreshBrowserStorage()
+}
 
 // OpenAI API Key state
 const openaiApiKey = ref('')
@@ -164,7 +199,7 @@ const exportUserData = async () => {
       bookFolder.file('book-info.txt', `Title: ${book.title}\nID: ${book.id}\nCreated: ${book.created_at || 'Unknown'}\n`)
 
       // Export book cover image if available
-      if (desktopImagesAvailable.value) {
+      if (imageManagementAvailable.value) {
         try {
           const bookCover = await fetchBookCover(book.id)
           if (bookCover) {
@@ -207,7 +242,7 @@ const exportUserData = async () => {
           }
 
           // Export chapter images if available
-          if (desktopImagesAvailable.value) {
+          if (imageManagementAvailable.value) {
             try {
               const chapterImages = await fetchChapterImages(chapter.id)
               if (chapterImages.length > 0) {
@@ -260,7 +295,7 @@ const exportUserData = async () => {
           partFolder.file('part-info.txt', `${partInfoLines.join('\n')}\n`)
 
           // Export part cover image if available
-          if (desktopImagesAvailable.value) {
+          if (imageManagementAvailable.value) {
             try {
               const partCover = await fetchPartCover(part.id)
               if (partCover) {
@@ -500,7 +535,9 @@ const handleCloudRestore = async () => {
 }
 
 onMounted(async () => {
+  await initializeDatabase()
   loadApiKey()
+  await refreshBrowserStorage()
   if (!cloudSyncReady.value) {
     try {
       await prepareCloudSync()
@@ -628,6 +665,67 @@ onMounted(async () => {
               <strong>Cost:</strong> You'll be billed by OpenAI based on your usage. GPT-4o-mini is approximately $0.15 per 1M input tokens and $0.60 per 1M output tokens.
             </p>
           </div>
+        </div>
+      </div>
+
+
+      <div
+        v-if="showBrowserStorage"
+        class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+      >
+        <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+          <div class="flex items-center space-x-2">
+            <CircleStackIcon class="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Browser Storage</h2>
+          </div>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Manuscripts and image files are stored locally by this browser. Browser settings can still remove them, so keep encrypted backups.
+          </p>
+        </div>
+        <div class="space-y-4 px-6 py-4 text-sm">
+          <p v-if="loadingBrowserStorage" class="text-gray-500 dark:text-gray-400">Checking storage…</p>
+          <div
+            v-else-if="browserStorage?.error"
+            role="alert"
+            class="rounded-lg bg-red-50 p-3 text-red-700 dark:bg-red-900/20 dark:text-red-300"
+          >
+            {{ browserStorage.error }}
+          </div>
+          <template v-else-if="browserStorage">
+            <dl class="grid grid-cols-2 gap-3 text-gray-700 dark:text-gray-300 sm:grid-cols-3">
+              <div>
+                <dt class="text-xs text-gray-500 dark:text-gray-400">Used by this site</dt>
+                <dd class="font-medium">{{ formatStorageBytes(browserStorage.usage) }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-gray-500 dark:text-gray-400">Browser quota</dt>
+                <dd class="font-medium">{{ formatStorageBytes(browserStorage.quota) }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-gray-500 dark:text-gray-400">Persistence</dt>
+                <dd class="font-medium">{{ browserStorage.persisted ? 'Granted' : 'Not guaranteed' }}</dd>
+              </div>
+            </dl>
+            <div v-if="browserStoragePercent !== null" class="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+              <div class="h-full bg-blue-600" :style="{ width: `${browserStoragePercent}%` }"></div>
+            </div>
+            <div
+              v-if="browserStorage.migrationStatus?.status === 'partial'"
+              role="alert"
+              class="rounded-lg bg-amber-50 p-3 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+            >
+              {{ browserStorage.migrationStatus.failedImageIds.length }} legacy image(s) could not be migrated. Their original database data was retained for recovery.
+            </div>
+            <button
+              v-if="!browserStorage.persisted"
+              type="button"
+              class="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+              @click="makeBrowserStoragePersistent"
+            >
+              Request persistent storage
+            </button>
+            <p v-if="browserStorageMessage" class="text-gray-600 dark:text-gray-300">{{ browserStorageMessage }}</p>
+          </template>
         </div>
       </div>
 

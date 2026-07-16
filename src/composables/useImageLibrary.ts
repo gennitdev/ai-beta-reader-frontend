@@ -9,6 +9,10 @@ import {
   IndexedDbImageContentStore,
   type ImageContentStore,
 } from '@/lib/imageContentStore'
+import {
+  browserStorageError,
+  requestPersistentBrowserStorage,
+} from '@/lib/browserStorage'
 
 function sanitizeBridgeAvailability(): boolean {
   return typeof window !== 'undefined' && Boolean(window.desktopImages) && isDesktopAppRuntime()
@@ -178,10 +182,18 @@ export function useImageLibrary() {
   }
 
   async function getImageBlob(image: ImageAsset): Promise<Blob> {
-    const storedBlob = await getContentStore().read(image)
+    let storedBlob: Blob | null
+    try {
+      storedBlob = await getContentStore().read(image)
+    } catch (error) {
+      if (!desktopImagesAvailable.value) throw browserStorageError(error, 'loaded')
+      throw error
+    }
     if (storedBlob) return storedBlob
     if (image.image_data) return dataUrlToBlob(image.image_data)
-    throw new Error('Image data not available')
+    throw new Error(
+      `The image data for ${image.file_name || 'this image'} is missing from this device. Restore a backup that includes the image or remove the broken image entry.`,
+    )
   }
 
   async function getImageSource(image: ImageAsset): Promise<string> {
@@ -224,6 +236,7 @@ export function useImageLibrary() {
     const selectedFiles = Array.from(files)
     selectedFiles.forEach(validateBrowserImage)
     await Promise.all(selectedFiles.map((file) => validateBrowserImageContents(file)))
+    await requestPersistentBrowserStorage()
     const saved: ImageAsset[] = []
 
     try {
@@ -244,7 +257,11 @@ export function useImageLibrary() {
           updated_at: now,
         }
 
-        await browserImageStore.write(asset, file)
+        try {
+          await browserImageStore.write(asset, file)
+        } catch (error) {
+          throw browserStorageError(error, 'saved')
+        }
         try {
           await saveImageAssetRecord(asset)
         } catch (error) {
