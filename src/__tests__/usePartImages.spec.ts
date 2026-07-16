@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { nextTick } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImageAsset } from '@/lib/database'
 import { usePartImages } from '@/composables/usePartImages'
 
@@ -62,6 +62,12 @@ beforeEach(() => {
   h.getImageWikiTags.mockResolvedValue([])
   h.setImageWikiTags.mockResolvedValue(undefined)
   h.updateImageAssetNotes.mockResolvedValue(undefined)
+})
+
+afterEach(() => {
+  // Restore spies (e.g. document.createElement) so re-spying in a later test
+  // does not stack into infinite recursion.
+  vi.restoreAllMocks()
 })
 
 const setup = (partId: string | undefined = 'part-1', bookId: string | undefined = 'book-1') =>
@@ -189,6 +195,64 @@ describe('saving notes and tags', () => {
 
     await c.handleSaveActiveImageNotes('x')
     expect(c.partImageError.value).toBe('save failed')
+  })
+})
+
+describe('warn branches and external-image flows', () => {
+  it('warns but continues when a source or tag load fails during refresh', async () => {
+    h.fetchPartImages.mockResolvedValue([img('a'), img('b')])
+    h.getImageSource.mockImplementation(async (image: ImageAsset) => {
+      if (image.id === 'a') throw new Error('no source')
+      return `src:${image.id}`
+    })
+    h.getImageWikiTags.mockRejectedValueOnce(new Error('no tags'))
+    h.getWikiPages.mockRejectedValue(new Error('no pages'))
+
+    const c = setup()
+    await c.refreshPartImages()
+
+    expect(c.partImageSources.value).toEqual({ b: 'src:b' })
+    expect(c.bookWikiPages.value).toEqual([])
+    expect(c.partImages.value).toHaveLength(2)
+  })
+
+  it('warns when loading tags fails while opening an external asset', async () => {
+    h.getImageWikiTags.mockRejectedValue(new Error('tag load failed'))
+    const c = setup()
+    await c.openImageAsset(img('ext'), 'src:ext')
+    expect(c.activeImageTags.value).toEqual([])
+    expect(c.activeImageLabel.value).toBe('ext.png')
+  })
+
+  it('saves notes and tags for an external image and downloads it', async () => {
+    const c = setup()
+    await c.openImageAsset(img('ext'), 'src:ext')
+
+    await c.handleSaveActiveImageNotes('external note')
+    expect(h.updateImageAssetNotes).toHaveBeenCalledWith('ext', 'external note')
+    expect(c.activeImage.value?.notes).toBe('external note')
+
+    h.getImageWikiTags.mockResolvedValue([{ wiki_page_id: 'w5' }])
+    await c.handleSaveActiveImageTags(['w5'])
+    expect(c.activeImageTags.value).toEqual([{ wiki_page_id: 'w5' }])
+
+    const click = vi.fn()
+    const realCreate = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = realCreate(tag) as HTMLAnchorElement
+      if (tag === 'a') el.click = click
+      return el
+    })
+    c.handleDownloadImage('ext')
+    expect(click).toHaveBeenCalled()
+  })
+
+  it('does nothing when saving notes/tags with no active image', async () => {
+    const c = setup()
+    await c.handleSaveActiveImageNotes('x')
+    await c.handleSaveActiveImageTags(['w'])
+    expect(h.updateImageAssetNotes).not.toHaveBeenCalled()
+    expect(h.setImageWikiTags).not.toHaveBeenCalled()
   })
 })
 

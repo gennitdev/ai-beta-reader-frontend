@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { nextTick } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImageAsset } from '@/lib/database'
 import { useWikiImages } from '@/composables/useWikiImages'
 
@@ -65,6 +65,10 @@ beforeEach(() => {
   h.updateImageAssetNotes.mockResolvedValue(undefined)
 })
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 const setup = (wikiId = 'wiki-1', bookId = 'book-1') =>
   useWikiImages(() => wikiId, () => bookId)
 
@@ -121,6 +125,23 @@ describe('hero image', () => {
     c.openHeroLightbox()
     expect(c.showImageLightbox.value).toBe(true)
     expect(c.activeImageId.value).toBe('a')
+  })
+
+  it('exposes active-image source/tags/label for the open image', async () => {
+    h.getWikiPageImageAssets.mockResolvedValue([img('a')])
+    h.getImageWikiTags.mockResolvedValue([{ wiki_page_id: 'w1' }])
+    const c = setup()
+    await c.refreshWikiImages()
+
+    // Nothing open yet.
+    expect(c.activeImageSource.value).toBeNull()
+    expect(c.activeImageTags.value).toEqual([])
+    expect(c.activeImageLabel.value).toBe('')
+
+    c.openImageModal('a')
+    expect(c.activeImageSource.value).toBe('src:a')
+    expect(c.activeImageTags.value).toEqual([{ wiki_page_id: 'w1' }])
+    expect(c.activeImageLabel.value).toBe('a.png')
   })
 })
 
@@ -202,5 +223,47 @@ describe('cover, navigation, notes, tags, download', () => {
     h.canStoreImages!.value = false
     await nextTick()
     expect(h.getWikiPageImageAssets).toHaveBeenCalled()
+  })
+})
+
+describe('warn and error branches', () => {
+  it('warns but continues when source/tag/page loads fail during refresh', async () => {
+    h.getWikiPageImageAssets.mockResolvedValue([img('a')])
+    h.getImageSource.mockRejectedValue(new Error('no source'))
+    h.getImageWikiTags.mockRejectedValue(new Error('no tags'))
+    h.getWikiPages.mockRejectedValue(new Error('no pages'))
+
+    const c = setup()
+    await c.refreshWikiImages()
+
+    expect(c.wikiImageSources.value).toEqual({})
+    expect(c.bookWikiPages.value).toEqual([])
+    expect(c.wikiImages.value).toHaveLength(1)
+  })
+
+  it('records an error when saving notes or tags fails', async () => {
+    h.getWikiPageImageAssets.mockResolvedValue([img('a')])
+    const c = setup()
+    await c.refreshWikiImages()
+    c.openImageModal('a')
+
+    h.updateImageAssetNotes.mockRejectedValue(new Error('notes fail'))
+    await c.handleSaveActiveImageNotes('x')
+    expect(c.wikiImageError.value).toBe('notes fail')
+
+    h.setImageWikiTags.mockRejectedValue(new Error('tags fail'))
+    await c.handleSaveActiveImageTags(['w'])
+    expect(c.wikiImageError.value).toBe('tags fail')
+  })
+
+  it('no-ops save handlers and hero lightbox with no active/hero image', async () => {
+    const c = setup()
+    await c.refreshWikiImages() // empty
+    await c.handleSaveActiveImageNotes('x')
+    await c.handleSaveActiveImageTags(['w'])
+    c.openHeroLightbox()
+    expect(c.showImageLightbox.value).toBe(false)
+    expect(c.heroImage.value).toBeNull()
+    expect(h.updateImageAssetNotes).not.toHaveBeenCalled()
   })
 })

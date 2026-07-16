@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImageAsset } from '@/lib/database'
 import { useChapterImages } from '@/composables/useChapterImages'
 
@@ -77,6 +77,10 @@ beforeEach(() => {
   h.setChapterCoverImageId.mockResolvedValue(undefined)
   h.deleteImage.mockResolvedValue(undefined)
   h.addImagesToChapter.mockResolvedValue([])
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 const setup = (chapterId = 'ch-1', bookId = 'book-1') =>
@@ -246,5 +250,87 @@ describe('cover, modal, notes, tags, download', () => {
     c.openHeroLightbox()
     expect(c.activeImageId.value).toBe('a')
     expect(c.chapterImageUploadAvailable.value).toBe(true)
+  })
+
+  it('exposes active-image computeds for the open image', async () => {
+    h.fetchChapterImages.mockResolvedValue([img('a')])
+    h.getImageWikiTags.mockResolvedValue([{ wiki_page_id: 'w1' }])
+    const c = setup()
+    await c.refreshChapterImages()
+
+    expect(c.activeImageSource.value).toBeNull()
+    expect(c.activeImageTags.value).toEqual([])
+    expect(c.activeImageLabel.value).toBe('')
+
+    c.openImageModal('a')
+    expect(c.activeImageSource.value).toBe('src:a')
+    expect(c.activeImageTags.value).toEqual([{ wiki_page_id: 'w1' }])
+    expect(c.activeImageLabel.value).toBe('a.png')
+  })
+})
+
+describe('warn and error branches', () => {
+  it('warns but continues when source/tag/page loads fail during refresh', async () => {
+    h.fetchChapterImages.mockResolvedValue([img('a')])
+    h.getImageSource.mockRejectedValue(new Error('no source'))
+    h.getImageWikiTags.mockRejectedValue(new Error('no tags'))
+    h.getWikiPages.mockRejectedValue(new Error('no pages'))
+
+    const c = setup()
+    await c.refreshChapterImages()
+
+    expect(c.chapterImageSources.value).toEqual({})
+    expect(c.bookWikiPages.value).toEqual([])
+    expect(c.chapterImages.value).toHaveLength(1)
+  })
+
+  it('warns when a preview fails for a newly added illustration', async () => {
+    const c = setup()
+    await c.refreshChapterImages()
+    h.addImagesToChapter.mockResolvedValue([img('new')])
+    h.getImageSource.mockRejectedValue(new Error('preview fail'))
+
+    await c.handleAddIllustrations()
+    expect(c.chapterImages.value.map((i) => i.id)).toEqual(['new'])
+    expect(c.chapterImageSources.value.new).toBeUndefined()
+  })
+
+  it('closes the lightbox when the active image is deleted', async () => {
+    h.fetchChapterImages.mockResolvedValue([img('a')])
+    const c = setup()
+    await c.refreshChapterImages()
+    c.openImageModal('a')
+
+    c.requestDeleteIllustration('a')
+    await c.handleDeleteIllustration()
+    expect(c.showImageLightbox.value).toBe(false)
+    expect(c.activeImageId.value).toBeNull()
+  })
+
+  it('records errors when saving notes/tags or setting the cover fails', async () => {
+    h.fetchChapterImages.mockResolvedValue([img('a')])
+    const c = setup()
+    await c.refreshChapterImages()
+    c.openImageModal('a')
+
+    h.updateImageAssetNotes.mockRejectedValue(new Error('notes fail'))
+    await c.handleSaveActiveImageNotes('x')
+    expect(c.chapterImageError.value).toBe('notes fail')
+
+    h.setImageWikiTags.mockRejectedValue(new Error('tags fail'))
+    await c.handleSaveActiveImageTags(['w'])
+    expect(c.chapterImageError.value).toBe('tags fail')
+
+    h.setChapterCoverImageId.mockRejectedValue(new Error('cover fail'))
+    await c.handleSetAsCover('a')
+    expect(c.chapterImageError.value).toBe('cover fail')
+  })
+
+  it('does not cancel a deletion while one is in progress', () => {
+    const c = setup()
+    c.requestDeleteIllustration('a')
+    c.deletingIllustration.value = true
+    c.cancelDeleteIllustration()
+    expect(c.showDeleteIllustrationModal.value).toBe(true)
   })
 })
