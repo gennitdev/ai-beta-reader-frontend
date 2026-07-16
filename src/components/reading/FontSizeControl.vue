@@ -7,8 +7,8 @@ const props = withDefaults(
     modelValue: ReadingFontSize
     /**
      * 'card'  — matches sidebar info cards (rounded-lg, gray-800, shadow).
-     * 'panel' — matches the chapter illustration panel (rounded-xl, darker
-     *           gray-900, no shadow, extra top padding).
+     * 'panel' — matches the chapter illustration panel (rounded-xl, no
+     *           shadow, extra top padding).
      */
     variant?: 'card' | 'panel'
   }>(),
@@ -21,7 +21,7 @@ const emit = defineEmits<{
 
 const containerClass = computed(() =>
   props.variant === 'panel'
-    ? 'rounded-xl border border-gray-200 bg-white p-4 pt-5 dark:border-gray-700 dark:bg-gray-900'
+    ? 'rounded-xl border border-gray-200 bg-white p-4 pt-5 dark:border-gray-700 dark:bg-gray-800'
     : 'rounded-lg border border-gray-200 bg-white p-4 shadow-md dark:border-gray-700 dark:bg-gray-800'
 )
 

@@ -805,7 +805,7 @@ watch(
       @delete-chapter="requestDeleteChapter"
     />
 
-    <div class="w-full max-w-6xl md:mx-auto px-4 lg:px-8">
+    <div class="w-full max-w-6xl px-4 pt-6 md:mx-auto lg:px-8">
       <div class="lg:grid lg:grid-cols-3 lg:gap-8">
         <div class="lg:col-span-2">
           <ChapterStatusBar

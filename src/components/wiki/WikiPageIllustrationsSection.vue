@@ -22,7 +22,7 @@ const emit = defineEmits<{
 
 <template>
   <section
-    class="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+    class="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
     :class="layout === 'panel' ? 'p-4' : 'mt-4 p-6'"
   >
     <div

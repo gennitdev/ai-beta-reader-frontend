@@ -706,7 +706,10 @@ export class AppDatabase {
       // Desktop/Web: Use sql.js (SQLite compiled to WebAssembly)
       // Use local WASM file (bundled in public/) to avoid CSP issues in Electron
       const SQL = await initSqlJs({
-        locateFile: (file: string) => `/${file}`
+        // The browser export asks for sql-wasm-browser.wasm, while the local
+        // asset copied by the project is sql-wasm.wasm. Both package files are
+        // the same binary, so always resolve SQL.js to the bundled asset.
+        locateFile: () => '/sql-wasm.wasm'
       });
 
       // Try to load existing database from IndexedDB first, then fall back to localStorage for migration
