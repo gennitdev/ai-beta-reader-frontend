@@ -2907,7 +2907,7 @@ export class AppDatabase {
         await this.db.run(updateQuery, params);
       } else {
         this.db.run(updateQuery, params);
-        this.saveToLocalStorage();
+        this.requestPersistence();
       }
 
       dispatchChapterWikiLinksChanged({ chapterIds: [request.targetId], wikiPageIds: [] });
@@ -2964,7 +2964,7 @@ export class AppDatabase {
       await this.db.run(updateQuery, params);
     } else {
       this.db.run(updateQuery, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     dispatchChapterWikiLinksChanged({ chapterIds: [], wikiPageIds: [request.targetId] });
@@ -3010,7 +3010,7 @@ export class AppDatabase {
         await this.db.run(updateQuery, params);
       } else {
         this.db.run(updateQuery, params);
-        this.saveToLocalStorage();
+        this.requestPersistence();
       }
 
       dispatchChapterWikiLinksChanged({ chapterIds: [request.targetId], wikiPageIds: [] });
@@ -3067,7 +3067,7 @@ export class AppDatabase {
       await this.db.run(updateQuery, params);
     } else {
       this.db.run(updateQuery, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     dispatchChapterWikiLinksChanged({ chapterIds: [], wikiPageIds: [request.targetId] });
