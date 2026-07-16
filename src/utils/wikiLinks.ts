@@ -5,6 +5,17 @@ interface Character {
   character_name: string
   wiki_page_id: string | null
   has_wiki_page: boolean
+  aliases?: string[]
+}
+
+function characterNames(character: Character): string[] {
+  const seen = new Set<string>()
+  return [character.character_name, ...(character.aliases ?? [])].filter((name) => {
+    const key = name.trim().toLocaleLowerCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /**
@@ -16,33 +27,32 @@ export function processWikiLinks(content: string, characters: Character[], bookI
     return content
   }
 
-  let processedContent = content
-
   // Create a list of characters that have wiki pages, sorted by name length (longest first)
   // This prevents partial matches (e.g., "Al" matching inside "Alice")
   const linkableCharacters = characters
     .filter(char => char.has_wiki_page && char.wiki_page_id)
-    .sort((a, b) => b.character_name.length - a.character_name.length)
+    .flatMap((character) => characterNames(character).map((name) => ({ character, name })))
+    .sort((a, b) => b.name.length - a.name.length)
+  if (linkableCharacters.length === 0) return content
 
-  for (const character of linkableCharacters) {
-    const characterName = character.character_name
-
-    // Create a regex that matches the character name as a whole word
-    // This prevents partial matches and avoids matching inside existing links
-    const regex = new RegExp(
-      `(?<!\\[)\\b(${escapeRegex(characterName)})\\b(?![^\\[]*\\])(?![^<]*>)`,
-      'g'
-    )
-
-    // Replace character mentions with wiki links
-    // Format: [Character Name](/books/bookId/wiki/wikiPageId)
-    processedContent = processedContent.replace(
-      regex,
-      `[$1](/books/${bookId}/wiki/${character.wiki_page_id})`
-    )
+  const targetByName = new Map<string, Character>()
+  for (const target of linkableCharacters) {
+    const key = target.name.toLocaleLowerCase()
+    if (!targetByName.has(key)) targetByName.set(key, target.character)
   }
+  const namesPattern = linkableCharacters.map(({ name }) => escapeRegex(name)).join('|')
+  const regex = new RegExp(
+    `(?<!\\[)\\b(${namesPattern})\\b(?![^\\[]*\\])(?![^<]*>)`,
+    'gi',
+  )
 
-  return processedContent
+  // Replace all names in one pass so newly generated link URLs cannot be linked again.
+  return content.replace(regex, (matchedName) => {
+    const character = targetByName.get(matchedName.toLocaleLowerCase())
+    return character?.wiki_page_id
+      ? `[${matchedName}](/books/${bookId}/wiki/${character.wiki_page_id})`
+      : matchedName
+  })
 }
 
 /**
@@ -60,8 +70,9 @@ export function extractMentionedCharacters(content: string, characters: Characte
   const mentionedCharacters: Character[] = []
 
   for (const character of characters) {
-    const regex = new RegExp(`\\b${escapeRegex(character.character_name)}\\b`, 'i')
-    if (regex.test(content)) {
+    if (characterNames(character).some((name) =>
+      new RegExp(`\\b${escapeRegex(name)}\\b`, 'i').test(content),
+    )) {
       mentionedCharacters.push(character)
     }
   }
@@ -76,9 +87,10 @@ export function countCharacterMentions(content: string, characters: Character[])
   const mentions: Record<string, number> = {}
 
   for (const character of characters) {
-    const regex = new RegExp(`\\b${escapeRegex(character.character_name)}\\b`, 'gi')
-    const matches = content.match(regex)
-    mentions[character.character_name] = matches ? matches.length : 0
+    mentions[character.character_name] = characterNames(character).reduce((count, name) => {
+      const matches = content.match(new RegExp(`\\b${escapeRegex(name)}\\b`, 'gi'))
+      return count + (matches?.length ?? 0)
+    }, 0)
   }
 
   return mentions

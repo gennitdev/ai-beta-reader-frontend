@@ -20,6 +20,7 @@ interface Character {
   character_name: string
   wiki_page_id: string | null
   has_wiki_page: boolean
+  aliases?: string[]
 }
 
 const props = defineProps({
