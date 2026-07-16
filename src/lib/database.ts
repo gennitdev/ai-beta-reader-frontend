@@ -38,6 +38,12 @@ import {
   type ReplaceFindReplaceMatchesResult,
   type RestoreFindReplaceFieldsRequest,
 } from '@/lib/findReplace';
+import {
+  assertWikiIdentityAvailable,
+  normalizeWikiAliases,
+  parseWikiAliases,
+  resolveWikiPageByName,
+} from '@/lib/wikiAliases';
 
 export interface Book {
   id: string;
@@ -2133,11 +2139,17 @@ export class AppDatabase {
     page_type?: string;
     created_by_ai?: boolean;
     is_pinned?: boolean;
+    aliases?: string[];
   }) {
     const id = `wiki-${page.book_id}-${Date.now()}`;
     const now = new Date().toISOString();
-    const query = `INSERT INTO wiki_pages (id, book_id, page_name, page_type, content, summary, created_by_ai, created_at, updated_at, is_pinned)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const aliases = normalizeWikiAliases(page.aliases ?? [], page.page_name);
+    assertWikiIdentityAvailable(await this.getWikiPages(page.book_id), {
+      pageName: page.page_name,
+      aliases,
+    });
+    const query = `INSERT INTO wiki_pages (id, book_id, page_name, page_type, content, summary, aliases, created_by_ai, created_at, updated_at, is_pinned)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     const params = [
       id,
@@ -2146,6 +2158,7 @@ export class AppDatabase {
       page.page_type || 'character',
       page.content,
       page.summary,
+      JSON.stringify(aliases),
       page.created_by_ai ? 1 : 0,
       now,
       now,
@@ -2168,10 +2181,27 @@ export class AppDatabase {
     page_name?: string;
     tags?: string;
     is_pinned?: boolean;
+    aliases?: string[];
   }) {
     const now = new Date().toISOString();
     const sets: string[] = [];
     const params: unknown[] = [];
+
+    if (updates.page_name !== undefined || updates.aliases !== undefined) {
+      const currentPage = await this.getWikiPageById(pageId);
+      if (!currentPage) throw new Error('Wiki page not found');
+      const pageName = updates.page_name?.trim() || currentPage.page_name;
+      const aliases = normalizeWikiAliases(
+        updates.aliases ?? parseWikiAliases(currentPage.aliases),
+        pageName,
+      );
+      assertWikiIdentityAvailable(await this.getWikiPages(currentPage.book_id), {
+        pageId,
+        pageName,
+        aliases,
+      });
+      if (updates.aliases !== undefined) updates.aliases = aliases;
+    }
 
     if (updates.content !== undefined) {
       sets.push('content = ?');
@@ -2188,6 +2218,10 @@ export class AppDatabase {
     if (updates.tags !== undefined) {
       sets.push('tags = ?');
       params.push(updates.tags);
+    }
+    if (updates.aliases !== undefined) {
+      sets.push('aliases = ?');
+      params.push(JSON.stringify(updates.aliases));
     }
     if (updates.is_pinned !== undefined) {
       sets.push('is_pinned = ?');
@@ -2222,18 +2256,8 @@ export class AppDatabase {
     }
   }
 
-  async getWikiPage(bookId: string, pageName: string): Promise<WikiPage | null> {
-    const query = `SELECT * FROM wiki_pages WHERE book_id = ? AND page_name = ? LIMIT 1`;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [bookId, pageName]);
-      return result.values?.[0] ? toNativeWikiPage(result.values[0]) : null;
-    } else {
-      const result = this.db.exec(query, [bookId, pageName]);
-      if (result.length === 0 || result[0].values.length === 0) return null;
-
-      return toWebWikiPage(result[0].values[0] as unknown[]);
-    }
+  async getWikiPage(bookId: string, pageName: string, pageType?: string): Promise<WikiPage | null> {
+    return resolveWikiPageByName(await this.getWikiPages(bookId), pageName, pageType);
   }
 
   async getWikiPages(bookId: string): Promise<WikiPage[]> {
