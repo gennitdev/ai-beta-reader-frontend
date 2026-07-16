@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createFindReplaceDocument,
   findTextMatches,
   formatReplacement,
+  replaceFindReplaceFields,
   replaceSelectedTextMatches,
   replaceTextMatch,
   type TextMatch,
@@ -120,5 +122,61 @@ describe('replacement operations', () => {
     ]
 
     expect(() => replaceSelectedTextMatches('Jonny', overlappingMatches, 'X')).toThrow(/overlap/)
+  })
+})
+
+describe('find and replace documents', () => {
+  it('builds match-level results across searchable fields', () => {
+    const document = createFindReplaceDocument({
+      targetType: 'chapter',
+      targetId: 'chapter-1',
+      displayName: 'Jon Returns',
+      wordCount: 4,
+      fields: {
+        title: 'Jon Returns',
+        text: 'Jon met jon.',
+      },
+      searchTerm: 'jon',
+    })
+
+    expect(document.matches).toHaveLength(3)
+    expect(document.matches.map((match) => match.field)).toEqual(['title', 'text', 'text'])
+    expect(document.matches[0].id).toBe('chapter:chapter-1:title:0:0:3')
+  })
+
+  it('applies selected matches to their corresponding fields', () => {
+    const fields = {
+      page_name: 'Jon',
+      summary: 'Jon is a traveler.',
+      content: 'Jon met JON.',
+    }
+    const document = createFindReplaceDocument({
+      targetType: 'wikiPage',
+      targetId: 'wiki-1',
+      displayName: 'Jon',
+      fields,
+      searchTerm: 'jon',
+    })
+    const selectedMatches = document.matches.filter(
+      (match) => match.field === 'page_name' || match.matchedText === 'JON',
+    )
+
+    expect(replaceFindReplaceFields(fields, fields, selectedMatches, 'james')).toEqual({
+      replacedCount: 2,
+      fields: {
+        page_name: 'James',
+        summary: 'Jon is a traveler.',
+        content: 'Jon met JAMES.',
+      },
+    })
+  })
+
+  it('rejects replacements when an affected field changed after searching', () => {
+    const expectedFields = { text: 'Jon arrived.' }
+    const matches = findTextMatches(expectedFields.text, 'Jon', 'text')
+
+    expect(() =>
+      replaceFindReplaceFields({ text: 'Jane arrived.' }, expectedFields, matches, 'James'),
+    ).toThrow(/changed after searching/)
   })
 })

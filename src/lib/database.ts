@@ -28,6 +28,14 @@ import {
   type ImageDataMigrationRepository,
 } from '@/lib/imageDataMigration';
 import { dispatchChapterWikiLinksChanged } from '@/utils/chapterWikiLinkEvents';
+import {
+  createFindReplaceDocument,
+  replaceFindReplaceFields,
+  type FindReplaceDocument,
+  type FindReplaceSearchRequest,
+  type ReplaceFindReplaceMatchesRequest,
+  type ReplaceFindReplaceMatchesResult,
+} from '@/lib/findReplace';
 
 export interface Book {
   id: string;
@@ -2736,6 +2744,229 @@ export class AppDatabase {
     }
 
     return { chapters, wikiPages };
+  }
+
+  async findReplaceMatches(request: FindReplaceSearchRequest): Promise<FindReplaceDocument[]> {
+    const { bookId, searchTerm, scope = 'book', targetId } = request;
+    if (!searchTerm) return [];
+    if (scope !== 'book' && !targetId) {
+      throw new Error(`A target ID is required for ${scope}-scoped search`);
+    }
+
+    const documents: FindReplaceDocument[] = [];
+
+    if (scope !== 'wikiPage') {
+      const chapterQuery = `
+        SELECT id, title, text, word_count
+        FROM chapters
+        WHERE book_id = ?${scope === 'chapter' ? ' AND id = ?' : ''}
+      `;
+      const chapterParams = scope === 'chapter' ? [bookId, targetId] : [bookId];
+
+      if (this.isNative) {
+        const result = await this.db.query(chapterQuery, chapterParams);
+        result.values?.forEach((row: Record<string, unknown>) => {
+          const id = String(readQueryRowValue(row, 0, 'id') ?? '');
+          const title = String(readQueryRowValue(row, 1, 'title') ?? '');
+          const text = String(readQueryRowValue(row, 2, 'text') ?? '');
+          const wordCount = Number(readQueryRowValue(row, 3, 'word_count') ?? 0);
+          const document = createFindReplaceDocument({
+            targetType: 'chapter',
+            targetId: id,
+            displayName: title || 'Untitled chapter',
+            wordCount,
+            fields: { title, text },
+            searchTerm,
+          });
+          if (document.matches.length > 0) documents.push(document);
+        });
+      } else {
+        const stmt = this.db.prepare(chapterQuery);
+        stmt.bind(chapterParams);
+        while (stmt.step()) {
+          const row = stmt.getAsObject();
+          const id = String(row.id ?? '');
+          const title = String(row.title ?? '');
+          const text = String(row.text ?? '');
+          const document = createFindReplaceDocument({
+            targetType: 'chapter',
+            targetId: id,
+            displayName: title || 'Untitled chapter',
+            wordCount: Number(row.word_count ?? 0),
+            fields: { title, text },
+            searchTerm,
+          });
+          if (document.matches.length > 0) documents.push(document);
+        }
+        stmt.free();
+      }
+    }
+
+    if (scope !== 'chapter') {
+      const wikiQuery = `
+        SELECT id, page_name, content, summary, page_type
+        FROM wiki_pages
+        WHERE book_id = ?${scope === 'wikiPage' ? ' AND id = ?' : ''}
+      `;
+      const wikiParams = scope === 'wikiPage' ? [bookId, targetId] : [bookId];
+
+      if (this.isNative) {
+        const result = await this.db.query(wikiQuery, wikiParams);
+        result.values?.forEach((row: Record<string, unknown>) => {
+          const id = String(readQueryRowValue(row, 0, 'id') ?? '');
+          const pageName = String(readQueryRowValue(row, 1, 'page_name') ?? '');
+          const content = String(readQueryRowValue(row, 2, 'content') ?? '');
+          const summary = String(readQueryRowValue(row, 3, 'summary') ?? '');
+          const pageType = String(readQueryRowValue(row, 4, 'page_type') ?? '');
+          const document = createFindReplaceDocument({
+            targetType: 'wikiPage',
+            targetId: id,
+            displayName: pageName || 'Untitled wiki page',
+            pageType,
+            fields: { page_name: pageName, summary, content },
+            searchTerm,
+          });
+          if (document.matches.length > 0) documents.push(document);
+        });
+      } else {
+        const stmt = this.db.prepare(wikiQuery);
+        stmt.bind(wikiParams);
+        while (stmt.step()) {
+          const row = stmt.getAsObject();
+          const id = String(row.id ?? '');
+          const pageName = String(row.page_name ?? '');
+          const document = createFindReplaceDocument({
+            targetType: 'wikiPage',
+            targetId: id,
+            displayName: pageName || 'Untitled wiki page',
+            pageType: String(row.page_type ?? ''),
+            fields: {
+              page_name: pageName,
+              summary: String(row.summary ?? ''),
+              content: String(row.content ?? ''),
+            },
+            searchTerm,
+          });
+          if (document.matches.length > 0) documents.push(document);
+        }
+        stmt.free();
+      }
+    }
+
+    return documents;
+  }
+
+  async replaceFindReplaceMatches(
+    request: ReplaceFindReplaceMatchesRequest,
+  ): Promise<ReplaceFindReplaceMatchesResult> {
+    if (request.matches.length === 0) {
+      return { replacedCount: 0, fields: { ...request.expectedFields } };
+    }
+
+    if (request.targetType === 'chapter') {
+      const getQuery = `SELECT title, text FROM chapters WHERE id = ?`;
+      let title: string | null = null;
+      let text = '';
+
+      if (this.isNative) {
+        const result = await this.db.query(getQuery, [request.targetId]);
+        const row = result.values?.[0];
+        if (!row) throw new Error('Chapter not found');
+        const titleValue = readQueryRowValue(row, 0, 'title');
+        title = typeof titleValue === 'string' ? titleValue : null;
+        text = String(readQueryRowValue(row, 1, 'text') ?? '');
+      } else {
+        const stmt = this.db.prepare(getQuery);
+        stmt.bind([request.targetId]);
+        if (!stmt.step()) {
+          stmt.free();
+          throw new Error('Chapter not found');
+        }
+        const row = stmt.getAsObject();
+        title = (row.title as string) ?? null;
+        text = String(row.text ?? '');
+        stmt.free();
+      }
+
+      const result = replaceFindReplaceFields(
+        { title: title ?? '', text },
+        request.expectedFields,
+        request.matches,
+        request.replacement,
+      );
+      const updatedTitle = title === null ? null : (result.fields.title ?? title);
+      const updatedText = result.fields.text ?? text;
+      const trimmedText = updatedText.trim();
+      const wordCount = trimmedText ? trimmedText.split(/\s+/).length : 0;
+      const updateQuery = `UPDATE chapters SET title = ?, text = ?, word_count = ? WHERE id = ?`;
+      const params = [updatedTitle, updatedText, wordCount, request.targetId];
+
+      if (this.isNative) {
+        await this.db.run(updateQuery, params);
+      } else {
+        this.db.run(updateQuery, params);
+        this.saveToLocalStorage();
+      }
+
+      dispatchChapterWikiLinksChanged({ chapterIds: [request.targetId], wikiPageIds: [] });
+      return result;
+    }
+
+    const getQuery = `SELECT page_name, content, summary FROM wiki_pages WHERE id = ?`;
+    let pageName = '';
+    let content = '';
+    let summary = '';
+
+    if (this.isNative) {
+      const result = await this.db.query(getQuery, [request.targetId]);
+      const row = result.values?.[0];
+      if (!row) throw new Error('Wiki page not found');
+      pageName = String(readQueryRowValue(row, 0, 'page_name') ?? '');
+      content = String(readQueryRowValue(row, 1, 'content') ?? '');
+      summary = String(readQueryRowValue(row, 2, 'summary') ?? '');
+    } else {
+      const stmt = this.db.prepare(getQuery);
+      stmt.bind([request.targetId]);
+      if (!stmt.step()) {
+        stmt.free();
+        throw new Error('Wiki page not found');
+      }
+      const row = stmt.getAsObject();
+      pageName = String(row.page_name ?? '');
+      content = String(row.content ?? '');
+      summary = String(row.summary ?? '');
+      stmt.free();
+    }
+
+    const result = replaceFindReplaceFields(
+      { page_name: pageName, summary, content },
+      request.expectedFields,
+      request.matches,
+      request.replacement,
+    );
+    const now = new Date().toISOString();
+    const updateQuery = `
+      UPDATE wiki_pages
+      SET page_name = ?, content = ?, summary = ?, updated_at = ?
+      WHERE id = ?
+    `;
+    const params = [
+      result.fields.page_name ?? pageName,
+      result.fields.content ?? content,
+      result.fields.summary ?? summary,
+      now,
+      request.targetId,
+    ];
+
+    if (this.isNative) {
+      await this.db.run(updateQuery, params);
+    } else {
+      this.db.run(updateQuery, params);
+      this.saveToLocalStorage();
+    }
+
+    dispatchChapterWikiLinksChanged({ chapterIds: [], wikiPageIds: [request.targetId] });
+    return result;
   }
 
   async saveImageAsset(asset: ImageAsset) {

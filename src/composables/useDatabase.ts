@@ -13,6 +13,10 @@ import {
   type WikiPageChapterLink,
 } from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
+import type {
+  FindReplaceSearchRequest,
+  ReplaceFindReplaceMatchesRequest,
+} from '@/lib/findReplace'
 
 const isInitialized = ref(false)
 const cloudSync = ref<CloudSync | null>(null)
@@ -661,6 +665,28 @@ export function useDatabase() {
     }
   }
 
+  async function findReplaceMatches(request: FindReplaceSearchRequest) {
+    try {
+      await initializeDatabase()
+      return await db.findReplaceMatches(request)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to find matches'
+      console.error('Find matches error:', e)
+      throw e
+    }
+  }
+
+  async function replaceFindReplaceMatches(request: ReplaceFindReplaceMatchesRequest) {
+    try {
+      await initializeDatabase()
+      return await db.replaceFindReplaceMatches(request)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to replace matches'
+      console.error('Replace matches error:', e)
+      throw e
+    }
+  }
+
   async function replaceInChapter(chapterId: string, searchTerm: string, replaceTerm: string) {
     try {
       await initializeDatabase()
@@ -941,6 +967,8 @@ export function useDatabase() {
 
     // Search and Replace operations
     searchBook,
+    findReplaceMatches,
+    replaceFindReplaceMatches,
     replaceInChapter,
     replaceInWikiPage,
 
