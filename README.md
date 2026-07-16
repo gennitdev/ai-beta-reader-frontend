@@ -17,6 +17,39 @@ This repository contains the complete application code for the browser, Electron
 - **AI Services:** OpenAI (GPT‑4o Mini) for summaries & reviews
 - **Native Platforms:** Capacitor for Android, Electron for desktop (macOS/Windows/Linux)
 
+## Architecture
+
+```mermaid
+flowchart TB
+  app["Shared Vue 3 + TypeScript application<br/>UI · Pinia · composables · services"]
+
+  app --> web["Browser<br/>Vite web app"]
+  app --> electron["Desktop<br/>Electron shell"]
+  app --> android["Android<br/>Capacitor shell"]
+
+  subgraph local["Local-first platform storage"]
+    webDb["Browser data<br/>sql.js SQLite snapshot + image Blobs in IndexedDB"]
+    electronDb["Electron data<br/>sql.js SQLite snapshot in IndexedDB"]
+    electronImages["Electron images<br/>app-data filesystem via preload / IPC"]
+    androidDb["Android data<br/>native SQLite in the device sandbox"]
+  end
+
+  web --> webDb
+  electron --> electronDb
+  electron --> electronImages
+  android --> androidDb
+
+  app -->|"AI features only; user-supplied key"| openai["OpenAI API"]
+
+  webDb --> backup["User-initiated backup / restore<br/>versioned JSON · gzip · AES-GCM"]
+  electronDb --> backup
+  electronImages --> backup
+  androidDb --> backup
+  backup -->|"optional OAuth integration"| drive["Google Drive API"]
+```
+
+The browser, desktop, and Android targets share the same application and portable backup format. Platform adapters only change how the local SQLite database and image binaries are stored. OpenAI and Google Drive are contacted directly from the running client; there is no application server between them.
+
 ## Features
 
 ### Core Writing Tools
