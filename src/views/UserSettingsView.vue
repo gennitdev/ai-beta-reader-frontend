@@ -37,7 +37,7 @@ const {
   fetchBookCover,
   fetchPartCover,
   fetchChapterImages,
-  getImageSource,
+  getImageBlob,
 } = useImageLibrary()
 
 // OpenAI API Key state
@@ -114,19 +114,6 @@ const goBack = () => {
   router.back()
 }
 
-// Helper to convert data URL to Uint8Array for zip
-const dataUrlToUint8Array = (dataUrl: string): { data: Uint8Array; mimeType: string } => {
-  const [header, base64Data] = dataUrl.split(',')
-  const mimeMatch = header.match(/data:([^;]+)/)
-  const mimeType = mimeMatch ? mimeMatch[1] : 'image/png'
-  const binaryString = atob(base64Data)
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
-  }
-  return { data: bytes, mimeType }
-}
-
 const stripFileExtension = (fileName: string): string => {
   const lastDot = fileName.lastIndexOf('.')
   return lastDot > 0 ? fileName.slice(0, lastDot) : fileName
@@ -137,8 +124,9 @@ const exportImageWithNotes = async (
   image: ImageAsset,
   fallbackBaseName: string
 ) => {
-  const dataUrl = await getImageSource(image)
-  const { data, mimeType } = dataUrlToUint8Array(dataUrl)
+  const blob = await getImageBlob(image)
+  const data = new Uint8Array(await blob.arrayBuffer())
+  const mimeType = blob.type || image.mime_type || 'image/png'
   const ext = mimeType.split('/')[1] || 'png'
   const imageFileName = image.file_name || `${fallbackBaseName}.${ext}`
   folder.file(imageFileName, data)

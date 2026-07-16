@@ -14,6 +14,12 @@ import {
   decodeLegacyDatabaseSnapshot,
   PersistenceCoordinator,
 } from '@/lib/persistenceCoordinator';
+import {
+  DATABASE_STORE,
+  readIndexedDbValue,
+  SQLITE_DATABASE_KEY,
+  writeIndexedDbValue,
+} from '@/lib/indexedDbStorage';
 import { dispatchChapterWikiLinksChanged } from '@/utils/chapterWikiLinkEvents';
 
 export interface Book {
@@ -215,11 +221,6 @@ function imageAssetFromNativeRow(row: Record<string, unknown>): ImageAsset {
 }
 
 const NATIVE_CAPACITOR_PLATFORMS = new Set(['ios', 'android']);
-
-// IndexedDB constants for web storage (much larger capacity than localStorage)
-const IDB_NAME = 'ai-beta-reader-db';
-const IDB_STORE = 'database';
-const IDB_KEY = 'sqliteDb';
 
 type QueryRow = Record<string, unknown>;
 
@@ -3157,82 +3158,17 @@ export class AppDatabase {
   }
 
   private async writeSnapshotToIndexedDB(data: Uint8Array): Promise<void> {
-    const idb = await this.openIndexedDB();
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const transaction = idb.transaction(IDB_STORE, 'readwrite');
-        const store = transaction.objectStore(IDB_STORE);
-        store.put(data, IDB_KEY);
-
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => {
-          console.error('[AppDatabase] IndexedDB write failed:', transaction.error);
-          reject(new Error('Failed to save database to IndexedDB.'));
-        };
-        transaction.onabort = () => {
-          console.error('[AppDatabase] IndexedDB write aborted:', transaction.error);
-          reject(new Error('Saving the database to IndexedDB was aborted.'));
-        };
-      });
-    } finally {
-      idb.close();
-    }
+    await writeIndexedDbValue(DATABASE_STORE, SQLITE_DATABASE_KEY, data);
   }
 
   private async loadFromIndexedDB(): Promise<Uint8Array | null> {
-    const idb = await this.openIndexedDB();
-
-    try {
-      return await new Promise<Uint8Array | null>((resolve, reject) => {
-        const transaction = idb.transaction(IDB_STORE, 'readonly');
-        const store = transaction.objectStore(IDB_STORE);
-        const request = store.get(IDB_KEY);
-        let snapshot: Uint8Array | null = null;
-
-        request.onsuccess = () => {
-          if (request.result instanceof Uint8Array) {
-            snapshot = request.result;
-          } else if (request.result) {
-            snapshot = new Uint8Array(request.result);
-          }
-        };
-        transaction.oncomplete = () => resolve(snapshot);
-        transaction.onerror = () => reject(
-          transaction.error ?? new Error('Failed to read the database from IndexedDB.'),
-        );
-        transaction.onabort = () => reject(
-          transaction.error ?? new Error('Reading the database from IndexedDB was aborted.'),
-        );
-      });
-    } finally {
-      idb.close();
-    }
-  }
-
-  private openIndexedDB(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(IDB_NAME, 1);
-
-      request.onupgradeneeded = () => {
-        const database = request.result;
-        if (!database.objectStoreNames.contains(IDB_STORE)) {
-          database.createObjectStore(IDB_STORE);
-        }
-      };
-
-      request.onsuccess = () => {
-        const database = request.result;
-        database.onversionchange = () => database.close();
-        resolve(database);
-      };
-      request.onerror = () => reject(
-        request.error ?? new Error('Failed to open IndexedDB.'),
-      );
-      request.onblocked = () => reject(
-        new Error('Opening IndexedDB was blocked by another app tab. Close other tabs and try again.'),
-      );
-    });
+    const result = await readIndexedDbValue<Uint8Array | ArrayBuffer>(
+      DATABASE_STORE,
+      SQLITE_DATABASE_KEY,
+    );
+    if (result instanceof Uint8Array) return result;
+    if (result) return new Uint8Array(result);
+    return null;
   }
 
   async close() {

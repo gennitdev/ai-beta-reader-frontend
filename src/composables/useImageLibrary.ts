@@ -3,8 +3,12 @@ import type { ImageAsset, ImageAssetType } from '@/lib/database'
 import type { DesktopImageMetadata } from '@/shims/desktop-images'
 import { useDatabase } from './useDatabase'
 import { isDesktopAppRuntime } from '@/utils/platform'
-
-const imageSourceCache = new Map<string, string>()
+import {
+  dataUrlToBlob,
+  ElectronImageContentStore,
+  IndexedDbImageContentStore,
+  type ImageContentStore,
+} from '@/lib/imageContentStore'
 
 function sanitizeBridgeAvailability(): boolean {
   return typeof window !== 'undefined' && Boolean(window.desktopImages) && isDesktopAppRuntime()
@@ -45,6 +49,8 @@ export function useImageLibrary() {
   } = useDatabase()
 
   const desktopImagesAvailable = ref(sanitizeBridgeAvailability())
+  const browserImageStore = new IndexedDbImageContentStore()
+  const imageSourceCache = new Map<string, { source: string; shouldRevoke: boolean }>()
 
   const refreshAvailability = () => {
     desktopImagesAvailable.value = sanitizeBridgeAvailability()
@@ -60,6 +66,10 @@ export function useImageLibrary() {
     if (typeof window !== 'undefined') {
       window.removeEventListener('focus', availabilityListener)
     }
+    for (const cached of imageSourceCache.values()) {
+      if (cached.shouldRevoke) URL.revokeObjectURL(cached.source)
+    }
+    imageSourceCache.clear()
   })
 
   function ensureBridge() {
@@ -70,30 +80,35 @@ export function useImageLibrary() {
     return window.desktopImages
   }
 
-  async function getImageSource(image: ImageAsset): Promise<string> {
-    // Check cache first
-    if (imageSourceCache.has(image.id)) {
-      return imageSourceCache.get(image.id)!
+  function getContentStore(): ImageContentStore {
+    refreshAvailability()
+    if (desktopImagesAvailable.value) {
+      return new ElectronImageContentStore(ensureBridge())
     }
+    return browserImageStore
+  }
 
-    // On desktop, read from filesystem
-    if (desktopImagesAvailable.value && image.file_path) {
-      const bridge = ensureBridge()
-      const payload = await bridge.readImageData({
-        relativePath: image.file_path,
-        mimeType: image.mime_type ?? undefined,
-      })
-      imageSourceCache.set(image.id, payload.dataUrl)
-      return payload.dataUrl
-    }
+  function clearCachedSource(imageId: string) {
+    const cached = imageSourceCache.get(imageId)
+    if (cached?.shouldRevoke) URL.revokeObjectURL(cached.source)
+    imageSourceCache.delete(imageId)
+  }
 
-    // On web, use image_data from database (restored from backup)
-    if (image.image_data) {
-      imageSourceCache.set(image.id, image.image_data)
-      return image.image_data
-    }
-
+  async function getImageBlob(image: ImageAsset): Promise<Blob> {
+    const storedBlob = await getContentStore().read(image)
+    if (storedBlob) return storedBlob
+    if (image.image_data) return dataUrlToBlob(image.image_data)
     throw new Error('Image data not available')
+  }
+
+  async function getImageSource(image: ImageAsset): Promise<string> {
+    const cached = imageSourceCache.get(image.id)
+    if (cached) return cached.source
+
+    const blob = await getImageBlob(image)
+    const source = URL.createObjectURL(blob)
+    imageSourceCache.set(image.id, { source, shouldRevoke: true })
+    return source
   }
 
   async function addImagesToChapter(bookId: string, chapterId: string) {
@@ -119,7 +134,7 @@ export function useImageLibrary() {
     return saved
   }
 
-  // Web-based image upload using File API
+  // Browser file ingestion. The UI remains gated until the parity phase.
   async function addImagesFromFiles(
     files: FileList | File[],
     options: { bookId: string; chapterId?: string | null; assetType: ImageAssetType }
@@ -127,14 +142,6 @@ export function useImageLibrary() {
     const saved: ImageAsset[] = []
 
     for (const file of Array.from(files)) {
-      // Convert file to base64 data URL
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-
       const id = crypto.randomUUID()
       const now = new Date().toISOString()
       const asset: ImageAsset = {
@@ -145,23 +152,27 @@ export function useImageLibrary() {
         file_name: file.name,
         file_path: `web/${id}/${file.name}`, // Virtual path for web
         mime_type: file.type || null,
-        image_data: dataUrl,
+        image_data: null,
         notes: '',
         created_at: now,
         updated_at: now,
       }
 
-      await saveImageAssetRecord(asset)
-      imageSourceCache.set(asset.id, dataUrl)
+      await browserImageStore.write(asset, file)
+      try {
+        await saveImageAssetRecord(asset)
+      } catch (error) {
+        await browserImageStore.delete(asset).catch(() => undefined)
+        throw error
+      }
       saved.push(asset)
     }
 
     return saved
   }
 
-  // Check if images can be displayed (desktop filesystem or web with image_data)
   function canDisplayImages(): boolean {
-    return desktopImagesAvailable.value || true // Web can display if image_data exists
+    return true
   }
 
   // Check if new images can be uploaded
@@ -170,17 +181,14 @@ export function useImageLibrary() {
   }
 
   async function deleteImage(image: ImageAsset) {
+    const contentStore = getContentStore()
     await deleteImageAssetRecord(image.id)
-    imageSourceCache.delete(image.id)
+    clearCachedSource(image.id)
 
-    // Only delete from filesystem on desktop
-    if (desktopImagesAvailable.value && image.file_path && !image.file_path.startsWith('web/')) {
-      try {
-        const bridge = ensureBridge()
-        await bridge.deleteImageFile({ relativePath: image.file_path })
-      } catch (error) {
-        console.warn('Failed to delete image file', error)
-      }
+    try {
+      await contentStore.delete(image)
+    } catch (error) {
+      console.warn('Failed to delete image content', error)
     }
   }
 
@@ -237,13 +245,7 @@ export function useImageLibrary() {
     await setBookCoverImageId(bookId, asset.id)
 
     if (previousCover) {
-      imageSourceCache.delete(previousCover.id)
-      await deleteImageAssetRecord(previousCover.id)
-      try {
-        await bridge.deleteImageFile({ relativePath: previousCover.file_path })
-      } catch (error) {
-        console.warn('Failed to delete old cover image', error)
-      }
+      await deleteImage(previousCover)
     }
 
     return asset
@@ -271,13 +273,7 @@ export function useImageLibrary() {
     await setPartCoverImageId(partId, asset.id)
 
     if (previousCover) {
-      imageSourceCache.delete(previousCover.id)
-      await deleteImageAssetRecord(previousCover.id)
-      try {
-        await bridge.deleteImageFile({ relativePath: previousCover.file_path })
-      } catch (error) {
-        console.warn('Failed to delete old part cover image', error)
-      }
+      await deleteImage(previousCover)
     }
 
     return asset
@@ -326,6 +322,7 @@ export function useImageLibrary() {
     fetchChapterCover,
     setChapterCoverImageId,
     getImageSource,
+    getImageBlob,
     setPartCoverImageId,
   }
 }
