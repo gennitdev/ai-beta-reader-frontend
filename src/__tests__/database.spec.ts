@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import initSqlJs from 'sql.js'
 import { AppDatabase, type Book, type Chapter, type ImageAsset } from '@/lib/database'
 
@@ -49,7 +49,15 @@ function chapter(overrides: Partial<Chapter> = {}): Chapter {
 let db: AppDatabase
 
 beforeEach(async () => {
+  // Row ids are built from Date.now(); make it strictly increasing so records
+  // created within the same millisecond (e.g. two wiki pages) get unique ids.
+  let tick = 1_800_000_000_000
+  vi.spyOn(Date, 'now').mockImplementation(() => (tick += 1))
   db = await makeDb()
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('books', () => {
