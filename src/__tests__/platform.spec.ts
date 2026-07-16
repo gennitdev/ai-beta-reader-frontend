@@ -55,4 +55,12 @@ describe('isDesktopAppRuntime', () => {
     getPlatform.mockReturnValue('web')
     expect(isDesktopAppRuntime()).toBe(false)
   })
+
+  it('is false when Capacitor throws with a window present', () => {
+    vi.stubGlobal('window', {})
+    getPlatform.mockImplementation(() => {
+      throw new Error('not available')
+    })
+    expect(isDesktopAppRuntime()).toBe(false)
+  })
 })
