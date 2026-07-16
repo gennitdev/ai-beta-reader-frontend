@@ -7,6 +7,7 @@ import SearchModal from '@/components/SearchModal.vue'
 import BrowserStorageNotice from '@/components/BrowserStorageNotice.vue'
 import { primaryNavItems } from '@/config/navigation'
 import type { Book, Chapter } from '@/lib/database'
+import type { FindReplaceScope } from '@/lib/findReplace'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +19,7 @@ const {
   getParts,
   findReplaceMatches,
   replaceFindReplaceMatches,
+  restoreFindReplaceFields,
 } = useDatabase()
 
 // Parts data for breadcrumbs
@@ -30,6 +32,7 @@ const showSearchModal = ref(false)
 const searchService = {
   findReplaceMatches,
   replaceFindReplaceMatches,
+  restoreFindReplaceFields,
 }
 
 const isSideNavOpen = ref(false)
@@ -79,6 +82,15 @@ onUnmounted(() => {
 const currentBookId = computed(() => {
   const bookId = (route.params.bookId || route.params.id) as string | undefined
   return bookId || null
+})
+const contextualSearchScope = computed<FindReplaceScope>(() => {
+  if (route.params.chapterId) return 'chapter'
+  if (route.params.wikiPageId) return 'wikiPage'
+  return 'book'
+})
+const contextualSearchTargetId = computed(() => {
+  const targetId = route.params.chapterId || route.params.wikiPageId
+  return typeof targetId === 'string' ? targetId : undefined
 })
 
 const goToNewChapter = () => {
@@ -433,6 +445,8 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
         :show="showSearchModal"
         :book-id="currentBookId"
         :search-service="searchService"
+        :initial-scope="contextualSearchScope"
+        :target-id="contextualSearchTargetId"
         @close="showSearchModal = false"
       />
 

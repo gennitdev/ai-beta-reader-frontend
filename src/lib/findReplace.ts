@@ -49,6 +49,13 @@ export interface ReplaceFindReplaceMatchesResult {
   fields: FindReplaceFieldValues
 }
 
+export interface RestoreFindReplaceFieldsRequest {
+  targetType: FindReplaceTargetType
+  targetId: string
+  expectedFields: FindReplaceFieldValues
+  fields: FindReplaceFieldValues
+}
+
 const DEFAULT_CONTEXT_LENGTH = 60
 
 function escapeRegExp(value: string): string {
@@ -206,4 +213,16 @@ export function replaceFindReplaceFields(
   }
 
   return { replacedCount: matches.length, fields }
+}
+
+export function assertFindReplaceFieldsCurrent(
+  currentFields: FindReplaceFieldValues,
+  expectedFields: FindReplaceFieldValues,
+  action: string,
+): void {
+  for (const [field, expectedValue] of Object.entries(expectedFields)) {
+    if (currentFields[field as FindReplaceField] !== expectedValue) {
+      throw new Error(`The ${field} field changed after ${action} and must be refreshed`)
+    }
+  }
 }

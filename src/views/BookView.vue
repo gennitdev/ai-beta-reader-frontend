@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useImageLibrary } from "@/composables/useImageLibrary";
 import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ImageAsset, ImageWikiTag } from "@/lib/database";
+import type { FindReplaceScope } from "@/lib/findReplace";
 import type {
   BookChapter,
   BookOrganizedPart,
@@ -55,6 +56,7 @@ const {
   updatePartOrder,
   findReplaceMatches,
   replaceFindReplaceMatches,
+  restoreFindReplaceFields,
   setBookCoverImageId,
   getBookImageAssets,
   updateImageAssetNotes,
@@ -110,12 +112,22 @@ const expandedParts = ref<Set<string>>(new Set());
 const searchService = {
   findReplaceMatches,
   replaceFindReplaceMatches,
+  restoreFindReplaceFields,
 };
 
 // Drag and drop state
 const isDragging = ref(false);
 const isDraggingInSidebar = ref(false);
 const showSearchModal = ref(false);
+const contextualSearchScope = computed<FindReplaceScope>(() => {
+  if (route.params.chapterId) return "chapter";
+  if (route.params.wikiPageId) return "wikiPage";
+  return "book";
+});
+const contextualSearchTargetId = computed(() => {
+  const targetId = route.params.chapterId || route.params.wikiPageId;
+  return typeof targetId === "string" ? targetId : undefined;
+});
 
 // Create wiki page state
 const showCreateWikiModal = ref(false);
@@ -1194,6 +1206,8 @@ onMounted(async () => {
     :show="showSearchModal"
     :book-id="bookId"
     :search-service="searchService"
+    :initial-scope="contextualSearchScope"
+    :target-id="contextualSearchTargetId"
     @close="showSearchModal = false"
     @refresh="refreshData"
   />

@@ -99,7 +99,7 @@ Automatically generated character sheets that track relationships and developmen
 
 ### Search and Replace for Continuity
 
-Find and replace text across all chapters and wiki pages to maintain consistency throughout your manuscript.
+Review individual matches before replacing text across your entire manuscript, or limit the operation to the current chapter or wiki page. Matches are grouped by document and field, with controls to replace one, selected matches, or every match in a document.
 
 ![Search](./src/assets/screenshots/search.png)
 

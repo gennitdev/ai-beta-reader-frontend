@@ -29,12 +29,14 @@ import {
 } from '@/lib/imageDataMigration';
 import { dispatchChapterWikiLinksChanged } from '@/utils/chapterWikiLinkEvents';
 import {
+  assertFindReplaceFieldsCurrent,
   createFindReplaceDocument,
   replaceFindReplaceFields,
   type FindReplaceDocument,
   type FindReplaceSearchRequest,
   type ReplaceFindReplaceMatchesRequest,
   type ReplaceFindReplaceMatchesResult,
+  type RestoreFindReplaceFieldsRequest,
 } from '@/lib/findReplace';
 
 export interface Book {
@@ -2967,6 +2969,108 @@ export class AppDatabase {
 
     dispatchChapterWikiLinksChanged({ chapterIds: [], wikiPageIds: [request.targetId] });
     return result;
+  }
+
+  async restoreFindReplaceFields(request: RestoreFindReplaceFieldsRequest): Promise<void> {
+    if (request.targetType === 'chapter') {
+      const getQuery = `SELECT title, text FROM chapters WHERE id = ?`;
+      let currentTitle = '';
+      let currentText = '';
+
+      if (this.isNative) {
+        const result = await this.db.query(getQuery, [request.targetId]);
+        const row = result.values?.[0];
+        if (!row) throw new Error('Chapter not found');
+        currentTitle = String(readQueryRowValue(row, 0, 'title') ?? '');
+        currentText = String(readQueryRowValue(row, 1, 'text') ?? '');
+      } else {
+        const stmt = this.db.prepare(getQuery);
+        stmt.bind([request.targetId]);
+        if (!stmt.step()) {
+          stmt.free();
+          throw new Error('Chapter not found');
+        }
+        const row = stmt.getAsObject();
+        currentTitle = String(row.title ?? '');
+        currentText = String(row.text ?? '');
+        stmt.free();
+      }
+
+      const currentFields = { title: currentTitle, text: currentText };
+      assertFindReplaceFieldsCurrent(currentFields, request.expectedFields, 'replacement');
+
+      const restoredTitle = request.fields.title ?? currentTitle;
+      const restoredText = request.fields.text ?? currentText;
+      const trimmedText = restoredText.trim();
+      const wordCount = trimmedText ? trimmedText.split(/\s+/).length : 0;
+      const updateQuery = `UPDATE chapters SET title = ?, text = ?, word_count = ? WHERE id = ?`;
+      const params = [restoredTitle, restoredText, wordCount, request.targetId];
+
+      if (this.isNative) {
+        await this.db.run(updateQuery, params);
+      } else {
+        this.db.run(updateQuery, params);
+        this.saveToLocalStorage();
+      }
+
+      dispatchChapterWikiLinksChanged({ chapterIds: [request.targetId], wikiPageIds: [] });
+      return;
+    }
+
+    const getQuery = `SELECT page_name, content, summary FROM wiki_pages WHERE id = ?`;
+    let currentPageName = '';
+    let currentContent = '';
+    let currentSummary = '';
+
+    if (this.isNative) {
+      const result = await this.db.query(getQuery, [request.targetId]);
+      const row = result.values?.[0];
+      if (!row) throw new Error('Wiki page not found');
+      currentPageName = String(readQueryRowValue(row, 0, 'page_name') ?? '');
+      currentContent = String(readQueryRowValue(row, 1, 'content') ?? '');
+      currentSummary = String(readQueryRowValue(row, 2, 'summary') ?? '');
+    } else {
+      const stmt = this.db.prepare(getQuery);
+      stmt.bind([request.targetId]);
+      if (!stmt.step()) {
+        stmt.free();
+        throw new Error('Wiki page not found');
+      }
+      const row = stmt.getAsObject();
+      currentPageName = String(row.page_name ?? '');
+      currentContent = String(row.content ?? '');
+      currentSummary = String(row.summary ?? '');
+      stmt.free();
+    }
+
+    const currentFields = {
+      page_name: currentPageName,
+      summary: currentSummary,
+      content: currentContent,
+    };
+    assertFindReplaceFieldsCurrent(currentFields, request.expectedFields, 'replacement');
+
+    const updateQuery = `
+      UPDATE wiki_pages
+      SET page_name = ?, content = ?, summary = ?, updated_at = ?
+      WHERE id = ?
+    `;
+    const params = [
+      request.fields.page_name ?? currentPageName,
+      request.fields.content ?? currentContent,
+      request.fields.summary ?? currentSummary,
+      new Date().toISOString(),
+      request.targetId,
+    ];
+
+    if (this.isNative) {
+      await this.db.run(updateQuery, params);
+    } else {
+      this.db.run(updateQuery, params);
+      this.saveToLocalStorage();
+    }
+
+    dispatchChapterWikiLinksChanged({ chapterIds: [], wikiPageIds: [request.targetId] });
   }
 
   async saveImageAsset(asset: ImageAsset) {

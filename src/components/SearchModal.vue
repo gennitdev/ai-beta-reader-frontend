@@ -5,15 +5,30 @@ import Modal from './Modal.vue'
 import FindReplaceDocumentResult from './search/FindReplaceDocumentResult.vue'
 import type {
   FindReplaceDocument,
+  FindReplaceFieldValues,
   FindReplaceScope,
   FindReplaceSearchRequest,
   ReplaceFindReplaceMatchesRequest,
+  ReplaceFindReplaceMatchesResult,
+  RestoreFindReplaceFieldsRequest,
   TextMatch,
 } from '@/lib/findReplace'
 
 interface SearchService {
   findReplaceMatches: (request: FindReplaceSearchRequest) => Promise<FindReplaceDocument[]>
-  replaceFindReplaceMatches: (request: ReplaceFindReplaceMatchesRequest) => Promise<unknown>
+  replaceFindReplaceMatches: (
+    request: ReplaceFindReplaceMatchesRequest,
+  ) => Promise<ReplaceFindReplaceMatchesResult>
+  restoreFindReplaceFields: (request: RestoreFindReplaceFieldsRequest) => Promise<void>
+}
+
+interface LastReplacement {
+  targetType: FindReplaceDocument['targetType']
+  targetId: string
+  displayName: string
+  beforeFields: FindReplaceFieldValues
+  afterFields: FindReplaceFieldValues
+  replacedCount: number
 }
 
 interface Props {
@@ -46,6 +61,8 @@ const expandedDocumentIds = ref(new Set<string>())
 const selectedMatchIds = ref(new Set<string>())
 const replacingMatchId = ref<string | null>(null)
 const replacingDocumentId = ref<string | null>(null)
+const isUndoing = ref(false)
+const lastReplacement = ref<LastReplacement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
@@ -54,7 +71,7 @@ const totalMatches = computed(() =>
   documents.value.reduce((total, document) => total + document.matches.length, 0),
 )
 const isReplacing = computed(
-  () => replacingMatchId.value !== null || replacingDocumentId.value !== null,
+  () => replacingMatchId.value !== null || replacingDocumentId.value !== null || isUndoing.value,
 )
 const availableScopes = computed(() => {
   const scopes: Array<{ value: FindReplaceScope; label: string }> = [
@@ -153,13 +170,21 @@ async function replaceMatches(document: FindReplaceDocument, matches: TextMatch[
 
   errorMessage.value = ''
   try {
-    await props.searchService.replaceFindReplaceMatches({
+    const result = await props.searchService.replaceFindReplaceMatches({
       targetType: document.targetType,
       targetId: document.targetId,
       replacement: replaceTerm.value,
       expectedFields: document.fields,
       matches,
     })
+    lastReplacement.value = {
+      targetType: document.targetType,
+      targetId: document.targetId,
+      displayName: document.displayName,
+      beforeFields: { ...document.fields },
+      afterFields: { ...result.fields },
+      replacedCount: result.replacedCount,
+    }
     emit('refresh')
     await runSearch()
   } catch (error) {
@@ -190,11 +215,44 @@ async function replaceSelectedInDocument(document: FindReplaceDocument): Promise
 }
 
 async function replaceAllInDocument(document: FindReplaceDocument): Promise<void> {
+  if (
+    document.matches.length > 1 &&
+    !window.confirm(
+      `Replace all ${document.matches.length} matches in “${document.displayName}”?`,
+    )
+  ) {
+    return
+  }
+
   replacingDocumentId.value = document.targetId
   try {
     await replaceMatches(document, document.matches)
   } finally {
     replacingDocumentId.value = null
+  }
+}
+
+async function undoLastReplacement(): Promise<void> {
+  const replacement = lastReplacement.value
+  if (!replacement) return
+
+  isUndoing.value = true
+  errorMessage.value = ''
+  try {
+    await props.searchService.restoreFindReplaceFields({
+      targetType: replacement.targetType,
+      targetId: replacement.targetId,
+      expectedFields: replacement.afterFields,
+      fields: replacement.beforeFields,
+    })
+    lastReplacement.value = null
+    emit('refresh')
+    await runSearch()
+  } catch (error) {
+    console.error('Undo replacement error:', error)
+    errorMessage.value = error instanceof Error ? error.message : 'Undo failed'
+  } finally {
+    isUndoing.value = false
   }
 }
 
@@ -225,6 +283,7 @@ watch(
     documents.value = []
     selectedMatchIds.value = new Set()
     expandedDocumentIds.value = new Set()
+    lastReplacement.value = null
     errorMessage.value = ''
   },
 )
@@ -284,6 +343,25 @@ watch(
 
       <div v-if="errorMessage" class="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
         {{ errorMessage }}
+      </div>
+
+      <div
+        v-if="lastReplacement"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-md bg-green-50 p-3 text-sm text-green-800 dark:bg-green-900/30 dark:text-green-200"
+      >
+        <span>
+          Replaced {{ lastReplacement.replacedCount }}
+          {{ lastReplacement.replacedCount === 1 ? 'match' : 'matches' }} in
+          “{{ lastReplacement.displayName }}”.
+        </span>
+        <button
+          type="button"
+          :disabled="isReplacing"
+          class="font-medium underline hover:no-underline disabled:cursor-not-allowed disabled:opacity-50"
+          @click="undoLastReplacement"
+        >
+          {{ isUndoing ? 'Undoing…' : 'Undo' }}
+        </button>
       </div>
 
       <div v-if="isSearching" class="py-8 text-center">

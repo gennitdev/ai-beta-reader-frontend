@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  assertFindReplaceFieldsCurrent,
   createFindReplaceDocument,
   findTextMatches,
   formatReplacement,
@@ -178,5 +179,15 @@ describe('find and replace documents', () => {
     expect(() =>
       replaceFindReplaceFields({ text: 'Jane arrived.' }, expectedFields, matches, 'James'),
     ).toThrow(/changed after searching/)
+  })
+
+  it('rejects undo when a field changed after replacement', () => {
+    expect(() =>
+      assertFindReplaceFieldsCurrent(
+        { title: 'Edited title', text: 'James arrived.' },
+        { title: 'Original title', text: 'James arrived.' },
+        'replacement',
+      ),
+    ).toThrow(/title field changed after replacement/)
   })
 })

@@ -16,6 +16,7 @@ import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 import type {
   FindReplaceSearchRequest,
   ReplaceFindReplaceMatchesRequest,
+  RestoreFindReplaceFieldsRequest,
 } from '@/lib/findReplace'
 
 const isInitialized = ref(false)
@@ -687,6 +688,17 @@ export function useDatabase() {
     }
   }
 
+  async function restoreFindReplaceFields(request: RestoreFindReplaceFieldsRequest) {
+    try {
+      await initializeDatabase()
+      await db.restoreFindReplaceFields(request)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to undo replacement'
+      console.error('Undo replacement error:', e)
+      throw e
+    }
+  }
+
   async function replaceInChapter(chapterId: string, searchTerm: string, replaceTerm: string) {
     try {
       await initializeDatabase()
@@ -969,6 +981,7 @@ export function useDatabase() {
     searchBook,
     findReplaceMatches,
     replaceFindReplaceMatches,
+    restoreFindReplaceFields,
     replaceInChapter,
     replaceInWikiPage,
 
