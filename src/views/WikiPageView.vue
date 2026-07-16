@@ -18,6 +18,7 @@ import {
   CHAPTER_WIKI_LINKS_CHANGED_EVENT,
   type ChapterWikiLinksChangedDetail,
 } from '@/utils/chapterWikiLinkEvents'
+import { normalizeWikiAliases } from '@/lib/wikiAliases'
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -136,6 +137,11 @@ const isEditingTags = ref(false)
 const editedTags = ref<string[]>([])
 const newTag = ref('')
 const savingTags = ref(false)
+const isEditingAliases = ref(false)
+const editedAliases = ref<string[]>([])
+const newAlias = ref('')
+const savingAliases = ref(false)
+const aliasError = ref('')
 
 // Feature flag for wiki history (disabled by default)
 const isHistoryFeatureEnabled = computed(() => import.meta.env.VITE_ENABLE_WIKI_HISTORY === 'true')
@@ -292,6 +298,10 @@ const loadWikiPage = async () => {
         updated_at: pageData.updated_at
       }
       editedContent.value = pageData.content || ''
+      editedAliases.value = [...wikiPage.value.aliases]
+      newAlias.value = ''
+      aliasError.value = ''
+      isEditingAliases.value = false
       editedTags.value = parseStringArray(pageData.tags)
       newTag.value = ''
       isEditingTags.value = false
@@ -400,6 +410,69 @@ const cancelEdit = () => {
   if (!wikiPage.value) return
   editedContent.value = wikiPage.value.content
   isEditing.value = false
+}
+
+const startEditingAliases = () => {
+  if (!wikiPage.value) return
+  editedAliases.value = [...wikiPage.value.aliases]
+  newAlias.value = ''
+  aliasError.value = ''
+  isEditingAliases.value = true
+}
+
+const cancelEditAliases = () => {
+  if (!wikiPage.value) return
+  editedAliases.value = [...wikiPage.value.aliases]
+  newAlias.value = ''
+  aliasError.value = ''
+  isEditingAliases.value = false
+}
+
+const addAlias = () => {
+  if (!wikiPage.value) return
+  const alias = newAlias.value.trim()
+  if (!alias) return
+
+  const nextAliases = normalizeWikiAliases(
+    [...editedAliases.value, alias],
+    wikiPage.value.page_name,
+  )
+  if (nextAliases.length === editedAliases.value.length) {
+    aliasError.value = 'Alternate names must be unique and different from the page name.'
+    return
+  }
+
+  editedAliases.value = nextAliases
+  newAlias.value = ''
+  aliasError.value = ''
+}
+
+const removeAlias = (aliasToRemove: string) => {
+  editedAliases.value = editedAliases.value.filter((alias) => alias !== aliasToRemove)
+  aliasError.value = ''
+}
+
+const saveAliases = async () => {
+  if (!wikiPage.value) return
+
+  const aliases = normalizeWikiAliases(editedAliases.value, wikiPage.value.page_name)
+  savingAliases.value = true
+  aliasError.value = ''
+  try {
+    await updateWikiPage(wikiPageId.value, { aliases })
+    wikiPage.value.aliases = aliases
+    wikiPage.value.updated_at = new Date().toISOString()
+    editedAliases.value = [...aliases]
+    newAlias.value = ''
+    isEditingAliases.value = false
+  } catch (error) {
+    console.error('Failed to save wiki page alternate names:', error)
+    aliasError.value = error instanceof Error
+      ? error.message
+      : 'Failed to save alternate names.'
+  } finally {
+    savingAliases.value = false
+  }
 }
 
 const startEditingTags = () => {
@@ -908,17 +981,91 @@ watch(
                 <p class="mt-1 text-gray-600 dark:text-gray-400">{{ wikiPage.summary }}</p>
               </div>
 
-              <div v-if="wikiPage.aliases && wikiPage.aliases.length">
-                <span class="font-medium text-gray-700 dark:text-gray-300">Aliases:</span>
-                <div class="flex flex-wrap gap-1 mt-1">
+              <div>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="font-medium text-gray-700 dark:text-gray-300">Alternate names:</span>
+                  <button
+                    v-if="!isEditingAliases"
+                    type="button"
+                    class="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    @click="startEditingAliases"
+                  >
+                    {{ wikiPage.aliases.length ? 'Edit names' : 'Add names' }}
+                  </button>
+                </div>
+
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Nicknames, titles, and other names that should resolve to this page.
+                </p>
+
+                <div v-if="isEditingAliases" class="mt-3 space-y-3">
+                  <div v-if="editedAliases.length" class="flex flex-wrap gap-2">
+                    <button
+                      v-for="alias in editedAliases"
+                      :key="alias"
+                      type="button"
+                      class="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-1 text-xs text-purple-800 transition-colors hover:bg-purple-200 dark:bg-purple-900 dark:text-purple-200 dark:hover:bg-purple-800"
+                      @click="removeAlias(alias)"
+                    >
+                      <span>{{ alias }}</span>
+                      <span class="ml-1.5 text-[11px]" aria-hidden="true">x</span>
+                      <span class="sr-only">Remove {{ alias }}</span>
+                    </button>
+                  </div>
+
+                  <div class="flex gap-2">
+                    <input
+                      v-model="newAlias"
+                      type="text"
+                      class="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      placeholder="Add an alternate name"
+                      @keyup.enter="addAlias"
+                    />
+                    <button
+                      type="button"
+                      class="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                      @click="addAlias"
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  <p v-if="aliasError" class="text-xs text-red-600 dark:text-red-400" role="alert">
+                    {{ aliasError }}
+                  </p>
+
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      :disabled="savingAliases"
+                      @click="saveAliases"
+                    >
+                      {{ savingAliases ? 'Saving...' : 'Save names' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+                      :disabled="savingAliases"
+                      @click="cancelEditAliases"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+
+                <div v-else-if="wikiPage.aliases.length" class="mt-2 flex flex-wrap gap-1">
                   <span
                     v-for="alias in wikiPage.aliases"
                     :key="alias"
-                    class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded"
+                    class="rounded bg-purple-100 px-2 py-1 text-xs text-purple-800 dark:bg-purple-900 dark:text-purple-200"
                   >
                     {{ alias }}
                   </span>
                 </div>
+                <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  No alternate names yet.
+                </p>
               </div>
 
               <div>

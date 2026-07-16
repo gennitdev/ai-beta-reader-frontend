@@ -42,7 +42,7 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 - **Local-first data**: Every project lives in a local SQLite database. Backups are user-initiated; AI features send the selected manuscript context to the configured AI service when invoked.
 - **Encrypted backups**: The database snapshot is compressed, encrypted with a password-derived AES-GCM key, and uploaded to Google Drive as `ai-beta-reader-backup.enc`.
 - **Cross-platform restore**: Browser, Electron, and Android use the same versioned JSON snapshot format. Android uses PKCE OAuth and App Links to re-enter the app after Google consent.
-- **Story bible**: Character sheets, wiki pages, change history, and cross-document search keep continuity intact.
+- **Story bible**: Character sheets and wiki pages can record human-edited alternate names, helping AI updates resolve nicknames and titles to one canonical page.
 - **Find & replace**: Rename characters/places everywhere in one shot.
 - **Drag & drop parts**: Reorder chapters and group them into parts.
 

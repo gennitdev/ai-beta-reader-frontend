@@ -1,6 +1,10 @@
 import { ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
-import { useChapterMutationFlow, type ChapterMutationChapter } from '@/composables/useChapterMutationFlow'
+import {
+  canonicalizeWikiEntityNames,
+  useChapterMutationFlow,
+  type ChapterMutationChapter,
+} from '@/composables/useChapterMutationFlow'
 
 function createChapter(): ChapterMutationChapter {
   return {
@@ -102,5 +106,18 @@ describe('useChapterMutationFlow', () => {
     expect(saveNotesToDb).toHaveBeenCalledWith('chapter-1', editedNotes.value)
     expect(chapter.value?.notes).toBe('Updated notes')
     expect(flow.savingNotes.value).toBe(false)
+  })
+})
+
+describe('canonicalizeWikiEntityNames', () => {
+  it('replaces aliases with canonical page names and deduplicates the result', async () => {
+    const result = await canonicalizeWikiEntityNames(
+      ['Liz', 'Elizabeth Bennet', 'Darcy'],
+      async (name) => ['Liz', 'Elizabeth Bennet'].includes(name)
+        ? { page_name: 'Elizabeth Bennet' }
+        : null,
+    )
+
+    expect(result).toEqual(['Elizabeth Bennet', 'Darcy'])
   })
 })

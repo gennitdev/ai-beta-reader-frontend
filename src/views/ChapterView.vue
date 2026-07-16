@@ -28,6 +28,7 @@ import {
   CHAPTER_WIKI_LINKS_CHANGED_EVENT,
   type ChapterWikiLinksChangedDetail,
 } from "@/utils/chapterWikiLinkEvents";
+import { parseWikiAliases, resolveWikiPageByName } from "@/lib/wikiAliases";
 
 interface Chapter {
   id: string;
@@ -60,6 +61,7 @@ interface Character {
   character_name: string;
   wiki_page_id: string | null;
   has_wiki_page: boolean;
+  aliases?: string[];
 }
 
 interface CustomReviewerProfile {
@@ -527,12 +529,13 @@ const loadCharacters = async () => {
     // Map chapter characters to include wiki page info
     characters.value = chapter.value.characters.map((character) => {
       const characterName = character;
-      const wikiPage = wikiPages.find((page) => page.page_name === characterName);
+      const wikiPage = resolveWikiPageByName(wikiPages, characterName, "character");
       return {
         id: wikiPage?.id || `char-${characterName}`,
-        character_name: characterName,
+        character_name: wikiPage?.page_name || characterName,
         wiki_page_id: wikiPage?.id || null,
         has_wiki_page: !!wikiPage,
+        aliases: parseWikiAliases(wikiPage?.aliases),
       };
     });
   } catch (error) {

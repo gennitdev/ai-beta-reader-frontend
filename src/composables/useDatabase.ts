@@ -413,6 +413,7 @@ export function useDatabase() {
     page_type?: string;
     created_by_ai?: boolean;
     is_pinned?: boolean;
+    aliases?: string[];
   }) {
     try {
       await initializeDatabase()
@@ -430,6 +431,7 @@ export function useDatabase() {
     page_name?: string;
     tags?: string;
     is_pinned?: boolean;
+    aliases?: string[];
   }) {
     try {
       await initializeDatabase()
@@ -452,10 +454,10 @@ export function useDatabase() {
     }
   }
 
-  async function getWikiPage(bookId: string, pageName: string) {
+  async function getWikiPage(bookId: string, pageName: string, pageType?: string) {
     try {
       await initializeDatabase()
-      return await db.getWikiPage(bookId, pageName)
+      return await db.getWikiPage(bookId, pageName, pageType)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to get wiki page'
       console.error('Get wiki page error:', e)

@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { BUILT_IN_PROFILES, generateChapterSummary, generateReview as generateAIReview, type AIProfile, type PartSummaryChapterInput, type PartSummaryOverview } from '@/lib/openai'
 import type { BookPart } from '@/lib/database'
+import { normalizeWikiEntityName } from '@/lib/wikiAliases'
 
 export interface ChapterMutationChapter {
   id: string
@@ -75,7 +76,16 @@ interface ChapterMutationFlowOptions {
     content?: string
     summary?: string
   }) => Promise<void>
-  getWikiPage: (bookId: string, pageName: string) => Promise<{ id: string; content: string | null; summary: string | null } | null>
+  getWikiPage: (
+    bookId: string,
+    pageName: string,
+    pageType?: string,
+  ) => Promise<{
+    id: string
+    page_name: string
+    content: string | null
+    summary: string | null
+  } | null>
   trackWikiUpdate: (update: {
     wiki_page_id: string
     chapter_id: string
@@ -99,6 +109,24 @@ interface ChapterMutationFlowOptions {
   openSettings: () => void
 }
 
+export async function canonicalizeWikiEntityNames(
+  names: string[],
+  resolvePage: (name: string) => Promise<{ page_name: string } | null>,
+): Promise<string[]> {
+  const canonicalNames = await Promise.all(names.map(async (name) => {
+    const page = await resolvePage(name)
+    return page?.page_name || name
+  }))
+  const seen = new Set<string>()
+
+  return canonicalNames.filter((name) => {
+    const key = normalizeWikiEntityName(name)
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
   const generatingReview = ref(false)
   const generatingSummary = ref(false)
@@ -108,6 +136,14 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
   const summaryError = ref<string | null>(null)
   const wikiUpdateResults = ref<WikiUpdateResult[]>([])
   const showWikiUpdateResults = ref(false)
+
+  const canonicalizeEntityNames = async (
+    names: string[],
+    entityType: 'character' | 'location',
+  ): Promise<string[]> => canonicalizeWikiEntityNames(
+    names,
+    (name) => options.getWikiPage(options.bookId.value, name, entityType),
+  )
 
   const updateWikiFromGeneratedSummary = async (
     apiKey: string,
@@ -129,11 +165,16 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
       summaryProgress.value = `Updating wiki: ${entityName} (${currentIndex + 1} of ${totalEntities})...`
 
       try {
-        const existingPage = await options.getWikiPage(options.bookId.value, entityName)
+        const existingPage = await options.getWikiPage(
+          options.bookId.value,
+          entityName,
+          entityType,
+        )
+        const canonicalName = existingPage?.page_name || entityName
         const { generateWikiContent } = await import('@/lib/openai')
         const wikiResult = await generateWikiContent(
           apiKey,
-          entityName,
+          canonicalName,
           currentChapter.text,
           chapterSummary,
           existingPage?.content || null,
@@ -154,14 +195,14 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
               contradiction_notes: wikiResult.contradictions,
             })
             wikiResults.push({
-              entityName,
+              entityName: canonicalName,
               entityType,
               wikiPageId: existingPage.id,
               updateType: 'updated',
             })
           } else {
             wikiResults.push({
-              entityName,
+              entityName: canonicalName,
               entityType,
               wikiPageId: existingPage.id,
               updateType: 'unchanged',
@@ -171,7 +212,7 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
         } else {
           const newPageId = await options.createWikiPage({
             book_id: options.bookId.value,
-            page_name: entityName,
+            page_name: canonicalName,
             content: wikiResult.content,
             summary: wikiResult.summary,
             page_type: entityType,
@@ -181,11 +222,11 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
             wiki_page_id: newPageId,
             chapter_id: currentChapter.id,
             update_type: 'created',
-            change_summary: `Created ${entityType} page for ${entityName}`,
+            change_summary: `Created ${entityType} page for ${canonicalName}`,
           })
           await options.addChapterWikiMention(currentChapter.id, newPageId, 'ai_summary')
           wikiResults.push({
-            entityName,
+            entityName: canonicalName,
             entityType,
             wikiPageId: newPageId,
             updateType: 'created',
@@ -294,7 +335,14 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
         },
       )
 
-      const generatedCharacters = options.normalizeCharacterList(result.characters)
+      const generatedCharacters = await canonicalizeEntityNames(
+        options.normalizeCharacterList(result.characters),
+        'character',
+      )
+      const generatedLocations = await canonicalizeEntityNames(
+        Array.isArray(result.locations) ? result.locations : [],
+        'location',
+      )
       const beatsArray = Array.isArray(result.beats) ? result.beats : []
 
       summaryProgress.value = 'Saving summary...'
@@ -320,7 +368,7 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
           apiKey,
           result.summary,
           generatedCharacters,
-          Array.isArray(result.locations) ? result.locations : [],
+          generatedLocations,
         )
         wikiUpdateResults.value = wikiResults
         if (wikiResults.length > 0) {

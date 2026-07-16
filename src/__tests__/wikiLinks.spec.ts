@@ -11,6 +11,7 @@ interface Character {
   character_name: string
   wiki_page_id: string | null
   has_wiki_page: boolean
+  aliases?: string[]
 }
 
 function char(overrides: Partial<Character> & { character_name: string }): Character {
@@ -20,6 +21,7 @@ function char(overrides: Partial<Character> & { character_name: string }): Chara
     wiki_page_id:
       'wiki_page_id' in overrides ? overrides.wiki_page_id! : `wiki-${overrides.character_name}`,
     has_wiki_page: overrides.has_wiki_page ?? true,
+    aliases: overrides.aliases,
   }
 }
 
@@ -58,6 +60,17 @@ describe('processWikiLinks', () => {
     const result = processWikiLinks('Alice smiled', [char({ character_name: 'Al' })], 'book-1')
     expect(result).toBe('Alice smiled')
   })
+
+  it('links canonical names and aliases to the same wiki page', () => {
+    const result = processWikiLinks(
+      'Elizabeth greeted Liz.',
+      [char({ character_name: 'Elizabeth', aliases: ['Liz'], wiki_page_id: 'wiki-elizabeth' })],
+      'book-1',
+    )
+    expect(result).toBe(
+      '[Elizabeth](/books/book-1/wiki/wiki-elizabeth) greeted [Liz](/books/book-1/wiki/wiki-elizabeth).',
+    )
+  })
 })
 
 describe('extractMentionedCharacters', () => {
@@ -70,6 +83,11 @@ describe('extractMentionedCharacters', () => {
   it('returns an empty array when nobody is mentioned', () => {
     expect(extractMentionedCharacters('nobody here', [char({ character_name: 'Alice' })])).toEqual([])
   })
+
+  it('recognizes an alias as a mention of its canonical character', () => {
+    const liz = char({ character_name: 'Elizabeth', aliases: ['Liz'] })
+    expect(extractMentionedCharacters('Liz waved.', [liz])).toEqual([liz])
+  })
 })
 
 describe('countCharacterMentions', () => {
@@ -77,6 +95,14 @@ describe('countCharacterMentions', () => {
     const chars = [char({ character_name: 'Alice' }), char({ character_name: 'Bob' })]
     const counts = countCharacterMentions('Alice met Alice and bob', chars)
     expect(counts).toEqual({ Alice: 2, Bob: 1 })
+  })
+
+  it('combines canonical-name and alias mentions under the canonical name', () => {
+    const counts = countCharacterMentions(
+      'Elizabeth met Liz and LIZ.',
+      [char({ character_name: 'Elizabeth', aliases: ['Liz'] })],
+    )
+    expect(counts).toEqual({ Elizabeth: 3 })
   })
 })
 
