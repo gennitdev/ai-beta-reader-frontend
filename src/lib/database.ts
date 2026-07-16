@@ -10,6 +10,23 @@ import {
   type DatabaseImportData,
   type ImportRow,
 } from '@/lib/databaseImportExport';
+import {
+  decodeLegacyDatabaseSnapshot,
+  PersistenceCoordinator,
+} from '@/lib/persistenceCoordinator';
+import {
+  DATABASE_STORE,
+  METADATA_STORE,
+  readIndexedDbValue,
+  SQLITE_DATABASE_KEY,
+  writeIndexedDbValue,
+} from '@/lib/indexedDbStorage';
+import { IndexedDbImageContentStore } from '@/lib/imageContentStore';
+import {
+  IMAGE_BLOB_MIGRATION_STATUS_KEY,
+  migrateLegacyImageData,
+  type ImageDataMigrationRepository,
+} from '@/lib/imageDataMigration';
 import { dispatchChapterWikiLinksChanged } from '@/utils/chapterWikiLinkEvents';
 
 export interface Book {
@@ -211,11 +228,6 @@ function imageAssetFromNativeRow(row: Record<string, unknown>): ImageAsset {
 }
 
 const NATIVE_CAPACITOR_PLATFORMS = new Set(['ios', 'android']);
-
-// IndexedDB constants for web storage (much larger capacity than localStorage)
-const IDB_NAME = 'ai-beta-reader-db';
-const IDB_STORE = 'database';
-const IDB_KEY = 'sqliteDb';
 
 type QueryRow = Record<string, unknown>;
 
@@ -648,14 +660,17 @@ export class AppDatabase {
   private db!: AppDatabaseConnection;
   private sqlite: SQLiteConnection | null = null;
   private isNative: boolean | null = null; // Determined at init() time
+  private isElectron = false;
   private tableColumnCache = new Map<string, string[]>();
   private isImporting = false; // Skip intermediate saves during bulk import
+  private persistenceCoordinator: PersistenceCoordinator | null = null;
 
   async init() {
     // Determine platform at init time, not at module load time
     // This ensures Capacitor and window.desktopImages are available
     const platform = typeof Capacitor.getPlatform === 'function' ? Capacitor.getPlatform() : 'web';
     const isElectron = isElectronRuntime();
+    this.isElectron = isElectron;
     this.isNative = NATIVE_CAPACITOR_PLATFORMS.has(platform) && !isElectron;
 
     console.log(`[AppDatabase] Platform: ${platform}, isElectron: ${isElectron}, isNative: ${this.isNative}`);
@@ -679,7 +694,8 @@ export class AppDatabase {
       });
 
       // Try to load existing database from IndexedDB first, then fall back to localStorage for migration
-      let savedDb = await this.loadFromIndexedDB();
+      const indexedDbSnapshot = await this.loadFromIndexedDB();
+      let savedDb = indexedDbSnapshot;
       let migratedFromLocalStorage = false;
 
       // If no IndexedDB data, check localStorage for migration
@@ -688,12 +704,13 @@ export class AppDatabase {
         if (localStorageDb) {
           console.log('[AppDatabase] Migrating database from localStorage to IndexedDB...');
           try {
-            savedDb = localStorageDb.startsWith('[')
-              ? new Uint8Array(JSON.parse(localStorageDb))
-              : this.base64ToUint8Array(localStorageDb);
+            savedDb = decodeLegacyDatabaseSnapshot(localStorageDb);
             migratedFromLocalStorage = true;
           } catch (error) {
-            console.warn('[AppDatabase] Failed to parse localStorage data:', error);
+            console.error('[AppDatabase] Failed to parse legacy localStorage data:', error);
+            throw new Error(
+              'The legacy local database could not be read. It was left unchanged so it can be recovered.',
+            );
           }
         }
       }
@@ -701,24 +718,59 @@ export class AppDatabase {
       if (savedDb) {
         try {
           this.db = new SQL.Database(savedDb) as unknown as AppDatabaseConnection;
-          // If we migrated from localStorage, save to IndexedDB and clear localStorage
-          if (migratedFromLocalStorage) {
-            await this.saveToIndexedDB();
-            localStorage.removeItem('sqliteDb');
-            console.log('[AppDatabase] Migration complete. localStorage cleared.');
-          }
         } catch (error) {
-          console.warn('[AppDatabase] Failed to restore DB, starting fresh.', error);
-          this.db = new SQL.Database() as unknown as AppDatabaseConnection;
+          console.error('[AppDatabase] Failed to restore stored database.', error);
+          const source = migratedFromLocalStorage ? 'legacy localStorage' : 'IndexedDB';
+          throw new Error(
+            `The database stored in ${source} could not be opened. No empty replacement was created.`,
+          );
+        }
+
+        // Verify the IndexedDB copy before marking a legacy migration complete.
+        if (migratedFromLocalStorage) {
+          try {
+            await this.writeSnapshotToIndexedDB(this.db.export());
+            const verifiedSnapshot = await this.loadFromIndexedDB();
+            if (!verifiedSnapshot) {
+              throw new Error('The migrated IndexedDB snapshot could not be read back.');
+            }
+            const verificationDb = new SQL.Database(
+              verifiedSnapshot,
+            ) as unknown as AppDatabaseConnection;
+            verificationDb.close();
+            try {
+              localStorage.setItem('sqliteDbMigratedToIndexedDB', 'true');
+            } catch (error) {
+              console.warn('[AppDatabase] Could not save the migration marker:', error);
+            }
+            console.log('[AppDatabase] Migration verified. Legacy localStorage copy retained for recovery.');
+          } catch (error) {
+            console.error('[AppDatabase] Failed to verify IndexedDB migration.', error);
+            throw new Error(
+              'The legacy database opened successfully but could not be copied safely to IndexedDB. The legacy copy was retained.',
+            );
+          }
         }
       } else {
         this.db = new SQL.Database() as unknown as AppDatabaseConnection;
       }
+
+      this.persistenceCoordinator = new PersistenceCoordinator({
+        exportSnapshot: () => this.db.export(),
+        writeSnapshot: (snapshot) => this.writeSnapshotToIndexedDB(snapshot),
+        onBackgroundError: (error) => {
+          console.error('[AppDatabase] Failed to persist DB to IndexedDB:', error);
+        },
+      });
     }
 
     await this.createTables();
     await this.runMigrations();
     await this.ensureChapterWikiMentionsSchema();
+    await this.flushPersistence();
+    if (!this.isNative && !this.isElectron) {
+      await this.migrateLegacyBrowserImageData();
+    }
   }
 
   private async createTables() {
@@ -905,7 +957,7 @@ export class AppDatabase {
       await this.db.execute(schema);
     } else {
       this.db.run(schema);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -967,7 +1019,7 @@ export class AppDatabase {
     }
 
     if (!this.isNative) {
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1016,7 +1068,7 @@ export class AppDatabase {
     }
 
     if (!this.isNative) {
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1048,7 +1100,7 @@ export class AppDatabase {
       ]);
     } else {
       this.db.run(query, [book.id, book.title, chapterOrder, partOrder, coverImageId, book.created_at]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1092,7 +1144,7 @@ export class AppDatabase {
         chapter.word_count,
         chapter.created_at
       ]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     // Add chapter to book's chapter_order if not already present
@@ -1218,7 +1270,7 @@ export class AppDatabase {
     }
 
     if (!this.isNative) {
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1252,7 +1304,7 @@ export class AppDatabase {
         await this.db.run(updateQuery, [JSON.stringify(currentOrder), bookId]);
       } else {
         this.db.run(updateQuery, [JSON.stringify(currentOrder), bookId]);
-        this.saveToLocalStorage();
+        this.requestPersistence();
       }
     }
   }
@@ -1268,7 +1320,7 @@ export class AppDatabase {
       await this.db.run(query, [id, part.book_id, part.name, now, now]);
     } else {
       this.db.run(query, [id, part.book_id, part.name, now, now]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     const currentOrder = await this.getBookPartOrder(part.book_id);
@@ -1309,7 +1361,8 @@ export class AppDatabase {
       await this.db.run(query, [imageId, now, partId]);
     } else {
       this.db.run(query, [imageId, now, partId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 
@@ -1321,7 +1374,7 @@ export class AppDatabase {
       await this.db.run(query, [name, now, partId]);
     } else {
       this.db.run(query, [name, now, partId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1370,7 +1423,7 @@ export class AppDatabase {
       await this.db.run(query, [serialized, bookId]);
     } else {
       this.db.run(query, [serialized, bookId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1407,7 +1460,7 @@ export class AppDatabase {
       this.db.run(updateChaptersQuery, [partId]);
       this.db.run(deleteQuery, [partId]);
       this.db.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     if (bookId) {
@@ -1479,11 +1532,13 @@ export class AppDatabase {
         await this.saveBookPartOrder(bookId, partOrder);
       }
 
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
   async exportDatabase(): Promise<Uint8Array> {
+    await this.flushPersistence();
+
     if (this.isNative) {
       const jsonExport = await this.db.exportToJson('full');
       const normalized = this.normalizeCapacitorExport(jsonExport);
@@ -1655,7 +1710,8 @@ export class AppDatabase {
     // Save once at the end after all imports are complete
     if (!this.isNative) {
       console.log('[Database] importDatabase: Saving to IndexedDB...');
-      await this.saveToIndexedDB();
+      this.requestPersistence();
+      await this.flushPersistence();
       console.log('[Database] importDatabase: Save complete');
     }
   }
@@ -1796,7 +1852,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1841,7 +1897,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1866,7 +1922,7 @@ export class AppDatabase {
       await this.db.run(query, [partId]);
     } else {
       this.db.run(query, [partId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1900,7 +1956,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1925,7 +1981,7 @@ export class AppDatabase {
       await this.db.run(query, [reviewId]);
     } else {
       this.db.run(query, [reviewId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1947,7 +2003,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -1972,7 +2028,7 @@ export class AppDatabase {
       await this.db.run(query, [chapterId]);
     } else {
       this.db.run(query, [chapterId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -2006,7 +2062,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     return id;
@@ -2039,7 +2095,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -2054,7 +2110,7 @@ export class AppDatabase {
     } else {
       this.db.run(deleteReviewsQuery, [profileId]);
       this.db.run(deleteProfileQuery, [profileId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -2090,7 +2146,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     return id;
@@ -2138,7 +2194,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -2204,7 +2260,7 @@ export class AppDatabase {
       this.db.run(deleteMentionsQuery, [pageId]);
       this.db.run(deleteImageTagsQuery, [pageId]);
       this.db.run(deletePageQuery, [pageId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -2234,7 +2290,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -2346,7 +2402,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     dispatchChapterWikiLinksChanged({
@@ -2418,7 +2474,7 @@ export class AppDatabase {
     }
 
     if (!this.isNative) {
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     dispatchChapterWikiLinksChanged({
@@ -2488,7 +2544,7 @@ export class AppDatabase {
     }
 
     if (!this.isNative && insertedWikiPageIds.length > 0) {
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     if (insertedWikiPageIds.length > 0) {
@@ -2565,7 +2621,7 @@ export class AppDatabase {
     }
 
     if (!this.isNative) {
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
 
     dispatchChapterWikiLinksChanged({
@@ -2704,7 +2760,8 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 
@@ -2727,7 +2784,8 @@ export class AppDatabase {
       this.db.run(unlinkChapterCoverQuery, [imageId]);
       this.db.run(deleteTagsQuery, [imageId]);
       this.db.run(deleteQuery, [imageId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 
@@ -2739,7 +2797,7 @@ export class AppDatabase {
       await this.db.run(query, params);
     } else {
       this.db.run(query, params);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -2791,7 +2849,7 @@ export class AppDatabase {
       for (const wikiPageId of uniqueWikiPageIds) {
         this.db.run(insertQuery, [imageId, wikiPageId, now]);
       }
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -2889,7 +2947,8 @@ export class AppDatabase {
       await this.db.run(query, [imageId, bookId]);
     } else {
       this.db.run(query, [imageId, bookId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 
@@ -2923,7 +2982,8 @@ export class AppDatabase {
       await this.db.run(query, [imageId, chapterId]);
     } else {
       this.db.run(query, [imageId, chapterId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
+      await this.flushPersistence();
     }
   }
 
@@ -2958,7 +3018,7 @@ export class AppDatabase {
       await this.db.run(query, [imageId, updatedAt, wikiPageId]);
     } else {
       this.db.run(query, [imageId, updatedAt, wikiPageId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -3037,7 +3097,7 @@ export class AppDatabase {
       await this.db.run(updateQuery, [newTitle, newText, wordCount, chapterId]);
     } else {
       this.db.run(updateQuery, [newTitle, newText, wordCount, chapterId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
@@ -3097,118 +3157,97 @@ export class AppDatabase {
       await this.db.run(updateQuery, [newPageName, newContent, newSummary, now, wikiPageId]);
     } else {
       this.db.run(updateQuery, [newPageName, newContent, newSummary, now, wikiPageId]);
-      this.saveToLocalStorage();
+      this.requestPersistence();
     }
   }
 
-  private saveToLocalStorage() {
+  private requestPersistence() {
     if (!this.isNative && !this.isImporting) {
-      // Use IndexedDB for persistence (async, but we fire-and-forget for compatibility)
-      // Skip during bulk import to avoid saving 170MB+ hundreds of times
-      this.saveToIndexedDB().catch(error => {
-        console.error('[AppDatabase] Failed to persist DB to IndexedDB:', error);
-      });
+      // Skip during bulk import to avoid exporting and writing a large database
+      // hundreds of times. The import path requests and flushes once at the end.
+      this.persistenceCoordinator?.request();
     }
   }
 
-  private async saveToIndexedDB(): Promise<void> {
+  async flushPersistence(): Promise<void> {
     if (this.isNative) return;
+    await this.persistenceCoordinator?.flush();
+  }
 
-    const data = this.db.export();
-    const idb = await this.openIndexedDB();
-
-    return new Promise((resolve, reject) => {
-      const transaction = idb.transaction(IDB_STORE, 'readwrite');
-      const store = transaction.objectStore(IDB_STORE);
-      const request = store.put(data, IDB_KEY);
-
-      request.onsuccess = () => {
-        idb.close();
-        resolve();
-      };
-      request.onerror = () => {
-        idb.close();
-        console.error('[AppDatabase] IndexedDB write failed:', request.error);
-        reject(new Error('Failed to save database to IndexedDB.'));
-      };
-    });
+  private async writeSnapshotToIndexedDB(data: Uint8Array): Promise<void> {
+    await writeIndexedDbValue(DATABASE_STORE, SQLITE_DATABASE_KEY, data);
   }
 
   private async loadFromIndexedDB(): Promise<Uint8Array | null> {
-    try {
-      const idb = await this.openIndexedDB();
-
-      return new Promise((resolve, reject) => {
-        const transaction = idb.transaction(IDB_STORE, 'readonly');
-        const store = transaction.objectStore(IDB_STORE);
-        const request = store.get(IDB_KEY);
-
-        request.onsuccess = () => {
-          idb.close();
-          if (request.result instanceof Uint8Array) {
-            resolve(request.result);
-          } else if (request.result) {
-            // Handle ArrayBuffer case
-            resolve(new Uint8Array(request.result));
-          } else {
-            resolve(null);
-          }
-        };
-        request.onerror = () => {
-          idb.close();
-          console.error('[AppDatabase] IndexedDB read failed:', request.error);
-          reject(request.error);
-        };
-      });
-    } catch (error) {
-      console.warn('[AppDatabase] Failed to open IndexedDB:', error);
-      return null;
-    }
+    const result = await readIndexedDbValue<Uint8Array | ArrayBuffer>(
+      DATABASE_STORE,
+      SQLITE_DATABASE_KEY,
+    );
+    if (result instanceof Uint8Array) return result;
+    if (result) return new Uint8Array(result);
+    return null;
   }
 
-  private openIndexedDB(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(IDB_NAME, 1);
+  private async migrateLegacyBrowserImageData(): Promise<void> {
+    const repository: ImageDataMigrationRepository = {
+      listPendingImageIds: async () => {
+        const result = this.db.exec(
+          `SELECT id FROM image_assets
+           WHERE image_data IS NOT NULL AND image_data <> ''
+           ORDER BY created_at ASC`,
+        );
+        return result.length > 0
+          ? result[0].values.map((row) => String(row[0]))
+          : [];
+      },
+      loadImages: async (imageIds) => {
+        if (imageIds.length === 0) return [];
+        const placeholders = imageIds.map(() => '?').join(', ');
+        const result = this.db.exec(
+          `SELECT ${IMAGE_ASSET_COLUMNS.join(', ')} FROM image_assets
+           WHERE id IN (${placeholders})`,
+          imageIds,
+        );
+        return result.length > 0
+          ? result[0].values.map(imageAssetFromSqlRow)
+          : [];
+      },
+      clearImageData: async (imageIds) => {
+        if (imageIds.length === 0) return;
+        const placeholders = imageIds.map(() => '?').join(', ');
+        this.db.run(
+          `UPDATE image_assets SET image_data = NULL WHERE id IN (${placeholders})`,
+          imageIds,
+        );
+        this.requestPersistence();
+      },
+      flush: () => this.flushPersistence(),
+      saveStatus: (status) => writeIndexedDbValue(
+        METADATA_STORE,
+        IMAGE_BLOB_MIGRATION_STATUS_KEY,
+        status,
+      ),
+    };
 
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(IDB_STORE)) {
-          db.createObjectStore(IDB_STORE);
-        }
-      };
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+    const status = await migrateLegacyImageData({
+      repository,
+      store: new IndexedDbImageContentStore(),
     });
-  }
-
-  private uint8ArrayToBase64(arr: Uint8Array): string {
-    const chunkSize = 0x8000;
-    let binary = '';
-
-    for (let i = 0; i < arr.length; i += chunkSize) {
-      const chunk = arr.subarray(i, i + chunkSize);
-      binary += String.fromCharCode(...chunk);
+    if (status.status === 'partial') {
+      console.warn(
+        '[AppDatabase] Some legacy image data could not be migrated and was retained:',
+        status.failedImageIds,
+      );
+    } else if (status.migratedCount > 0) {
+      console.log(`[AppDatabase] Migrated ${status.migratedCount} browser images to Blob storage.`);
     }
-
-    return btoa(binary);
-  }
-
-  private base64ToUint8Array(base64: string): Uint8Array {
-    const binary = atob(base64);
-    const length = binary.length;
-    const bytes = new Uint8Array(length);
-
-    for (let i = 0; i < length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-
-    return bytes;
   }
 
   async close() {
     if (this.isNative && this.db) {
       await this.db.close();
+    } else {
+      await this.flushPersistence();
     }
   }
 }

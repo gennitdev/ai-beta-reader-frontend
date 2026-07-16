@@ -65,7 +65,8 @@ const {
 } = useDatabase();
 
 const {
-  desktopImagesAvailable,
+  canSelectImages,
+  canStoreImages,
   fetchBookCover,
   pickNewBookCover,
   getImageSource: getCoverImageSource,
@@ -327,7 +328,7 @@ watch(
 );
 
 watch(
-  () => desktopImagesAvailable.value,
+  () => canStoreImages.value,
   () => {
     if (book.value) {
       loadBookCoverImage(book.value.id);
@@ -1102,7 +1103,7 @@ onMounted(async () => {
       :update-editing-book-title="updateEditingBookTitle"
       :get-type-icon="getTypeIcon"
       :get-type-color="getTypeColor"
-      :desktop-images-available="desktopImagesAvailable"
+      :can-select-images="canSelectImages"
       :cover-image-src="bookCoverSrc"
       :cover-loading="coverLoading"
       :cover-error="coverError"
@@ -1173,7 +1174,7 @@ onMounted(async () => {
     :save-book-title="saveBookTitle"
     :cancel-editing-book-title="cancelEditingBookTitle"
     :update-editing-book-title="updateEditingBookTitle"
-    :desktop-images-available="desktopImagesAvailable"
+    :can-select-images="canSelectImages"
     :cover-image-src="bookCoverSrc"
     :cover-loading="coverLoading"
     :cover-error="coverError"

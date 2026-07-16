@@ -11,14 +11,14 @@ interface WikiPageOption {
 
 export function useChapterImages(chapterIdRef: () => string | undefined, bookIdRef: () => string | undefined) {
   const {
-    desktopImagesAvailable,
+    canSelectImages,
+    canStoreImages,
     addImagesToChapter,
     deleteImage: deleteChapterImageAsset,
     fetchChapterImages,
     fetchChapterCover,
     setChapterCoverImageId,
     getImageSource,
-    canUploadImages,
   } = useImageLibrary();
   const {
     getWikiPages,
@@ -43,7 +43,7 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
   const illustrationToDelete = ref<string | null>(null);
   const chapterCoverImageId = ref<string | null>(null);
   const settingCoverId = ref<string | null>(null);
-  const chapterImageUploadAvailable = computed(() => canUploadImages());
+  const chapterImageUploadAvailable = canSelectImages;
 
   const activeImageSource = computed(() => {
     const id = activeImageId.value;
@@ -348,13 +348,12 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
   };
 
   // Set up watchers
-  watch(() => desktopImagesAvailable.value, () => {
+  watch(() => canStoreImages.value, () => {
     refreshChapterImages();
   });
 
   return {
     // State
-    desktopImagesAvailable,
     chapterImageUploadAvailable,
     chapterImages,
     chapterImagesLoading,

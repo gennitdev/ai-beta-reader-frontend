@@ -98,6 +98,7 @@ const emit = defineEmits<{
 
 const hasCharacters = computed(() => props.chapterCharacters && props.chapterCharacters.length > 0)
 const hasBeats = computed(() => props.chapterBeats && props.chapterBeats.length > 0)
+const getCharacterInfo = (name: string) => props.characterLookup?.(name)
 </script>
 
 <template>
@@ -265,12 +266,12 @@ const hasBeats = computed(() => props.chapterBeats && props.chapterBeats.length 
                 @click="emit('character-click', character)"
                 :class="[
                   'inline-block rounded px-2 py-1 text-xs transition-colors',
-                  characterLookup(character)?.has_wiki_page
+                  getCharacterInfo(character)?.has_wiki_page
                     ? 'cursor-pointer bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800'
                     : 'cursor-default bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
                 ]"
-                :disabled="!characterLookup(character)?.has_wiki_page"
-                :title="characterLookup(character)?.has_wiki_page
+                :disabled="!getCharacterInfo(character)?.has_wiki_page"
+                :title="getCharacterInfo(character)?.has_wiki_page
                   ? `View ${character}'s wiki page`
                   : `${character} (no wiki page)`"
               >

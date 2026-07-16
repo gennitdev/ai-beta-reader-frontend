@@ -45,11 +45,11 @@ A Vue.js frontend for the AI Beta Reader application. Manage your books and chap
 
 ### Chapter Illustrations
 
-- **Electron image management**: Add and manage multiple illustrations per chapter in the Electron desktop app
-- **Browser viewing**: View images restored from a Drive backup; browser-side image creation is not yet exposed in the UI
+- **Browser and Electron image management**: Add and manage chapter illustrations plus book, part, and chapter covers
+- **Local binary storage**: Browser images are stored as IndexedDB `Blob` records; Electron images live in the app-data directory
 - **Chapter covers**: Set any illustration as the chapter's cover image for visual navigation
 - **Lightbox viewer**: View images full-screen with download option
-- **Storage and backup**: Electron stores image files in its app-data directory. Drive backup embeds their data in the encrypted snapshot so they can be restored on Electron or viewed in the browser.
+- **Storage and backup**: Drive backup embeds image data in the encrypted snapshot so browser and Electron restores preserve the image library.
 
 ## Screenshots
 
@@ -164,7 +164,7 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 - **Android builds** use `@capacitor-community/sqlite`. Data lives in the device sandbox in the `ai-beta-reader` database.
 - All user actions (adding books, editing chapters, creating wiki entries) mutate the local DB immediately.
 - Export/import serializes the database tables to a versioned JSON snapshot for portability between storage engines.
-- On the browser, images restored from backup currently remain as base64 data in the SQLite snapshot. Moving those bytes to a dedicated IndexedDB blob store is planned.
+- Browser image bytes live in the IndexedDB `imageBlobs` object store. SQLite keeps only image metadata during normal use; legacy base64 rows migrate automatically in restartable batches.
 
 ### Google Drive Backup & Restore
 
@@ -172,7 +172,7 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
    - Prompts for a password. The app gzip-compresses the JSON snapshot, derives a key with PBKDF2, and encrypts it with AES-GCM through the Web Crypto API. Restore retains compatibility with older CryptoJS-encrypted backups.
    - Uploads `ai-beta-reader-backup.enc` with Drive scope `drive.file`.
    - Re-running backup overwrites the same file id (Drive `files.update`).
-   - Browser, Electron, and Android emit the same database snapshot format. Electron adds its local image file data to the snapshot; Android currently preserves image metadata but does not provide local image-binary storage.
+   - Browser, Electron, and Android emit the same database snapshot format. Browser and Electron add local image data to the encrypted snapshot; Android currently preserves image metadata but does not provide local image-binary storage.
    - Want to sanity-check a backup before restoring? See `docs/cloud-sync.md#verifying-a-backup-locally` for a tiny Node script that prints record counts.
 
 2. **Restore** (`User Settings → Restore from Drive`)
@@ -180,7 +180,7 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
      - **Web**: Google Identity Services token client (`response_type=token`).
      - **Android**: Custom PKCE helper opens Chrome via App Launcher, listens for App Link redirect (`com.googleusercontent.apps...:/oauth2redirect`), exchanges code for tokens, caches refresh token with `@capacitor/preferences`.
    - Downloads the encrypted blob, decrypts with the password you provide, and hydrates the local DB.
-   - Electron writes restored image data to its filesystem. The browser retains restored image data in SQLite for display. Android strips image binary data during restore and keeps the metadata.
+   - Electron writes restored image data to its filesystem. The browser writes it to IndexedDB Blob storage. Android strips image binary data during restore and keeps the metadata.
    - Foreign key constraints are disabled temporarily during import to avoid ordering errors.
    - Nothing gets uploaded automatically—restore only reads from Drive. You decide when to back up.
 

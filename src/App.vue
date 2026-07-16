@@ -4,6 +4,7 @@ import { MagnifyingGlassIcon, PlusIcon, Bars3Icon, XMarkIcon, Cog6ToothIcon } fr
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
+import BrowserStorageNotice from '@/components/BrowserStorageNotice.vue'
 import { primaryNavItems } from '@/config/navigation'
 import type { Book, Chapter } from '@/lib/database'
 
@@ -420,6 +421,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
       </header>
 
       <!-- Main content -->
+      <BrowserStorageNotice />
       <main class="flex-1 min-h-0 overflow-y-auto">
         <RouterView />
       </main>
