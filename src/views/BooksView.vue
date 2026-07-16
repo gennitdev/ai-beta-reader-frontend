@@ -11,7 +11,7 @@ const newBook = ref({ id: '', title: '' })
 
 // Use local database instead of API
 const { books, loading, error, loadBooks, createBook } = useBooks()
-const { desktopImagesAvailable, fetchBookCover, getImageSource } = useImageLibrary()
+const { canStoreImages, fetchBookCover, getImageSource } = useImageLibrary()
 const bookCoverSources = ref<Record<string, string>>({})
 const coverRefreshError = ref<string | null>(null)
 
@@ -79,7 +79,7 @@ onMounted(async () => {
 })
 
 watch(
-  () => desktopImagesAvailable.value,
+  () => canStoreImages.value,
   async () => {
     await refreshCoverSources()
   }

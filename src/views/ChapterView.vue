@@ -813,7 +813,7 @@ watch(
             :show-notes-panel="showNotesPanel"
             :has-illustrations="chapterImages.length > 0"
             :show-illustrations-panel="showIllustrationsPanel || chapterImages.length > 0"
-            :desktop-images-available="chapterImageUploadAvailable"
+            :can-select-images="chapterImageUploadAvailable"
             @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
             @toggle-notes-panel="showNotesPanel = !showNotesPanel"
             @toggle-illustrations-panel="showIllustrationsPanel = !showIllustrationsPanel"

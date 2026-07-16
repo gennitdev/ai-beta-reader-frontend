@@ -9,7 +9,7 @@ defineProps<{
   showNotesPanel: boolean;
   hasIllustrations?: boolean;
   showIllustrationsPanel?: boolean;
-  desktopImagesAvailable?: boolean;
+  canSelectImages?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -53,7 +53,7 @@ const emit = defineEmits<{
       {{ showNotesPanel ? "Hide Notes Panel" : "Show Notes Panel" }}
     </button>
     <button
-      v-if="desktopImagesAvailable"
+      v-if="canSelectImages"
       @click="emit('toggle-illustrations-panel')"
       class="font-medium text-emerald-600 transition-colors hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
     >

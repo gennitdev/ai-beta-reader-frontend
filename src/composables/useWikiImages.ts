@@ -11,7 +11,7 @@ interface WikiPageOption {
 
 export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef: () => string | undefined) {
   const {
-    desktopImagesAvailable,
+    canStoreImages,
     getImageSource,
   } = useImageLibrary();
   const {
@@ -256,13 +256,12 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
   };
 
   // Set up watchers
-  watch(() => desktopImagesAvailable.value, () => {
+  watch(() => canStoreImages.value, () => {
     refreshWikiImages();
   });
 
   return {
     // State
-    desktopImagesAvailable,
     wikiImages,
     wikiImagesLoading,
     wikiImageSources,

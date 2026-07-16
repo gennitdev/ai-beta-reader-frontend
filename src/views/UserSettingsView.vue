@@ -19,6 +19,7 @@ import {
   requestPersistentBrowserStorage,
   type BrowserStorageSnapshot,
 } from '@/lib/browserStorage'
+import { isDesktopAppRuntime } from '@/utils/platform'
 
 const router = useRouter()
 
@@ -39,8 +40,7 @@ const {
 
 // Image library for exporting images
 const {
-  desktopImagesAvailable,
-  imageManagementAvailable,
+  canStoreImages,
   fetchBookCover,
   fetchPartCover,
   fetchChapterImages,
@@ -51,7 +51,7 @@ const browserStorage = ref<BrowserStorageSnapshot | null>(null)
 const loadingBrowserStorage = ref(false)
 const browserStorageMessage = ref('')
 const showBrowserStorage = computed(
-  () => imageManagementAvailable.value && !desktopImagesAvailable.value,
+  () => canStoreImages.value && !isDesktopAppRuntime(),
 )
 const browserStoragePercent = computed(() => {
   const usage = browserStorage.value?.usage
@@ -199,7 +199,7 @@ const exportUserData = async () => {
       bookFolder.file('book-info.txt', `Title: ${book.title}\nID: ${book.id}\nCreated: ${book.created_at || 'Unknown'}\n`)
 
       // Export book cover image if available
-      if (imageManagementAvailable.value) {
+      if (canStoreImages.value) {
         try {
           const bookCover = await fetchBookCover(book.id)
           if (bookCover) {
@@ -242,7 +242,7 @@ const exportUserData = async () => {
           }
 
           // Export chapter images if available
-          if (imageManagementAvailable.value) {
+          if (canStoreImages.value) {
             try {
               const chapterImages = await fetchChapterImages(chapter.id)
               if (chapterImages.length > 0) {
@@ -295,7 +295,7 @@ const exportUserData = async () => {
           partFolder.file('part-info.txt', `${partInfoLines.join('\n')}\n`)
 
           // Export part cover image if available
-          if (imageManagementAvailable.value) {
+          if (canStoreImages.value) {
             try {
               const partCover = await fetchPartCover(part.id)
               if (partCover) {

@@ -20,12 +20,14 @@ This doc captures how the new Google Drive sync workflow works across the browse
 | Token persistence | `src/lib/tokenStorage.ts` | N/A (handled by GIS) | Saves `{accessToken, refreshToken, expiresAt}` with `@capacitor/preferences` |
 | Cloud provider | `src/lib/cloudSync.ts` | Requests GIS token client (`google.accounts.oauth2.initTokenClient`) | Reuses cached tokens, refreshes via `https://oauth2.googleapis.com/token`, launches PKCE flow when needed |
 | Database interface | `src/lib/database.ts` | Uses `sql.js` in the browser | Uses `@capacitor-community/sqlite`; restores now import raw JSON exports (no `importFromJson`) |
+| Image content | `src/lib/imageContentStore.ts` | Reads/writes IndexedDB Blob records | Electron uses its app-data filesystem; Android keeps metadata only |
 
 Key differences:
 
 - Web keeps the existing GIS flow (`response_type=token`). Android requires Authorization Code + PKCE and **must** run in the system browser to satisfy Google’s “Use secure browsers” policy.
 - Native needs several Capacitor plugins: `@capacitor/browser`, `@capacitor/app-launcher`, `@capacitor/preferences`, `@capacitor/status-bar`.
 - OAuth tokens are cached locally on native so repeated restores/upgrades are instant.
+- Browser and Electron backups embed image data into the temporary encrypted snapshot. Live browser SQLite rows do not retain base64 image content.
 
 ---
 
@@ -127,6 +129,7 @@ adb logcat | grep "using OAuth config"
   5. Insert rows table-by-table, using the live schema via `PRAGMA table_info` so constraint definitions aren’t mistaken for real columns
   6. Re-enable foreign keys
 - Because we emit the exact same snapshot everywhere, a backup made on Android can be restored verbatim on web, and vice versa. If a restore fails, the DB stays untouched; re-running with the correct password/file is safe.
+- Browser and Electron restores write image binaries to their active content store before importing metadata. A failed binary write aborts the restore instead of reporting incomplete success. Android imports metadata without local image binaries.
 
 ### Verifying a Backup Locally
 

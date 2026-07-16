@@ -47,7 +47,7 @@ withDefaults(defineProps<{
   saveBookTitle: () => void
   cancelEditingBookTitle: () => void
   updateEditingBookTitle: (value: string) => void
-  desktopImagesAvailable?: boolean
+  canSelectImages?: boolean
   coverImageSrc?: string | null
   coverLoading?: boolean
   coverError?: string | null
@@ -85,7 +85,7 @@ withDefaults(defineProps<{
   activeWikiPageId: undefined,
   openCreateWikiModal: () => {},
   isOnBookOnly: false,
-  desktopImagesAvailable: false,
+  canSelectImages: false,
   coverImageSrc: null,
   coverLoading: false,
   coverError: null,
@@ -151,7 +151,7 @@ withDefaults(defineProps<{
         :save-book-title="saveBookTitle"
         :cancel-editing-book-title="cancelEditingBookTitle"
         :update-editing-book-title="updateEditingBookTitle"
-        :desktop-images-available="desktopImagesAvailable"
+        :can-select-images="canSelectImages"
         :cover-image-src="coverImageSrc"
         :cover-loading="coverLoading"
         :cover-error="coverError"

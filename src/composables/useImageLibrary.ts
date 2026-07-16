@@ -132,15 +132,19 @@ export function useImageLibrary() {
     setChapterCoverImageId,
   } = useDatabase()
 
-  const desktopImagesAvailable = ref(sanitizeBridgeAvailability())
+  const electronImageStorageAvailable = ref(sanitizeBridgeAvailability())
   const imageManagementAvailable = computed(
-    () => desktopImagesAvailable.value || browserImageStorageAvailable(),
+    () => electronImageStorageAvailable.value || browserImageStorageAvailable(),
   )
+  const canSelectImages = imageManagementAvailable
+  const canStoreImages = imageManagementAvailable
+  const canDeleteImages = imageManagementAvailable
+  const canDownloadImages = computed(() => true)
   const browserImageStore = new IndexedDbImageContentStore()
   const imageSourceCache = new Map<string, { source: string; shouldRevoke: boolean }>()
 
   const refreshAvailability = () => {
-    desktopImagesAvailable.value = sanitizeBridgeAvailability()
+    electronImageStorageAvailable.value = sanitizeBridgeAvailability()
   }
 
   const availabilityListener = () => refreshAvailability()
@@ -161,7 +165,7 @@ export function useImageLibrary() {
 
   function ensureBridge() {
     refreshAvailability()
-    if (!desktopImagesAvailable.value || typeof window === 'undefined' || !window.desktopImages) {
+    if (!electronImageStorageAvailable.value || typeof window === 'undefined' || !window.desktopImages) {
       throw new Error('Image management is only available in the desktop build')
     }
     return window.desktopImages
@@ -169,7 +173,7 @@ export function useImageLibrary() {
 
   function getContentStore(): ImageContentStore {
     refreshAvailability()
-    if (desktopImagesAvailable.value) {
+    if (electronImageStorageAvailable.value) {
       return new ElectronImageContentStore(ensureBridge())
     }
     return browserImageStore
@@ -186,7 +190,7 @@ export function useImageLibrary() {
     try {
       storedBlob = await getContentStore().read(image)
     } catch (error) {
-      if (!desktopImagesAvailable.value) throw browserStorageError(error, 'loaded')
+      if (!electronImageStorageAvailable.value) throw browserStorageError(error, 'loaded')
       throw error
     }
     if (storedBlob) return storedBlob
@@ -207,7 +211,7 @@ export function useImageLibrary() {
   }
 
   async function addImagesToChapter(bookId: string, chapterId: string) {
-    if (!desktopImagesAvailable.value) {
+    if (!electronImageStorageAvailable.value) {
       const files = await selectBrowserImages(true)
       return files.length > 0
         ? addImagesFromFiles(files, { bookId, chapterId, assetType: 'chapter' })
@@ -285,11 +289,6 @@ export function useImageLibrary() {
     return true
   }
 
-  // Check if new images can be uploaded
-  function canUploadImages(): boolean {
-    return imageManagementAvailable.value
-  }
-
   async function deleteImage(image: ImageAsset) {
     const contentStore = getContentStore()
     await deleteImageAssetRecord(image.id)
@@ -342,7 +341,7 @@ export function useImageLibrary() {
     const previousCover = await getBookCoverImageAsset(bookId)
     let asset: ImageAsset
 
-    if (desktopImagesAvailable.value) {
+    if (electronImageStorageAvailable.value) {
       const response = await ensureBridge().pickBookCover({ bookId })
       if (response.canceled || !response.image) return null
       asset = createAssetFromMetadata(response.image, {
@@ -380,7 +379,7 @@ export function useImageLibrary() {
     const previousCover = await getPartCoverImageAsset(partId)
     let asset: ImageAsset
 
-    if (desktopImagesAvailable.value) {
+    if (electronImageStorageAvailable.value) {
       const response = await ensureBridge().pickBookCover({ bookId })
       if (response.canceled || !response.image) return null
       asset = createAssetFromMetadata(response.image, {
@@ -434,13 +433,15 @@ export function useImageLibrary() {
   }
 
   return {
-    desktopImagesAvailable,
-    imageManagementAvailable,
+    electronImageStorageAvailable,
+    canSelectImages,
+    canStoreImages,
+    canDeleteImages,
+    canDownloadImages,
     refreshAvailability,
     addImagesToChapter,
     addImagesFromFiles,
     canDisplayImages,
-    canUploadImages,
     deleteImage,
     fetchChapterImages,
     fetchFirstChapterImage,
