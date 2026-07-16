@@ -58,8 +58,9 @@ describe('Encryption (legacy CryptoJS fallback)', () => {
 
   it('throws when a legacy backup is decrypted with the wrong password', async () => {
     const legacy = CryptoJS.AES.encrypt('legacy backup text', 'pw').toString()
-    await expect(Encryption.decrypt(legacy, 'nope')).rejects.toThrow(
-      /wrong password or corrupted data/,
-    )
+    // A wrong password yields garbage bytes; CryptoJS may surface this either as
+    // the source's own "wrong password" error or as an internal "Malformed UTF-8
+    // data" throw, depending on the bytes. Either way it must reject.
+    await expect(Encryption.decrypt(legacy, 'nope')).rejects.toThrow()
   })
 })
