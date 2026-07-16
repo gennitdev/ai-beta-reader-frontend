@@ -16,10 +16,17 @@ import {
 } from '@/lib/persistenceCoordinator';
 import {
   DATABASE_STORE,
+  METADATA_STORE,
   readIndexedDbValue,
   SQLITE_DATABASE_KEY,
   writeIndexedDbValue,
 } from '@/lib/indexedDbStorage';
+import { IndexedDbImageContentStore } from '@/lib/imageContentStore';
+import {
+  IMAGE_BLOB_MIGRATION_STATUS_KEY,
+  migrateLegacyImageData,
+  type ImageDataMigrationRepository,
+} from '@/lib/imageDataMigration';
 import { dispatchChapterWikiLinksChanged } from '@/utils/chapterWikiLinkEvents';
 
 export interface Book {
@@ -653,6 +660,7 @@ export class AppDatabase {
   private db!: AppDatabaseConnection;
   private sqlite: SQLiteConnection | null = null;
   private isNative: boolean | null = null; // Determined at init() time
+  private isElectron = false;
   private tableColumnCache = new Map<string, string[]>();
   private isImporting = false; // Skip intermediate saves during bulk import
   private persistenceCoordinator: PersistenceCoordinator | null = null;
@@ -662,6 +670,7 @@ export class AppDatabase {
     // This ensures Capacitor and window.desktopImages are available
     const platform = typeof Capacitor.getPlatform === 'function' ? Capacitor.getPlatform() : 'web';
     const isElectron = isElectronRuntime();
+    this.isElectron = isElectron;
     this.isNative = NATIVE_CAPACITOR_PLATFORMS.has(platform) && !isElectron;
 
     console.log(`[AppDatabase] Platform: ${platform}, isElectron: ${isElectron}, isNative: ${this.isNative}`);
@@ -759,6 +768,9 @@ export class AppDatabase {
     await this.runMigrations();
     await this.ensureChapterWikiMentionsSchema();
     await this.flushPersistence();
+    if (!this.isNative && !this.isElectron) {
+      await this.migrateLegacyBrowserImageData();
+    }
   }
 
   private async createTables() {
@@ -3169,6 +3181,61 @@ export class AppDatabase {
     if (result instanceof Uint8Array) return result;
     if (result) return new Uint8Array(result);
     return null;
+  }
+
+  private async migrateLegacyBrowserImageData(): Promise<void> {
+    const repository: ImageDataMigrationRepository = {
+      listPendingImageIds: async () => {
+        const result = this.db.exec(
+          `SELECT id FROM image_assets
+           WHERE image_data IS NOT NULL AND image_data <> ''
+           ORDER BY created_at ASC`,
+        );
+        return result.length > 0
+          ? result[0].values.map((row) => String(row[0]))
+          : [];
+      },
+      loadImages: async (imageIds) => {
+        if (imageIds.length === 0) return [];
+        const placeholders = imageIds.map(() => '?').join(', ');
+        const result = this.db.exec(
+          `SELECT ${IMAGE_ASSET_COLUMNS.join(', ')} FROM image_assets
+           WHERE id IN (${placeholders})`,
+          imageIds,
+        );
+        return result.length > 0
+          ? result[0].values.map(imageAssetFromSqlRow)
+          : [];
+      },
+      clearImageData: async (imageIds) => {
+        if (imageIds.length === 0) return;
+        const placeholders = imageIds.map(() => '?').join(', ');
+        this.db.run(
+          `UPDATE image_assets SET image_data = NULL WHERE id IN (${placeholders})`,
+          imageIds,
+        );
+        this.requestPersistence();
+      },
+      flush: () => this.flushPersistence(),
+      saveStatus: (status) => writeIndexedDbValue(
+        METADATA_STORE,
+        IMAGE_BLOB_MIGRATION_STATUS_KEY,
+        status,
+      ),
+    };
+
+    const status = await migrateLegacyImageData({
+      repository,
+      store: new IndexedDbImageContentStore(),
+    });
+    if (status.status === 'partial') {
+      console.warn(
+        '[AppDatabase] Some legacy image data could not be migrated and was retained:',
+        status.failedImageIds,
+      );
+    } else if (status.migratedCount > 0) {
+      console.log(`[AppDatabase] Migrated ${status.migratedCount} browser images to Blob storage.`);
+    }
   }
 
   async close() {
