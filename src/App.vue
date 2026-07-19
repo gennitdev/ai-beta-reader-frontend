@@ -6,6 +6,7 @@ import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
 import BrowserStorageNotice from '@/components/BrowserStorageNotice.vue'
 import logoHorizontal from '@/assets/logo-horizontal.png'
+import logoStacked from '@/assets/logo-stacked.png'
 import { primaryNavItems } from '@/config/navigation'
 import type { Book, Chapter } from '@/lib/database'
 import type { FindReplaceScope } from '@/lib/findReplace'
@@ -454,13 +455,14 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
             id="side-nav"
             class="absolute inset-y-0 left-0 flex h-full w-72 max-w-[85%] flex-col bg-white px-6 py-6 shadow-xl dark:bg-navy-900"
           >
-            <div class="mb-4 flex items-center justify-between">
+            <div class="mb-4 flex items-start justify-between">
               <router-link
                 to="/"
-                class="text-sm font-semibold text-gray-900 transition-colors dark:text-white"
+                class="block overflow-hidden rounded-xl ring-1 ring-navy-900/10 transition-opacity hover:opacity-90"
                 @click="closeSideNav"
+                aria-label="Beta-bot home"
               >
-                Beta-bot
+                <img :src="logoStacked" alt="Beta-bot" class="h-28 w-28 object-cover" />
               </router-link>
               <button
                 @click="closeSideNav"
