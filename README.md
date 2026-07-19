@@ -2,7 +2,7 @@
   <img src="src/assets/logo-stacked.png" alt="Beta-bot" width="320">
 </p>
 
-# AI Beta Reader
+# beta bot (AI Beta Reader)
 
 [![CI](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend/branch/main/graph/badge.svg)](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend)
