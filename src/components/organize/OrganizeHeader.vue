@@ -18,7 +18,7 @@ const emit = defineEmits<{
     <div class="space-y-2">
       <button
         type="button"
-        class="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+        class="inline-flex items-center text-sm font-medium text-gold-600 dark:text-gold-400 hover:text-gold-700 dark:hover:text-gold-300 transition-colors"
         @click="emit('back')"
       >
         <ArrowLeftIcon class="w-4 h-4 mr-1" />
@@ -38,7 +38,7 @@ const emit = defineEmits<{
     <div class="flex gap-2">
       <button
         type="button"
-        class="inline-flex items-center px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        class="inline-flex items-center px-3 py-2 text-sm bg-gray-100 dark:bg-navy-800 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
         @click="emit('refresh')"
       >
         Refresh

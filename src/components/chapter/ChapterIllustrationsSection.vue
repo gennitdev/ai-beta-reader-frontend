@@ -26,7 +26,7 @@ const emit = defineEmits<{
 
 <template>
   <section
-    class="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+    class="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-navy-800"
     :class="layout === 'panel' ? 'p-4' : 'mt-4 p-6'"
   >
     <div
@@ -44,7 +44,7 @@ const emit = defineEmits<{
       <button
         v-if="canAddImages"
         type="button"
-        class="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        class="inline-flex items-center justify-center rounded-md bg-gold-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
         :class="layout === 'panel' ? 'w-full' : ''"
         :disabled="adding"
         @click="emit('add-images')"

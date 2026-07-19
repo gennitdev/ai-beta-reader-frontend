@@ -128,7 +128,7 @@ onUnmounted(() => {
           <div class="relative">
             <select
               :value="reviewTone"
-              class="rounded-md border border-gray-300 bg-white px-3 py-1 pr-8 text-sm text-gray-900 transition focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              class="rounded-md border border-gray-300 bg-white px-3 py-1 pr-8 text-sm text-gray-900 transition focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               style="appearance: none"
               @change="emit('update:reviewTone', ($event.target as HTMLSelectElement).value)"
             >
@@ -170,7 +170,7 @@ onUnmounted(() => {
 
       <template v-if="savedReviews.length === 0">
         <div v-if="loadingReviews" class="flex justify-center py-4">
-          <div class="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600"></div>
+          <div class="h-6 w-6 animate-spin rounded-full border-b-2 border-gold-600"></div>
         </div>
         <div
           v-else-if="!generatingReview"
@@ -186,7 +186,7 @@ onUnmounted(() => {
           v-if="loadingReviews"
           class="mb-4 flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400"
         >
-          <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-blue-600"></div>
+          <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-gold-600"></div>
           <span>Refreshing reviews...</span>
         </div>
 
@@ -216,8 +216,8 @@ onUnmounted(() => {
                   <component
                     :is="review.profile_id ? 'router-link' : 'span'"
                     :to="review.profile_id ? `/ai-profiles/${review.profile_id}` : undefined"
-                    class="font-medium text-gray-900 transition-colors hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
-                    :class="{ 'hover:text-blue-600 dark:hover:text-blue-400': !!review.profile_id }"
+                    class="font-medium text-gray-900 transition-colors hover:text-gold-600 dark:text-white dark:hover:text-gold-400"
+                    :class="{ 'hover:text-gold-600 dark:hover:text-gold-400': !!review.profile_id }"
                     :title="
                       review.profile_id && review.profile_name
                         ? `View ${review.profile_name} profile`
@@ -235,7 +235,7 @@ onUnmounted(() => {
               <div class="flex items-center gap-1">
                 <button
                   @click="copyReviewText(review)"
-                  class="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-400"
+                  class="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gold-600 dark:hover:bg-gray-700 dark:hover:text-gold-400"
                   title="Copy review text"
                 >
                   <component
@@ -269,7 +269,7 @@ onUnmounted(() => {
                   <span class="text-gray-500">...</span>
                   <button
                     @click="emit('toggle-review', review.id)"
-                    class="ml-2 inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                    class="ml-2 inline-flex items-center px-3 py-1 text-sm font-medium text-gold-600 transition-colors hover:text-gold-800 dark:text-gold-400 dark:hover:text-gold-300"
                   >
                     Show more
                   </button>
@@ -280,7 +280,7 @@ onUnmounted(() => {
                 <div v-if="getTruncatedText(review.review_text).needsTruncation" class="not-prose">
                   <button
                     @click="emit('toggle-review', review.id)"
-                    class="mt-3 inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                    class="mt-3 inline-flex items-center px-3 py-1 text-sm font-medium text-gold-600 transition-colors hover:text-gold-800 dark:text-gold-400 dark:hover:text-gold-300"
                   >
                     Show less
                   </button>

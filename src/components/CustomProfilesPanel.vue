@@ -121,7 +121,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+  <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
       <div class="flex items-center justify-between">
         <div>
@@ -132,7 +132,7 @@ onMounted(() => {
         </div>
         <button
           @click="showCreateForm = true"
-          class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors font-medium"
         >
           <PlusIcon class="w-5 h-5 mr-2" />
           Add Profile
@@ -157,7 +157,7 @@ onMounted(() => {
             v-model="formData.name"
             type="text"
             placeholder="e.g., Encouraging Beta Reader"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-navy-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-gold-500 focus:border-transparent"
             required
           />
         </div>
@@ -170,14 +170,14 @@ onMounted(() => {
             v-model="formData.description"
             rows="4"
             placeholder="Describe how this reviewer should provide feedback. Include tone, style, focus areas, etc."
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-navy-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-gold-500 focus:border-transparent resize-vertical"
             required
           ></textarea>
         </div>
         <div class="flex items-center space-x-3">
           <button
             type="submit"
-            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors font-medium"
           >
             {{ editingProfile ? 'Update Profile' : 'Create Profile' }}
           </button>
@@ -195,7 +195,7 @@ onMounted(() => {
     <!-- Profiles List -->
     <div class="px-6 py-4">
       <div v-if="isLoading" class="text-center py-8">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-600 mx-auto"></div>
         <p class="text-gray-600 dark:text-gray-400 mt-2">Loading profiles...</p>
       </div>
 
@@ -223,7 +223,7 @@ onMounted(() => {
             <div class="flex items-center space-x-2 ml-4">
               <button
                 @click="startEdit(profile)"
-                class="inline-flex items-center p-2 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                class="inline-flex items-center p-2 text-gray-500 dark:text-gray-400 hover:text-gold-600 dark:hover:text-gold-400 transition-colors"
                 title="Edit profile"
               >
                 <PencilIcon class="w-5 h-5" />

@@ -159,7 +159,7 @@ const fontSizeClass = computed(() => {
 }
 
 :deep(th) {
-  @apply bg-gray-100 dark:bg-gray-800 font-semibold;
+  @apply bg-gray-100 dark:bg-navy-800 font-semibold;
 }
 
 /* Blockquote styles */

@@ -12,7 +12,7 @@
   }
 
   body {
-    background: radial-gradient(circle at top, rgba(30, 64, 175, 0.15), transparent 55%), linear-gradient(to bottom, #0f172a, #020617);
+    background: radial-gradient(circle at top, rgba(219, 171, 93, 0.12), transparent 55%), linear-gradient(to bottom, #00132f, #00091c);
     color: #f3f4f6;
   }
 }

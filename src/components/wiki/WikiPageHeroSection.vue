@@ -33,7 +33,7 @@ const getTypeIcon = (type: string) => {
   <div class="relative w-full">
     <!-- Hero image container -->
     <div
-      class="relative h-48 w-full cursor-pointer overflow-hidden bg-gray-900 sm:h-64 md:h-80 lg:h-96"
+      class="relative h-48 w-full cursor-pointer overflow-hidden bg-navy-900 sm:h-64 md:h-80 lg:h-96"
       @click="emit('open-lightbox')"
     >
       <img

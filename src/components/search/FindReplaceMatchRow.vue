@@ -31,7 +31,7 @@ const fieldLabels: Record<TextMatch['field'], string> = {
       :checked="selected"
       :disabled="disabled"
       type="checkbox"
-      class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
+      class="mt-1 rounded border-gray-300 text-gold-600 focus:ring-gold-500 dark:border-gray-600 dark:bg-navy-800"
       :aria-label="`Select match in ${fieldLabels[match.field]}`"
       @change="emit('toggle', ($event.target as HTMLInputElement).checked)"
     />
@@ -49,7 +49,7 @@ const fieldLabels: Record<TextMatch['field'], string> = {
       v-if="replacementReady"
       type="button"
       :disabled="disabled"
-      class="shrink-0 rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+      class="shrink-0 rounded bg-gold-600 px-3 py-1 text-sm text-white hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-50"
       @click="emit('replace')"
     >
       {{ replacing ? 'Replacing…' : 'Replace' }}

@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
-import heroImage from '@/assets/art-attack-RpSTMkZGKyE-unsplash.jpg'
+import logoStacked from '@/assets/logo-stacked.png'
 import { useDatabase } from '@/composables/useDatabase'
 
 const router = useRouter()
@@ -52,8 +52,8 @@ const detailedSteps = [
     title: 'Write & Summarize Chapters',
     description:
       'Organize your manuscript. The AI creates structured summaries (tracking characters, plot points) for each chapter as you go.',
-    wrapperClass: 'bg-[#fbeee2] dark:bg-[#2a1c40]',
-    badgeClass: 'bg-[#c2653d]',
+    wrapperClass: 'bg-[#faf3e4] dark:bg-navy-800',
+    badgeClass: 'bg-gold-500 text-navy-900',
   },
   {
     number: '2',
@@ -61,43 +61,40 @@ const detailedSteps = [
     description:
       'The AI uses the summaries of **all previous chapters** to provide feedback. It already knows your backstory, character arcs, and world rules!',
     wrapperClass:
-      'bg-[#f8e0cf] dark:bg-[#3d2a54]/40 border border-[#eec4a8] dark:border-[#4a3363] shadow-md',
-    badgeClass: 'bg-[#3d2a54]',
+      'bg-[#f5ecd6] dark:bg-navy-800 border border-[#e7d29a] dark:border-navy-700 shadow-md',
+    badgeClass: 'bg-navy-900 text-cream',
   },
   {
     number: '3',
     title: 'Advanced Tools',
     description:
       'The AI **automatically updates your Character & World wiki pages** as your story grows. Plus custom AI reviewer profiles, manuscript-wide search & replace, and more.',
-    wrapperClass: 'bg-[#eef0e4] dark:bg-[#26281a]/60 border border-[#cdd3b4] dark:border-[#454a32]',
-    badgeClass: 'bg-[#6f7052]',
+    wrapperClass: 'bg-[#eef1e6] dark:bg-navy-800/60 border border-[#d5dabb] dark:border-navy-700',
+    badgeClass: 'bg-[#6f7052] text-white',
   },
 ]
 
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] bg-white dark:bg-gray-900">
+  <div class="min-h-[calc(100vh-4rem)] bg-white dark:bg-navy-900">
     <!-- Loading state while checking for books -->
     <div v-if="isLoading" class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#c2653d]"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-500"></div>
     </div>
     <!-- Landing page - only shown when user has no books -->
     <div v-else>
-      <div class="px-4 sm:px-6 pt-8 py-8 pb-16 bg-gradient-to-br from-[#faf1e8] to-[#f7e2d3] dark:from-[#241636] dark:to-[#2f1f45] relative">
+      <div class="px-4 sm:px-6 pt-8 py-8 pb-16 bg-gradient-to-br from-[#fbf5ea] to-[#f3e7cf] dark:from-navy-900 dark:to-navy-950 relative">
         <div class="max-w-xl mx-auto text-center">
 
-          <div class="aspect-[4/3] overflow-hidden rounded-2xl shadow-lg mb-8">
+          <div class="max-w-xs mx-auto overflow-hidden rounded-2xl shadow-lg mb-8 ring-1 ring-navy-900/10">
             <img
-              :src="heroImage"
-              alt="Creative writing inspiration"
+              :src="logoStacked"
+              alt="Beta-bot"
               class="w-full h-full object-cover"
             />
           </div>
 
-          <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4 space-grotesk-logo">
-            Beta-bot
-          </h1>
           <p class="text-lg text-gray-700 dark:text-gray-300 mb-8">
             Your <strong>AI Beta Reader</strong>. Get intelligent, contextual feedback on your creative writing.
           </p>
@@ -105,41 +102,41 @@ const detailedSteps = [
           <div class="flex flex-col gap-3 mb-12">
             <button
               @click="handleGetStarted"
-              class="w-full inline-flex items-center justify-center px-6 py-3 bg-[#c2653d] text-white rounded-xl hover:bg-[#a9552f] transition-colors font-semibold text-lg shadow-xl shadow-[#f09060]/40"
+              class="w-full inline-flex items-center justify-center px-6 py-3 bg-gold-500 text-navy-900 rounded-xl hover:bg-gold-400 transition-colors font-semibold text-lg shadow-xl shadow-gold-500/30"
             >
               Start Writing Now
             </button>
             <router-link
               to="/docs"
-              class="w-full inline-flex items-center justify-center px-6 py-3 bg-[#3d2a54] text-white rounded-xl hover:bg-[#31214a] transition-colors font-medium shadow-md"
+              class="w-full inline-flex items-center justify-center px-6 py-3 bg-navy-900 text-cream rounded-xl hover:bg-navy-800 transition-colors font-medium shadow-md"
             >
               <BookOpenIcon class="w-5 h-5 mr-2" />
               Screenshots & Tutorial
             </router-link>
           </div>
 
-          <div class="bg-[#fbeee2] dark:bg-[#3d2a54]/30 border border-[#eec4a8] dark:border-[#4a3363] rounded-xl p-4 mb-12 shadow-inner text-left">
-            <p class="text-sm text-[#8a4a2c] dark:text-[#ffd8c0] font-bold mb-1 flex items-center">
-              <LightBulbIcon class="w-5 h-5 mr-2 text-[#c2653d] dark:text-[#f09060]" />
+          <div class="bg-[#faf3e4] dark:bg-navy-800/60 border border-[#e7d29a] dark:border-navy-700 rounded-xl p-4 mb-12 shadow-inner text-left">
+            <p class="text-sm text-navy-900 dark:text-gold-200 font-bold mb-1 flex items-center">
+              <LightBulbIcon class="w-5 h-5 mr-2 text-gold-600 dark:text-gold-400" />
               Privacy-First Writing
             </p>
-            <p class="text-sm text-[#9a5636] dark:text-[#f0d5c4]">
+            <p class="text-sm text-gray-700 dark:text-gray-300">
               All your data is stored <strong>locally</strong> on your device. You bring your own OpenAI API key. Your work is <strong>yours</strong> and stays private.
             </p>
           </div>
 
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-left border-b border-gray-200 dark:border-gray-700 pb-2">
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-left border-b border-gray-200 dark:border-navy-700 pb-2">
             Core Features
           </h2>
 
           <div class="space-y-4 mb-12 text-left">
             <div v-for="feature in coreFeatures" :key="feature.text" class="flex items-center space-x-3">
-              <component :is="feature.icon" class="w-6 h-6 text-[#c2653d] dark:text-[#f09060] flex-shrink-0" />
+              <component :is="feature.icon" class="w-6 h-6 text-gold-600 dark:text-gold-400 flex-shrink-0" />
               <p class="text-base text-gray-700 dark:text-gray-300 font-medium">{{ feature.text }}</p>
             </div>
           </div>
 
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-left border-b border-gray-200 dark:border-gray-700 pb-2">
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-left border-b border-gray-200 dark:border-navy-700 pb-2">
             The Contextual Advantage
           </h2>
 
@@ -150,14 +147,14 @@ const detailedSteps = [
                 :class="[
                   'rounded-lg p-3 text-left shadow-sm',
                   step.highlight
-                    ? 'bg-[#f8e0cf] dark:bg-[#3d2a54]/40 border border-[#eec4a8] dark:border-[#4a3363]'
-                    : 'bg-white/80 dark:bg-[#2a1c40] border border-[#ecdccb] dark:border-[#43335f]'
+                    ? 'bg-[#f5ecd6] dark:bg-navy-800 border border-[#e7d29a] dark:border-navy-700'
+                    : 'bg-white/80 dark:bg-navy-800/70 border border-[#ecdec0] dark:border-navy-700'
                 ]"
               >
                 <span
                   :class="[
                     'font-bold text-lg',
-                    step.highlight ? 'text-[#3d2a54] dark:text-[#c4a9e0]' : 'text-[#c2653d] dark:text-[#f09060]'
+                    step.highlight ? 'text-gold-700 dark:text-gold-300' : 'text-navy-700 dark:text-gray-200'
                   ]"
                 >
                   {{ step.step }}. {{ step.title }}
@@ -166,17 +163,17 @@ const detailedSteps = [
               </div>
           </div>
 
-          <div class="mt-10 border-t border-gray-200 dark:border-gray-700 pt-6">
+          <div class="mt-10 border-t border-gray-200 dark:border-navy-700 pt-6">
             <button
               @click="showDetailedSteps = !showDetailedSteps"
               class="flex items-center justify-between w-full text-left p-3 rounded-lg transition-colors"
-              :class="showDetailedSteps ? 'bg-[#f8e0cf] dark:bg-[#2a1c40]' : 'hover:bg-[#faf1e8] dark:hover:bg-[#2a1c40]'"
+              :class="showDetailedSteps ? 'bg-[#f5ecd6] dark:bg-navy-800' : 'hover:bg-[#faf3e4] dark:hover:bg-navy-800'"
             >
               <h2 class="text-xl font-bold text-gray-900 dark:text-white">
                 {{ showDetailedSteps ? 'Hide Technical Details' : 'Show How It Works' }}
               </h2>
               <svg
-                :class="showDetailedSteps ? 'rotate-180 text-[#c2653d]' : 'text-gray-500'"
+                :class="showDetailedSteps ? 'rotate-180 text-gold-600' : 'text-gray-500'"
                 class="w-5 h-5 transition-transform"
                 fill="none"
                 stroke="currentColor"
@@ -195,7 +192,7 @@ const detailedSteps = [
                 <div class="flex items-start space-x-3">
                   <span
                     :class="[
-                      'flex-shrink-0 w-6 h-6 text-white rounded-full flex items-center justify-center text-sm font-bold',
+                      'flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold',
                       detail.badgeClass
                     ]"
                   >
@@ -210,22 +207,8 @@ const detailedSteps = [
             </div>
           </div>
         </div>
-
-        <div class="absolute bottom-4 right-4 text-xs text-gray-500 dark:text-gray-400">
-          Illustration by <a href="https://unsplash.com/@artattackzone?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Art Attack</a>
-        </div>
       </div>
     </div>
     </div>
 
 </template>
-
-<style scoped>
-/* Added an additional font for a more modern look, assuming it's imported elsewhere */
-.space-grotesk-logo {
-  font-family: "Space Grotesk", sans-serif;
-  font-optical-sizing: auto;
-  font-weight: 600;
-  font-style: normal;
-}
-</style>

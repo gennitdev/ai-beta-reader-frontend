@@ -71,8 +71,8 @@ function updateTags(wikiPageIds: string[]) {
 </script>
 
 <template>
-  <div v-if="image" class="flex h-full flex-col bg-white dark:bg-gray-900">
-    <div class="flex min-h-0 flex-1 items-center justify-center bg-gray-100 p-4 dark:bg-gray-800">
+  <div v-if="image" class="flex h-full flex-col bg-white dark:bg-navy-900">
+    <div class="flex min-h-0 flex-1 items-center justify-center bg-gray-100 p-4 dark:bg-navy-800">
       <img
         v-if="imageSrc"
         :src="imageSrc"
@@ -97,7 +97,7 @@ function updateTags(wikiPageIds: string[]) {
         <button
           v-if="canDownload"
           type="button"
-          class="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+          class="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-navy-800"
           @click="emit('download', image.id)"
         >
           <ArrowDownTrayIcon class="mr-1.5 h-4 w-4" />
@@ -118,7 +118,7 @@ function updateTags(wikiPageIds: string[]) {
           <span
             v-for="tag in tags"
             :key="tag.wiki_page_id"
-            class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+            class="rounded-full bg-gold-50 px-2.5 py-1 text-xs font-medium text-gold-700 dark:bg-gold-900/30 dark:text-gold-200"
           >
             {{ tag.page_name }}
           </span>
@@ -131,7 +131,7 @@ function updateTags(wikiPageIds: string[]) {
           <button
             v-if="canEditNotes && !isEditingNotes"
             type="button"
-            class="inline-flex items-center text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+            class="inline-flex items-center text-xs font-medium text-gold-600 hover:text-gold-800 dark:text-gold-300 dark:hover:text-gold-200"
             @click="startEditingNotes"
           >
             <PencilIcon class="mr-1 h-3.5 w-3.5" />
@@ -156,7 +156,7 @@ function updateTags(wikiPageIds: string[]) {
             </button>
             <button
               type="button"
-              class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
               :disabled="savingNotes"
               @click="saveNotes"
             >

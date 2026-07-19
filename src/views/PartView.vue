@@ -399,13 +399,13 @@ watch([bookId, partId], async () => {
 <template>
   <div class="w-full">
     <div
-      class="border-b border-gray-200 bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 sm:px-6 lg:px-8"
+      class="border-b border-gray-200 bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-navy-900/95 sm:px-6 lg:px-8"
     >
       <div class="mx-auto flex w-full max-w-6xl items-center justify-between">
         <div class="flex items-center space-x-4">
           <button
             @click="goBack"
-            class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+            class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-navy-800 dark:hover:text-white"
           >
             <ArrowLeftIcon class="h-5 w-5" />
           </button>
@@ -419,7 +419,7 @@ watch([bookId, partId], async () => {
         <div class="flex items-center space-x-3">
           <router-link
             :to="organizeUrl"
-            class="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            class="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-navy-800"
           >
             Manage Parts
           </router-link>
@@ -429,7 +429,7 @@ watch([bookId, partId], async () => {
 
     <div class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <div v-if="loading" class="flex h-64 items-center justify-center">
-        <div class="h-10 w-10 animate-spin rounded-full border-b-2 border-blue-600"></div>
+        <div class="h-10 w-10 animate-spin rounded-full border-b-2 border-gold-600"></div>
       </div>
 
       <div v-else>
@@ -445,7 +445,7 @@ watch([bookId, partId], async () => {
           <div v-if="partCoverSrc" class="relative -mx-4 -mt-8 mb-8 sm:-mx-6 lg:-mx-8">
             <!-- Hero image container -->
             <div
-              class="relative h-48 w-full overflow-hidden bg-gray-900 sm:h-64 md:h-80 lg:h-96 cursor-pointer"
+              class="relative h-48 w-full overflow-hidden bg-navy-900 sm:h-64 md:h-80 lg:h-96 cursor-pointer"
               @click="openPartCoverLightbox"
             >
               <img
@@ -515,7 +515,7 @@ watch([bookId, partId], async () => {
           <!-- Add cover prompt (when no cover) -->
           <div
             v-else-if="canSelectImages"
-            class="mb-8 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center dark:border-gray-700 dark:bg-gray-800/50"
+            class="mb-8 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center dark:border-gray-700 dark:bg-navy-800/50"
           >
             <div class="mx-auto max-w-md">
               <div
@@ -541,7 +541,7 @@ watch([bookId, partId], async () => {
               </p>
               <button
                 type="button"
-                class="mt-4 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                class="mt-4 inline-flex items-center rounded-md bg-gold-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="partCoverLoading"
                 @click="handleSelectPartCover"
               >
@@ -559,7 +559,7 @@ watch([bookId, partId], async () => {
 
           <div class="grid gap-4 sm:grid-cols-3 mb-8">
             <div
-              class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+              class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-navy-900"
             >
               <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Chapters</p>
               <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
@@ -567,7 +567,7 @@ watch([bookId, partId], async () => {
               </p>
             </div>
             <div
-              class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+              class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-navy-900"
             >
               <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Words</p>
               <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
@@ -575,7 +575,7 @@ watch([bookId, partId], async () => {
               </p>
             </div>
             <div
-              class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+              class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-navy-900"
             >
               <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Summaries Ready</p>
               <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
@@ -588,7 +588,7 @@ watch([bookId, partId], async () => {
             <!-- Right column: part summary + illustrations -->
             <div class="order-2 space-y-8">
           <section
-            class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+            class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-navy-900"
           >
             <div class="flex flex-col gap-4">
               <div>
@@ -604,7 +604,7 @@ watch([bookId, partId], async () => {
                 <button
                   @click="handleGeneratePartSummary"
                   :disabled="generatingSummary || chapterEntries.length === 0"
-                  class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md bg-gold-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span
                     v-if="generatingSummary"
@@ -622,7 +622,7 @@ watch([bookId, partId], async () => {
                 <button
                   v-if="hasPartSummary && !isEditingSummary"
                   @click="startEditingSummary"
-                  class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                  class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-navy-800"
                 >
                   <PencilIcon class="mr-2 h-4 w-4" />
                   Edit
@@ -632,10 +632,10 @@ watch([bookId, partId], async () => {
 
             <div
               v-if="generatingSummary"
-              class="mt-6 flex items-center rounded-md border border-dashed border-blue-300 bg-blue-50/70 px-4 py-3 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"
+              class="mt-6 flex items-center rounded-md border border-dashed border-gold-300 bg-gold-50/70 px-4 py-3 text-sm text-gold-700 dark:border-gold-800 dark:bg-gold-900/20 dark:text-gold-200"
             >
               <div
-                class="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
+                class="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-gold-600 border-t-transparent"
               ></div>
               AI is generating a higher-level summary using your chapter summaries…
             </div>
@@ -645,14 +645,14 @@ watch([bookId, partId], async () => {
                 <textarea
                   v-model="editedSummary"
                   rows="6"
-                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500 dark:border-gray-700 dark:bg-navy-800 dark:text-white"
                   placeholder="Write a concise overview of this part..."
                 ></textarea>
                 <div class="mt-3 flex items-center gap-3">
                   <button
                     @click="saveEditedSummary"
                     :disabled="savingSummary"
-                    class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="inline-flex items-center rounded-md bg-gold-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span
                       v-if="savingSummary"
@@ -676,7 +676,7 @@ watch([bookId, partId], async () => {
                 />
                 <div
                   v-else
-                  class="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-400"
+                  class="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-navy-800/60 dark:text-gray-400"
                 >
                   Generate this part summary to brief the AI on everything that happened in these
                   chapters.
@@ -689,7 +689,7 @@ watch([bookId, partId], async () => {
                   <span
                     v-for="character in partSummary.characters"
                     :key="character"
-                    class="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                    class="inline-flex items-center rounded-full bg-gold-100 px-3 py-1 text-xs font-medium text-gold-700 dark:bg-gold-900/40 dark:text-gold-200"
                   >
                     {{ character }}
                   </span>
@@ -709,7 +709,7 @@ watch([bookId, partId], async () => {
 
           <section
             v-if="canSelectImages || partImages.length > 0"
-            class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+            class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-navy-900"
           >
             <div class="mb-4">
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
@@ -734,7 +734,7 @@ watch([bookId, partId], async () => {
                   v-for="image in partImages"
                   :key="image.id"
                   type="button"
-                  class="group overflow-hidden rounded-lg border border-gray-200 bg-gray-50 text-left transition hover:shadow dark:border-gray-700 dark:bg-gray-800"
+                  class="group overflow-hidden rounded-lg border border-gray-200 bg-gray-50 text-left transition hover:shadow dark:border-gray-700 dark:bg-navy-800"
                   @click="openPartImageModal(image.id)"
                 >
                   <div class="aspect-[4/3] w-full overflow-hidden bg-gray-200 dark:bg-gray-700">
@@ -765,7 +765,7 @@ watch([bookId, partId], async () => {
                       <span
                         v-for="tag in partImageTags[image.id]"
                         :key="tag.wiki_page_id"
-                        class="max-w-full truncate rounded-full bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                        class="max-w-full truncate rounded-full bg-gold-50 px-1.5 py-0.5 text-[11px] text-gold-700 dark:bg-gold-900/30 dark:text-gold-200"
                       >
                         {{ tag.page_name }}
                       </span>
@@ -775,7 +775,7 @@ watch([bookId, partId], async () => {
               </div>
               <div
                 v-else
-                class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300"
+                class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-navy-800/60 dark:text-gray-300"
               >
                 No chapter illustrations yet.
               </div>
@@ -795,7 +795,7 @@ watch([bookId, partId], async () => {
               </p>
               <button
                 type="button"
-                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md bg-gold-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700"
                 @click="createNewChapterInPart"
               >
                 <PlusIcon class="mr-2 h-4 w-4" />
@@ -805,12 +805,12 @@ watch([bookId, partId], async () => {
 
             <div
               v-if="chapterEntries.length === 0"
-              class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400"
+              class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-navy-800/50 dark:text-gray-400"
             >
               <p>No chapters are currently assigned to this part.</p>
               <button
                 type="button"
-                class="mt-4 inline-flex items-center whitespace-nowrap rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                class="mt-4 inline-flex items-center whitespace-nowrap rounded-md bg-gold-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700"
                 @click="createNewChapterInPart"
               >
                 <PlusIcon class="mr-2 h-4 w-4" />
@@ -822,14 +822,14 @@ watch([bookId, partId], async () => {
               <div
                 v-for="chapter in chapterEntries"
                 :key="chapter.id"
-                class="cursor-pointer rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-200 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-700/50"
+                class="cursor-pointer rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-gold-200 dark:border-gray-800 dark:bg-navy-900 dark:hover:border-gold-700/50"
                 @click="openChapter(chapter.id)"
               >
                 <div class="flex gap-4">
                   <!-- Chapter thumbnail -->
                   <div
                     v-if="chapterThumbnails[chapter.id]"
-                    class="hidden h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:block dark:bg-gray-800"
+                    class="hidden h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:block dark:bg-navy-800"
                   >
                     <img
                       :src="chapterThumbnails[chapter.id]"
@@ -874,7 +874,7 @@ watch([bookId, partId], async () => {
                   <span
                     v-for="character in chapter.characters"
                     :key="`${chapter.id}-${character}`"
-                    class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                    class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700 dark:bg-navy-800 dark:text-gray-300"
                   >
                     {{ character }}
                   </span>
@@ -918,9 +918,9 @@ watch([bookId, partId], async () => {
       v-if="showDeletePartCoverModal"
       class="fixed inset-0 z-50 flex items-center justify-center px-4"
     >
-      <div class="absolute inset-0 bg-gray-900/70" @click="cancelDeletePartCover"></div>
+      <div class="absolute inset-0 bg-navy-900/70" @click="cancelDeletePartCover"></div>
       <div
-        class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800"
+        class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-navy-800"
       >
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Delete part cover?</h2>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">

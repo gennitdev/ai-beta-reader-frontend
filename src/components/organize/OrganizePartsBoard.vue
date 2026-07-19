@@ -62,11 +62,11 @@ function togglePart(partId: string) {
 
 <template>
   <div class="p-3 sm:p-6 space-y-4 sm:space-y-6">
-    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
-      <h3 class="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
+    <div class="bg-gold-50 dark:bg-gold-900/20 rounded-lg p-4 border border-gold-200 dark:border-gold-700">
+      <h3 class="text-sm font-medium text-gold-900 dark:text-gold-200 mb-2">
         How to organize chapters
       </h3>
-      <p class="text-sm text-blue-800 dark:text-blue-300">
+      <p class="text-sm text-gold-800 dark:text-gold-300">
         Use the dropdown next to each chapter to assign it to a part. Create new parts as
         needed to organize your chapters into logical sections.
       </p>
@@ -83,7 +83,7 @@ function togglePart(partId: string) {
       <h3 class="text-lg font-medium text-gray-900 dark:text-white">Parts</h3>
       <button
         v-if="!creatingPart"
-        class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        class="inline-flex items-center px-3 py-2 text-sm bg-gold-600 text-white rounded-md hover:bg-gold-700 transition-colors"
         @click="emit('start-create-part')"
       >
         <PlusIcon class="w-4 h-4 mr-1" />
@@ -97,7 +97,7 @@ function togglePart(partId: string) {
           :value="newPartName"
           type="text"
           placeholder="Enter part name..."
-          class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-navy-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-gold-500 focus:border-transparent"
           autofocus
           @input="emit('update:newPartName', ($event.target as HTMLInputElement).value)"
           @keyup.enter="emit('create-part')"
@@ -160,7 +160,7 @@ function togglePart(partId: string) {
             }}
           </p>
         </div>
-        <div class="bg-white dark:bg-gray-800">
+        <div class="bg-white dark:bg-navy-800">
           <draggable
             :model-value="chaptersByPart.uncategorized"
             item-key="id"
@@ -203,7 +203,7 @@ function togglePart(partId: string) {
                 <div class="relative flex-shrink-0">
                   <select
                     :value="chapter.part_id || ''"
-                    class="appearance-none text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 pr-7 sm:pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-24 sm:min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    class="appearance-none text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 pr-7 sm:pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-24 sm:min-w-36 focus:ring-2 focus:ring-gold-500 focus:border-transparent focus:outline-none"
                     @change="
                       emit(
                         'move-chapter-to-part',
@@ -254,7 +254,7 @@ function togglePart(partId: string) {
                   v-if="editingPartId === part.id"
                   :value="editingPartName"
                   type="text"
-                  class="font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm w-full"
+                  class="font-medium text-gray-900 dark:text-white bg-white dark:bg-navy-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm w-full"
                   autofocus
                   @click.stop
                   @input="emit('update:editingPartName', ($event.target as HTMLInputElement).value)"
@@ -273,7 +273,7 @@ function togglePart(partId: string) {
             <div class="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
               <template v-if="editingPartId === part.id">
                 <button
-                  class="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  class="px-2 py-1 text-xs bg-gold-600 text-white rounded hover:bg-gold-700 transition-colors"
                   @click="emit('save-part', part.id)"
                 >
                   Save
@@ -303,7 +303,7 @@ function togglePart(partId: string) {
                   <ChevronDownIcon class="w-4 h-4" />
                 </button>
                 <button
-                  class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  class="p-1 text-gold-600 hover:text-gold-700 dark:text-gold-400 dark:hover:text-gold-300"
                   title="Edit name"
                   @click="emit('start-edit-part', part.id)"
                 >
@@ -320,7 +320,7 @@ function togglePart(partId: string) {
             </div>
           </div>
         </div>
-        <div v-show="expandedPartIds.has(part.id)" class="bg-white dark:bg-gray-800">
+        <div v-show="expandedPartIds.has(part.id)" class="bg-white dark:bg-navy-800">
           <draggable
             :model-value="part.chapters"
             item-key="id"
@@ -363,7 +363,7 @@ function togglePart(partId: string) {
                 <div class="relative flex-shrink-0">
                   <select
                     :value="chapter.part_id || ''"
-                    class="appearance-none text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 pr-7 sm:pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-24 sm:min-w-36 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    class="appearance-none text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 pr-7 sm:pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-24 sm:min-w-36 focus:ring-2 focus:ring-gold-500 focus:border-transparent focus:outline-none"
                     @change="
                       emit(
                         'move-chapter-to-part',

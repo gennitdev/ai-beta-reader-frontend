@@ -160,9 +160,9 @@ const goToSection = (index: number) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="min-h-screen bg-gray-50 dark:bg-navy-900">
     <!-- Header -->
-    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <div class="bg-white dark:bg-navy-800 border-b border-gray-200 dark:border-gray-700">
       <div class="container mx-auto px-4 py-6">
         <div class="flex items-center justify-between">
           <div>
@@ -173,7 +173,7 @@ const goToSection = (index: number) => {
           </div>
           <router-link
             to="/"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            class="px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
           >
             Back to Home
           </router-link>
@@ -182,7 +182,7 @@ const goToSection = (index: number) => {
     </div>
 
     <!-- Progress Bar -->
-    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <div class="bg-white dark:bg-navy-800 border-b border-gray-200 dark:border-gray-700">
       <div class="container mx-auto px-4 py-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm text-gray-600 dark:text-gray-400">
@@ -194,7 +194,7 @@ const goToSection = (index: number) => {
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
           <div
-            class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+            class="bg-gold-600 h-2 rounded-full transition-all duration-300"
             :style="{ width: `${((currentSectionIndex + 1) / sections.length) * 100}%` }"
           ></div>
         </div>
@@ -202,7 +202,7 @@ const goToSection = (index: number) => {
     </div>
 
     <!-- Navigation Tabs -->
-    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
+    <div class="bg-white dark:bg-navy-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
       <div class="container mx-auto px-4">
         <div class="flex overflow-x-auto py-3 space-x-4">
           <button
@@ -212,7 +212,7 @@ const goToSection = (index: number) => {
             :class="[
               'px-4 py-2 rounded-lg whitespace-nowrap transition-colors',
               currentSectionIndex === index
-                ? 'bg-blue-600 text-white'
+                ? 'bg-gold-600 text-white'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             ]"
           >
@@ -240,7 +240,7 @@ const goToSection = (index: number) => {
           <div
             v-for="(screenshot, index) in currentSection.screenshots"
             :key="index"
-            class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden"
+            class="bg-white dark:bg-navy-800 rounded-lg shadow-lg overflow-hidden"
           >
             <div class="p-4">
               <p class="text-gray-700 dark:text-gray-300 mb-4">
@@ -266,8 +266,8 @@ const goToSection = (index: number) => {
             :class="[
               'flex items-center px-6 py-3 rounded-lg transition-colors',
               currentSectionIndex === 0
-                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600'
+                ? 'bg-gray-100 dark:bg-navy-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                : 'bg-white dark:bg-navy-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600'
             ]"
           >
             <ChevronLeftIcon class="w-5 h-5 mr-2" />
@@ -282,7 +282,7 @@ const goToSection = (index: number) => {
               :class="[
                 'w-2 h-2 rounded-full transition-colors',
                 currentSectionIndex === index
-                  ? 'bg-blue-600'
+                  ? 'bg-gold-600'
                   : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
               ]"
             ></button>
@@ -294,8 +294,8 @@ const goToSection = (index: number) => {
             :class="[
               'flex items-center px-6 py-3 rounded-lg transition-colors',
               currentSectionIndex === sections.length - 1
-                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                ? 'bg-gray-100 dark:bg-navy-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                : 'bg-gold-600 text-white hover:bg-gold-700'
             ]"
           >
             Next

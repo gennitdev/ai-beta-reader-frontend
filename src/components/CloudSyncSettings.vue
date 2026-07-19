@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
+  <div class="bg-white dark:bg-navy-800 shadow sm:rounded-lg">
     <div class="px-4 py-5 sm:p-6">
       <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">
         Cloud Backup & Sync

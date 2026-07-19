@@ -145,7 +145,7 @@ const closeLightbox = () => {
 
 <template>
   <div
-    class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto relative"
+    class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-navy-800 overflow-y-auto relative"
   >
     <div class="p-2 pt-2 pb-16">
       <div class="relative overflow-hidden rounded-lg mb-3">
@@ -163,9 +163,9 @@ const closeLightbox = () => {
         </div>
         <div
           v-else
-          class="aspect-[16/9] w-full bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
+          class="aspect-[16/9] w-full bg-gradient-to-br from-gold-100 via-indigo-50 to-purple-100 dark:from-gold-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
         >
-          <BookOpenIcon class="w-16 h-16 text-blue-300 dark:text-blue-600 opacity-60" />
+          <BookOpenIcon class="w-16 h-16 text-gold-300 dark:text-gold-600 opacity-60" />
         </div>
 
         <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-3 py-3 pt-10">
@@ -176,7 +176,7 @@ const closeLightbox = () => {
               @keyup.enter="saveBookTitle"
               @keyup.esc="cancelEditingBookTitle"
               type="text"
-              class="text-lg font-bold bg-white/90 dark:bg-gray-700/90 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="text-lg font-bold bg-white/90 dark:bg-gray-700/90 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-gold-500"
               placeholder="Book title"
               autofocus
               @click.stop
@@ -184,7 +184,7 @@ const closeLightbox = () => {
             <div class="flex space-x-2">
               <button
                 @click.stop="saveBookTitle"
-                class="flex-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                class="flex-1 px-3 py-1.5 bg-gold-600 text-white text-sm rounded hover:bg-gold-700 transition-colors"
               >
                 Save
               </button>
@@ -244,7 +244,7 @@ const closeLightbox = () => {
       >
         <button
           type="button"
-          class="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          class="inline-flex items-center rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
           :disabled="coverLoading"
           @click="selectBookCover"
         >
@@ -257,7 +257,7 @@ const closeLightbox = () => {
         <button
           v-if="coverImageSrc && deleteBookCover"
           type="button"
-          class="inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+          class="inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-700 dark:bg-navy-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
           :disabled="coverLoading"
           @click="deleteBookCover"
         >
@@ -274,7 +274,7 @@ const closeLightbox = () => {
           class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium bg-white dark:bg-gray-700 rounded-lg shadow border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
         >
           <span class="flex items-center">
-            <component :is="currentSectionIcon()" class="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" />
+            <component :is="currentSectionIcon()" class="w-4 h-4 mr-2 text-gold-600 dark:text-gold-400" />
             <span class="text-gray-900 dark:text-white">{{ currentSectionLabel() }}</span>
           </span>
           <ChevronDownIcon
@@ -308,7 +308,7 @@ const closeLightbox = () => {
               :class="[
                 'flex items-center px-3 py-2 text-sm transition-colors',
                 currentTab === option.id
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  ? 'bg-gold-50 dark:bg-gold-900/30 text-gold-700 dark:text-gold-300'
                   : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600'
               ]"
             >
@@ -327,7 +327,7 @@ const closeLightbox = () => {
           <span class="flex items-center">
             <component
               :is="wikiTypeIcon(wikiTypeFilter)"
-              :class="['w-4 h-4 mr-2', wikiTypeFilter === 'all' ? 'text-blue-600 dark:text-blue-400' : getTypeColor(wikiTypeFilter)]"
+              :class="['w-4 h-4 mr-2', wikiTypeFilter === 'all' ? 'text-gold-600 dark:text-gold-400' : getTypeColor(wikiTypeFilter)]"
             />
             <span class="text-gray-900 dark:text-white">{{ currentWikiTypeOption().label }}</span>
           </span>
@@ -362,7 +362,7 @@ const closeLightbox = () => {
               :class="[
                 'flex w-full items-center px-3 py-2 text-sm transition-colors',
                 wikiTypeFilter === option.id
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  ? 'bg-gold-50 dark:bg-gold-900/30 text-gold-700 dark:text-gold-300'
                   : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600'
               ]"
             >
@@ -428,7 +428,7 @@ const closeLightbox = () => {
       <div class="fixed bottom-4 left-4 z-10">
         <router-link
           to="/settings"
-          class="inline-flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-700"
+          class="inline-flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg bg-white dark:bg-navy-800 hover:bg-gray-100 dark:hover:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-700"
           title="User Settings"
         >
           <Cog6ToothIcon class="w-5 h-5 mr-2" />

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/assets/logo-stacked.png" alt="Beta-bot" width="320">
+</p>
+
 # AI Beta Reader
 
 [![CI](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml)

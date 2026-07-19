@@ -23,7 +23,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+  <div class="flex-1 bg-gray-50 dark:bg-navy-900 overflow-y-auto">
     <div v-if="currentTab === 'images' && selectedImageId && selectedImageSrc" class="h-full flex flex-col">
       <IllustrationDetail
         :image="selectedImage || null"

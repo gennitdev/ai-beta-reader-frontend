@@ -302,7 +302,7 @@ watch(
             ref="searchInputRef"
             v-model="searchTerm"
             type="text"
-            class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-gold-500 focus:outline-none focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             placeholder="Enter text to search for…"
             @input="scheduleSearch"
           />
@@ -315,7 +315,7 @@ watch(
             id="replace-input"
             v-model="replaceTerm"
             type="text"
-            class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-gold-500 focus:outline-none focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             placeholder="Enter replacement text, or leave empty to delete…"
             @input="setReplacementReady"
           />
@@ -365,7 +365,7 @@ watch(
       </div>
 
       <div v-if="isSearching" class="py-8 text-center">
-        <div class="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+        <div class="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-gold-600"></div>
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Searching…</p>
       </div>
 

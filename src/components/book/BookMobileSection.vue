@@ -344,11 +344,11 @@ watch(
               @keyup.enter="saveBookTitle"
               @keyup.esc="cancelEditingBookTitle"
               type="text"
-              class="text-3xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="text-3xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-gold-500"
               placeholder="Book title"
               autofocus
             />
-            <button @click="saveBookTitle" class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+            <button @click="saveBookTitle" class="px-3 py-2 bg-gold-600 text-white rounded hover:bg-gold-700 transition-colors">
               Save
             </button>
             <button @click="cancelEditingBookTitle" class="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
@@ -372,7 +372,7 @@ watch(
           </p>
         </div>
         <div class="flex flex-wrap justify-end gap-2">
-          <button @click="createNewChapter" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button @click="createNewChapter" class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors">
             <PlusIcon class="w-5 h-5 mr-2" />
             New Chapter
           </button>
@@ -386,10 +386,10 @@ watch(
 
     <div
       v-if="canSelectImages || coverImageSrc"
-      class="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+      class="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-navy-900"
     >
       <div class="flex gap-4">
-        <div class="h-48 w-32 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+        <div class="h-48 w-32 overflow-hidden rounded-lg bg-gray-100 dark:bg-navy-800">
           <img
             v-if="coverImageSrc"
             :src="coverImageSrc"
@@ -412,7 +412,7 @@ watch(
           <div v-if="canSelectImages" class="mt-2 flex items-center gap-2">
             <button
               type="button"
-              class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              class="inline-flex items-center rounded-md bg-gold-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
               :disabled="coverLoading"
               @click="selectBookCover"
             >
@@ -425,7 +425,7 @@ watch(
             <button
               v-if="coverImageSrc && deleteBookCover"
               type="button"
-              class="inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              class="inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-700 dark:bg-navy-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
               :disabled="coverLoading"
               @click="deleteBookCover"
             >
@@ -439,14 +439,14 @@ watch(
       </div>
     </div>
 
-    <div class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-6">
+    <div class="flex space-x-1 rounded-xl bg-gold-900/20 p-1 mb-6">
       <router-link
         :to="`/books/${bookId}`"
         :class="[
-          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
+          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-gold-700 ring-white/60 ring-offset-2 ring-offset-gold-400 focus:outline-none focus:ring-2 flex items-center justify-center',
           currentTab === 'chapters'
-            ? 'bg-white text-blue-700 shadow'
-            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+            ? 'bg-white text-gold-700 shadow'
+            : 'text-gold-100 hover:bg-white/[0.12] hover:text-white'
         ]"
       >
         <DocumentTextIcon class="w-5 h-5 inline mr-2" />
@@ -455,10 +455,10 @@ watch(
       <router-link
         :to="`/books/${bookId}?tab=wiki`"
         :class="[
-          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
+          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-gold-400 ring-white/60 ring-offset-2 ring-offset-gold-400 focus:outline-none focus:ring-2 flex items-center justify-center',
           currentTab === 'wiki'
-            ? 'bg-white text-blue-700 shadow'
-            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+            ? 'bg-white text-gold-700 shadow'
+            : 'text-gold-100 hover:bg-white/[0.12] hover:text-white'
         ]"
       >
         <BookOpenIcon class="w-5 h-5 inline mr-2" />
@@ -467,10 +467,10 @@ watch(
       <router-link
         :to="`/books/${bookId}?tab=images`"
         :class="[
-          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-400 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 flex items-center justify-center',
+          'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-gold-400 ring-white/60 ring-offset-2 ring-offset-gold-400 focus:outline-none focus:ring-2 flex items-center justify-center',
           currentTab === 'images'
-            ? 'bg-white text-blue-700 shadow'
-            : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+            ? 'bg-white text-gold-700 shadow'
+            : 'text-gold-100 hover:bg-white/[0.12] hover:text-white'
         ]"
       >
         <PhotoIcon class="w-5 h-5 inline mr-2" />
@@ -480,14 +480,14 @@ watch(
 
     <div v-if="currentTab === 'chapters'">
       <div v-if="loading" class="flex justify-center items-center h-64">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-600"></div>
       </div>
 
       <div v-else-if="sortedChapters.length > 0" >
         <section
           v-for="part in chaptersByPart.parts"
           :key="part.id"
-          class="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 shadow-sm"
+          class="bg-white dark:bg-navy-900 border-gray-200 dark:border-gray-800 shadow-sm"
         >
           <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <button
@@ -515,7 +515,7 @@ watch(
                     {{ formatWordCount(part.wordCount) }} words ·
                     <router-link
                       :to="`/m/books/${bookId}/parts/${part.id}`"
-                      class="text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                      class="text-gold-600 hover:text-gold-700 hover:underline dark:text-gold-400 dark:hover:text-gold-300"
                       @click.stop
                     >View</router-link>
                   </p>
@@ -537,7 +537,7 @@ watch(
             <div class="flex items-center gap-2">
               <button
                 @click="createNewChapterInPart(part.id)"
-                class="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-700"
+                class="inline-flex items-center rounded-lg bg-gold-600 px-3 py-2 text-sm text-white transition-colors hover:bg-gold-700"
               >
                 <PlusIcon class="mr-2 h-4 w-4" />
                 Add Chapter
@@ -566,7 +566,7 @@ watch(
 
         <section
           v-if="chaptersByPart.parts.length > 0 && chaptersByPart.uncategorized.length > 0"
-          class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
+          class="bg-white dark:bg-navy-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
         >
           <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <div>
@@ -577,7 +577,7 @@ watch(
                 }}
               </p>
             </div>
-            <button @click="createNewChapter" class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <button @click="createNewChapter" class="inline-flex items-center px-3 py-2 text-sm bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors">
               <PlusIcon class="w-4 h-4 mr-2" />
               Add Chapter
             </button>
@@ -605,7 +605,7 @@ watch(
           <div
             v-for="chapter in sortedChapters"
             :key="chapter.id"
-            class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
+            class="bg-white dark:bg-navy-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
           >
             <BookMobileChapterCard
               :book-id="bookId"
@@ -626,7 +626,7 @@ watch(
         <p class="text-gray-600 dark:text-gray-400 mb-6">
           Add your first chapter to start getting AI feedback.
         </p>
-        <button @click="createNewChapter" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <button @click="createNewChapter" class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors">
           <PlusIcon class="w-5 h-5 mr-2" />
           Add First Chapter
         </button>
@@ -635,19 +635,19 @@ watch(
 
     <div v-else-if="currentTab === 'wiki'">
       <div v-if="loadingWiki" class="flex justify-center items-center h-64">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-600"></div>
       </div>
 
       <template v-else>
         <div v-if="hasAnyWikiPages" class="relative mb-6">
           <button
             @click="showWikiTypeDropdown = !showWikiTypeDropdown"
-            class="w-full flex items-center justify-between px-4 py-3 text-base font-medium bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm"
+            class="w-full flex items-center justify-between px-4 py-3 text-base font-medium bg-white dark:bg-navy-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm"
           >
             <span class="flex items-center">
               <component
                 :is="wikiTypeIcon(wikiTypeFilter)"
-                :class="['w-5 h-5 mr-2', wikiTypeFilter === 'all' ? 'text-blue-600 dark:text-blue-400' : getTypeColor(wikiTypeFilter)]"
+                :class="['w-5 h-5 mr-2', wikiTypeFilter === 'all' ? 'text-gold-600 dark:text-gold-400' : getTypeColor(wikiTypeFilter)]"
               />
               <span class="text-gray-900 dark:text-white">{{ currentWikiTypeOption().label }}</span>
             </span>
@@ -664,7 +664,7 @@ watch(
 
           <div
             v-if="showWikiTypeDropdown"
-            class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+            class="absolute z-10 mt-1 w-full bg-white dark:bg-navy-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1"
           >
             <button
               v-for="option in wikiTypeOptions"
@@ -674,7 +674,7 @@ watch(
               :class="[
                 'flex w-full items-center px-4 py-3 text-base transition-colors',
                 wikiTypeFilter === option.id
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  ? 'bg-gold-50 dark:bg-gold-900/30 text-gold-700 dark:text-gold-300'
                   : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
               ]"
             >
@@ -691,7 +691,7 @@ watch(
         <div class="flex justify-end">
           <button
             @click="openCreateWikiModal"
-            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
           >
             <PlusIcon class="w-5 h-5 mr-2" />
             New Wiki Page
@@ -711,7 +711,7 @@ watch(
               v-for="page in pages"
               :key="page.id"
               :to="`/m/books/${bookId}/wiki/${page.id}`"
-              class="flex gap-3 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 p-4 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
+              class="flex gap-3 bg-white dark:bg-navy-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 p-4 hover:border-gold-300 dark:hover:border-gold-600 cursor-pointer"
             >
               <div
                 v-if="wikiPageThumbnails[page.id]"
@@ -739,8 +739,8 @@ watch(
                   </span>
                   <button
                     @click.prevent.stop="toggleWikiPagePinned(page)"
-                    class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-300"
-                    :class="page.is_pinned ? 'text-blue-600 dark:text-blue-300' : ''"
+                    class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gold-600 dark:hover:bg-gray-700 dark:hover:text-gold-300"
+                    :class="page.is_pinned ? 'text-gold-600 dark:text-gold-300' : ''"
                     :title="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
                     :aria-label="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
                   >
@@ -788,7 +788,7 @@ watch(
           </p>
           <button
             @click="openCreateWikiModal"
-            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
           >
             <PlusIcon class="w-5 h-5 mr-2" />
             New Wiki Page
@@ -803,7 +803,7 @@ watch(
           </p>
           <button
             @click="openCreateWikiModal"
-            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
           >
             <PlusIcon class="w-5 h-5 mr-2" />
             Create Wiki Page
@@ -821,12 +821,12 @@ watch(
       <div v-if="selectedImageId && selectedImageSrc">
         <router-link
           :to="`/books/${bookId}?tab=images`"
-          class="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mb-4"
+          class="inline-flex items-center text-sm text-gold-600 dark:text-gold-400 hover:text-gold-800 dark:hover:text-gold-300 mb-4"
         >
           <ArrowLeftIcon class="w-4 h-4 mr-1" />
           Back to images
         </router-link>
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
           <IllustrationDetail
             :image="selectedImage"
             :image-src="selectedImageSrc"
@@ -847,7 +847,7 @@ watch(
       <!-- Image Grid -->
       <template v-else>
         <div v-if="loadingImages" class="flex justify-center items-center h-64">
-          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-600"></div>
         </div>
 
         <div v-else-if="!canSelectImages && bookImages.length === 0" class="text-center py-16">
@@ -863,7 +863,7 @@ watch(
             v-for="image in bookImages"
             :key="image.id"
             :to="`/books/${bookId}?tab=images&imageId=${image.id}`"
-            class="relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 cursor-pointer transition-all hover:ring-2 hover:ring-blue-400"
+            class="relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 cursor-pointer transition-all hover:ring-2 hover:ring-gold-400"
           >
             <img
               v-if="bookImageSources[image.id]"

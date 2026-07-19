@@ -32,7 +32,7 @@ const handleTitleInput = (event: Event) => {
 
 <template>
   <div
-    class="z-30 border-b border-gray-200/60 bg-white/95 px-4 py-4 backdrop-blur dark:border-gray-700/60 dark:bg-gray-900/95 sm:px-6 lg:px-8"
+    class="z-30 border-b border-gray-200/60 bg-white/95 px-4 py-4 backdrop-blur dark:border-gray-700/60 dark:bg-navy-900/95 sm:px-6 lg:px-8"
   >
     <div class="flex items-center justify-between">
       <div class="flex flex-1 items-center">
@@ -50,7 +50,7 @@ const handleTitleInput = (event: Event) => {
               :value="editedTitle"
               type="text"
               placeholder="Chapter title (optional)"
-              class="w-full border-b-2 border-gray-300 bg-transparent text-xl font-bold text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:text-white sm:text-xl"
+              class="w-full border-b-2 border-gray-300 bg-transparent text-xl font-bold text-gray-900 focus:border-gold-500 focus:outline-none dark:border-gray-600 dark:text-white sm:text-xl"
               @input="handleTitleInput"
             />
           </div>
@@ -82,7 +82,7 @@ const handleTitleInput = (event: Event) => {
           <button
             @click="emit('save-chapter')"
             :disabled="!hasUnsavedChanges || savingChapter"
-            class="inline-flex items-center whitespace-nowrap rounded-md bg-blue-600 px-3 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            class="inline-flex items-center whitespace-nowrap rounded-md bg-gold-600 px-3 py-2 text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span
               v-if="savingChapter"

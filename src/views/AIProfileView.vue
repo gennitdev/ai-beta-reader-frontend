@@ -195,7 +195,7 @@ onMounted(() => {
   <div class="max-w-6xl mx-auto p-6">
     <!-- Loading state -->
     <div v-if="loading" class="flex justify-center items-center h-64">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-600"></div>
     </div>
 
     <!-- Error state -->
@@ -263,7 +263,7 @@ onMounted(() => {
                   <SparklesIcon class="w-4 h-4 mr-1" />
                   System Profile
                 </span>
-                <span v-if="profileData.profile.is_default" class="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-full">
+                <span v-if="profileData.profile.is_default" class="px-3 py-1 text-sm bg-gold-100 text-gold-800 rounded-full">
                   Default
                 </span>
                 <span class="text-sm text-gray-500 dark:text-gray-400">
@@ -279,7 +279,7 @@ onMounted(() => {
         <!-- Main content -->
         <div class="lg:col-span-2 space-y-6">
           <!-- AI Prompt -->
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+          <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
             <div class="p-6">
               <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
@@ -289,20 +289,20 @@ onMounted(() => {
                 <button
                   v-if="profileData.profile.system_prompt.length > 200"
                   @click="showFullPrompt = !showFullPrompt"
-                  class="px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+                  class="px-3 py-1 text-sm text-gold-600 dark:text-gold-400 hover:text-gold-800 dark:hover:text-gold-300 font-medium transition-colors"
                 >
                   {{ showFullPrompt ? 'Show less' : 'Show full prompt' }}
                 </button>
               </div>
 
-              <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 font-mono text-sm">
+              <div class="bg-gray-50 dark:bg-navy-900 rounded-lg p-4 font-mono text-sm">
                 <pre class="whitespace-pre-wrap text-gray-800 dark:text-gray-200">{{ showFullPrompt ? profileData.profile.system_prompt : promptPreview }}</pre>
               </div>
             </div>
           </div>
 
           <!-- Comment History -->
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+          <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
             <div class="p-6">
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center">
                 <ChatBubbleLeftRightIcon class="w-6 h-6 mr-2" />
@@ -319,7 +319,7 @@ onMounted(() => {
                   <!-- Review Header -->
                   <div class="flex items-start justify-between mb-3">
                     <div class="flex-1">
-                      <h3 class="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                      <h3 class="font-medium text-gray-900 dark:text-white hover:text-gold-600 dark:hover:text-gold-400 transition-colors">
                         {{ review.book_title }}
                         <span v-if="review.chapter_title" class="text-gray-500"> → {{ review.chapter_title }}</span>
                         <span v-else class="text-gray-500"> → Chapter {{ review.chapter_id }}</span>
@@ -328,7 +328,7 @@ onMounted(() => {
                         {{ formatDate(review.created_at) }}
                       </p>
                     </div>
-                    <div class="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                    <div class="text-xs text-gold-600 dark:text-gold-400 font-medium">
                       View in context →
                     </div>
                   </div>
@@ -351,7 +351,7 @@ onMounted(() => {
         <!-- Sidebar -->
         <div class="space-y-6">
           <!-- Profile Info -->
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+          <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
             <div class="p-6">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <UserCircleIcon class="w-5 h-5 mr-2" />
@@ -380,7 +380,7 @@ onMounted(() => {
           </div>
 
           <!-- Activity Stats -->
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+          <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
             <div class="p-6">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <ClockIcon class="w-5 h-5 mr-2" />

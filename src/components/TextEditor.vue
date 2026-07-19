@@ -157,14 +157,14 @@ onMounted(() => {
 <template>
   <div class="w-full">
     <TabGroup v-model="selectedTab" as="div">
-      <TabList class="flex space-x-1 rounded-xl bg-blue-900/20 p-1 mb-4">
+      <TabList class="flex space-x-1 rounded-xl bg-gold-900/20 p-1 mb-4">
         <Tab as="template" v-slot="{ selected }">
           <button
             :class="[
-              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 dark:text-blue-200 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-gold-700 dark:text-gold-200 ring-white/60 ring-offset-2 ring-offset-gold-400 focus:outline-none focus:ring-2',
               selected
-                ? 'bg-white text-blue-700 shadow dark:bg-blue-600 dark:text-white'
-                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white dark:text-blue-100'
+                ? 'bg-white text-gold-700 shadow dark:bg-gold-600 dark:text-white'
+                : 'text-gold-100 hover:bg-white/[0.12] hover:text-white dark:text-gold-100'
             ]"
           >
             Write
@@ -173,10 +173,10 @@ onMounted(() => {
         <Tab as="template" v-slot="{ selected }">
           <button
             :class="[
-              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700 dark:text-blue-200 ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+              'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-gold-700 dark:text-gold-200 ring-white/60 ring-offset-2 ring-offset-gold-400 focus:outline-none focus:ring-2',
               selected
-                ? 'bg-white text-blue-700 shadow dark:bg-blue-600 dark:text-white'
-                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white dark:text-blue-100'
+                ? 'bg-white text-gold-700 shadow dark:bg-gold-600 dark:text-white'
+                : 'text-gold-100 hover:bg-white/[0.12] hover:text-white dark:text-gold-100'
             ]"
           >
             Preview
@@ -187,7 +187,7 @@ onMounted(() => {
       <TabPanels>
         <TabPanel>
           <!-- Toolbar -->
-          <div class="flex flex-wrap gap-2 p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-t-lg">
+          <div class="flex flex-wrap gap-2 p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-navy-800 rounded-t-lg">
             <button
               type="button"
               @click="formatText('bold')"
@@ -267,7 +267,7 @@ onMounted(() => {
               :placeholder="placeholder"
               :readonly="readonly"
               :style="{ height }"
-              class="w-full p-4 border-l border-r border-b border-gray-300 dark:border-gray-600 rounded-b-lg resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-900 dark:text-white"
+              class="w-full p-4 border-l border-r border-b border-gray-300 dark:border-gray-600 rounded-b-lg resize-y focus:ring-2 focus:ring-gold-500 focus:border-transparent dark:bg-navy-900 dark:text-white"
               :class="{ 'border-red-500': isOverLimit }"
             />
           </div>
@@ -275,7 +275,7 @@ onMounted(() => {
 
         <TabPanel>
           <div
-            class="border border-gray-300 dark:border-gray-600 rounded-lg p-4 min-h-[300px] bg-white dark:bg-gray-900"
+            class="border border-gray-300 dark:border-gray-600 rounded-lg p-4 min-h-[300px] bg-white dark:bg-navy-900"
             :style="{ minHeight: height }"
           >
             <MarkdownRenderer
