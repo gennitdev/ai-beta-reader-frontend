@@ -50,7 +50,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <section class="rounded-lg border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800">
+  <section class="rounded-lg border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-navy-800">
     <div class="p-6">
       <div class="flex items-start justify-between gap-3">
         <div>
@@ -62,7 +62,7 @@ const emit = defineEmits<{
         <button
           v-if="!isEditing && links.length"
           type="button"
-          class="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          class="text-xs font-medium text-gold-600 transition-colors hover:text-gold-700 dark:text-gold-400 dark:hover:text-gold-300"
           @click="emit('startEdit')"
         >
           Edit links
@@ -85,7 +85,7 @@ const emit = defineEmits<{
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            class="rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
             :disabled="saving"
             @click="emit('save')"
           >
@@ -118,12 +118,12 @@ const emit = defineEmits<{
               path: `${routePrefix}/${bookId}/wiki/${link.wiki_page_id}`,
               query: { fromChapterId: chapterId },
             }"
-            class="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40"
+            class="flex items-center justify-between rounded-lg border border-gold-200 bg-gold-50 px-3 py-2 text-left text-sm transition hover:border-gold-300 hover:bg-gold-100 dark:border-gold-800 dark:bg-gold-900/20 dark:hover:bg-gold-900/40"
           >
-            <div class="min-w-0 truncate font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 dark:text-blue-200">
+            <div class="min-w-0 truncate font-medium text-gold-700 underline decoration-gold-300 underline-offset-2 dark:text-gold-200">
               {{ link.page_name }}
             </div>
-            <span class="ml-3 shrink-0 text-xs font-medium text-blue-600 dark:text-blue-300">
+            <span class="ml-3 shrink-0 text-xs font-medium text-gold-600 dark:text-gold-300">
               Open
             </span>
           </RouterLink>
@@ -137,7 +137,7 @@ const emit = defineEmits<{
       <button
         v-if="!isEditing && !links.length"
         type="button"
-        class="mt-5 block w-full border-t border-gray-200 pt-4 text-left text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:border-gray-700 dark:text-blue-400 dark:hover:text-blue-300"
+        class="mt-5 block w-full border-t border-gray-200 pt-4 text-left text-xs font-medium text-gold-600 transition-colors hover:text-gold-700 dark:border-gray-700 dark:text-gold-400 dark:hover:text-gold-300"
         @click="emit('startEdit')"
       >
         Add links

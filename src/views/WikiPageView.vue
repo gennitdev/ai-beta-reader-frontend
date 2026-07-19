@@ -987,7 +987,7 @@ watch(
                   <button
                     v-if="!isEditingAliases"
                     type="button"
-                    class="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    class="text-xs font-medium text-gold-600 transition-colors hover:text-gold-700 dark:text-gold-400 dark:hover:text-gold-300"
                     @click="startEditingAliases"
                   >
                     {{ wikiPage.aliases.length ? 'Edit names' : 'Add names' }}
@@ -1017,13 +1017,13 @@ watch(
                     <input
                       v-model="newAlias"
                       type="text"
-                      class="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      class="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                       placeholder="Add an alternate name"
                       @keyup.enter="addAlias"
                     />
                     <button
                       type="button"
-                      class="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                      class="rounded-md bg-gold-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700"
                       @click="addAlias"
                     >
                       Add
@@ -1037,7 +1037,7 @@ watch(
                   <div class="flex items-center gap-2">
                     <button
                       type="button"
-                      class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      class="rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
                       :disabled="savingAliases"
                       @click="saveAliases"
                     >
@@ -1178,7 +1178,7 @@ watch(
           @download="handleDownloadImage"
         />
 
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+        <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
           <div class="p-6">
             <div class="flex items-center justify-between gap-3">
               <div>
@@ -1190,7 +1190,7 @@ watch(
               <button
                 v-if="!isEditingLinkedChapters"
                 type="button"
-                class="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                class="text-xs font-medium text-gold-600 transition-colors hover:text-gold-700 dark:text-gold-400 dark:hover:text-gold-300"
                 @click="startEditingLinkedChapters"
               >
                 {{ linkedChapters.length ? 'Edit links' : 'Add links' }}
@@ -1213,7 +1213,7 @@ watch(
               <div class="flex items-center gap-2">
                 <button
                   type="button"
-                  class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  class="rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="savingLinkedChapters"
                   @click="saveLinkedChapters"
                 >
@@ -1235,17 +1235,17 @@ watch(
                 v-for="link in linkedChapters"
                 :key="link.chapter_id"
                 :to="`${isMobileRoute ? '/m/books' : '/books'}/${bookId}/chapters/${link.chapter_id}`"
-                class="flex w-full items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:hover:bg-blue-900/40"
+                class="flex w-full items-center justify-between rounded-lg border border-gold-200 bg-gold-50 px-3 py-2 text-left text-sm transition hover:border-gold-300 hover:bg-gold-100 dark:border-gold-800 dark:bg-gold-900/20 dark:hover:bg-gold-900/40"
               >
                 <div class="min-w-0">
-                  <div class="truncate font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 dark:text-blue-200">
+                  <div class="truncate font-medium text-gold-700 underline decoration-gold-300 underline-offset-2 dark:text-gold-200">
                     {{ link.chapter_title || link.chapter_id }}
                   </div>
-                  <div class="mt-0.5 text-xs text-blue-500 dark:text-blue-300">
+                  <div class="mt-0.5 text-xs text-gold-500 dark:text-gold-300">
                     {{ link.link_source === 'ai_summary' ? 'Linked from summary generation' : 'Manually linked chapter' }}
                   </div>
                 </div>
-                <span class="ml-3 shrink-0 text-xs font-medium text-blue-600 dark:text-blue-300">
+                <span class="ml-3 shrink-0 text-xs font-medium text-gold-600 dark:text-gold-300">
                   Open
                 </span>
               </RouterLink>

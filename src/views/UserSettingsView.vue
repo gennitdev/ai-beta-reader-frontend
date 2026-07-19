@@ -671,7 +671,7 @@ onMounted(async () => {
 
       <div
         v-if="showBrowserStorage"
-        class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+        class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800"
       >
         <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <div class="flex items-center space-x-2">
@@ -707,7 +707,7 @@ onMounted(async () => {
               </div>
             </dl>
             <div v-if="browserStoragePercent !== null" class="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-              <div class="h-full bg-blue-600" :style="{ width: `${browserStoragePercent}%` }"></div>
+              <div class="h-full bg-gold-600" :style="{ width: `${browserStoragePercent}%` }"></div>
             </div>
             <div
               v-if="browserStorage.migrationStatus?.status === 'partial'"
@@ -719,7 +719,7 @@ onMounted(async () => {
             <button
               v-if="!browserStorage.persisted"
               type="button"
-              class="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+              class="rounded-lg bg-gold-600 px-4 py-2 font-medium text-white hover:bg-gold-700"
               @click="makeBrowserStoragePersistent"
             >
               Request persistent storage
