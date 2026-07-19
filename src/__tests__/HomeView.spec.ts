@@ -40,7 +40,7 @@ describe('HomeView', () => {
     expect(routerReplace).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('Start Writing Now')
     // The brand wordmark is rendered as the logo image, not body text.
-    expect(wrapper.find('img[alt="Beta-bot"]').exists()).toBe(true)
+    expect(wrapper.find('img[alt="beta bot"]').exists()).toBe(true)
   })
 
   it('redirects to /books when the user already has books', async () => {

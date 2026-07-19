@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="src/assets/logo-stacked.png" alt="Beta-bot" width="320">
+  <img src="src/assets/logo-stacked.png" alt="beta bot" width="320">
 </p>
 
-# beta bot (AI Beta Reader)
+# beta bot
 
 [![CI](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend/branch/main/graph/badge.svg)](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend)
@@ -155,7 +155,7 @@ Review individual matches before replacing text across your entire manuscript, o
 
 ![Find and Replace for Continuity Fixes](./src/assets/screenshots/find-and-replace-for-continuity-fixes.png)
 
-## Prerequisites for Self Hosting Beta-bot
+## Prerequisites for Self Hosting beta bot
 
 - Node.js 20.19+ or 22.12+
 - An OpenAI API key, entered in the app, to use AI summaries and reviews

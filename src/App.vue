@@ -225,7 +225,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
               <XMarkIcon v-else class="w-6 h-6" />
             </button>
             <router-link to="/" class="flex items-center flex-shrink-0">
-              <img :src="logoHorizontal" alt="Beta-bot" class="h-8 w-auto" />
+              <img :src="logoHorizontal" alt="beta bot" class="h-8 w-auto" />
             </router-link>
 
             <!-- Show breadcrumbs if available, otherwise show main nav -->
@@ -345,7 +345,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                 <XMarkIcon v-else class="w-6 h-6" />
               </button>
               <router-link to="/" class="flex items-center">
-                <img :src="logoHorizontal" alt="Beta-bot" class="h-8 w-auto" />
+                <img :src="logoHorizontal" alt="beta bot" class="h-8 w-auto" />
               </router-link>
             </div>
 
@@ -460,9 +460,9 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                 to="/"
                 class="block overflow-hidden rounded-xl ring-1 ring-navy-900/10 transition-opacity hover:opacity-90"
                 @click="closeSideNav"
-                aria-label="Beta-bot home"
+                aria-label="beta bot home"
               >
-                <img :src="logoStacked" alt="Beta-bot" class="h-28 w-28 object-cover" />
+                <img :src="logoStacked" alt="beta bot" class="h-28 w-28 object-cover" />
               </router-link>
               <button
                 @click="closeSideNav"

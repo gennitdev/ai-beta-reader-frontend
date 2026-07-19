@@ -84,7 +84,7 @@ Set these in `.env.local` for local builds **and** in Vercel (Production + Previ
    npx cap sync android
    npx cap run android --target <serial>   # or open in Android Studio
    ```
-5. On first launch the app opens Chrome for OAuth. Accept the “Allow Beta-bot to connect to your Google Drive” prompt; the App Link (`com.googleusercontent.apps.…:/oauth2redirect`) brings you back into the app.
+5. On first launch the app opens Chrome for OAuth. Accept the “Allow beta bot to connect to your Google Drive” prompt; the App Link (`com.googleusercontent.apps.…:/oauth2redirect`) brings you back into the app.
 
 Status bar tweaks (`@capacitor/status-bar`) ensure the web view sits below the system status area.
 
