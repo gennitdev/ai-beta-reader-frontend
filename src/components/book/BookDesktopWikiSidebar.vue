@@ -26,14 +26,14 @@ const hasFilteredPages = computed(() =>
 <template>
   <div>
     <div v-if="loadingWiki" class="flex justify-center items-center h-32">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-gold-600"></div>
     </div>
 
     <div v-else-if="hasFilteredPages" class="space-y-4">
       <button
         v-if="openCreateWikiModal"
         @click="openCreateWikiModal"
-        class="w-full inline-flex items-center justify-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        class="w-full inline-flex items-center justify-center px-3 py-2 text-sm bg-gold-600 text-white rounded-md hover:bg-gold-700 transition-colors"
       >
         <PlusIcon class="w-4 h-4 mr-1.5" />
         New Wiki Page
@@ -52,10 +52,10 @@ const hasFilteredPages = computed(() =>
             v-for="page in pages"
             :key="page.id"
             :to="`/books/${bookId}/wiki/${page.id}`"
-            class="flex gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            class="flex gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gold-300 dark:hover:border-gold-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             :class="
               activeWikiPageId === page.id
-                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600'
+                ? 'bg-gold-50 dark:bg-gold-900/20 border-gold-300 dark:border-gold-600'
                 : ''
             "
           >
@@ -84,8 +84,8 @@ const hasFilteredPages = computed(() =>
                 </div>
                 <button
                   @click.prevent.stop="toggleWikiPagePinned(page)"
-                  class="ml-2 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-300"
-                  :class="page.is_pinned ? 'text-blue-600 dark:text-blue-300' : ''"
+                  class="ml-2 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gold-600 dark:hover:bg-gray-700 dark:hover:text-gold-300"
+                  :class="page.is_pinned ? 'text-gold-600 dark:text-gold-300' : ''"
                   :title="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
                   :aria-label="page.is_pinned ? 'Unpin wiki page' : 'Pin wiki page'"
                 >
@@ -122,7 +122,7 @@ const hasFilteredPages = computed(() =>
       <button
         v-if="openCreateWikiModal"
         @click="openCreateWikiModal"
-        class="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        class="inline-flex items-center px-3 py-1.5 text-sm bg-gold-600 text-white rounded-md hover:bg-gold-700 transition-colors"
       >
         <PlusIcon class="w-4 h-4 mr-1" />
         New Wiki Page
@@ -140,7 +140,7 @@ const hasFilteredPages = computed(() =>
       <button
         v-if="openCreateWikiModal"
         @click="openCreateWikiModal"
-        class="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        class="inline-flex items-center px-3 py-1.5 text-sm bg-gold-600 text-white rounded-md hover:bg-gold-700 transition-colors"
       >
         <PlusIcon class="w-4 h-4 mr-1" />
         Create Wiki Page

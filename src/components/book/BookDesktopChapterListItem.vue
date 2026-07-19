@@ -55,7 +55,7 @@ const insertChapter = (placement: 'before' | 'after') => {
     class="relative block py-2 pr-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer border-l-4"
     :class="
       activeChapterId === chapter.id
-        ? 'bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
+        ? 'bg-gold-50 dark:bg-gold-900/20 border-l-gold-500'
         : 'border-l-transparent hover:border-l-gray-300 dark:hover:border-l-gray-600'
     "
   >
@@ -103,7 +103,7 @@ const insertChapter = (placement: 'before' | 'after') => {
       <div class="flex items-center space-x-1 ml-2">
         <button
           @click.prevent.stop="editChapter(chapter.id)"
-          class="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          class="p-1 text-gray-400 hover:text-gold-600 dark:hover:text-gold-400 transition-colors"
           title="Edit chapter"
           aria-label="Edit chapter"
         >
@@ -122,7 +122,7 @@ const insertChapter = (placement: 'before' | 'after') => {
           </button>
           <div
             v-if="showActionMenu"
-            class="absolute right-0 top-6 z-20 w-48 rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+            class="absolute right-0 top-6 z-20 w-48 rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-navy-800"
             role="menu"
             @click.prevent.stop
           >

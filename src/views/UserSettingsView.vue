@@ -549,9 +549,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="min-h-screen bg-gray-50 dark:bg-navy-900">
     <!-- Header -->
-    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+    <div class="bg-white dark:bg-navy-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div class="max-w-4xl mx-auto px-4 sm:px-6 py-4">
         <div class="flex items-center space-x-4">
           <button
@@ -569,7 +569,7 @@ onMounted(async () => {
     <!-- Main Content -->
     <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       <!-- OpenAI API Key Section -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex items-center space-x-2">
             <KeyIcon class="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -593,7 +593,7 @@ onMounted(async () => {
                   v-model="openaiApiKey"
                   :type="showApiKey ? 'text' : 'password'"
                   placeholder="sk-..."
-                  class="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                  class="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-gold-500 focus:border-transparent font-mono text-sm"
                 />
                 <button
                   type="button"
@@ -607,7 +607,7 @@ onMounted(async () => {
               </div>
               <button
                 @click="saveApiKey"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                class="px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors font-medium"
               >
                 Save
               </button>
@@ -648,20 +648,20 @@ onMounted(async () => {
           </div>
 
           <!-- Info Box -->
-          <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <h3 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+          <div class="p-4 bg-gold-50 dark:bg-gold-900/20 rounded-lg">
+            <h3 class="text-sm font-medium text-gold-900 dark:text-gold-100 mb-2">
               How to get your OpenAI API key:
             </h3>
-            <ol class="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
-              <li>Visit <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" class="underline hover:text-blue-600">platform.openai.com/api-keys</a></li>
+            <ol class="text-sm text-gold-800 dark:text-gold-200 space-y-1 list-decimal list-inside">
+              <li>Visit <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" class="underline hover:text-gold-600">platform.openai.com/api-keys</a></li>
               <li>Sign in or create an account</li>
               <li>Click "Create new secret key"</li>
               <li>Copy the key and paste it above</li>
             </ol>
-            <p class="text-xs text-blue-700 dark:text-blue-300 mt-3">
+            <p class="text-xs text-gold-700 dark:text-gold-300 mt-3">
               <strong>Privacy:</strong> Your API key never leaves your device. All AI requests are made directly from your browser to OpenAI.
             </p>
-            <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">
+            <p class="text-xs text-gold-700 dark:text-gold-300 mt-1">
               <strong>Cost:</strong> You'll be billed by OpenAI based on your usage. GPT-4o-mini is approximately $0.15 per 1M input tokens and $0.60 per 1M output tokens.
             </p>
           </div>
@@ -731,7 +731,7 @@ onMounted(async () => {
 
 
       <!-- Cloud Backup Section -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex items-center space-x-2">
             <CloudArrowUpIcon class="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -759,7 +759,7 @@ onMounted(async () => {
                 v-model="cloudPassword"
                 :type="showCloudPassword ? 'text' : 'password'"
                 placeholder="Enter a password used to encrypt your backup"
-                class="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                class="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-gold-500 focus:border-transparent text-sm"
               />
               <button
                 type="button"
@@ -781,7 +781,7 @@ onMounted(async () => {
             <button
               @click="handleCloudBackup"
               :disabled="isBackingUp || !cloudPassword || !cloudSyncAvailable || !cloudSyncReady"
-              class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg
                 v-if="isBackingUp"
@@ -847,13 +847,13 @@ onMounted(async () => {
             <p>⚠️ Each backup overwrites the previous one - use the same password each time</p>
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            To find your backup: Open <a href="https://drive.google.com" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">Google Drive</a> and search for <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">ai-beta-reader-backup.enc</code>
+            To find your backup: Open <a href="https://drive.google.com" target="_blank" rel="noopener noreferrer" class="text-gold-600 dark:text-gold-400 hover:underline">Google Drive</a> and search for <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">ai-beta-reader-backup.enc</code>
           </p>
         </div>
       </div>
 
       <!-- Data Export Section -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-8">
+      <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-8">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>

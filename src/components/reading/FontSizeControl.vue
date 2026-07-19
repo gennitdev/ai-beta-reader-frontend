@@ -21,8 +21,8 @@ const emit = defineEmits<{
 
 const containerClass = computed(() =>
   props.variant === 'panel'
-    ? 'rounded-xl border border-gray-200 bg-white p-4 pt-5 dark:border-gray-700 dark:bg-gray-800'
-    : 'rounded-lg border border-gray-200 bg-white p-4 shadow-md dark:border-gray-700 dark:bg-gray-800'
+    ? 'rounded-xl border border-gray-200 bg-white p-4 pt-5 dark:border-gray-700 dark:bg-navy-800'
+    : 'rounded-lg border border-gray-200 bg-white p-4 shadow-md dark:border-gray-700 dark:bg-navy-800'
 )
 
 const options: { key: ReadingFontSize; label: string; sizeClass: string }[] = [
@@ -44,11 +44,11 @@ const options: { key: ReadingFontSize; label: string; sizeClass: string }[] = [
         v-for="option in options"
         :key="option.key"
         type="button"
-        class="flex flex-1 items-center justify-center py-1.5 leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+        class="flex flex-1 items-center justify-center py-1.5 leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-500"
         :class="[
           option.sizeClass,
           modelValue === option.key
-            ? 'bg-blue-600 font-semibold text-white'
+            ? 'bg-gold-600 font-semibold text-white'
             : 'bg-transparent text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700',
         ]"
         :aria-pressed="modelValue === option.key"

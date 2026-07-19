@@ -59,7 +59,7 @@ const chapterLink = computed(
         />
       </div>
       <router-link :to="chapterLink" class="flex-1">
-        <h3 class="text-sm mt-1 font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+        <h3 class="text-sm mt-1 font-semibold text-gray-900 dark:text-white hover:text-gold-600 dark:hover:text-gold-400 transition-colors">
           {{ chapter.title || chapter.id }}
         </h3>
         <div class="mt-1 flex flex-wrap items-center gap-4">
@@ -87,7 +87,7 @@ const chapterLink = computed(
               {{ getSummaryPreview(chapter.summary) }}
               <button
                 @click.stop.prevent="toggleSummary(chapter.id)"
-                class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+                class="ml-1 text-gold-600 dark:text-gold-400 hover:text-gold-800 dark:hover:text-gold-300 font-medium"
               >
                 See more
               </button>
@@ -96,7 +96,7 @@ const chapterLink = computed(
               {{ chapter.summary }}
               <button
                 @click.stop.prevent="toggleSummary(chapter.id)"
-                class="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+                class="ml-1 text-gold-600 dark:text-gold-400 hover:text-gold-800 dark:hover:text-gold-300 font-medium"
               >
                 Show less
               </button>
@@ -107,7 +107,7 @@ const chapterLink = computed(
 
       <button
         @click="editChapter(chapter.id)"
-        class="mt-1 inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+        class="mt-1 inline-flex items-center px-3 py-1.5 text-sm bg-gold-100 dark:bg-gold-900/30 text-gold-700 dark:text-gold-300 rounded-md hover:bg-gold-200 dark:hover:bg-gold-800 transition-colors"
       >
         <PencilIcon class="w-4 h-4 mr-1" />
         Edit

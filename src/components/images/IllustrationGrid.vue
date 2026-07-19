@@ -43,12 +43,12 @@ const emit = defineEmits<{
       <div
         v-for="image in images"
         :key="image.id"
-        class="group relative overflow-hidden rounded-lg border bg-gray-50 dark:bg-gray-800"
-        :class="coverImageId === image.id ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-gray-200 dark:border-gray-700'"
+        class="group relative overflow-hidden rounded-lg border bg-gray-50 dark:bg-navy-800"
+        :class="coverImageId === image.id ? 'border-gold-500 ring-2 ring-gold-500/30' : 'border-gray-200 dark:border-gray-700'"
       >
         <div
           v-if="coverImageId === image.id"
-          class="absolute left-2 top-2 z-10 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white"
+          class="absolute left-2 top-2 z-10 rounded-full bg-gold-600 px-2 py-0.5 text-xs font-medium text-white"
         >
           Cover
         </div>
@@ -57,7 +57,7 @@ const emit = defineEmits<{
           <button
             v-if="canSetCover && coverImageId !== image.id"
             type="button"
-            class="rounded-full bg-blue-600/90 px-2 py-1 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            class="rounded-full bg-gold-600/90 px-2 py-1 text-xs font-medium text-white transition hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
             :disabled="settingCoverId === image.id"
             @click.stop="emit('set-cover', image.id)"
           >
@@ -109,7 +109,7 @@ const emit = defineEmits<{
               <span
                 v-for="tag in tagsByImageId[image.id]"
                 :key="tag.wiki_page_id"
-                class="max-w-full truncate rounded-full bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                class="max-w-full truncate rounded-full bg-gold-50 px-1.5 py-0.5 text-[11px] text-gold-700 dark:bg-gold-900/30 dark:text-gold-200"
               >
                 {{ tag.page_name }}
               </span>
@@ -121,7 +121,7 @@ const emit = defineEmits<{
 
     <div
       v-else
-      class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300"
+      class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-navy-800/60 dark:text-gray-300"
     >
       <PhotoIcon class="mx-auto mb-2 h-8 w-8 text-gray-300 dark:text-gray-600" />
       {{ emptyText || 'No illustrations yet.' }}

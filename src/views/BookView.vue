@@ -971,7 +971,7 @@ const getTypeIcon = (type: string) => {
 const getTypeColor = (type: string) => {
   switch (type) {
     case "character":
-      return "text-blue-600";
+      return "text-gold-600";
     case "location":
       return "text-green-600";
     case "concept":
@@ -1218,8 +1218,8 @@ onMounted(async () => {
       v-if="showCreateWikiModal"
       class="fixed inset-0 z-50 flex items-center justify-center px-4"
     >
-      <div class="absolute inset-0 bg-gray-900/70" @click="closeCreateWikiModal"></div>
-      <div class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+      <div class="absolute inset-0 bg-navy-900/70" @click="closeCreateWikiModal"></div>
+      <div class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-navy-800">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Create Wiki Page</h2>
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
           Add a new character, location, or concept to your book's wiki.
@@ -1234,7 +1234,7 @@ onMounted(async () => {
               id="wiki-page-name"
               v-model="newWikiPageName"
               type="text"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               placeholder="e.g., John Smith, The Castle, Time Travel"
               :disabled="creatingWikiPage"
               @keydown.enter="handleCreateWikiPage"
@@ -1248,7 +1248,7 @@ onMounted(async () => {
             <select
               id="wiki-page-type"
               v-model="newWikiPageType"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               :disabled="creatingWikiPage"
             >
               <option value="character">Character</option>
@@ -1274,7 +1274,7 @@ onMounted(async () => {
           <button
             @click="handleCreateWikiPage"
             :disabled="creatingWikiPage || !newWikiPageName.trim()"
-            class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            class="inline-flex items-center rounded-md bg-gold-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span
               v-if="creatingWikiPage"

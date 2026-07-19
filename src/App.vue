@@ -5,6 +5,7 @@ import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
 import BrowserStorageNotice from '@/components/BrowserStorageNotice.vue'
+import logoHorizontal from '@/assets/logo-horizontal.png'
 import { primaryNavItems } from '@/config/navigation'
 import type { Book, Chapter } from '@/lib/database'
 import type { FindReplaceScope } from '@/lib/findReplace'
@@ -199,14 +200,14 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
 </script>
 
 <template>
-  <div class="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 flex">
+  <div class="h-screen overflow-hidden bg-gray-50 dark:bg-navy-900 flex">
     <div class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- Header -->
-      <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 safe-area-top">
+      <header class="bg-navy-900 border-b border-navy-800 shadow-sm safe-area-top">
         <div class="px-4 sm:px-6">
         <!-- Desktop layout -->
         <div
-          class="hidden md:flex md:w-full md:flex-wrap md:items-start md:justify-between md:gap-y-2 md:py-3 lg:flex-nowrap lg:items-center lg:justify-between lg:h-12 lg:py-0"
+          class="hidden md:flex md:w-full md:flex-wrap md:items-start md:justify-between md:gap-y-2 md:py-3 lg:flex-nowrap lg:items-center lg:justify-between lg:h-14 lg:py-0"
         >
           <!-- Logo and Breadcrumbs / Navigation -->
           <div
@@ -216,18 +217,14 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
               @click="toggleSideNav"
               :aria-expanded="isSideNavOpen"
               aria-controls="side-nav"
-              class="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              class="p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
               aria-label="Toggle navigation"
             >
               <Bars3Icon v-if="!isSideNavOpen" class="w-6 h-6" />
               <XMarkIcon v-else class="w-6 h-6" />
             </button>
             <router-link to="/" class="flex items-center flex-shrink-0">
-              <h1
-                class="text-md text-gray-900 dark:text-white space-grotesk-logo whitespace-nowrap"
-              >
-                BETABOT
-              </h1>
+              <img :src="logoHorizontal" alt="Beta-bot" class="h-8 w-auto" />
             </router-link>
 
             <!-- Show breadcrumbs if available, otherwise show main nav -->
@@ -236,19 +233,19 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                 <router-link
                   v-if="crumb.to"
                   :to="crumb.to"
-                  class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                  class="text-gold-300 hover:text-gold-200 transition-colors"
                 >
                   {{ crumb.label }}
                 </router-link>
                 <span
                   v-else
-                  class="text-gray-700 dark:text-gray-300"
+                  class="text-gray-200"
                 >
                   {{ crumb.label }}
                 </span>
                 <span
                   v-if="index < breadcrumbs.length - 1"
-                  class="mx-2 text-gray-400 dark:text-gray-500"
+                  class="mx-2 text-gray-500"
                 >
                   >
                 </span>
@@ -257,8 +254,8 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
             <nav v-else-if="!isSettingsRoute" class="flex items-center space-x-6 whitespace-nowrap">
               <router-link
                 to="/books"
-                class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
-                active-class="text-blue-600 dark:text-blue-400"
+                class="text-gray-200 hover:text-gold-300 font-medium transition-colors"
+                active-class="text-gold-300"
               >
                 My Books
               </router-link>
@@ -270,7 +267,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
             <button
               v-if="currentBookId"
               @click="goToNewChapter"
-              class="hidden md:flex items-center justify-center p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              class="hidden md:flex items-center justify-center p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
               title="New Chapter"
               aria-label="Create new chapter"
             >
@@ -280,13 +277,13 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
             <button
               v-if="currentBookId"
               @click="showSearchModal = true"
-              class="hidden md:flex items-center px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md border border-gray-300 dark:border-gray-600 transition-colors"
+              class="hidden md:flex items-center px-3 py-1.5 text-sm text-gray-300 bg-navy-800 hover:bg-navy-700 rounded-md border border-navy-700 transition-colors"
             >
               <MagnifyingGlassIcon class="w-4 h-4 mr-2" />
               <span class="whitespace-nowrap">
                 Type
                 <kbd
-                  class="px-1 py-0.5 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded"
+                  class="px-1 py-0.5 text-xs font-semibold text-gray-200 bg-navy-900 border border-navy-700 rounded"
                 >
                   /
                 </kbd>
@@ -298,7 +295,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
             <button
               v-if="currentBookId"
               @click="showSearchModal = true"
-              class="md:hidden text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              class="md:hidden text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
               title="Search"
             >
               <MagnifyingGlassIcon class="w-5 h-5" />
@@ -309,10 +306,10 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
               class="flex items-center space-x-2 hover:opacity-80 transition-opacity"
               title="Settings"
             >
-              <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <Cog6ToothIcon class="w-5 h-5 text-white" />
+              <div class="w-8 h-8 bg-gold-500 rounded-full flex items-center justify-center">
+                <Cog6ToothIcon class="w-5 h-5 text-navy-900" />
               </div>
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <span class="text-sm font-medium text-gray-200">
                 Settings
               </span>
             </router-link>
@@ -321,7 +318,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
               href="https://github.com/gennitdev/ai-beta-reader-frontend"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+              class="inline-flex items-center px-3 py-2 text-gray-300 hover:text-white transition-colors"
               title="View on GitHub"
             >
               <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -340,14 +337,14 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                 @click="toggleSideNav"
                 :aria-expanded="isSideNavOpen"
                 aria-controls="side-nav"
-                class="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                class="p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
                 aria-label="Toggle navigation"
               >
                 <Bars3Icon v-if="!isSideNavOpen" class="w-6 h-6" />
                 <XMarkIcon v-else class="w-6 h-6" />
               </button>
               <router-link to="/" class="flex items-center">
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white space-grotesk-logo">Beta-bot</h1>
+                <img :src="logoHorizontal" alt="Beta-bot" class="h-8 w-auto" />
               </router-link>
             </div>
 
@@ -356,7 +353,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
               <button
                 v-if="currentBookId"
                 @click="showSearchModal = true"
-                class="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                class="p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
                 title="Search"
               >
                 <MagnifyingGlassIcon class="w-5 h-5" />
@@ -364,7 +361,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
               <button
                 v-if="currentBookId"
                 @click="goToNewChapter"
-                class="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                class="p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
                 title="New Chapter"
                 aria-label="Create new chapter"
               >
@@ -377,8 +374,8 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                 class="flex items-center hover:opacity-80 transition-opacity"
                 title="Settings"
               >
-                <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <Cog6ToothIcon class="w-5 h-5 text-white" />
+                <div class="w-8 h-8 bg-gold-500 rounded-full flex items-center justify-center">
+                  <Cog6ToothIcon class="w-5 h-5 text-navy-900" />
                 </div>
               </router-link>
 
@@ -386,7 +383,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                 href="https://github.com/gennitdev/ai-beta-reader-frontend"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center p-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                class="inline-flex items-center p-2 text-gray-300 hover:text-white transition-colors"
                 title="View on GitHub"
               >
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -402,19 +399,19 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
               <router-link
                 v-if="crumb.to"
                 :to="crumb.to"
-                class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors whitespace-nowrap"
+                class="text-gold-300 hover:text-gold-200 transition-colors whitespace-nowrap"
               >
                 {{ crumb.label }}
               </router-link>
               <span
                 v-else
-                class="text-gray-700 dark:text-gray-300 whitespace-nowrap"
+                class="text-gray-200 whitespace-nowrap"
               >
                 {{ crumb.label }}
               </span>
               <span
                 v-if="index < breadcrumbs.length - 1"
-                class="mx-2 text-gray-400 dark:text-gray-500 whitespace-nowrap"
+                class="mx-2 text-gray-500 whitespace-nowrap"
               >
                 >
               </span>
@@ -423,8 +420,8 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
           <nav v-else-if="!isSettingsRoute" class="flex items-center">
             <router-link
               to="/books"
-              class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
-              active-class="text-blue-600 dark:text-blue-400"
+              class="text-gray-200 hover:text-gold-300 font-medium transition-colors"
+              active-class="text-gold-300"
             >
               My Books
             </router-link>
@@ -455,7 +452,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
           <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeSideNav" />
           <div
             id="side-nav"
-            class="absolute inset-y-0 left-0 flex h-full w-72 max-w-[85%] flex-col bg-white px-6 py-6 shadow-xl dark:bg-gray-900"
+            class="absolute inset-y-0 left-0 flex h-full w-72 max-w-[85%] flex-col bg-white px-6 py-6 shadow-xl dark:bg-navy-900"
           >
             <div class="mb-4 flex items-center justify-between">
               <router-link
@@ -467,7 +464,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
               </router-link>
               <button
                 @click="closeSideNav"
-                class="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                class="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-navy-800"
                 aria-label="Close navigation"
               >
                 <XMarkIcon class="h-5 w-5" />
@@ -486,8 +483,8 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                   :href="href"
                   class="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
                   :class="isActive
-                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'"
+                    ? 'bg-gold-100 text-gold-600 dark:bg-gold-900/40 dark:text-gold-300'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-navy-800'"
                   :aria-current="isActive ? 'page' : undefined"
                   @click.prevent="navigate(); closeSideNav()"
                 >
@@ -509,8 +506,8 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                   :to="`/books/${book.id}`"
                   class="block rounded-lg px-3 py-1.5 text-sm leading-snug transition-colors"
                   :class="isBookActive(book.id)
-                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'"
+                    ? 'bg-gold-100 text-gold-600 dark:bg-gold-900/40 dark:text-gold-300'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-navy-800'"
                   :aria-current="isBookActive(book.id) ? 'page' : undefined"
                   @click="closeSideNav"
                 >

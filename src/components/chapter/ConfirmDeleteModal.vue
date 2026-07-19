@@ -19,9 +19,9 @@ const emit = defineEmits<{
       v-if="show"
       class="fixed inset-0 z-50 flex items-center justify-center px-4"
     >
-      <div class="absolute inset-0 bg-gray-900/70" @click="emit('cancel')"></div>
+      <div class="absolute inset-0 bg-navy-900/70" @click="emit('cancel')"></div>
       <div
-        class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800"
+        class="relative z-10 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-navy-800"
       >
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ title }}</h2>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">

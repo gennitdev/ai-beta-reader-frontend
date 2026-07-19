@@ -9,11 +9,11 @@ const builtInProfiles = computed(() => Object.values(BUILT_IN_PROFILES))
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="min-h-screen bg-gray-50 dark:bg-navy-900">
     <div class="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-8">
       <header class="flex items-start justify-between flex-wrap gap-2 sm:gap-4">
         <div>
-          <div class="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm text-blue-700 dark:text-blue-300 font-medium">
+          <div class="inline-flex items-center rounded-full bg-gold-100 dark:bg-gold-900/40 px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm text-gold-700 dark:text-gold-300 font-medium">
             <SparklesIcon class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
             AI Profiles
           </div>
@@ -26,7 +26,7 @@ const builtInProfiles = computed(() => Object.values(BUILT_IN_PROFILES))
         </div>
         <RouterLink
           to="/books"
-          class="inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors"
+          class="inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium text-gold-600 dark:text-gold-300 hover:text-gold-700 dark:hover:text-gold-200 transition-colors"
         >
           Browse Books
           <ArrowTopRightOnSquareIcon class="w-4 h-4 ml-1.5 sm:ml-2" />
@@ -41,7 +41,7 @@ const builtInProfiles = computed(() => Object.values(BUILT_IN_PROFILES))
           <article
             v-for="profile in builtInProfiles"
             :key="profile.id"
-            class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 flex flex-col justify-between shadow-sm hover:shadow transition-shadow"
+            class="bg-white dark:bg-navy-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 flex flex-col justify-between shadow-sm hover:shadow transition-shadow"
           >
             <div>
               <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
@@ -53,7 +53,7 @@ const builtInProfiles = computed(() => Object.values(BUILT_IN_PROFILES))
             </div>
             <RouterLink
               :to="`/ai-profiles/${profile.id}`"
-              class="mt-4 sm:mt-6 inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors"
+              class="mt-4 sm:mt-6 inline-flex items-center text-sm font-medium text-gold-600 dark:text-gold-300 hover:text-gold-700 dark:hover:text-gold-200 transition-colors"
             >
               View profile details
             </RouterLink>

@@ -30,7 +30,7 @@ defineProps<{
 <template>
   <div>
     <div v-if="loadingChapters" class="flex justify-center items-center h-32">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-gold-600"></div>
     </div>
 
     <div v-else-if="hasChapters" class="divide-y divide-gray-200 dark:divide-gray-800">
@@ -38,7 +38,7 @@ defineProps<{
         <button
           type="button"
           @click="togglePart(part.id)"
-          class="w-full text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+          class="w-full text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-500"
           :aria-expanded="expandedParts.has(part.id)"
           :aria-controls="`sidebar-part-${part.id}`"
         >
@@ -72,7 +72,7 @@ defineProps<{
                     ·
                     <router-link
                       :to="`/books/${bookId}/parts/${part.id}`"
-                      class="text-blue-300 hover:text-blue-200 hover:underline"
+                      class="text-gold-300 hover:text-gold-200 hover:underline"
                       @click.stop="expandPart(part.id)"
                     >View</router-link>
                   </p>
@@ -97,7 +97,7 @@ defineProps<{
 
           <div
             v-else
-            class="mx-2 my-2 rounded-lg border border-gray-200 bg-white px-3 py-3 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
+            class="mx-2 my-2 rounded-lg border border-gray-200 bg-white px-3 py-3 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-navy-800 dark:hover:bg-gray-700"
           >
             <div class="flex items-center justify-between gap-3">
               <div class="flex min-w-0 items-center gap-3">
@@ -122,7 +122,7 @@ defineProps<{
                     ·
                     <router-link
                       :to="`/books/${bookId}/parts/${part.id}`"
-                      class="text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                      class="text-gold-600 hover:text-gold-700 hover:underline dark:text-gold-400 dark:hover:text-gold-300"
                       @click.stop="expandPart(part.id)"
                     >View</router-link>
                   </p>
@@ -149,12 +149,12 @@ defineProps<{
         <div
           v-if="expandedParts.has(part.id)"
           :id="`sidebar-part-${part.id}`"
-          class="bg-white dark:bg-gray-800"
+          class="bg-white dark:bg-navy-800"
         >
           <div class="pr-2 pt-3 pb-2 flex justify-end border-t border-gray-200 dark:border-gray-700">
             <button
               @click.prevent.stop="createNewChapterInPart(part.id)"
-              class="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+              class="inline-flex items-center rounded-md bg-gold-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gold-700"
             >
               <PlusIcon class="w-4 h-4 mr-1" />
               Add Chapter in Part
@@ -204,7 +204,7 @@ defineProps<{
             · {{ formatWordCount(wordCountForChapters(sidebarUncategorized)) }} words
           </p>
         </div>
-        <div class="bg-white dark:bg-gray-800">
+        <div class="bg-white dark:bg-navy-800">
           <draggable
             :list="sidebarUncategorized"
             item-key="id"

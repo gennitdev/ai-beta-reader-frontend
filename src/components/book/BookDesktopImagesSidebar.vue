@@ -15,7 +15,7 @@ defineProps<{
 <template>
   <div>
     <div v-if="loadingImages" class="flex justify-center items-center h-32">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-gold-600"></div>
     </div>
 
     <div v-else-if="!canSelectImages && bookImages.length === 0" class="text-center py-8">
@@ -36,8 +36,8 @@ defineProps<{
         :class="[
           'relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 cursor-pointer transition-all',
           selectedImageId === image.id
-            ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-100 dark:ring-offset-gray-800'
-            : 'hover:ring-2 hover:ring-blue-400'
+            ? 'ring-2 ring-gold-500 ring-offset-2 ring-offset-gray-100 dark:ring-offset-gray-800'
+            : 'hover:ring-2 hover:ring-gold-400'
         ]"
       >
         <img

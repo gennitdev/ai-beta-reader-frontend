@@ -66,12 +66,12 @@ function handleBlur() {
       <span
         v-for="page in selectedPages"
         :key="page.id"
-        class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-200 dark:bg-blue-900/30 dark:text-blue-200 dark:ring-blue-700"
+        class="inline-flex items-center gap-1 rounded-full bg-gold-50 px-2.5 py-1 text-xs font-medium text-gold-700 ring-1 ring-inset ring-gold-200 dark:bg-gold-900/30 dark:text-gold-200 dark:ring-gold-700"
       >
         {{ page.page_name }}
         <button
           type="button"
-          class="rounded-full text-blue-500 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-200 dark:hover:text-white"
+          class="rounded-full text-gold-500 hover:text-gold-800 disabled:cursor-not-allowed disabled:opacity-60 dark:text-gold-200 dark:hover:text-white"
           :disabled="disabled"
           :aria-label="`Remove ${page.page_name}`"
           @click="removePage(page.id)"
@@ -85,7 +85,7 @@ function handleBlur() {
       <input
         v-model="query"
         type="text"
-        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:disabled:bg-gray-800/60"
+        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-600 dark:bg-navy-800 dark:text-white dark:disabled:bg-navy-800/60"
         placeholder="Tag a wiki page..."
         :disabled="disabled"
         @focus="isFocused = true"
@@ -94,7 +94,7 @@ function handleBlur() {
       />
       <div
         v-if="showSuggestions"
-        class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+        class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-navy-800"
       >
         <button
           v-for="page in availablePages"

@@ -110,7 +110,7 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
           <button
             v-if="chapterSummary && !isEditingSummary"
             @click="emit('start-edit')"
-            class="inline-flex items-center px-2 py-1 text-xs text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+            class="inline-flex items-center px-2 py-1 text-xs text-gold-600 transition-colors hover:text-gold-800 dark:text-gold-400 dark:hover:text-gold-300"
             title="Edit summary"
           >
             <PencilIcon class="mr-1 h-3 w-3" />
@@ -128,12 +128,12 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
       </div>
 
       <label
-        class="mb-4 flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300"
+        class="mb-4 flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-navy-800/60 dark:text-gray-300"
       >
         <input
           :checked="updateWikiEnabled"
           type="checkbox"
-          class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+          class="mt-0.5 h-4 w-4 rounded border-gray-300 text-gold-600 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700"
           :disabled="generatingSummary || isEditingSummary"
           @change="emit('update:updateWikiEnabled', ($event.target as HTMLInputElement).checked)"
         />
@@ -166,16 +166,16 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
       <!-- Wiki update results -->
       <div
         v-if="showWikiUpdateResults && wikiUpdateResults.length > 0"
-        class="rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"
+        class="rounded-md border border-gold-200 bg-gold-50 p-4 dark:border-gold-800 dark:bg-gold-900/20"
       >
         <div class="flex items-start justify-between">
           <div class="flex items-center">
-            <CheckCircleIcon class="mr-2 h-5 w-5 text-blue-500" />
-            <span class="text-sm font-medium text-blue-700 dark:text-blue-300">Wiki pages updated</span>
+            <CheckCircleIcon class="mr-2 h-5 w-5 text-gold-500" />
+            <span class="text-sm font-medium text-gold-700 dark:text-gold-300">Wiki pages updated</span>
           </div>
           <button
             @click="emit('dismiss-wiki-results')"
-            class="text-blue-500 hover:text-blue-700 dark:hover:text-blue-300"
+            class="text-gold-500 hover:text-gold-700 dark:hover:text-gold-300"
           >
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -187,7 +187,7 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
             v-for="result in wikiUpdateResults"
             :key="result.wikiPageId"
             :to="`${routePrefix}/${bookId}/wiki/${result.wikiPageId}`"
-            class="flex items-center text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+            class="flex items-center text-sm text-gold-600 hover:text-gold-800 dark:text-gold-400 dark:hover:text-gold-300"
           >
             <span
               :class="[
@@ -226,7 +226,7 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
                 <button
                   @click="emit('save')"
                   :disabled="savingSummary || !editedSummary.trim()"
-                  class="inline-flex items-center rounded bg-blue-600 px-2 py-1 text-xs text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="inline-flex items-center rounded bg-gold-600 px-2 py-1 text-xs text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span
                     v-if="savingSummary"
@@ -241,7 +241,7 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
               v-if="isEditingSummary"
               :value="editedSummary"
               rows="6"
-              class="w-full resize-vertical rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+              class="w-full resize-vertical rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-transparent focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
               placeholder="Enter chapter summary..."
               @input="emit('update:editedSummary', ($event.target as HTMLTextAreaElement).value)"
             ></textarea>
@@ -267,7 +267,7 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
                 :class="[
                   'inline-block rounded px-2 py-1 text-xs transition-colors',
                   getCharacterInfo(character)?.has_wiki_page
-                    ? 'cursor-pointer bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800'
+                    ? 'cursor-pointer bg-gold-100 text-gold-800 hover:bg-gold-200 dark:bg-gold-900 dark:text-gold-200 dark:hover:bg-gold-800'
                     : 'cursor-default bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
                 ]"
                 :disabled="!getCharacterInfo(character)?.has_wiki_page"

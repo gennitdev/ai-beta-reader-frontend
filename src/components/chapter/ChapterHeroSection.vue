@@ -26,7 +26,7 @@ const emit = defineEmits<{
   <div class="relative w-full">
     <!-- Hero image container -->
     <div
-      class="relative h-48 w-full overflow-hidden bg-gray-900 sm:h-64 md:h-80 lg:h-96 cursor-pointer"
+      class="relative h-48 w-full overflow-hidden bg-navy-900 sm:h-64 md:h-80 lg:h-96 cursor-pointer"
       @click="emit('open-lightbox')"
     >
       <img
@@ -50,14 +50,14 @@ const emit = defineEmits<{
     </div>
 
     <!-- Title edit field when editing with hero image -->
-    <div v-if="isEditing" class="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
+    <div v-if="isEditing" class="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-navy-900">
       <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chapter Title</label>
       <input
         :value="editedTitle"
         @input="emit('update:editedTitle', ($event.target as HTMLInputElement).value)"
         type="text"
         placeholder="Enter chapter title..."
-        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-lg font-semibold text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-lg font-semibold text-gray-900 placeholder-gray-400 focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-navy-800 dark:text-white dark:placeholder-gray-500"
       />
     </div>
 
@@ -85,7 +85,7 @@ const emit = defineEmits<{
         v-if="isEditing"
         @click="emit('save-chapter')"
         :disabled="savingChapter || !hasUnsavedChanges"
-        class="inline-flex items-center rounded-md bg-blue-600/90 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-blue-700 disabled:opacity-50"
+        class="inline-flex items-center rounded-md bg-gold-600/90 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-gold-700 disabled:opacity-50"
       >
         {{ savingChapter ? 'Saving...' : 'Save' }}
       </button>

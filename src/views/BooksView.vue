@@ -99,7 +99,7 @@ watch(
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white">My Books</h1>
       <button
         @click="showCreateModal = true"
-        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
       >
         <PlusIcon class="w-5 h-5 mr-2" />
         New Book
@@ -108,7 +108,7 @@ watch(
 
     <!-- Loading state -->
     <div v-if="loading" class="flex justify-center items-center h-64">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-600"></div>
     </div>
 
     <p
@@ -139,9 +139,9 @@ watch(
         </div>
         <div
           v-else
-          class="aspect-[9/16] w-full bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
+          class="aspect-[9/16] w-full bg-gradient-to-br from-gold-100 via-indigo-50 to-purple-100 dark:from-gold-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
         >
-          <BookOpenIcon class="w-16 h-16 text-blue-300 dark:text-blue-600 opacity-60" />
+          <BookOpenIcon class="w-16 h-16 text-gold-300 dark:text-gold-600 opacity-60" />
         </div>
 
         <!-- Overlaid metadata with gradient background -->
@@ -165,7 +165,7 @@ watch(
       </p>
       <button
         @click="showCreateModal = true"
-        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
       >
         <PlusIcon class="w-5 h-5 mr-2" />
         Create Your First Book
@@ -174,7 +174,7 @@ watch(
 
     <!-- Create book modal -->
     <div v-if="showCreateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+      <div class="bg-white dark:bg-navy-800 rounded-lg p-6 w-full max-w-md mx-4">
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Create New Book</h2>
 
         <form @submit.prevent="createBookHandler" class="space-y-4">
@@ -188,7 +188,7 @@ watch(
               @input="generateBookId"
               type="text"
               required
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gold-500 focus:border-transparent"
               placeholder="Enter book title"
             />
           </div>
@@ -202,7 +202,7 @@ watch(
               v-model="newBook.id"
               type="text"
               required
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gold-500 focus:border-transparent"
               placeholder="unique-book-id"
             />
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -238,7 +238,7 @@ watch(
             <button
               type="submit"
               :disabled="!newBook.title || !newBook.id || loading"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+              class="px-4 py-2 bg-gold-600 text-white rounded-md hover:bg-gold-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
             >
               <div v-if="loading" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
               {{ loading ? 'Creating...' : 'Create Book' }}

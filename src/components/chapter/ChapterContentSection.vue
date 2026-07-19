@@ -148,7 +148,7 @@ onUnmounted(() => {
     <div v-if="!isEditing" class="mb-2 flex justify-end gap-2">
       <button
         type="button"
-        class="inline-flex h-10 items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+        class="inline-flex h-10 items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2"
         :class="chapterCopyWarning
           ? 'border-amber-400 text-amber-600 dark:border-amber-500 dark:text-amber-400'
           : 'border-gray-300 text-gray-600 hover:border-gray-400 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white'"
@@ -168,7 +168,7 @@ onUnmounted(() => {
       </button>
       <button
         type="button"
-        class="inline-flex h-10 items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+        class="inline-flex h-10 items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
         @click.stop="isFullscreen = true"
       >
         <ArrowsPointingOutIcon class="h-4 w-4" />
@@ -194,7 +194,7 @@ onUnmounted(() => {
             <span class="text-gray-500">...</span>
             <button
               @click="toggleFullChapter(true)"
-              class="ml-2 inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              class="ml-2 inline-flex items-center px-3 py-1 text-sm font-medium text-gold-600 transition-colors hover:text-gold-800 dark:text-gold-400 dark:hover:text-gold-300"
             >
               Show more
             </button>
@@ -205,7 +205,7 @@ onUnmounted(() => {
           <div v-if="truncatedChapterText.needsTruncation" class="not-prose">
             <button
               @click="toggleFullChapter(false)"
-              class="mt-3 inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              class="mt-3 inline-flex items-center px-3 py-1 text-sm font-medium text-gold-600 transition-colors hover:text-gold-800 dark:text-gold-400 dark:hover:text-gold-300"
             >
               Show less
             </button>
@@ -218,16 +218,16 @@ onUnmounted(() => {
   <Teleport to="body">
     <div v-if="isFullscreen" class="fixed inset-0 z-50">
       <div
-        class="absolute inset-0 bg-gray-900/80 backdrop-blur-sm"
+        class="absolute inset-0 bg-navy-900/80 backdrop-blur-sm"
         @click="isFullscreen = false"
       ></div>
       <div class="relative z-10 flex h-full flex-col">
         <div class="flex-1 overflow-y-auto px-4 py-8 sm:px-8" @click="isFullscreen = false">
           <div class="mx-auto max-w-4xl" @click.stop>
-            <div class="relative rounded-lg bg-white p-6 shadow-2xl dark:bg-gray-900">
+            <div class="relative rounded-lg bg-white p-6 shadow-2xl dark:bg-navy-900">
               <button
                 type="button"
-                class="absolute right-4 top-4 inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+                class="absolute right-4 top-4 inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
                 @click.stop="isFullscreen = false"
               >
                 <ArrowsPointingInIcon class="h-4 w-4" />

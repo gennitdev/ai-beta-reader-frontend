@@ -538,7 +538,7 @@ watch(
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="min-h-screen bg-gray-50 dark:bg-navy-900">
     <div class="max-w-5xl mx-auto py-4 px-2 sm:py-8 sm:px-6 lg:px-8">
       <OrganizeHeader
         :book-title="book?.title ?? null"
@@ -548,7 +548,7 @@ watch(
         @refresh="refresh"
       />
 
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+      <div class="bg-white dark:bg-navy-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
         <OrganizePartsBoard
           :loading="loading"
           :error-message="errorMessage"

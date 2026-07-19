@@ -42,7 +42,7 @@ const emit = defineEmits<{
     </div>
     <button
       @click="emit('toggle-summary-panel')"
-      class="font-medium text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+      class="font-medium text-gold-600 transition-colors hover:text-gold-800 dark:text-gold-400 dark:hover:text-gold-300"
     >
       {{ showSummaryPanel ? "Hide Summary Panel" : "Show Summary Panel" }}
     </button>

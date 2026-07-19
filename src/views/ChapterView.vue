@@ -822,7 +822,7 @@ watch(
             @toggle-illustrations-panel="showIllustrationsPanel = !showIllustrationsPanel"
           />
           <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
-            <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+            <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-gold-600"></div>
           </div>
 
           <div
