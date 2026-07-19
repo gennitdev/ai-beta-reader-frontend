@@ -1,7 +1,7 @@
-# AI Beta Reader Vue Frontend - Claude Development Guide
+# beta bot Vue Frontend - Claude Development Guide
 
 ## Project Overview
-Vue.js 3 frontend for AI Beta Reader with local-first SQLite storage, Google Drive backup/restore, rich text editing, AI-powered writing feedback, wiki pages for world-building, and Electron desktop support.
+Vue.js 3 frontend for beta bot with local-first SQLite storage, Google Drive backup/restore, rich text editing, AI-powered writing feedback, wiki pages for world-building, and Electron desktop support.
 
 ## Quick Start Commands
 ```bash

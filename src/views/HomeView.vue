@@ -90,13 +90,13 @@ const detailedSteps = [
           <div class="max-w-xs mx-auto overflow-hidden rounded-2xl shadow-lg mb-8 ring-1 ring-navy-900/10">
             <img
               :src="logoStacked"
-              alt="Beta-bot"
+              alt="beta bot"
               class="w-full h-full object-cover"
             />
           </div>
 
           <p class="text-lg text-gray-700 dark:text-gray-300 mb-8">
-            Your <strong>AI Beta Reader</strong>. Get intelligent, contextual feedback on your creative writing.
+            Your <strong>AI-powered beta reader</strong>. Get intelligent, contextual feedback on your creative writing.
           </p>
 
           <div class="flex flex-col gap-3 mb-12">

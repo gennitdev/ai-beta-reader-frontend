@@ -2,7 +2,7 @@ import forms from '@tailwindcss/forms'
 import typography from '@tailwindcss/typography'
 
 /**
- * Beta-bot brand palette (from the moth-and-book logo)
+ * beta bot brand palette (from the moth-and-book logo)
  * navy   #00132f  page background / dark surfaces
  * gold   #dbab5d  primary accent
  * cream  #fae8cd  light text / highlights on navy
