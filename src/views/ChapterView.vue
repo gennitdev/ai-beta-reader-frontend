@@ -628,6 +628,25 @@ const handleChapterWikiLinksChanged = async (event: Event) => {
   const detail = customEvent.detail;
   if (!detail || !detail.chapterIds.includes(chapterId.value)) return;
 
+  // Find-and-replace (and its undo) writes new chapter text straight to the
+  // database, so pull the current row back in — otherwise the reader preview
+  // and the edit buffer keep showing the pre-replace text. Any in-progress
+  // unsaved edits are preserved (the edit buffer is only re-synced when clean).
+  const wasClean = !hasUnsavedChanges.value;
+  await loadChapters(bookId.value);
+  const updated = chapters.value.find(
+    (ch: DatabaseChapter) => ch.id === chapterId.value
+  );
+  if (updated && chapter.value) {
+    chapter.value.text = String(updated.text || "");
+    chapter.value.title = updated.title || null;
+    chapter.value.word_count = updated.word_count;
+    if (wasClean) {
+      editedText.value = String(updated.text || "");
+      editedTitle.value = updated.title || "";
+    }
+  }
+
   await Promise.all([loadLinkedWikiPages(), loadCharacters()]);
 };
 
