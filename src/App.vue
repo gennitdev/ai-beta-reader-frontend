@@ -60,14 +60,32 @@ const sortedBooks = computed(() => {
 const isBookActive = (bookId: string) => route.path.startsWith(`/books/${bookId}`)
 
 
-// Keyboard shortcut for search
+// Keyboard shortcuts for search. Both "/" and Cmd/Ctrl+F open the app's search
+// modal. Intercepting Cmd/Ctrl+F deliberately replaces the browser's native
+// find-in-page, which only scans the visible DOM — and chapter pages truncate
+// their text ("Show more"), so native find silently misses matches that the
+// modal's database-backed search returns.
 const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === '/' && !showSearchModal.value && currentBookId.value) {
-    // Only if not already in an input
-    if (e.target instanceof HTMLElement && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-      return
-    }
-    e.preventDefault()
+  const isFindShortcut =
+    (e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F')
+
+  const isTypingTarget =
+    e.target instanceof HTMLElement &&
+    (e.target.tagName === 'INPUT' ||
+      e.target.tagName === 'TEXTAREA' ||
+      e.target.isContentEditable)
+
+  // "/" is a bare shortcut, so ignore it while the user is typing in a field.
+  // Cmd/Ctrl+F is an explicit chord and should work even from within an editor.
+  const isSlashShortcut = e.key === '/' && !e.metaKey && !e.ctrlKey && !isTypingTarget
+
+  if (!isFindShortcut && !isSlashShortcut) return
+  // Only take over when there is a book to search (the modal needs a bookId);
+  // otherwise leave the browser's native find alone.
+  if (!currentBookId.value) return
+
+  e.preventDefault()
+  if (!showSearchModal.value) {
     showSearchModal.value = true
   }
 }
