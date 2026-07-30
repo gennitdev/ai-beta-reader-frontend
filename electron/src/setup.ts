@@ -102,6 +102,13 @@ export class ElectronCapacitorApp {
     const icon = nativeImage.createFromPath(
       join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'appIcon.ico' : 'appIcon.png')
     );
+    // On macOS the Dock icon is not controlled by BrowserWindow's `icon` option
+    // (that only covers the Windows/Linux taskbar), so an unpackaged/dev run
+    // falls back to the default Electron logo. Set it explicitly so the beta bot
+    // moth shows in the Dock.
+    if (process.platform === 'darwin' && app.dock) {
+      app.dock.setIcon(icon);
+    }
     this.mainWindowState = windowStateKeeper({
       defaultWidth: 1000,
       defaultHeight: 800,
