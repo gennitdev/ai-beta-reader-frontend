@@ -62,6 +62,29 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// Manuscripts routinely mix straight keyboard punctuation with smart/curly
+// punctuation (e.g. text pasted from Word or Google Docs). Treat the variants
+// as interchangeable so a search typed with a straight ' or " still finds the
+// curly forms, and vice versa. The regex is still run against the original,
+// unmodified text, so match offsets stay valid for find-and-replace.
+const QUOTE_EQUIVALENCE_CLASSES: ReadonlyArray<{ chars: RegExp; group: string }> = [
+  // Straight apostrophe, curly single quotes, modifier-letter apostrophe.
+  { chars: /['‘’ʼ]/g, group: "['‘’ʼ]" },
+  // Straight double quote, curly double quotes.
+  { chars: /["“”]/g, group: '["“”]' },
+]
+
+function buildSearchPattern(searchTerm: string): string {
+  let pattern = escapeRegExp(searchTerm)
+  for (const { chars, group } of QUOTE_EQUIVALENCE_CLASSES) {
+    // Replacement is a plain string with no `$` sequences, so it is inserted
+    // literally; each class only contains its own variants, so the passes do
+    // not interfere with one another.
+    pattern = pattern.replace(chars, group)
+  }
+  return pattern
+}
+
 export function findTextMatches(
   text: string,
   searchTerm: string,
@@ -72,7 +95,7 @@ export function findTextMatches(
 
   const contextLength = Math.max(0, options.contextLength ?? DEFAULT_CONTEXT_LENGTH)
   const flags = options.caseSensitive ? 'g' : 'gi'
-  const regex = new RegExp(escapeRegExp(searchTerm), flags)
+  const regex = new RegExp(buildSearchPattern(searchTerm), flags)
   const matches: TextMatch[] = []
 
   for (const match of text.matchAll(regex)) {

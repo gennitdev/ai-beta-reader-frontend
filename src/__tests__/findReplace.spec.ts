@@ -47,6 +47,42 @@ describe('findTextMatches', () => {
   it('returns no matches for an empty search term', () => {
     expect(findTextMatches('Jon', '', 'text')).toEqual([])
   })
+
+  it('matches curly apostrophes when searching with a straight apostrophe', () => {
+    const matches = findTextMatches('She said she didn’t know I’m here.', "didn't", 'text')
+
+    expect(matches).toHaveLength(1)
+    // The matched text is the original (curly) form, so offsets stay valid.
+    expect(matches[0].matchedText).toBe('didn’t')
+  })
+
+  it('matches straight apostrophes when searching with a curly apostrophe', () => {
+    const matches = findTextMatches("don't stop", 'don’t', 'text')
+
+    expect(matches).toHaveLength(1)
+    expect(matches[0].matchedText).toBe("don't")
+  })
+
+  it('treats straight and curly double quotes as equivalent', () => {
+    const matches = findTextMatches('He said “Hello” loudly.', '"Hello"', 'text')
+
+    expect(matches).toHaveLength(1)
+    expect(matches[0].matchedText).toBe('“Hello”')
+  })
+
+  it('finds both straight and curly variants in one pass', () => {
+    const matches = findTextMatches('I’m sure I\'m right.', "I'm", 'text')
+
+    expect(matches.map((match) => match.matchedText)).toEqual(['I’m', "I'm"])
+  })
+
+  it('produces offsets usable for replacement across quote variants', () => {
+    const text = 'She didn’t care.'
+    const [match] = findTextMatches(text, "didn't", 'text')
+
+    // The offsets must index the original text so replacement succeeds.
+    expect(replaceTextMatch(text, match, 'did not')).toBe('She did not care.')
+  })
 })
 
 describe('formatReplacement', () => {
