@@ -1,5 +1,5 @@
 {
-  "appId": "com.yourdoamnin.yourapp",
+  "appId": "com.betareader.app",
   "directories": {
     "buildResources": "resources"
   },
@@ -19,7 +19,8 @@
     "icon": "assets/appIcon.ico"
   },
   "mac": {
-    "category": "your.app.category.type",
-    "target": "dmg"
+    "category": "public.app-category.productivity",
+    "target": "dmg",
+    "icon": "assets/appIcon.icns"
   }
 }
