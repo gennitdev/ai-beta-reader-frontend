@@ -427,7 +427,7 @@ watch([bookId, partId], async () => {
       </div>
     </div>
 
-    <div class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-6xl px-3 py-8 sm:px-6 lg:px-8">
       <div v-if="loading" class="flex h-64 items-center justify-center">
         <div class="h-10 w-10 animate-spin rounded-full border-b-2 border-gold-600"></div>
       </div>
@@ -442,7 +442,7 @@ watch([bookId, partId], async () => {
 
         <template v-else>
           <!-- Part Cover Hero -->
-          <div v-if="partCoverSrc" class="relative -mx-4 -mt-8 mb-8 sm:-mx-6 lg:-mx-8">
+          <div v-if="partCoverSrc" class="relative -mx-3 -mt-8 mb-8 sm:-mx-6 lg:-mx-8">
             <!-- Hero image container -->
             <div
               class="relative h-48 w-full overflow-hidden bg-navy-900 sm:h-64 md:h-80 lg:h-96 cursor-pointer"
@@ -818,11 +818,14 @@ watch([bookId, partId], async () => {
               </button>
             </div>
 
-            <div v-else class="space-y-4">
+            <div
+              v-else
+              class="divide-y divide-gray-200 dark:divide-gray-800 sm:space-y-4 sm:divide-y-0"
+            >
               <div
                 v-for="chapter in chapterEntries"
                 :key="chapter.id"
-                class="cursor-pointer rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-gold-200 dark:border-gray-800 dark:bg-navy-900 dark:hover:border-gold-700/50"
+                class="cursor-pointer bg-white py-4 transition-colors dark:bg-navy-900 sm:rounded-lg sm:border sm:border-gray-200 sm:p-5 sm:shadow-sm sm:hover:border-gold-200 dark:sm:border-gray-800 dark:sm:hover:border-gold-700/50"
                 @click="openChapter(chapter.id)"
               >
                 <div class="flex gap-4">
