@@ -167,9 +167,11 @@ const fontSizeClass = computed(() => {
   @apply border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic;
 }
 
-/* Reading layout: enhanced typography for long-form chapter prose */
+/* Reading layout: enhanced typography for long-form chapter prose.
+   Only vertical padding so text flows to the container's horizontal edges;
+   the surrounding layout owns the left/right margins. */
 .markdown-body {
-  padding: 2rem;
+  padding: 2rem 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.65;
   letter-spacing: -0.01em;
