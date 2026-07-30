@@ -646,6 +646,21 @@ const handleChapterWikiLinksChanged = async (event: Event) => {
   const detail = customEvent.detail
   if (!detail || !detail.wikiPageIds.includes(wikiPageId.value)) return
 
+  // Find-and-replace (and its undo) writes new page text straight to the
+  // database, so pull the current row back in — otherwise the view keeps
+  // showing the pre-replace text. The content edit buffer is only re-synced
+  // when it has no unsaved changes.
+  const contentWasClean = !wikiPage.value || editedContent.value === wikiPage.value.content
+  const updated = await getWikiPageById(wikiPageId.value)
+  if (updated && wikiPage.value) {
+    wikiPage.value.page_name = updated.page_name
+    wikiPage.value.content = updated.content || ''
+    wikiPage.value.summary = updated.summary || null
+    if (contentWasClean) {
+      editedContent.value = updated.content || ''
+    }
+  }
+
   await loadLinkedChapters()
 }
 

@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import TextEditor from '@/components/TextEditor.vue'
 import { ArrowLeftIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import type { Book, BookPart, Chapter as DatabaseChapter } from '@/lib/database'
+import {
+  CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+  type ChapterWikiLinksChangedDetail,
+} from '@/utils/chapterWikiLinkEvents'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,6 +35,10 @@ const chapter = ref({
   title: '',
   text: ''
 })
+// Baseline of the last-loaded (saved) title/text, used to tell whether the
+// editor buffer has unsaved edits before an out-of-band refresh reloads it.
+const savedTitle = ref('')
+const savedText = ref('')
 const generatedSuffix = ref(Date.now().toString(36).slice(-6))
 const parts = ref<BookPart[]>([])
 const selectedPartId = ref(
@@ -142,6 +150,8 @@ const loadChapter = async () => {
         title: chapterData.title || '',
         text: chapterData.text
       }
+      savedTitle.value = chapter.value.title
+      savedText.value = chapter.value.text
       selectedPartId.value = chapterData.part_id || ''
     } else {
       console.error('Chapter not found')
@@ -208,9 +218,43 @@ const goBack = () => {
   router.push(`/books/${bookId}`)
 }
 
+const handleChapterWikiLinksChanged = async (event: Event) => {
+  if (!isEditing) return
+  const detail = (event as CustomEvent<ChapterWikiLinksChangedDetail>).detail
+  if (!detail || !detail.chapterIds.includes(chapterId)) return
+
+  // Find-and-replace (and its undo) can rewrite this chapter directly in the
+  // database while the editor is open. Reload it so the buffer reflects the
+  // change — but only when the buffer has no unsaved edits, to avoid
+  // discarding in-progress work.
+  const isClean =
+    chapter.value.title === savedTitle.value && chapter.value.text === savedText.value
+  if (!isClean) return
+
+  await loadChapters(bookId)
+  const updated = chapters.value.find((ch: DatabaseChapter) => ch.id === chapterId)
+  if (updated) {
+    chapter.value.title = updated.title || ''
+    chapter.value.text = updated.text
+    savedTitle.value = chapter.value.title
+    savedText.value = chapter.value.text
+  }
+}
+
 onMounted(() => {
   loadParts()
   loadChapter()
+  window.addEventListener(
+    CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+    handleChapterWikiLinksChanged as EventListener,
+  )
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    CHAPTER_WIKI_LINKS_CHANGED_EVENT,
+    handleChapterWikiLinksChanged as EventListener,
+  )
 })
 
 watch(
