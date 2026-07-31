@@ -987,6 +987,8 @@ watch(
           />
 
           <ChapterVersionHistory
+            :book-id="bookId"
+            :chapter-id="chapterId"
             :revisions="chapterRevisions"
             :loading="loadingChapterRevisions"
           />

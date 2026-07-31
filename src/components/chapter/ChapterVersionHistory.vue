@@ -1,29 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { ClockIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/vue/24/outline'
+import { ref } from 'vue'
+import { ClockIcon, ChevronDownIcon, ChevronRightIcon, ChevronUpIcon } from '@heroicons/vue/24/outline'
 import type { ChapterRevision } from '@/lib/database'
-import { createRevisionDiff } from '@/lib/revisionDiff'
 
-const props = defineProps<{
+defineProps<{
+  bookId: string
+  chapterId: string
   revisions: ChapterRevision[]
   loading?: boolean
 }>()
 
 const expanded = ref(false)
-const selectedId = ref<string | null>(null)
-
-watch(
-  () => props.revisions[0]?.id,
-  () => {
-    selectedId.value = props.revisions[0]?.id ?? null
-  },
-  { immediate: true },
-)
-
-const selectedIndex = computed(() => props.revisions.findIndex((revision) => revision.id === selectedId.value))
-const selectedRevision = computed(() => props.revisions[selectedIndex.value] ?? null)
-const previousRevision = computed(() => props.revisions[selectedIndex.value + 1] ?? null)
-const diff = computed(() => createRevisionDiff(previousRevision.value?.text ?? '', selectedRevision.value?.text ?? ''))
 
 const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -60,15 +47,12 @@ const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
       <p v-else-if="revisions.length === 0" class="px-4 py-5 text-sm text-gray-500 dark:text-gray-400">
         Your next chapter save will appear here.
       </p>
-      <template v-else>
-        <div class="max-h-56 overflow-y-auto border-b border-gray-200 dark:border-gray-700">
-          <button
+      <div v-else class="max-h-72 overflow-y-auto">
+          <RouterLink
             v-for="revision in revisions"
             :key="revision.id"
-            type="button"
-            class="flex w-full items-center justify-between gap-3 border-l-2 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-navy-700"
-            :class="selectedId === revision.id ? 'border-gold-500 bg-gold-50/60 dark:bg-gold-900/10' : 'border-transparent'"
-            @click="selectedId = revision.id"
+            :to="`/books/${bookId}/chapters/${chapterId}/versions/${revision.id}`"
+            class="flex w-full items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-navy-700"
           >
             <span>
               <span class="block text-sm font-medium text-gray-900 dark:text-white">
@@ -76,34 +60,15 @@ const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
               </span>
               <span class="text-xs text-gray-500 dark:text-gray-400">{{ revision.word_count.toLocaleString() }} words</span>
             </span>
-            <span v-if="revision.revision_kind === 'save'" class="shrink-0 text-xs">
-              <span class="text-emerald-600">+{{ revision.words_added }}</span>
-              <span class="ml-2 text-rose-600">−{{ revision.words_removed }}</span>
+            <span class="flex shrink-0 items-center gap-3">
+              <span v-if="revision.revision_kind === 'save'" class="text-xs">
+                <span class="text-emerald-600">+{{ revision.words_added }}</span>
+                <span class="ml-2 text-rose-600">−{{ revision.words_removed }}</span>
+              </span>
+              <ChevronRightIcon class="h-4 w-4 text-gray-400" />
             </span>
-          </button>
-        </div>
-
-        <div v-if="selectedRevision" class="p-4">
-          <div v-if="selectedRevision.title !== previousRevision?.title" class="mb-3 text-xs text-gray-500 dark:text-gray-400">
-            Title: <span class="font-medium text-gray-800 dark:text-gray-200">{{ selectedRevision.title || 'Untitled' }}</span>
-          </div>
-          <div class="max-h-80 overflow-y-auto rounded-md bg-gray-50 p-3 text-sm leading-6 text-gray-700 dark:bg-navy-900 dark:text-gray-300">
-            <span
-              v-for="(segment, index) in diff"
-              :key="index"
-              class="whitespace-pre-wrap"
-              :class="{
-                'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100': segment.type === 'added',
-                'bg-rose-100 text-rose-800 line-through dark:bg-rose-900/40 dark:text-rose-100': segment.type === 'removed',
-              }"
-            >{{ segment.text }}</span>
-          </div>
-          <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            <template v-if="previousRevision">Compared with the preceding saved version.</template>
-            <template v-else>First recorded version of this chapter.</template>
-          </p>
-        </div>
-      </template>
+          </RouterLink>
+      </div>
     </div>
   </section>
 </template>
