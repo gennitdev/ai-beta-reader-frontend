@@ -3,17 +3,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { ChapterRevision } from '@/lib/database'
 
-const revisions = vi.hoisted(() => [] as ChapterRevision[])
+const { revisions, routeParams, replace, restoreChapterRevision } = vi.hoisted(() => ({
+  revisions: [] as ChapterRevision[],
+  routeParams: { id: 'book-1', chapterId: 'chapter-1', revisionId: 'revision-2' },
+  replace: vi.fn(async () => {}),
+  restoreChapterRevision: vi.fn(),
+}))
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({
-    params: { id: 'book-1', chapterId: 'chapter-1', revisionId: 'revision-2' },
+    params: routeParams,
   }),
+  useRouter: () => ({ replace }),
 }))
 
 vi.mock('@/composables/useDatabase', () => ({
   useDatabase: () => ({
     getChapterRevisions: vi.fn(async () => revisions),
+    restoreChapterRevision,
   }),
 }))
 
@@ -59,7 +66,12 @@ const setDesktopViewport = (matches: boolean) => {
   })))
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  routeParams.revisionId = 'revision-2'
+  replace.mockClear()
+  restoreChapterRevision.mockReset()
+})
 
 describe('ChapterVersionDiffView', () => {
   it('shows the selected revision compared with the preceding version', async () => {
@@ -105,5 +117,24 @@ describe('ChapterVersionDiffView', () => {
 
     expect(wrapper.get('[data-testid="unified-diff"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-pressed="true"]').text()).toBe('Unified')
+  })
+
+  it('restores an older version as a new revision after confirmation', async () => {
+    seedRevisions()
+    routeParams.revisionId = 'revision-1'
+    restoreChapterRevision.mockResolvedValue({ ...revisions[1], id: 'revision-restored' })
+
+    const wrapper = mount(ChapterVersionDiffView, {
+      global: { stubs: { RouterLink: true } },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="open-restore"]').trigger('click')
+    expect(wrapper.text()).toContain('Your newer versions will remain in history')
+    await wrapper.get('[data-testid="confirm-restore"]').trigger('click')
+    await flushPromises()
+
+    expect(restoreChapterRevision).toHaveBeenCalledWith('revision-1')
+    expect(replace).toHaveBeenCalledWith('/books/book-1/chapters/chapter-1/versions/revision-restored')
   })
 })

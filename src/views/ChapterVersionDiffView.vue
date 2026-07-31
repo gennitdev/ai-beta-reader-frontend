@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { ArrowLeftIcon, ClockIcon } from '@heroicons/vue/24/outline'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeftIcon, ArrowPathIcon, ClockIcon } from '@heroicons/vue/24/outline'
 import { useDatabase } from '@/composables/useDatabase'
 import type { ChapterRevision } from '@/lib/database'
 import { createRevisionDiff, getRevisionDiffStats } from '@/lib/revisionDiff'
 
 const route = useRoute()
-const { getChapterRevisions } = useDatabase()
+const router = useRouter()
+const { getChapterRevisions, restoreChapterRevision } = useDatabase()
 
 const bookId = computed(() => route.params.id as string)
 const chapterId = computed(() => route.params.chapterId as string)
@@ -17,6 +18,9 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const diffMode = ref<'split' | 'unified'>('unified')
 const hasSelectedDiffMode = ref(false)
+const showRestoreConfirmation = ref(false)
+const restoring = ref(false)
+const restoreError = ref<string | null>(null)
 let desktopMediaQuery: MediaQueryList | null = null
 
 const revisionIndex = computed(() => revisions.value.findIndex((revision) => revision.id === revisionId.value))
@@ -37,6 +41,23 @@ const syncDefaultDiffMode = (matches: boolean) => {
 }
 
 const handleViewportChange = (event: MediaQueryListEvent) => syncDefaultDiffMode(event.matches)
+
+const restoreVersion = async () => {
+  if (!revision.value) return
+  restoring.value = true
+  restoreError.value = null
+  try {
+    const restored = await restoreChapterRevision(revision.value.id)
+    revisions.value = await getChapterRevisions(chapterId.value)
+    showRestoreConfirmation.value = false
+    await router.replace(`/books/${bookId.value}/chapters/${chapterId.value}/versions/${restored.id}`)
+  } catch (restoreFailure) {
+    console.error('Failed to restore chapter version:', restoreFailure)
+    restoreError.value = 'This version could not be restored. Please try again.'
+  } finally {
+    restoring.value = false
+  }
+}
 
 const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
   dateStyle: 'long',
@@ -95,6 +116,7 @@ onUnmounted(() => desktopMediaQuery?.removeEventListener('change', handleViewpor
                 {{ formatDate(revision.created_at) }}
               </p>
             </div>
+            <div class="flex flex-col items-end gap-3">
             <div class="rounded-lg bg-gray-50 px-4 py-3 text-sm dark:bg-navy-900">
               <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <span class="font-medium text-emerald-600 dark:text-emerald-400">
@@ -118,6 +140,18 @@ onUnmounted(() => desktopMediaQuery?.removeEventListener('change', handleViewpor
                 <span class="flex-1 bg-rose-500"></span>
               </div>
             </div>
+              <span v-if="revisionIndex === 0" class="text-xs font-medium text-gray-500 dark:text-gray-400">Current saved version</span>
+              <button
+                v-else
+                type="button"
+                data-testid="open-restore"
+                class="inline-flex items-center gap-2 rounded-lg border border-gold-500 px-3 py-2 text-sm font-medium text-gold-700 hover:bg-gold-50 dark:text-gold-300 dark:hover:bg-gold-900/20"
+                @click="showRestoreConfirmation = true"
+              >
+                <ArrowPathIcon class="h-4 w-4" />
+                Restore this version
+              </button>
+            </div>
           </div>
 
           <div v-if="revision.title !== previousRevision?.title" class="mt-5 grid gap-3 border-t border-gray-200 pt-5 text-sm dark:border-gray-700 sm:grid-cols-2">
@@ -131,6 +165,22 @@ onUnmounted(() => desktopMediaQuery?.removeEventListener('change', handleViewpor
             </div>
           </div>
         </header>
+
+        <section v-if="showRestoreConfirmation" class="mt-4 rounded-xl border border-gold-300 bg-gold-50 p-4 dark:border-gold-700 dark:bg-gold-900/20">
+          <h2 class="font-semibold text-gray-900 dark:text-white">Restore this saved version?</h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+            The chapter will use this title and text again. Your newer versions will remain in history, and the restoration will be recorded as a new version.
+          </p>
+          <p v-if="restoreError" class="mt-2 text-sm text-rose-600 dark:text-rose-300">{{ restoreError }}</p>
+          <div class="mt-4 flex gap-2">
+            <button type="button" data-testid="confirm-restore" class="rounded-lg bg-gold-600 px-4 py-2 text-sm font-medium text-white hover:bg-gold-500 disabled:opacity-60" :disabled="restoring" @click="restoreVersion">
+              {{ restoring ? 'Restoring…' : 'Restore version' }}
+            </button>
+            <button type="button" class="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-navy-800" :disabled="restoring" @click="showRestoreConfirmation = false">
+              Cancel
+            </button>
+          </div>
+        </section>
 
         <section class="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800">
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-4 dark:border-gray-700 sm:px-6">

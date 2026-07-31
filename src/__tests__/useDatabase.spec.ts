@@ -128,6 +128,7 @@ describe('useDatabase — delegation to the database layer', () => {
     const calls: Array<[keyof typeof api, unknown[]]> = [
       ['saveSummary', [{ chapter_id: 'c' }]],
       ['getChapterRevisions', ['c']],
+      ['restoreChapterRevision', ['r']],
       ['getBookRevisionActivity', ['b']],
       ['getSummary', ['c']],
       ['savePartSummary', [{ part_id: 'p' }]],

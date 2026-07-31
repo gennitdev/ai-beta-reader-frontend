@@ -169,6 +169,20 @@ export function useDatabase() {
     }
   }
 
+  async function restoreChapterRevision(revisionId: string): Promise<ChapterRevision> {
+    try {
+      error.value = null
+      await initializeDatabase()
+      const restored = await db.restoreChapterRevision(revisionId)
+      await loadChapters(restored.book_id)
+      return restored
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to restore chapter version'
+      console.error('Restore chapter version error:', e)
+      throw e
+    }
+  }
+
   async function getBookRevisionActivity(bookId: string): Promise<ChapterRevisionActivity[]> {
     try {
       error.value = null
@@ -953,6 +967,7 @@ export function useDatabase() {
     loadChapters,
     saveChapter,
     getChapterRevisions,
+    restoreChapterRevision,
     getBookRevisionActivity,
     deleteChapter,
 

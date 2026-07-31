@@ -147,6 +147,21 @@ describe('chapters', () => {
     const [revision] = await db.getChapterRevisions('ch-1')
     expect(revision).toMatchObject({ words_added: 2, words_removed: 2 })
   })
+
+  it('restores an older version as a new revision without deleting newer history', async () => {
+    await db.saveChapter(chapter())
+    await db.saveChapter(chapter({ text: 'Once upon a darker time.', word_count: 5 }))
+    const beforeRestore = await db.getChapterRevisions('ch-1')
+
+    const restored = await db.restoreChapterRevision(beforeRestore[1].id)
+
+    expect(restored.id).not.toBe(beforeRestore[1].id)
+    expect(restored.text).toBe('Once upon a time.')
+    const revisions = await db.getChapterRevisions('ch-1')
+    expect(revisions).toHaveLength(3)
+    expect(revisions.some((revision) => revision.text === 'Once upon a darker time.')).toBe(true)
+    expect((await db.getChapters('book-1'))[0].text).toBe('Once upon a time.')
+  })
 })
 
 describe('parts', () => {

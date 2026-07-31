@@ -1263,8 +1263,9 @@ export class AppDatabase {
     }
   }
 
-  async saveChapter(chapter: Chapter, options: { createRevision?: boolean } = {}) {
+  async saveChapter(chapter: Chapter, options: { createRevision?: boolean; forceRevision?: boolean } = {}): Promise<string | null> {
     const createRevision = options.createRevision !== false;
+    let createdRevisionId: string | null = null;
     const existingQuery = `SELECT id, book_id, part_id, title, text, word_count, created_at
                            FROM chapters WHERE id = ? LIMIT 1`;
     let existing: Chapter | null = null;
@@ -1278,7 +1279,7 @@ export class AppDatabase {
       }
     }
 
-    const changed = !existing || existing.title !== chapter.title || existing.text !== chapter.text;
+    const changed = options.forceRevision === true || !existing || existing.title !== chapter.title || existing.text !== chapter.text;
     const query = `INSERT INTO chapters (id, book_id, part_id, title, text, word_count, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
@@ -1340,6 +1341,7 @@ export class AppDatabase {
       const wordChanges = countChangedWords(existing?.text ?? '', chapter.text);
       const savedAt = new Date().toISOString();
       const revisionId = await insertRevision(chapter, 'save', savedAt, wordChanges.added, wordChanges.removed);
+      createdRevisionId = revisionId;
       await this.insertChapterActivity({
         id: revisionId,
         bookId: chapter.book_id,
@@ -1356,6 +1358,7 @@ export class AppDatabase {
 
     // Add chapter to book's chapter_order if not already present
     await this.addChapterToBookOrder(chapter.book_id, chapter.id);
+    return createdRevisionId;
   }
 
   private async insertChapterActivity(activity: {
@@ -1389,6 +1392,47 @@ export class AppDatabase {
     }
     const result = this.db.exec(query, [chapterId]);
     return result[0]?.values.map(toWebChapterRevision) ?? [];
+  }
+
+  async restoreChapterRevision(revisionId: string): Promise<ChapterRevision> {
+    const revisionQuery = `SELECT id, chapter_id, book_id, title, text, word_count, words_added, words_removed,
+                                  revision_kind, created_at
+                           FROM chapter_revisions WHERE id = ? LIMIT 1`;
+    const chapterQuery = `SELECT id, book_id, part_id, title, text, word_count, created_at
+                          FROM chapters WHERE id = ? LIMIT 1`;
+
+    let target: ChapterRevision | null = null;
+    if (this.isNative) {
+      const result = await this.db.query(revisionQuery, [revisionId]);
+      target = result.values?.[0] ? toNativeChapterRevision(result.values[0]) : null;
+    } else {
+      const result = this.db.exec(revisionQuery, [revisionId]);
+      target = result[0]?.values?.[0] ? toWebChapterRevision(result[0].values[0]) : null;
+    }
+    if (!target) throw new Error('Chapter version not found');
+
+    let current: Chapter | null = null;
+    if (this.isNative) {
+      const result = await this.db.query(chapterQuery, [target.chapter_id]);
+      current = result.values?.[0] ? toNativeChapter(result.values[0]) : null;
+    } else {
+      const result = this.db.exec(chapterQuery, [target.chapter_id]);
+      current = result[0]?.values?.[0] ? toWebChapter(result[0].values[0]) : null;
+    }
+    if (!current) throw new Error('Chapter not found');
+
+    const restoredId = await this.saveChapter({
+      ...current,
+      title: target.title ?? undefined,
+      text: target.text,
+      word_count: target.word_count,
+    }, { forceRevision: true });
+    if (!restoredId) throw new Error('Failed to create restored chapter version');
+
+    const restored = (await this.getChapterRevisions(target.chapter_id))
+      .find((item) => item.id === restoredId);
+    if (!restored) throw new Error('Restored chapter version not found');
+    return restored;
   }
 
   async getBookRevisionActivity(bookId: string): Promise<ChapterRevisionActivity[]> {
