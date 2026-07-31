@@ -11,6 +11,8 @@ A local-first writing application for managing books and chapters, editing conte
 
 This repository contains the complete application code for the browser, Electron desktop, and Android builds. No separate application backend or API server is required: writing data is stored locally, AI requests are sent directly to OpenAI using the API key configured by the user, and optional encrypted backups communicate directly with Google Drive.
 
+> **Why the backend is deprecated:** earlier versions relied on a companion Express server to store data and proxy AI and cloud requests. The current architecture no longer needs it. The app is local-first — SQLite lives on the user's device, so there is no application database to host — and it talks directly to OpenAI and Google Drive from the client, so there is nothing left for a server to do. Removing it means no infrastructure to run, host, or secure, and no shared server holding users' writing. The `ai-beta-reader-express` project is kept only for reference; it is not part of the running application.
+
 ## Tech Stack
 
 - **Application:** Vue 3 (Composition API) + TypeScript + Vite
