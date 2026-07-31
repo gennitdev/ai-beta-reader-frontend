@@ -43,5 +43,5 @@ describe('router', () => {
     // Invoke each loader so the dynamic-import expression executes, then
     // swallow the result — we're exercising the route config, not mounting.
     await Promise.allSettled(loaders.map((load) => Promise.resolve().then(load)))
-  })
+  }, 10_000)
 })

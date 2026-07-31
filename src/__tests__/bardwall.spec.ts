@@ -3,9 +3,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   BARDWALL_STORAGE_KEY,
   calculateBardwallPay,
+  createDefaultBardwallState,
   getBardwallDateKey,
   getBardwallPassages,
   loadBardwallState,
+  offerFlowerToHeliconia,
+  purchaseBardwallFood,
+  purchaseBardwallFlower,
+  resolveBardwallNight,
   saveBardwallState,
 } from '@/lib/bardwall'
 
@@ -31,6 +36,7 @@ describe('Bardwall game helpers', () => {
 
   it('persists progress and safely handles invalid storage', () => {
     saveBardwallState({
+      ...createDefaultBardwallState(),
       coins: 7,
       storiesTold: 2,
       totalWordsTold: 340,
@@ -50,6 +56,71 @@ describe('Bardwall game helpers', () => {
       totalWordsTold: 0,
       dailyGoal: null,
       toldPassageIds: [],
+      day: 1,
+      energy: 100,
+      hunger: 0,
+      inventory: {
+        tent: 1,
+        flower: 0,
+        apple: 0,
+        bread: 1,
+        cheese: 1,
+        'smoked-fish': 0,
+        stew: 0,
+      },
+      lastNight: null,
+      heliconiaMet: false,
+      caveUnlocked: false,
     })
+  })
+
+  it('gives existing Bardwall saves the starter inventory when migrating', () => {
+    localStorage.setItem(BARDWALL_STORAGE_KEY, JSON.stringify({ coins: 9, storiesTold: 1 }))
+
+    expect(loadBardwallState()).toMatchObject({
+      coins: 9,
+      day: 1,
+      energy: 100,
+      hunger: 0,
+      inventory: { tent: 1, bread: 1, cheese: 1 },
+    })
+  })
+
+  it('buys food and keeps it in the persistent inventory', () => {
+    const state = { ...createDefaultBardwallState(), coins: 30 }
+    const purchased = purchaseBardwallFood(state, 'bread')
+
+    expect(purchased.coins).toBe(18)
+    expect(purchased.inventory.bread).toBe(2)
+    expect(() => purchaseBardwallFood(createDefaultBardwallState(), 'stew')).toThrow('Not enough coins')
+  })
+
+  it('buys and offers a flower to reveal Heliconia’s cave', () => {
+    const purchased = purchaseBardwallFlower({ ...createDefaultBardwallState(), coins: 3 })
+    expect(purchased).toMatchObject({ coins: 0, inventory: { flower: 1 } })
+
+    const revealed = offerFlowerToHeliconia(purchased)
+    expect(revealed).toMatchObject({ inventory: { flower: 0 }, heliconiaMet: true, caveUnlocked: true })
+    expect(() => offerFlowerToHeliconia(createDefaultBardwallState())).toThrow('A flower is required')
+  })
+
+  it('consumes a full meal and applies lodging energy at the end of the day', () => {
+    const state = {
+      ...createDefaultBardwallState(),
+      coins: 100,
+      dailyGoal: { date: '2026-07-31', wordCount: 500, wordsTold: 500, coinsEarned: 100, locked: true },
+    }
+    const nextDay = resolveBardwallNight(state, 'inn', { bread: 1, cheese: 1 })
+
+    expect(nextDay).toMatchObject({ coins: 0, day: 2, energy: 100, hunger: 0, dailyGoal: null })
+    expect(nextDay.inventory).toMatchObject({ bread: 0, cheese: 0, tent: 1 })
+    expect(nextDay.lastNight).toMatchObject({ lodging: 'inn', nourishment: 100 })
+  })
+
+  it('makes an underfed tent sleeper hungry and less energetic the next day', () => {
+    const nextDay = resolveBardwallNight(createDefaultBardwallState(), 'tent', { bread: 1 })
+
+    expect(nextDay).toMatchObject({ day: 2, hunger: 50, energy: 50 })
+    expect(() => resolveBardwallNight(createDefaultBardwallState(), 'inn', {})).toThrow('Not enough coins for the inn')
   })
 })

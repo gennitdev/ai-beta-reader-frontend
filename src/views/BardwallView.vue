@@ -1,15 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ArrowLeftIcon, BookOpenIcon, BuildingLibraryIcon, CurrencyDollarIcon, SparklesIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, BookOpenIcon, CurrencyDollarIcon, MoonIcon, SparklesIcon } from '@heroicons/vue/24/outline'
 import { useDatabase } from '@/composables/useDatabase'
+import BardwallTownMap, { type BardwallLocation } from '@/components/bardwall/BardwallTownMap.vue'
 import type { ChapterRevision } from '@/lib/database'
 import {
   BARDWALL_INN_PRICE,
+  BARDWALL_DAILY_NOURISHMENT,
+  BARDWALL_FLOWER_PRICE,
+  BARDWALL_MARKET_ITEMS,
   calculateBardwallPay,
   getBardwallDateKey,
   getBardwallPassages,
   loadBardwallState,
+  offerFlowerToHeliconia,
+  purchaseBardwallFood,
+  purchaseBardwallFlower,
+  resolveBardwallNight,
   saveBardwallState,
+  type BardwallFoodId,
+  type BardwallLodging,
   type BardwallPassage,
 } from '@/lib/bardwall'
 
@@ -27,7 +37,7 @@ interface RevisionOffering {
 }
 
 const { books, loadBooks, getBookRevisionActivity, getChapterRevisions } = useDatabase()
-const screen = ref<'gate' | 'goal' | 'town' | 'amphitheater' | 'reward'>('gate')
+const screen = ref<'gate' | 'goal' | 'town' | 'amphitheater' | 'reward' | 'market' | 'night' | 'morning' | 'inn' | 'shrine' | 'camp' | 'challenge' | 'cave'>('gate')
 const game = ref(loadBardwallState())
 const offerings = ref<RevisionOffering[]>([])
 const loadingOfferings = ref(false)
@@ -37,6 +47,13 @@ const selectedPassageIndexes = ref<number[]>([])
 const lastReward = ref({ coins: 0, words: 0 })
 const goalChoice = ref<number | 'custom'>(500)
 const customGoal = ref('')
+const marketMessage = ref<string | null>(null)
+const lodgingChoice = ref<BardwallLodging>('tent')
+const mealSelection = ref<Partial<Record<BardwallFoodId, number>>>({})
+const nightError = ref<string | null>(null)
+const innAdviceShown = ref(false)
+const heliconiaEncounterActive = ref(false)
+const shrineMessage = ref<string | null>(null)
 
 const selectedOffering = computed(() => offerings.value.find((item) => item.id === selectedOfferingId.value) ?? null)
 const selectedPassages = computed(() => selectedOffering.value?.passages.filter((_, index) => selectedPassageIndexes.value.includes(index)) ?? [])
@@ -50,6 +67,11 @@ const dailyProgress = computed(() => {
   if (!dailyGoal.value) return 0
   return Math.min(100, (dailyGoal.value.wordsTold / dailyGoal.value.wordCount) * 100)
 })
+const selectedNourishment = computed(() => BARDWALL_MARKET_ITEMS.reduce((total, item) => (
+  total + item.nourishment * (mealSelection.value[item.id] ?? 0)
+), 0))
+const nourishmentDeficit = computed(() => Math.max(0, BARDWALL_DAILY_NOURISHMENT - selectedNourishment.value))
+const foodInventory = computed(() => BARDWALL_MARKET_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
 
 const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
   month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -179,6 +201,79 @@ const returnToTown = () => {
   screen.value = 'town'
 }
 
+const buyFood = (foodId: BardwallFoodId) => {
+  try {
+    game.value = purchaseBardwallFood(game.value, foodId)
+    saveBardwallState(game.value)
+    const item = BARDWALL_MARKET_ITEMS.find((candidate) => candidate.id === foodId)
+    marketMessage.value = `${item?.name ?? 'Food'} added to your pack.`
+  } catch {
+    marketMessage.value = 'You do not have enough coin for that.'
+  }
+}
+
+const buyFlower = () => {
+  try {
+    game.value = purchaseBardwallFlower(game.value)
+    saveBardwallState(game.value)
+    marketMessage.value = 'A red flower has been wrapped in damp paper and added to your pack.'
+  } catch {
+    marketMessage.value = 'You do not have enough coin for that.'
+  }
+}
+
+const offerFlower = () => {
+  try {
+    game.value = offerFlowerToHeliconia(game.value)
+    saveBardwallState(game.value)
+    heliconiaEncounterActive.value = true
+    shrineMessage.value = null
+  } catch {
+    shrineMessage.value = 'The bare stone waits. You need a flower from the night market.'
+  }
+}
+
+const selectMapLocation = async (location: BardwallLocation) => {
+  if (location === 'amphitheater') {
+    await visitAmphitheater()
+    return
+  }
+  if (location === 'shrine') {
+    heliconiaEncounterActive.value = false
+    shrineMessage.value = null
+  }
+  screen.value = location
+}
+
+const changeMealQuantity = (foodId: BardwallFoodId, change: number) => {
+  const current = mealSelection.value[foodId] ?? 0
+  const next = Math.min(game.value.inventory[foodId], Math.max(0, current + change))
+  mealSelection.value = { ...mealSelection.value, [foodId]: next }
+}
+
+const openNight = () => {
+  lodgingChoice.value = game.value.coins >= BARDWALL_INN_PRICE ? 'inn' : 'tent'
+  mealSelection.value = {}
+  nightError.value = null
+  screen.value = 'night'
+}
+
+const endDay = () => {
+  try {
+    game.value = resolveBardwallNight(game.value, lodgingChoice.value, mealSelection.value)
+    saveBardwallState(game.value)
+    screen.value = 'morning'
+  } catch (error) {
+    nightError.value = error instanceof Error ? error.message : 'The night could not be resolved.'
+  }
+}
+
+const beginNextDay = () => {
+  goalChoice.value = 500
+  customGoal.value = ''
+  screen.value = 'goal'
+}
+
 onMounted(() => {
   game.value = loadBardwallState()
 })
@@ -206,8 +301,11 @@ onMounted(() => {
           <p class="text-xs uppercase tracking-[0.28em] text-amber-300">The haunted town</p>
           <h1 class="mt-1 font-serif text-3xl font-bold">Bardwall</h1>
         </div>
-        <div class="flex gap-4 text-sm text-stone-300">
+        <div class="flex flex-wrap items-center gap-4 text-sm text-stone-300">
+          <span class="font-semibold text-stone-100">Day {{ game.day }}</span>
           <span class="inline-flex items-center gap-1.5"><CurrencyDollarIcon class="h-4 w-4 text-amber-300" /> {{ coinLabel(game.coins) }}</span>
+          <span>⚡ {{ game.energy }} energy</span>
+          <span>🍽️ {{ game.hunger }} hunger</span>
           <span>{{ game.storiesTold }} stories told</span>
         </div>
       </header>
@@ -246,15 +344,25 @@ onMounted(() => {
           </label>
 
           <div class="mt-7 rounded-xl border border-stone-700 bg-black/20 p-5">
-            <h3 class="font-semibold text-stone-100">The quartermaster hands you a starter pack</h3>
-            <div class="mt-3 flex flex-wrap gap-2 text-sm">
-              <span class="rounded-full bg-stone-800 px-3 py-1.5">⛺ Tent</span>
-              <span class="rounded-full bg-stone-800 px-3 py-1.5">🍞 Bread</span>
-              <span class="rounded-full bg-stone-800 px-3 py-1.5">🧀 Cheese</span>
-            </div>
-            <p class="mt-3 text-sm leading-6 text-stone-400">
-              Unless you earn enough for the inn, you’ll sleep in this tent beyond the wall tonight. You won’t starve, and another bard will always keep the story going—but a warm bed must be earned.
-            </p>
+            <template v-if="game.day === 1">
+              <h3 class="font-semibold text-stone-100">The quartermaster hands you a starter pack</h3>
+              <div class="mt-3 flex flex-wrap gap-2 text-sm">
+                <span class="rounded-full bg-stone-800 px-3 py-1.5">⛺ Tent</span>
+                <span class="rounded-full bg-stone-800 px-3 py-1.5">🍞 Bread</span>
+                <span class="rounded-full bg-stone-800 px-3 py-1.5">🧀 Cheese</span>
+              </div>
+              <p class="mt-3 text-sm leading-6 text-stone-400">Unless you earn enough for the inn, you’ll sleep in this tent beyond the wall tonight. Bread and cheese make one full day’s meal; after that, the night market awaits.</p>
+            </template>
+            <template v-else>
+              <h3 class="font-semibold text-stone-100">What you carry into Day {{ game.day }}</h3>
+              <div class="mt-3 flex flex-wrap gap-2 text-sm">
+                <span class="rounded-full bg-stone-800 px-3 py-1.5">⛺ Tent</span>
+                <span v-for="item in foodInventory" :key="item.id" class="rounded-full bg-stone-800 px-3 py-1.5">{{ item.icon }} {{ item.name }} ×{{ game.inventory[item.id] }}</span>
+                <span v-if="game.inventory.flower" class="rounded-full bg-stone-800 px-3 py-1.5">🌺 Red flower ×{{ game.inventory.flower }}</span>
+                <span v-if="!foodInventory.length" class="rounded-full bg-orange-400/10 px-3 py-1.5 text-orange-200">No food</span>
+              </div>
+              <p class="mt-3 text-sm leading-6 text-stone-400">Inventory carries forward. Anything you eat is gone, so visit the market before ending the day if your pouch is running light.</p>
+            </template>
           </div>
 
           <button data-testid="set-daily-goal" type="button" class="mt-7 w-full rounded-lg bg-amber-300 px-5 py-3 font-semibold text-[#13241d] hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="!validChosenGoal" @click="setDailyGoal">
@@ -280,30 +388,235 @@ onMounted(() => {
                 <div class="h-full rounded-full bg-amber-300 transition-all" :style="{ width: `${dailyProgress}%` }"></div>
               </div>
             </div>
-            <button data-testid="visit-amphitheater" class="mt-7 inline-flex items-center gap-2 rounded-lg bg-amber-300 px-5 py-3 font-semibold text-[#13241d] hover:bg-amber-200" @click="visitAmphitheater">
-              <BuildingLibraryIcon class="h-5 w-5" /> Walk to the amphitheater
-            </button>
+            <BardwallTownMap class="mt-7" :cave-unlocked="game.caveUnlocked" @select="selectMapLocation" />
           </article>
           <aside class="space-y-4">
             <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
+              <h3 class="font-serif text-xl font-semibold">How you feel</h3>
+              <div class="mt-4 space-y-4">
+                <div>
+                  <div class="flex justify-between text-sm"><span>⚡ Energy</span><span>{{ game.energy }} / 100</span></div>
+                  <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-700"><div class="h-full rounded-full bg-sky-300" :style="{ width: `${game.energy}%` }"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-sm"><span>🍽️ Hunger</span><span>{{ game.hunger }} / 100</span></div>
+                  <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-700"><div class="h-full rounded-full bg-orange-400" :style="{ width: `${game.hunger}%` }"></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
               <h3 class="font-serif text-xl font-semibold">Your purse</h3>
               <p class="mt-2 text-3xl font-bold text-amber-300">{{ game.coins }}</p>
-              <p class="mt-1 text-sm text-stone-400">A room at the inn will come later. For now, every coin proves the ghosts listened.</p>
+              <p class="mt-1 text-sm text-stone-400">Coin buys food at the market and a warm bed at the inn.</p>
             </div>
             <div class="rounded-2xl border border-dashed border-stone-700 p-5 text-stone-500">
               <h3 class="font-semibold">The Crooked Lantern Inn</h3>
               <p class="mt-1 text-sm">One night costs {{ BARDWALL_INN_PRICE }} coins. Until then, your tent waits beyond the wall.</p>
             </div>
             <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
-              <h3 class="font-serif text-xl font-semibold">Your starter pack</h3>
+              <h3 class="font-serif text-xl font-semibold">Your inventory</h3>
               <ul class="mt-3 grid grid-cols-3 gap-2 text-center text-xs text-stone-300">
-                <li class="rounded-lg bg-black/20 p-2">⛺<span class="mt-1 block">Tent</span></li>
-                <li class="rounded-lg bg-black/20 p-2">🍞<span class="mt-1 block">Bread</span></li>
-                <li class="rounded-lg bg-black/20 p-2">🧀<span class="mt-1 block">Cheese</span></li>
+                <li v-if="game.inventory.tent" class="rounded-lg bg-black/20 p-2">⛺<span class="mt-1 block">Tent</span></li>
+                <li v-for="item in foodInventory" :key="item.id" class="rounded-lg bg-black/20 p-2">
+                  {{ item.icon }}<span class="mt-1 block">{{ item.name }} ×{{ game.inventory[item.id] }}</span>
+                </li>
+                <li v-if="game.inventory.flower" class="rounded-lg bg-black/20 p-2">🌺<span class="mt-1 block">Red flower ×{{ game.inventory.flower }}</span></li>
               </ul>
+              <p v-if="!foodInventory.length" class="mt-3 text-sm text-stone-500">Your food pouch is empty. Visit the market before nightfall.</p>
             </div>
           </aside>
         </div>
+      </div>
+
+      <div v-else-if="screen === 'inn'" class="py-8">
+        <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <section class="mx-auto mt-5 max-w-3xl overflow-hidden rounded-2xl border border-amber-300/30 bg-[linear-gradient(145deg,#332516,#17130e)] shadow-2xl">
+          <div class="border-b border-amber-200/15 bg-black/20 p-6 sm:p-8">
+            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">A fire, a ledger, seven crooked lanterns</p>
+            <h2 class="mt-2 font-serif text-4xl font-bold">The Crooked Lantern Inn</h2>
+            <p class="mt-3 font-serif text-lg leading-8 text-stone-300">The innkeeper polishes a glass that has probably never been clean. Behind him, every chair faces the fire except one.</p>
+          </div>
+          <div class="grid gap-5 p-6 sm:grid-cols-[0.35fr_0.65fr] sm:p-8">
+            <div class="flex min-h-44 items-center justify-center rounded-xl border border-amber-200/15 bg-amber-100/5 text-center">
+              <div><span class="text-5xl">🧔</span><p class="mt-2 text-sm font-semibold text-amber-200">Merrick, innkeeper</p><p class="text-xs text-stone-500">Portrait placeholder</p></div>
+            </div>
+            <div>
+              <p class="font-serif text-lg leading-8 text-stone-200">“A room is {{ BARDWALL_INN_PRICE }} coins when the bells ring. Until then, you’re welcome to warm your hands.”</p>
+              <button v-if="!innAdviceShown" data-testid="ask-innkeeper-advice" type="button" class="mt-5 rounded-lg border border-amber-300/50 px-4 py-2.5 font-semibold text-amber-200 hover:bg-amber-300/10" @click="innAdviceShown = true">Ask the innkeeper for advice</button>
+              <blockquote v-else class="mt-5 rounded-xl border-l-4 border-rose-300 bg-black/20 p-5 font-serif text-lg leading-8 text-stone-200">
+                “Writing a book is precisely the sort of noble, unreasonable undertaking that the goddess of lost causes would take seriously. Go to Heliconia’s shrine in the square. Take a flower.”
+              </blockquote>
+              <button data-testid="end-day-from-inn" type="button" class="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-300 px-4 py-2.5 font-semibold text-[#302313] hover:bg-amber-200" @click="openNight"><MoonIcon class="h-5 w-5" /> Wait for the final bell</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div v-else-if="screen === 'shrine'" class="py-8">
+        <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-rose-300/30 bg-[radial-gradient(circle_at_top,#4a2538,#171218_62%)] p-7 text-center shadow-2xl sm:p-10">
+          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-rose-300">Town Square</p>
+          <div class="mx-auto mt-6 flex h-40 w-40 items-center justify-center rounded-full border border-rose-200/30 bg-black/20 text-7xl shadow-[0_0_50px_rgba(251,113,133,0.12)]">🌺</div>
+
+          <template v-if="heliconiaEncounterActive">
+            <p class="mt-7 text-xs font-semibold uppercase tracking-[0.3em] text-rose-300">The goddess appears in person</p>
+            <h2 class="mt-3 font-serif text-4xl font-bold">Heliconia</h2>
+            <p class="mx-auto mt-5 max-w-2xl font-serif text-xl leading-9 text-stone-200">“I keep faith with lost causes, impossible books, and games whose endings were decided before their beginnings.”</p>
+            <div class="mx-auto mt-6 max-w-xl rounded-xl border border-violet-300/25 bg-violet-300/10 p-5 text-left">
+              <p class="font-semibold text-violet-200">Heliconia gives you a map.</p>
+              <p class="mt-2 text-sm leading-6 text-stone-300">A cave and a narrow forest path appear in violet ink. “Some games can be played in the cave,” she warns. “None of them can be won.”</p>
+            </div>
+            <button data-testid="return-with-cave-map" class="mt-7 rounded-lg bg-rose-300 px-5 py-3 font-semibold text-[#331522] hover:bg-rose-200" @click="screen = 'town'">Return to the map</button>
+          </template>
+
+          <template v-else-if="game.heliconiaMet">
+            <h2 class="mt-7 font-serif text-4xl font-bold">Shrine of Heliconia</h2>
+            <p class="mx-auto mt-4 max-w-xl font-serif text-lg leading-8 text-stone-300">The flower is gone. The stone is warm. In your pocket, the goddess’s map still shows the path to the cave.</p>
+          </template>
+
+          <template v-else>
+            <h2 class="mt-7 font-serif text-4xl font-bold">Shrine of Heliconia</h2>
+            <p class="mt-3 font-serif text-lg italic text-rose-100">Goddess of lost causes and unwinnable games</p>
+            <p class="mx-auto mt-5 max-w-xl text-stone-400">The offering bowl is empty. An inscription asks only for a flower and makes no promise that your devotion will be rewarded.</p>
+            <p class="mt-4 text-sm text-stone-300">In your pack: {{ game.inventory.flower }} {{ game.inventory.flower === 1 ? 'flower' : 'flowers' }}</p>
+            <p v-if="shrineMessage" class="mt-3 text-sm text-rose-300">{{ shrineMessage }}</p>
+            <button data-testid="offer-flower" type="button" class="mt-6 rounded-lg bg-rose-300 px-5 py-3 font-semibold text-[#331522] hover:bg-rose-200" @click="offerFlower">Place a flower on the shrine</button>
+          </template>
+        </section>
+      </div>
+
+      <div v-else-if="screen === 'camp'" class="py-8">
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-emerald-300/20 bg-[radial-gradient(circle_at_top,#243c2f,#101a15_65%)] p-8 text-center shadow-2xl">
+          <div class="text-7xl">⛺</div>
+          <h2 class="mt-5 font-serif text-4xl font-bold">Forest Camp</h2>
+          <p class="mx-auto mt-4 max-w-xl font-serif text-lg leading-8 text-stone-300">Your bedroll waits beneath the town wall. Beyond the firelight, the woods listen with the patience of something that has nowhere else to be.</p>
+          <button data-testid="end-day" class="mt-7 inline-flex items-center gap-2 rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#181329] hover:bg-violet-200" @click="openNight"><MoonIcon class="h-5 w-5" /> End the day</button>
+        </section>
+      </div>
+
+      <div v-else-if="screen === 'challenge'" class="py-8">
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-stone-600 bg-stone-900/60 p-10 text-center">
+          <div class="text-6xl">🎭</div><h2 class="mt-5 font-serif text-4xl font-bold">Challenge Hall</h2>
+          <p class="mx-auto mt-4 max-w-xl text-stone-400">The doors are being painted and the judges are still arguing about the rules. Storytelling challenges will be held here soon.</p>
+        </section>
+      </div>
+
+      <div v-else-if="screen === 'cave'" class="py-8">
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <section class="mx-auto mt-5 max-w-4xl overflow-hidden rounded-2xl border border-violet-300/25 bg-[radial-gradient(circle_at_50%_0%,#34284d,#09080d_65%)] p-8 text-center shadow-2xl sm:p-12">
+          <p class="text-xs font-semibold uppercase tracking-[0.35em] text-violet-300">Deep in the haunted wood</p>
+          <div class="mx-auto mt-7 flex h-52 max-w-md items-end justify-center rounded-t-[50%] border-x border-t border-stone-500/30 bg-black/70 pb-7 text-6xl">🕯️</div>
+          <h2 class="mt-7 font-serif text-4xl font-bold">The Unwinnable Cave</h2>
+          <blockquote class="mx-auto mt-5 max-w-2xl font-serif text-xl italic leading-9 text-violet-100">“Some games can be played in the cave. None of them can be won.”</blockquote>
+          <p class="mx-auto mt-5 max-w-xl text-stone-400">The first game has not yet been laid out. Still, something in the dark has already taken its seat across from you.</p>
+        </section>
+      </div>
+
+      <div v-else-if="screen === 'market'" class="py-8">
+        <button data-testid="leave-market" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to town</button>
+        <div class="mt-5 rounded-2xl border border-stone-700/70 bg-stone-900/40 p-6">
+          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">Lantern Row</p>
+          <div class="mt-2 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 class="font-serif text-4xl font-bold">Bardwall Night Market</h2>
+              <p class="mt-2 max-w-2xl text-stone-400">A full day requires {{ BARDWALL_DAILY_NOURISHMENT }} nourishment. Food stays in your inventory until you choose it at day’s end.</p>
+            </div>
+            <p class="text-lg font-semibold text-amber-300">{{ coinLabel(game.coins) }} in your purse</p>
+          </div>
+          <p v-if="marketMessage" class="mt-4 rounded-lg bg-black/20 px-4 py-3 text-sm text-stone-300" aria-live="polite">{{ marketMessage }}</p>
+          <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <article class="rounded-xl border border-rose-300/30 bg-rose-300/5 p-5">
+              <div class="flex items-start justify-between gap-3"><span class="text-3xl">🌺</span><span class="rounded-full bg-rose-400/10 px-2.5 py-1 text-xs font-semibold text-rose-200">Offering</span></div>
+              <h3 class="mt-4 font-serif text-xl font-semibold">Red shrine flower</h3>
+              <p class="mt-1 min-h-10 text-sm text-stone-400">Fresh-cut for Heliconia’s shrine in the town square.</p>
+              <div class="mt-5 flex items-center justify-between gap-3">
+                <span class="text-sm text-stone-300">In pack: {{ game.inventory.flower }}</span>
+                <button data-testid="buy-flower" type="button" class="rounded-lg bg-rose-300 px-3 py-2 text-sm font-semibold text-[#331522] hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="game.coins < BARDWALL_FLOWER_PRICE" @click="buyFlower">Buy · {{ BARDWALL_FLOWER_PRICE }} coins</button>
+              </div>
+            </article>
+            <article v-for="item in BARDWALL_MARKET_ITEMS" :key="item.id" class="rounded-xl border border-stone-700 bg-black/15 p-5">
+              <div class="flex items-start justify-between gap-3">
+                <span class="text-3xl">{{ item.icon }}</span>
+                <span class="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">+{{ item.nourishment }} food</span>
+              </div>
+              <h3 class="mt-4 font-serif text-xl font-semibold">{{ item.name }}</h3>
+              <p class="mt-1 min-h-10 text-sm text-stone-400">{{ item.description }}</p>
+              <div class="mt-5 flex items-center justify-between gap-3">
+                <span class="text-sm text-stone-300">In pack: {{ game.inventory[item.id] }}</span>
+                <button :data-testid="`buy-${item.id}`" type="button" class="rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-[#13241d] hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="game.coins < item.price" @click="buyFood(item.id)">
+                  Buy · {{ item.price }} coins
+                </button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="screen === 'night'" class="py-8">
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Not yet—return to town</button>
+        <div class="mt-5 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <section class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-6">
+            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-violet-300">The last bells ring</p>
+            <h2 class="mt-2 font-serif text-4xl font-bold">Pack tonight’s food.</h2>
+            <p class="mt-3 text-stone-400">Choose up to what you own. Reach {{ BARDWALL_DAILY_NOURISHMENT }} nourishment to wake without hunger; extra food is allowed, but any excess is still eaten.</p>
+            <div class="mt-6 space-y-3">
+              <article v-for="item in foodInventory" :key="item.id" class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-stone-700 bg-black/15 p-4">
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl">{{ item.icon }}</span>
+                  <div>
+                    <h3 class="font-semibold">{{ item.name }}</h3>
+                    <p class="text-xs text-stone-400">{{ item.nourishment }} nourishment each · {{ game.inventory[item.id] }} owned</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <button type="button" class="h-9 w-9 rounded-full border border-stone-600 text-lg hover:border-stone-400 disabled:opacity-30" :disabled="!(mealSelection[item.id] ?? 0)" :aria-label="`Remove ${item.name}`" @click="changeMealQuantity(item.id, -1)">−</button>
+                  <span class="w-6 text-center font-semibold">{{ mealSelection[item.id] ?? 0 }}</span>
+                  <button :data-testid="`pack-${item.id}`" type="button" class="h-9 w-9 rounded-full border border-stone-600 text-lg hover:border-stone-400 disabled:opacity-30" :disabled="(mealSelection[item.id] ?? 0) >= game.inventory[item.id]" :aria-label="`Add ${item.name}`" @click="changeMealQuantity(item.id, 1)">+</button>
+                </div>
+              </article>
+              <p v-if="!foodInventory.length" class="rounded-xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-200">Your food pouch is empty. You may still sleep, but you will wake very hungry.</p>
+            </div>
+          </section>
+
+          <aside class="space-y-4">
+            <section class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
+              <h3 class="font-serif text-xl font-semibold">Tonight’s meal</h3>
+              <p class="mt-3 text-3xl font-bold" :class="nourishmentDeficit ? 'text-orange-300' : 'text-emerald-300'">{{ selectedNourishment }} / {{ BARDWALL_DAILY_NOURISHMENT }}</p>
+              <p class="mt-2 text-sm text-stone-400">{{ nourishmentDeficit ? `You will wake with ${nourishmentDeficit} hunger.` : 'This is enough food for the day.' }}</p>
+            </section>
+            <section class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
+              <h3 class="font-serif text-xl font-semibold">Choose where to sleep</h3>
+              <div class="mt-4 space-y-3">
+                <label class="flex cursor-pointer gap-3 rounded-xl border p-4" :class="lodgingChoice === 'tent' ? 'border-violet-300 bg-violet-300/10' : 'border-stone-700'">
+                  <input v-model="lodgingChoice" type="radio" value="tent" class="mt-1 text-violet-400 focus:ring-violet-300" />
+                  <span><strong class="block">⛺ Sleep in your tent · Free</strong><span class="mt-1 block text-xs text-stone-400">Restores 75 energy before hunger is applied.</span></span>
+                </label>
+                <label class="flex gap-3 rounded-xl border p-4" :class="[lodgingChoice === 'inn' ? 'border-amber-300 bg-amber-300/10' : 'border-stone-700', game.coins < BARDWALL_INN_PRICE ? 'cursor-not-allowed opacity-50' : 'cursor-pointer']">
+                  <input v-model="lodgingChoice" type="radio" value="inn" class="mt-1 text-amber-400 focus:ring-amber-300" :disabled="game.coins < BARDWALL_INN_PRICE" />
+                  <span><strong class="block">🛏️ Crooked Lantern Inn · {{ BARDWALL_INN_PRICE }} coins</strong><span class="mt-1 block text-xs text-stone-400">Restores 100 energy before hunger is applied.</span></span>
+                </label>
+              </div>
+              <p v-if="nightError" class="mt-3 text-sm text-rose-300">{{ nightError }}</p>
+              <button data-testid="confirm-end-day" type="button" class="mt-5 w-full rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#181329] hover:bg-violet-200" @click="endDay">Sleep and begin Day {{ game.day + 1 }}</button>
+            </section>
+          </aside>
+        </div>
+      </div>
+
+      <div v-else-if="screen === 'morning'" class="flex min-h-[34rem] items-center justify-center py-10">
+        <section v-if="game.lastNight" class="w-full max-w-2xl rounded-2xl border border-sky-300/30 bg-stone-900/60 p-8 text-center shadow-2xl">
+          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-sky-300">Morning in Bardwall</p>
+          <h2 class="mt-3 font-serif text-4xl font-bold">Day {{ game.day }} begins.</h2>
+          <p class="mt-4 font-serif text-lg text-stone-300">You slept {{ game.lastNight.lodging === 'inn' ? 'at the Crooked Lantern Inn' : 'in your tent beyond the wall' }} and ate {{ game.lastNight.nourishment }} nourishment.</p>
+          <div class="mx-auto mt-7 grid max-w-md grid-cols-2 gap-4">
+            <div class="rounded-xl bg-black/20 p-4"><span class="block text-sm text-stone-400">Energy</span><strong class="mt-1 block text-3xl text-sky-300">{{ game.energy }}</strong></div>
+            <div class="rounded-xl bg-black/20 p-4"><span class="block text-sm text-stone-400">Hunger</span><strong class="mt-1 block text-3xl" :class="game.hunger ? 'text-orange-300' : 'text-emerald-300'">{{ game.hunger }}</strong></div>
+          </div>
+          <p class="mt-5 text-sm text-stone-400">{{ game.hunger ? 'An empty stomach follows you into the new day, and your energy suffers.' : 'You wake fed and ready to tell another story.' }}</p>
+          <button data-testid="begin-next-day" class="mt-7 rounded-lg bg-sky-300 px-5 py-3 font-semibold text-[#10212a] hover:bg-sky-200" @click="beginNextDay">Set Day {{ game.day }}’s word goal</button>
+        </section>
       </div>
 
       <div v-else-if="screen === 'amphitheater'" class="py-8">
@@ -365,7 +678,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-else class="flex min-h-[32rem] items-center justify-center py-10 text-center">
+      <div v-else-if="screen === 'reward'" class="flex min-h-[32rem] items-center justify-center py-10 text-center">
         <div class="max-w-xl rounded-2xl border border-amber-300/40 bg-amber-300/10 p-8">
           <SparklesIcon class="mx-auto h-12 w-12 text-amber-300" />
           <p class="mt-4 text-xs uppercase tracking-[0.3em] text-amber-300">The ghosts are fed</p>

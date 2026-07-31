@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { ChapterRevision, ChapterRevisionActivity } from '@/lib/database'
+import { createDefaultBardwallState, getBardwallDateKey, saveBardwallState } from '@/lib/bardwall'
 
 const { books, activity, revisions } = vi.hoisted(() => ({
   books: { value: [{ id: 'book-1', title: 'Ghost Stories' }] },
@@ -58,7 +59,7 @@ describe('BardwallView', () => {
     expect(wrapper.text()).toContain('The story must go on.')
     expect(wrapper.text()).toContain('0 / 500 words')
 
-    await wrapper.get('[data-testid="visit-amphitheater"]').trigger('click')
+    await wrapper.get('[data-testid="map-amphitheater"]').trigger('click')
     await wrapper.get('[data-testid="revision-offering-revision-2"]').trigger('click')
     expect(wrapper.text()).toContain('very bright')
     expect(wrapper.text()).toContain('2 words selected')
@@ -76,8 +77,86 @@ describe('BardwallView', () => {
     })
 
     await wrapper.get('[data-testid="return-to-town"]').trigger('click')
-    await wrapper.get('[data-testid="visit-amphitheater"]').trigger('click')
+    await wrapper.get('[data-testid="map-amphitheater"]').trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('Save a chapter revision, then return')
+  })
+
+  it('buys market food and completes a fed night at the inn', async () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      coins: 130,
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 500, coinsEarned: 100, locked: true },
+    })
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    expect(wrapper.text()).toContain('Day 1')
+    await wrapper.get('[data-testid="map-market"]').trigger('click')
+    expect(wrapper.text()).toContain('Bardwall Night Market')
+    await wrapper.get('[data-testid="buy-apple"]').trigger('click')
+    expect(wrapper.text()).toContain('Orchard apple added to your pack.')
+    await wrapper.get('[data-testid="leave-market"]').trigger('click')
+
+    await wrapper.get('[data-testid="map-camp"]').trigger('click')
+    await wrapper.get('[data-testid="end-day"]').trigger('click')
+    await wrapper.get('[data-testid="pack-bread"]').trigger('click')
+    await wrapper.get('[data-testid="pack-cheese"]').trigger('click')
+    expect(wrapper.text()).toContain('100 / 100')
+    await wrapper.get('[data-testid="confirm-end-day"]').trigger('click')
+
+    expect(wrapper.text()).toContain('Day 2 begins.')
+    expect(wrapper.text()).toContain('You wake fed')
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({
+      coins: 25,
+      day: 2,
+      energy: 100,
+      hunger: 0,
+      dailyGoal: null,
+      inventory: { apple: 1, bread: 0, cheese: 0, tent: 1 },
+      lastNight: { lodging: 'inn', nourishment: 100 },
+    })
+
+    await wrapper.get('[data-testid="begin-next-day"]').trigger('click')
+    expect(wrapper.text()).toContain('Name today’s measure.')
+  })
+
+  it('follows the innkeeper’s advice and reveals Heliconia’s cave', async () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      coins: 3,
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 0, coinsEarned: 0, locked: false },
+    })
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    expect(wrapper.find('[data-testid="map-cave"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="map-inn"]').trigger('click')
+    await wrapper.get('[data-testid="ask-innkeeper-advice"]').trigger('click')
+    expect(wrapper.text()).toContain('noble, unreasonable undertaking')
+    expect(wrapper.text()).toContain('Take a flower')
+    await wrapper.get('[data-testid="back-to-map"]').trigger('click')
+
+    await wrapper.get('[data-testid="map-market"]').trigger('click')
+    await wrapper.get('[data-testid="buy-flower"]').trigger('click')
+    expect(wrapper.text()).toContain('red flower has been wrapped')
+    await wrapper.get('[data-testid="leave-market"]').trigger('click')
+
+    await wrapper.get('[data-testid="map-shrine"]').trigger('click')
+    await wrapper.get('[data-testid="offer-flower"]').trigger('click')
+    expect(wrapper.text()).toContain('The goddess appears in person')
+    expect(wrapper.text()).toContain('None of them can be won')
+    await wrapper.get('[data-testid="return-with-cave-map"]').trigger('click')
+    expect(wrapper.find('[data-testid="map-cave"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="map-cave"]').trigger('click')
+    expect(wrapper.text()).toContain('The Unwinnable Cave')
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({
+      coins: 0,
+      inventory: { flower: 0 },
+      heliconiaMet: true,
+      caveUnlocked: true,
+    })
   })
 })
