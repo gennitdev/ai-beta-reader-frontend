@@ -12,6 +12,7 @@ describe('router', () => {
     expect(byName.get('settings')).toBe('/settings')
     expect(byName.get('ai-profiles')).toBe('/ai-profiles')
     expect(byName.get('challenges')).toBe('/challenges')
+    expect(byName.get('bardwall')).toBe('/bardwall')
   })
 
   it('resolves the home path to the home route', () => {

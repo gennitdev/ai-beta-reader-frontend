@@ -127,6 +127,11 @@ const router = createRouter({
       path: '/challenges',
       name: 'challenges',
       component: () => import('../views/ChallengesView.vue')
+    },
+    {
+      path: '/bardwall',
+      name: 'bardwall',
+      component: () => import('../views/BardwallView.vue')
     }
   ]
 })
