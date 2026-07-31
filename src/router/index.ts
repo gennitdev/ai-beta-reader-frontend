@@ -24,6 +24,11 @@ const router = createRouter({
       component: () => import('../views/BookView.vue'),
       children: [
         {
+          path: 'chapters/:chapterId/versions/:revisionId',
+          name: 'book-chapter-version',
+          component: () => import('../views/ChapterVersionDiffView.vue')
+        },
+        {
           path: 'chapters/:chapterId',
           name: 'book-chapter',
           component: () => import('../views/ChapterView.vue')

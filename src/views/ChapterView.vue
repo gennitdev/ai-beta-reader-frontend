@@ -7,7 +7,7 @@ import { useChapterSummaryContext } from "@/composables/useChapterSummaryContext
 import {
   useChapterMutationFlow,
 } from "@/composables/useChapterMutationFlow";
-import type { Book, BookPart, Chapter as DatabaseChapter } from "@/lib/database";
+import type { Book, BookPart, Chapter as DatabaseChapter, ChapterRevision } from "@/lib/database";
 import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterNotesPanel from "@/components/chapter/ChapterNotesPanel.vue";
@@ -16,6 +16,7 @@ import ChapterReviewsSection from "@/components/chapter/ChapterReviewsSection.vu
 import ChapterHeroSection from "@/components/chapter/ChapterHeroSection.vue";
 import ChapterIllustrationsSection from "@/components/chapter/ChapterIllustrationsSection.vue";
 import ChapterStatusBar from "@/components/chapter/ChapterStatusBar.vue";
+import ChapterVersionHistory from "@/components/chapter/ChapterVersionHistory.vue";
 import FontSizeControl from "@/components/reading/FontSizeControl.vue";
 import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
 import { useReadingFontSize } from "@/composables/useReadingFontSize";
@@ -130,6 +131,7 @@ const {
   loadChapters,
   getParts,
   saveChapter: dbSaveChapter,
+  getChapterRevisions,
   deleteChapter: dbDeleteChapter,
   saveSummary: dbSaveSummary,
   getSummary,
@@ -154,6 +156,8 @@ const {
 const chapter = ref<Chapter | null>(null);
 const loading = ref(false);
 const savingChapter = ref(false);
+const chapterRevisions = ref<ChapterRevision[]>([]);
+const loadingChapterRevisions = ref(false);
 const isEditing = ref(false);
 const editedText = ref("");
 const editedTitle = ref("");
@@ -384,6 +388,13 @@ const loadChapter = async () => {
       editedSummary.value = summaryData?.summary || "";
       editedNotes.value = notesData?.notes || "";
 
+      loadingChapterRevisions.value = true;
+      try {
+        chapterRevisions.value = await getChapterRevisions(chapterData.id);
+      } finally {
+        loadingChapterRevisions.value = false;
+      }
+
       // Load character wiki info
       await loadCharacters();
 
@@ -434,6 +445,7 @@ const saveChapter = async () => {
     chapter.value.text = editedText.value;
     chapter.value.title = editedTitle.value || null;
     chapter.value.word_count = wordCount;
+    chapterRevisions.value = await getChapterRevisions(chapter.value.id);
     isEditing.value = false;
   } catch (error) {
     console.error("Failed to save chapter:", error);
@@ -972,6 +984,11 @@ watch(
             @cancel-edit="cancelEditingLinkedWikiPages"
             @save="saveLinkedWikiPages"
             @update:selected-ids="selectedLinkedWikiPageIds = $event"
+          />
+
+          <ChapterVersionHistory
+            :revisions="chapterRevisions"
+            :loading="loadingChapterRevisions"
           />
 
           <FontSizeControl v-model="fontSize" variant="panel" />

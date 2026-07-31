@@ -38,6 +38,18 @@ describe('database import/export helpers', () => {
             ],
             values: [['note-1', 'chapter-1', 'Important continuity note']],
           },
+          {
+            name: 'chapter_activity',
+            schema: [
+              { column: 'id' },
+              { column: 'book_id' },
+              { column: 'chapter_id' },
+              { column: 'chapter_title' },
+              { column: 'activity_type' },
+              { column: 'word_count_deleted' },
+            ],
+            values: [['activity-1', 'book-1', 'chapter-1', 'Old Chapter', 'delete', 900]],
+          },
         ],
       },
     })
@@ -63,6 +75,16 @@ describe('database import/export helpers', () => {
         id: 'note-1',
         chapter_id: 'chapter-1',
         notes: 'Important continuity note',
+      },
+    ])
+    expect(normalized.chapter_activity).toEqual([
+      {
+        id: 'activity-1',
+        book_id: 'book-1',
+        chapter_id: 'chapter-1',
+        chapter_title: 'Old Chapter',
+        activity_type: 'delete',
+        word_count_deleted: 900,
       },
     ])
   })

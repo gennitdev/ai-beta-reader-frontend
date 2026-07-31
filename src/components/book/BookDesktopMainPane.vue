@@ -2,9 +2,12 @@
 import { DocumentTextIcon, PhotoIcon } from '@heroicons/vue/24/outline'
 import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
 import type { ImageAsset, ImageWikiTag } from '@/lib/database'
+import type { ChapterRevisionActivity } from '@/lib/database'
 import type { BookWikiPage } from '@/types/bookView'
+import BookActivityHeatmap from './BookActivityHeatmap.vue'
 
 defineProps<{
+  bookId: string
   currentTab: 'chapters' | 'wiki' | 'images'
   selectedImageId?: string | null
   selectedImageSrc?: string | null
@@ -19,6 +22,7 @@ defineProps<{
   isOnBookOnly: boolean
   routerViewKey: number
   wikiPagePinChanged: (payload: { id: string; isPinned: boolean; updatedAt: string }) => void
+  revisionActivity?: ChapterRevisionActivity[]
 }>()
 </script>
 
@@ -53,8 +57,10 @@ defineProps<{
       </div>
     </div>
 
-    <div v-else-if="isOnBookOnly" class="flex items-center justify-center h-full">
-      <div class="text-center">
+    <div v-else-if="isOnBookOnly" class="h-full overflow-y-auto p-8">
+      <div class="mx-auto max-w-5xl">
+        <BookActivityHeatmap :book-id="bookId" :activity="revisionActivity || []" />
+        <div class="mt-16 text-center">
         <DocumentTextIcon class="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">
           Please select a chapter
@@ -63,6 +69,7 @@ defineProps<{
           Choose a chapter from the sidebar to view and edit its content, or create a new
           chapter to get started.
         </p>
+        </div>
       </div>
     </div>
 

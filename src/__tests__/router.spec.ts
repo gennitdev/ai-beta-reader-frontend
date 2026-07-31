@@ -21,6 +21,8 @@ describe('router', () => {
   it('nests chapter/part/wiki routes under the book route', () => {
     const book = router.getRoutes().find((r) => r.name === 'book-chapter')
     expect(book?.path).toBe('/books/:id/chapters/:chapterId')
+    const version = router.getRoutes().find((r) => r.name === 'book-chapter-version')
+    expect(version?.path).toBe('/books/:id/chapters/:chapterId/versions/:revisionId')
   })
 
   it('flags mobile routes with meta.mobile', () => {

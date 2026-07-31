@@ -4,6 +4,8 @@ import {
   type Book,
   type Chapter,
   type ChapterNote,
+  type ChapterRevision,
+  type ChapterRevisionActivity,
   type ChapterReview,
   type ChapterSummary,
   type ChapterWikiLink,
@@ -152,6 +154,30 @@ export function useDatabase() {
       throw e
     } finally {
       loading.value = false
+    }
+  }
+
+  async function getChapterRevisions(chapterId: string): Promise<ChapterRevision[]> {
+    try {
+      error.value = null
+      await initializeDatabase()
+      return await db.getChapterRevisions(chapterId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load chapter versions'
+      console.error('Load chapter versions error:', e)
+      throw e
+    }
+  }
+
+  async function getBookRevisionActivity(bookId: string): Promise<ChapterRevisionActivity[]> {
+    try {
+      error.value = null
+      await initializeDatabase()
+      return await db.getBookRevisionActivity(bookId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load writing activity'
+      console.error('Load writing activity error:', e)
+      throw e
     }
   }
 
@@ -926,6 +952,8 @@ export function useDatabase() {
     // Chapter operations
     loadChapters,
     saveChapter,
+    getChapterRevisions,
+    getBookRevisionActivity,
     deleteChapter,
 
     // Cloud sync operations

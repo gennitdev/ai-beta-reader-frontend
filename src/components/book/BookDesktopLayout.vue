@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import type { Book, ImageAsset, ImageWikiTag } from '@/lib/database'
+import type { Book, ChapterRevisionActivity, ImageAsset, ImageWikiTag } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import BookDesktopMainPane from './BookDesktopMainPane.vue'
 import BookDesktopSidebar from './BookDesktopSidebar.vue'
@@ -69,6 +69,7 @@ withDefaults(defineProps<{
   saveSelectedImageTags?: (wikiPageIds: string[]) => void | Promise<void>
   downloadSelectedImage?: (imageId: string) => void
   wikiPagePinChanged: (payload: { id: string; isPinned: boolean; updatedAt: string }) => void
+  revisionActivity?: ChapterRevisionActivity[]
 }>(), {
   isEditingBookTitle: false,
   editingBookTitle: '',
@@ -104,7 +105,8 @@ withDefaults(defineProps<{
   savingSelectedImageTags: false,
   saveSelectedImageNotes: undefined,
   saveSelectedImageTags: undefined,
-  downloadSelectedImage: undefined
+  downloadSelectedImage: undefined,
+  revisionActivity: () => []
 })
 </script>
 
@@ -166,6 +168,7 @@ withDefaults(defineProps<{
       />
 
       <BookDesktopMainPane
+        :book-id="bookId"
         :current-tab="currentTab"
         :selected-image-id="selectedImageId"
         :selected-image-src="selectedImageSrc"
@@ -178,6 +181,7 @@ withDefaults(defineProps<{
         :save-selected-image-tags="saveSelectedImageTags"
         :download-selected-image="downloadSelectedImage"
         :is-on-book-only="isOnBookOnly"
+        :revision-activity="revisionActivity"
         :router-view-key="routerViewKey"
         :wiki-page-pin-changed="wikiPagePinChanged"
       />

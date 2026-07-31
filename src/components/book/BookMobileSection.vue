@@ -2,11 +2,12 @@
 import { computed, ref, toRefs, watch } from 'vue'
 import type { Component } from 'vue'
 import { DocumentTextIcon, BookOpenIcon, PhotoIcon, PlusIcon, Cog6ToothIcon, PencilIcon, XMarkIcon, TrashIcon, BookmarkIcon, ArrowLeftIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
-import type { Book, ImageAsset, ImageWikiTag } from '@/lib/database'
+import type { Book, ChapterRevisionActivity, ImageAsset, ImageWikiTag } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import type { PropType } from 'vue'
 import BookMobileChapterCard from './BookMobileChapterCard.vue'
 import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
+import BookActivityHeatmap from './BookActivityHeatmap.vue'
 
 const props = defineProps({
   book: {
@@ -212,6 +213,10 @@ const props = defineProps({
   downloadSelectedImage: {
     type: Function as PropType<(imageId: string) => void>,
     default: undefined
+  },
+  revisionActivity: {
+    type: Array as PropType<ChapterRevisionActivity[]>,
+    default: () => []
   }
 })
 
@@ -479,6 +484,7 @@ watch(
     </div>
 
     <div v-if="currentTab === 'chapters'">
+      <BookActivityHeatmap class="mb-6" :book-id="bookId" :activity="revisionActivity" />
       <div v-if="loading" class="flex justify-center items-center h-64">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-600"></div>
       </div>

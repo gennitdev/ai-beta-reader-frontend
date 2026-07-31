@@ -11,7 +11,9 @@ vi.mock('@/lib/database', () => ({
 }))
 
 vi.mock('@/lib/cloudSync', () => ({
-  CloudSync: vi.fn(),
+  CloudSync: vi.fn(function (this: Record<string, unknown>) {
+    this.isWebSdkReady = vi.fn(() => true)
+  }),
   GoogleDriveProvider: vi.fn(),
 }))
 

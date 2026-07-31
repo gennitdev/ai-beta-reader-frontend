@@ -18,6 +18,8 @@ export interface DatabaseImportData {
   version: number
   books: ImportRow[]
   chapters: ImportRow[]
+  chapter_revisions: ImportRow[]
+  chapter_activity: ImportRow[]
   book_parts: ImportRow[]
   chapter_summaries: ImportRow[]
   part_summaries: ImportRow[]
@@ -96,9 +98,11 @@ export function convertCapacitorExport(exportData: CapacitorExportShape): Databa
   }
 
   return {
-    version: 2,
+    version: 4,
     books: rowsToObjects('books'),
     chapters: rowsToObjects('chapters'),
+    chapter_revisions: rowsToObjects('chapter_revisions'),
+    chapter_activity: rowsToObjects('chapter_activity'),
     book_parts: rowsToObjects('book_parts'),
     chapter_summaries: rowsToObjects('chapter_summaries'),
     part_summaries: rowsToObjects('part_summaries'),
@@ -127,9 +131,11 @@ export function normalizeDatabaseImportData(raw: unknown): DatabaseImportData {
   const normalized = isRecord(raw) ? raw : {}
 
   return {
-    version: typeof normalized.version === 'number' ? normalized.version : 2,
+    version: typeof normalized.version === 'number' ? normalized.version : 4,
     books: readRows(normalized, 'books'),
     chapters: readRows(normalized, 'chapters'),
+    chapter_revisions: readRows(normalized, 'chapter_revisions'),
+    chapter_activity: readRows(normalized, 'chapter_activity'),
     book_parts: readRows(normalized, 'book_parts'),
     chapter_summaries: readRows(normalized, 'chapter_summaries'),
     part_summaries: readRows(normalized, 'part_summaries'),

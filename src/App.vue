@@ -8,7 +8,7 @@ import BrowserStorageNotice from '@/components/BrowserStorageNotice.vue'
 import logoHorizontal from '@/assets/logo-horizontal.png'
 import logoStacked from '@/assets/logo-stacked.png'
 import { primaryNavItems } from '@/config/navigation'
-import type { Book, Chapter } from '@/lib/database'
+import type { Book, Chapter, ChapterRevision } from '@/lib/database'
 import type { FindReplaceScope } from '@/lib/findReplace'
 
 const route = useRoute()
@@ -19,6 +19,7 @@ const {
   loadBooks,
   loadChapters,
   getParts,
+  getChapterRevisions,
   findReplaceMatches,
   replaceFindReplaceMatches,
   restoreFindReplaceFields,
@@ -26,6 +27,7 @@ const {
 
 // Parts data for breadcrumbs
 const parts = ref<Array<{ id: string; name: string }>>([])
+const currentRevision = ref<ChapterRevision | null>(null)
 
 // Search modal state
 const showSearchModal = ref(false)
@@ -126,6 +128,7 @@ watch(
   () => route.params,
   async (params) => {
     const bookId = (params.bookId || params.id) as string | undefined
+    currentRevision.value = null
     if (bookId) {
       await loadChapters(bookId)
       // Load parts for breadcrumb navigation
@@ -134,6 +137,17 @@ watch(
       } catch (e) {
         console.error('Failed to load parts for breadcrumbs:', e)
         parts.value = []
+      }
+
+      const chapterId = params.chapterId as string | undefined
+      const revisionId = params.revisionId as string | undefined
+      if (chapterId && revisionId) {
+        try {
+          const revisions = await getChapterRevisions(chapterId)
+          currentRevision.value = revisions.find((revision) => revision.id === revisionId) ?? null
+        } catch (e) {
+          console.error('Failed to load revision for breadcrumbs:', e)
+        }
       }
     }
   },
@@ -178,6 +192,8 @@ const breadcrumbs = computed(() => {
         // Add chapter or wiki page breadcrumb
         if (path.includes('/chapters/')) {
           const chapterId = route.params.chapterId as string
+          const revisionId = route.params.revisionId as string | undefined
+          const isRevisionPage = Boolean(revisionId && path.includes('/versions/'))
           // Try to find the chapter title
           const chapter = chapters.value.find((ch: Chapter) => ch.id === chapterId)
 
@@ -193,7 +209,29 @@ const breadcrumbs = computed(() => {
           }
 
           const chapterLabel = chapter?.title || chapterId
-          crumbs.push({ label: chapterLabel })
+          crumbs.push({
+            label: chapterLabel,
+            ...(isRevisionPage ? { to: `/books/${bookId}/chapters/${chapterId}` } : {}),
+          })
+
+          if (isRevisionPage) {
+            crumbs.push({
+              label: 'Revisions',
+              to: `/books/${bookId}/chapters/${chapterId}#chapter-versions`,
+            })
+            const revisionLabel = currentRevision.value
+              ? currentRevision.value.revision_kind === 'baseline'
+                ? 'Original version'
+                : new Intl.DateTimeFormat(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  }).format(new Date(currentRevision.value.created_at))
+              : revisionId ?? 'Revision'
+            crumbs.push({ label: revisionLabel })
+          }
         } else if (path.includes('/parts/')) {
           const partId = route.params.partId as string
           // Find the part name

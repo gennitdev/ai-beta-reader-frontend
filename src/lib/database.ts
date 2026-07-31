@@ -44,6 +44,7 @@ import {
   parseWikiAliases,
   resolveWikiPageByName,
 } from '@/lib/wikiAliases';
+import { countRevisionChanges } from '@/lib/revisionDiff';
 
 export interface Book {
   id: string;
@@ -62,6 +63,31 @@ export interface Chapter {
   text: string;
   word_count: number;
   cover_image_id?: string | null;
+  created_at: string;
+}
+
+export interface ChapterRevision {
+  id: string;
+  chapter_id: string;
+  book_id: string;
+  title: string | null;
+  text: string;
+  word_count: number;
+  words_added: number;
+  words_removed: number;
+  revision_kind: 'save' | 'baseline';
+  created_at: string;
+}
+
+export interface ChapterRevisionActivity {
+  id: string;
+  chapter_id: string;
+  chapter_title: string | null;
+  activity_type: 'save' | 'delete';
+  words_added: number;
+  words_removed: number;
+  word_count_deleted: number;
+  revision_available: boolean;
   created_at: string;
 }
 
@@ -348,6 +374,40 @@ function toWebChapter(row: unknown[]): Chapter {
     word_count: Number(row[5] ?? 0),
     created_at: String(row[6]),
   };
+}
+
+function toWebChapterRevision(row: unknown[]): ChapterRevision {
+  return {
+    id: String(row[0]),
+    chapter_id: String(row[1]),
+    book_id: String(row[2]),
+    title: typeof row[3] === 'string' ? row[3] : null,
+    text: String(row[4] ?? ''),
+    word_count: Number(row[5] ?? 0),
+    words_added: Number(row[6] ?? 0),
+    words_removed: Number(row[7] ?? 0),
+    revision_kind: row[8] === 'baseline' ? 'baseline' : 'save',
+    created_at: String(row[9]),
+  };
+}
+
+function toNativeChapterRevision(row: QueryRow): ChapterRevision {
+  return {
+    id: String(readQueryRowValue(row, 0, 'id')),
+    chapter_id: String(readQueryRowValue(row, 1, 'chapter_id')),
+    book_id: String(readQueryRowValue(row, 2, 'book_id')),
+    title: typeof readQueryRowValue(row, 3, 'title') === 'string' ? readQueryRowValue(row, 3, 'title') as string : null,
+    text: String(readQueryRowValue(row, 4, 'text') ?? ''),
+    word_count: Number(readQueryRowValue(row, 5, 'word_count') ?? 0),
+    words_added: Number(readQueryRowValue(row, 6, 'words_added') ?? 0),
+    words_removed: Number(readQueryRowValue(row, 7, 'words_removed') ?? 0),
+    revision_kind: readQueryRowValue(row, 8, 'revision_kind') === 'baseline' ? 'baseline' : 'save',
+    created_at: String(readQueryRowValue(row, 9, 'created_at')),
+  };
+}
+
+function countChangedWords(previousText: string, nextText: string): { added: number; removed: number } {
+  return countRevisionChanges(previousText, nextText);
 }
 
 function toNativePart(row: Record<string, unknown>): BookPart {
@@ -815,6 +875,34 @@ export class AppDatabase {
         FOREIGN KEY (part_id) REFERENCES book_parts(id)
       );
 
+      CREATE TABLE IF NOT EXISTS chapter_revisions (
+        id TEXT PRIMARY KEY,
+        chapter_id TEXT NOT NULL,
+        book_id TEXT NOT NULL,
+        title TEXT,
+        text TEXT NOT NULL,
+        word_count INTEGER NOT NULL DEFAULT 0,
+        words_added INTEGER NOT NULL DEFAULT 0,
+        words_removed INTEGER NOT NULL DEFAULT 0,
+        revision_kind TEXT NOT NULL DEFAULT 'save',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (chapter_id) REFERENCES chapters(id),
+        FOREIGN KEY (book_id) REFERENCES books(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS chapter_activity (
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        chapter_id TEXT NOT NULL,
+        chapter_title TEXT,
+        activity_type TEXT NOT NULL,
+        words_added INTEGER NOT NULL DEFAULT 0,
+        words_removed INTEGER NOT NULL DEFAULT 0,
+        word_count_deleted INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (book_id) REFERENCES books(id)
+      );
+
       CREATE TABLE IF NOT EXISTS book_parts (
         id TEXT PRIMARY KEY,
         book_id TEXT NOT NULL,
@@ -970,6 +1058,9 @@ export class AppDatabase {
       CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_wiki_page ON image_wiki_tags(wiki_page_id);
       CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_chapter ON chapter_wiki_mentions(chapter_id);
       CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_wiki_page ON chapter_wiki_mentions(wiki_page_id);
+      CREATE INDEX IF NOT EXISTS idx_chapter_revisions_chapter_created ON chapter_revisions(chapter_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chapter_revisions_book_created ON chapter_revisions(book_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chapter_activity_book_created ON chapter_activity(book_id, created_at DESC);
     `;
 
     if (this.isNative) {
@@ -1021,7 +1112,40 @@ export class AppDatabase {
       `ALTER TABLE chapter_wiki_mentions ADD COLUMN updated_at TIMESTAMP`,
       `UPDATE chapter_wiki_mentions SET updated_at = created_at WHERE updated_at IS NULL`,
       `CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_chapter ON chapter_wiki_mentions(chapter_id)`,
-      `CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_wiki_page ON chapter_wiki_mentions(wiki_page_id)`
+      `CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_wiki_page ON chapter_wiki_mentions(wiki_page_id)`,
+      `CREATE TABLE IF NOT EXISTS chapter_revisions (
+        id TEXT PRIMARY KEY,
+        chapter_id TEXT NOT NULL,
+        book_id TEXT NOT NULL,
+        title TEXT,
+        text TEXT NOT NULL,
+        word_count INTEGER NOT NULL DEFAULT 0,
+        words_added INTEGER NOT NULL DEFAULT 0,
+        words_removed INTEGER NOT NULL DEFAULT 0,
+        revision_kind TEXT NOT NULL DEFAULT 'save',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (chapter_id) REFERENCES chapters(id),
+        FOREIGN KEY (book_id) REFERENCES books(id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_chapter_revisions_chapter_created ON chapter_revisions(chapter_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_chapter_revisions_book_created ON chapter_revisions(book_id, created_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS chapter_activity (
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        chapter_id TEXT NOT NULL,
+        chapter_title TEXT,
+        activity_type TEXT NOT NULL,
+        words_added INTEGER NOT NULL DEFAULT 0,
+        words_removed INTEGER NOT NULL DEFAULT 0,
+        word_count_deleted INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (book_id) REFERENCES books(id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_chapter_activity_book_created ON chapter_activity(book_id, created_at DESC)`,
+      `INSERT OR IGNORE INTO chapter_activity
+        (id, book_id, chapter_id, chapter_title, activity_type, words_added, words_removed, word_count_deleted, created_at)
+        SELECT id, book_id, chapter_id, title, 'save', words_added, words_removed, 0, created_at
+        FROM chapter_revisions WHERE revision_kind = 'save'`
     ];
 
     for (const migration of migrations) {
@@ -1139,9 +1263,30 @@ export class AppDatabase {
     }
   }
 
-  async saveChapter(chapter: Chapter) {
-    const query = `INSERT OR REPLACE INTO chapters (id, book_id, part_id, title, text, word_count, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  async saveChapter(chapter: Chapter, options: { createRevision?: boolean } = {}) {
+    const createRevision = options.createRevision !== false;
+    const existingQuery = `SELECT id, book_id, part_id, title, text, word_count, created_at
+                           FROM chapters WHERE id = ? LIMIT 1`;
+    let existing: Chapter | null = null;
+    if (createRevision) {
+      if (this.isNative) {
+        const result = await this.db.query(existingQuery, [chapter.id]);
+        existing = result.values?.[0] ? toNativeChapter(result.values[0]) : null;
+      } else {
+        const result = this.db.exec(existingQuery, [chapter.id]);
+        existing = result[0]?.values?.[0] ? toWebChapter(result[0].values[0]) : null;
+      }
+    }
+
+    const changed = !existing || existing.title !== chapter.title || existing.text !== chapter.text;
+    const query = `INSERT INTO chapters (id, book_id, part_id, title, text, word_count, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                     book_id = excluded.book_id,
+                     part_id = excluded.part_id,
+                     title = excluded.title,
+                     text = excluded.text,
+                     word_count = excluded.word_count`;
 
     if (this.isNative) {
       await this.db.run(query, [
@@ -1166,8 +1311,120 @@ export class AppDatabase {
       this.requestPersistence();
     }
 
+    if (createRevision && changed) {
+      const revisionCountQuery = `SELECT COUNT(*) AS count FROM chapter_revisions WHERE chapter_id = ?`;
+      let revisionCount = 0;
+      if (this.isNative) {
+        const result = await this.db.query(revisionCountQuery, [chapter.id]);
+        revisionCount = Number(result.values?.[0]?.count ?? 0);
+      } else {
+        const result = this.db.exec(revisionCountQuery, [chapter.id]);
+        revisionCount = Number(result[0]?.values?.[0]?.[0] ?? 0);
+      }
+
+      const insertRevision = async (snapshot: Chapter, kind: 'save' | 'baseline', createdAt: string, added: number, removed: number) => {
+        const revisionId = `${snapshot.id}-${kind}-${Date.now()}`;
+        const revisionQuery = `INSERT INTO chapter_revisions
+          (id, chapter_id, book_id, title, text, word_count, words_added, words_removed, revision_kind, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        const params = [revisionId, snapshot.id, snapshot.book_id, snapshot.title ?? null, snapshot.text,
+          snapshot.word_count, added, removed, kind, createdAt];
+        if (this.isNative) await this.db.run(revisionQuery, params);
+        else this.db.run(revisionQuery, params);
+        return revisionId;
+      };
+
+      if (existing && revisionCount === 0) {
+        await insertRevision(existing, 'baseline', existing.created_at, 0, 0);
+      }
+      const wordChanges = countChangedWords(existing?.text ?? '', chapter.text);
+      const savedAt = new Date().toISOString();
+      const revisionId = await insertRevision(chapter, 'save', savedAt, wordChanges.added, wordChanges.removed);
+      await this.insertChapterActivity({
+        id: revisionId,
+        bookId: chapter.book_id,
+        chapterId: chapter.id,
+        chapterTitle: chapter.title ?? null,
+        activityType: 'save',
+        wordsAdded: wordChanges.added,
+        wordsRemoved: wordChanges.removed,
+        wordCountDeleted: 0,
+        createdAt: savedAt,
+      });
+      if (!this.isNative) this.requestPersistence();
+    }
+
     // Add chapter to book's chapter_order if not already present
     await this.addChapterToBookOrder(chapter.book_id, chapter.id);
+  }
+
+  private async insertChapterActivity(activity: {
+    id: string;
+    bookId: string;
+    chapterId: string;
+    chapterTitle: string | null;
+    activityType: 'save' | 'delete';
+    wordsAdded: number;
+    wordsRemoved: number;
+    wordCountDeleted: number;
+    createdAt: string;
+  }): Promise<void> {
+    const query = `INSERT OR IGNORE INTO chapter_activity
+      (id, book_id, chapter_id, chapter_title, activity_type, words_added, words_removed, word_count_deleted, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const params = [activity.id, activity.bookId, activity.chapterId, activity.chapterTitle,
+      activity.activityType, activity.wordsAdded, activity.wordsRemoved, activity.wordCountDeleted,
+      activity.createdAt];
+    if (this.isNative) await this.db.run(query, params);
+    else this.db.run(query, params);
+  }
+
+  async getChapterRevisions(chapterId: string): Promise<ChapterRevision[]> {
+    const query = `SELECT id, chapter_id, book_id, title, text, word_count, words_added, words_removed,
+                          revision_kind, created_at
+                   FROM chapter_revisions WHERE chapter_id = ? ORDER BY created_at DESC, rowid DESC`;
+    if (this.isNative) {
+      const result = await this.db.query(query, [chapterId]);
+      return (result.values ?? []).map(toNativeChapterRevision);
+    }
+    const result = this.db.exec(query, [chapterId]);
+    return result[0]?.values.map(toWebChapterRevision) ?? [];
+  }
+
+  async getBookRevisionActivity(bookId: string): Promise<ChapterRevisionActivity[]> {
+    const query = `SELECT a.id, a.chapter_id, a.chapter_title, a.activity_type, a.words_added,
+                          a.words_removed, a.word_count_deleted, a.created_at,
+                          CASE WHEN r.id IS NULL THEN 0 ELSE 1 END AS revision_available
+                   FROM chapter_activity a
+                   LEFT JOIN chapter_revisions r ON r.id = a.id
+                   WHERE a.book_id = ? ORDER BY a.created_at ASC, a.rowid ASC`;
+    if (this.isNative) {
+      const result = await this.db.query(query, [bookId]);
+      return (result.values ?? []).map((row) => ({
+        id: String(readQueryRowValue(row, 0, 'id')),
+        chapter_id: String(readQueryRowValue(row, 1, 'chapter_id')),
+        chapter_title: typeof readQueryRowValue(row, 2, 'chapter_title') === 'string'
+          ? readQueryRowValue(row, 2, 'chapter_title') as string : null,
+        activity_type: readQueryRowValue(row, 3, 'activity_type') === 'delete' ? 'delete' : 'save',
+        words_added: Number(readQueryRowValue(row, 4, 'words_added') ?? 0),
+        words_removed: Number(readQueryRowValue(row, 5, 'words_removed') ?? 0),
+        word_count_deleted: Number(readQueryRowValue(row, 6, 'word_count_deleted') ?? 0),
+        revision_available: Boolean(readQueryRowValue(row, 8, 'revision_available')),
+        created_at: String(readQueryRowValue(row, 7, 'created_at')),
+      }));
+    }
+    const result = this.db.exec(query, [bookId]);
+    return result[0]?.values.map((row) => ({
+      id: String(row[0]),
+      chapter_id: String(row[1]),
+      chapter_title: typeof row[2] === 'string' ? row[2] : null,
+      activity_type: row[3] === 'delete' ? 'delete' : 'save',
+      words_added: Number(row[4] ?? 0),
+      words_removed: Number(row[5] ?? 0),
+      word_count_deleted: Number(row[6] ?? 0),
+      revision_available: Boolean(row[8]),
+      created_at: String(row[7]),
+    })) ?? [];
   }
 
   async getChapters(bookId: string): Promise<Chapter[]> {
@@ -1188,21 +1445,40 @@ export class AppDatabase {
   async deleteChapter(chapterId: string, bookId: string): Promise<void> {
     // Lookup part assignment before deletion
     let partId: string | null = null;
-    const getPartQuery = `SELECT part_id FROM chapters WHERE id = ? LIMIT 1`;
+    let deletedTitle: string | null = null;
+    let deletedWordCount = 0;
+    const getPartQuery = `SELECT part_id, title, word_count FROM chapters WHERE id = ? LIMIT 1`;
 
     if (this.isNative) {
       const result = await this.db.query(getPartQuery, [chapterId]);
       if (result.values && result.values[0]) {
         const value = readQueryRowValue(result.values[0], 0, 'part_id');
         partId = typeof value === 'string' ? value : null;
+        const titleValue = readQueryRowValue(result.values[0], 1, 'title');
+        deletedTitle = typeof titleValue === 'string' ? titleValue : null;
+        deletedWordCount = Number(readQueryRowValue(result.values[0], 2, 'word_count') ?? 0);
       }
     } else {
       const result = this.db.exec(getPartQuery, [chapterId]);
       if (result.length > 0 && result[0].values && result[0].values[0]) {
         const row = result[0].values[0];
         partId = (row[0] as string) || null;
+        deletedTitle = typeof row[1] === 'string' ? row[1] : null;
+        deletedWordCount = Number(row[2] ?? 0);
       }
     }
+
+    await this.insertChapterActivity({
+      id: `${chapterId}-delete-${Date.now()}`,
+      bookId,
+      chapterId,
+      chapterTitle: deletedTitle,
+      activityType: 'delete',
+      wordsAdded: 0,
+      wordsRemoved: 0,
+      wordCountDeleted: deletedWordCount,
+      createdAt: new Date().toISOString(),
+    });
 
     // Remove dependent records
     const cleanupStatements = [
@@ -1212,6 +1488,7 @@ export class AppDatabase {
       { query: "DELETE FROM wiki_updates WHERE chapter_id = ?", params: [chapterId] },
       { query: "DELETE FROM image_assets WHERE chapter_id = ?", params: [chapterId] },
       { query: "DELETE FROM chapter_notes WHERE chapter_id = ?", params: [chapterId] },
+      { query: "DELETE FROM chapter_revisions WHERE chapter_id = ?", params: [chapterId] },
     ];
 
     for (const statement of cleanupStatements) {
@@ -1590,9 +1867,11 @@ export class AppDatabase {
       };
 
       const exportData = {
-        version: 2,
+        version: 4,
         books,
         chapters: allChapters,
+        chapter_revisions: getAllFromTable('chapter_revisions'),
+        chapter_activity: getAllFromTable('chapter_activity'),
         book_parts: getAllFromTable('book_parts'),
         chapter_summaries: getAllFromTable('chapter_summaries'),
         part_summaries: getAllFromTable('part_summaries'),
@@ -1651,6 +1930,8 @@ export class AppDatabase {
         'chapter_summaries',
         'part_summaries',
         'chapter_notes',
+        'chapter_revisions',
+        'chapter_activity',
         'image_wiki_tags',
         'wiki_pages',
         'chapters',
@@ -1698,9 +1979,16 @@ export class AppDatabase {
 
       if (importData.chapters) {
         for (const chapter of importData.chapters) {
-          await this.saveChapter(toImportedChapter(chapter));
+          await this.saveChapter(toImportedChapter(chapter), { createRevision: false });
         }
       }
+
+      await importTable('chapter_revisions', importData.chapter_revisions);
+      await importTable('chapter_activity', importData.chapter_activity);
+      await run(`INSERT OR IGNORE INTO chapter_activity
+        (id, book_id, chapter_id, chapter_title, activity_type, words_added, words_removed, word_count_deleted, created_at)
+        SELECT id, book_id, chapter_id, title, 'save', words_added, words_removed, 0, created_at
+        FROM chapter_revisions WHERE revision_kind = 'save'`);
 
       await importTable('wiki_pages', importData.wiki_pages);
       await importTable('custom_reviewer_profiles', importData.custom_reviewer_profiles);
@@ -1740,9 +2028,11 @@ export class AppDatabase {
     // Neon exports tables as arrays of objects with column names
     const sourceData = isRecord(jsonData) ? jsonData : {};
     const transformedData: DatabaseImportData = {
-      version: 2,
+      version: 4,
       books: [],
       chapters: [],
+      chapter_revisions: [],
+      chapter_activity: [],
       book_parts: [],
       chapter_summaries: [],
       part_summaries: [],

@@ -95,6 +95,58 @@ describe('chapters', () => {
     chapters = await db.getChapters('book-1')
     expect(chapters.map((c) => c.id)).toEqual(['ch-2'])
   })
+
+  it('creates one version for each changed save and records activity', async () => {
+    await db.saveChapter(chapter())
+    await db.saveChapter(chapter())
+    await db.saveChapter(chapter({ text: 'Once upon a darker time.', word_count: 5 }))
+
+    const revisions = await db.getChapterRevisions('ch-1')
+    expect(revisions).toHaveLength(2)
+    expect(revisions[0]).toMatchObject({
+      text: 'Once upon a darker time.',
+      words_added: 1,
+      words_removed: 0,
+      revision_kind: 'save',
+    })
+
+    const activity = await db.getBookRevisionActivity('book-1')
+    expect(activity).toHaveLength(2)
+    expect(activity[1]).toMatchObject({ chapter_id: 'ch-1', words_added: 1, words_removed: 0 })
+  })
+
+  it('preserves an untracked existing chapter as a baseline on its first edited save', async () => {
+    await db.saveChapter(chapter(), { createRevision: false })
+    await db.saveChapter(chapter({ text: 'A newly edited opening.', word_count: 4 }))
+
+    const revisions = await db.getChapterRevisions('ch-1')
+    expect(revisions.map((revision) => revision.revision_kind)).toEqual(['save', 'baseline'])
+    expect(revisions[1].text).toBe('Once upon a time.')
+    expect(await db.getBookRevisionActivity('book-1')).toHaveLength(1)
+
+    await db.deleteChapter('ch-1', 'book-1')
+    expect(await db.getChapterRevisions('ch-1')).toEqual([])
+
+    const activityAfterDeletion = await db.getBookRevisionActivity('book-1')
+    expect(activityAfterDeletion).toHaveLength(2)
+    expect(activityAfterDeletion[0]).toMatchObject({
+      activity_type: 'save',
+      chapter_title: 'Chapter One',
+    })
+    expect(activityAfterDeletion[1]).toMatchObject({
+      activity_type: 'delete',
+      chapter_title: 'Chapter One',
+      word_count_deleted: 4,
+    })
+  })
+
+  it('records additions and deletions from the prose diff when words move', async () => {
+    await db.saveChapter(chapter({ text: 'one two three four', word_count: 4 }))
+    await db.saveChapter(chapter({ text: 'three four one two', word_count: 4 }))
+
+    const [revision] = await db.getChapterRevisions('ch-1')
+    expect(revision).toMatchObject({ words_added: 2, words_removed: 2 })
+  })
 })
 
 describe('parts', () => {

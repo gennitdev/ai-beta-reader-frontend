@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useImageLibrary } from "@/composables/useImageLibrary";
-import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ImageAsset, ImageWikiTag } from "@/lib/database";
+import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ChapterRevisionActivity, ImageAsset, ImageWikiTag } from "@/lib/database";
 import type { FindReplaceScope } from "@/lib/findReplace";
 import type {
   BookChapter,
@@ -63,6 +63,7 @@ const {
   getImageWikiTags,
   setImageWikiTags,
   getWikiPageCoverImageAsset,
+  getBookRevisionActivity,
 } = useDatabase();
 
 const {
@@ -100,6 +101,7 @@ const bookImageTags = ref<Record<string, ImageWikiTag[]>>({});
 const loadingImages = ref(false);
 const savingSelectedImageNotes = ref(false);
 const savingSelectedImageTags = ref(false);
+const revisionActivity = ref<ChapterRevisionActivity[]>([]);
 
 // Book editing state
 const isEditingBookTitle = ref(false);
@@ -325,6 +327,9 @@ watch(
     if (suppressDbChapterSync) return;
     try {
       await syncChaptersFromDb();
+      if (book.value) {
+        revisionActivity.value = await getBookRevisionActivity(book.value.id);
+      }
     } catch (error) {
       console.error("Failed to synchronize chapters:", error);
     }
@@ -518,6 +523,7 @@ const loadBook = async () => {
 
     await syncPartOrderWithParts();
     await syncChaptersFromDb();
+    revisionActivity.value = await getBookRevisionActivity(bookId.value);
     await loadBookCoverImage(bookId.value);
     await loadChapterThumbnailsForBook();
     if (currentTab.value === "images") {
@@ -1128,6 +1134,7 @@ onMounted(async () => {
       :save-selected-image-notes="saveSelectedImageNotes"
       :save-selected-image-tags="saveSelectedImageTags"
       :download-selected-image="downloadSelectedImage"
+      :revision-activity="revisionActivity"
     />
     <router-view
       v-else
@@ -1200,6 +1207,7 @@ onMounted(async () => {
     :save-selected-image-tags="saveSelectedImageTags"
     :download-selected-image="downloadSelectedImage"
     :wiki-page-pin-changed="handleWikiPagePinChanged"
+    :revision-activity="revisionActivity"
   />
 
   <SearchModal
