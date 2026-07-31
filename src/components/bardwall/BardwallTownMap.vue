@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-export type BardwallLocation = 'amphitheater' | 'market' | 'inn' | 'shrine' | 'camp' | 'challenge' | 'cave'
+export type BardwallLocation = 'amphitheater' | 'market' | 'inn' | 'shrine' | 'apothecary' | 'camp' | 'challenge' | 'cave'
 
 const props = defineProps<{ caveUnlocked: boolean }>()
 const emit = defineEmits<{ select: [location: BardwallLocation] }>()
@@ -9,6 +9,7 @@ const emit = defineEmits<{ select: [location: BardwallLocation] }>()
 const locations = computed(() => [
   { id: 'inn' as const, name: 'Crooked Lantern Inn', detail: 'Rooms, rumors, and advice', icon: '🏠', x: 20, y: 22, tone: 'amber' },
   { id: 'shrine' as const, name: 'Shrine of Heliconia', detail: 'Town Square', icon: '🌺', x: 42, y: 40, tone: 'rose' },
+  { id: 'apothecary' as const, name: 'Moth & Mortar', detail: 'Apothecary and physic', icon: '⚗️', x: 15, y: 48, tone: 'emerald' },
   { id: 'market' as const, name: 'Night Market', detail: 'Food, flowers, and provisions', icon: '🏮', x: 63, y: 55, tone: 'amber' },
   { id: 'challenge' as const, name: 'Challenge Hall', detail: 'Coming soon', icon: '🎭', x: 25, y: 68, tone: 'stone' },
   { id: 'amphitheater' as const, name: 'Stone Amphitheater', detail: 'Tell the ghosts a story', icon: '👻', x: 79, y: 18, tone: 'sky' },

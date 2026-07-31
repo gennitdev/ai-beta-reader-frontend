@@ -5,6 +5,14 @@ export const BARDWALL_INN_PRICE = 100
 export const BARDWALL_DAILY_NOURISHMENT = 100
 export const BARDWALL_FLOWER_PRICE = 3
 
+export const BARDWALL_WYRM_POTIONS = [
+  { id: 'gold', name: 'Sun-gold cordial', color: '#e7b84b', ailment: 'Gilded Fever', icon: '☀️', description: 'Your skin burns with fever while every shadow appears full of treasure.' },
+  { id: 'blue', name: 'Moon-blue tincture', color: '#6ea8d9', ailment: 'The Lost Lexicon', icon: '🌙', description: 'Common words flee from you precisely when you need them.' },
+  { id: 'red', name: 'Ember-red draught', color: '#c95f4b', ailment: 'Smoke Tongue', icon: '🔥', description: 'Every attempted sentence leaves your mouth as a ribbon of smoke.' },
+  { id: 'silver', name: 'Silver looking-glass wine', color: '#b8bec7', ailment: 'The Errant Reflection', icon: '🪞', description: 'Your reflection continues moving after you have gone still.' },
+  { id: 'clear', name: 'Clear springwater', color: '#b9e2dc', ailment: 'Cave Ague', icon: '💧', description: 'It tastes exactly like water. This somehow makes the illness more insulting.' },
+] as const
+
 export const BARDWALL_MARKET_ITEMS = [
   { id: 'apple', name: 'Orchard apple', icon: '🍎', price: 5, nourishment: 25, description: 'Bright, crisp, and easy to carry.' },
   { id: 'bread', name: 'Brown bread', icon: '🍞', price: 12, nourishment: 50, description: 'A sturdy half-loaf from the market ovens.' },
@@ -15,7 +23,15 @@ export const BARDWALL_MARKET_ITEMS = [
 
 export type BardwallFoodId = typeof BARDWALL_MARKET_ITEMS[number]['id']
 export type BardwallLodging = 'tent' | 'inn'
+export type BardwallPotionId = typeof BARDWALL_WYRM_POTIONS[number]['id']
 export type BardwallInventory = Record<BardwallFoodId | 'tent' | 'flower', number>
+
+export interface BardwallAilment {
+  potionId: BardwallPotionId
+  name: string
+  icon: string
+  description: string
+}
 
 export interface BardwallNightSummary {
   day: number
@@ -46,6 +62,8 @@ export interface BardwallState {
   lastNight: BardwallNightSummary | null
   heliconiaMet: boolean
   caveUnlocked: boolean
+  ailment: BardwallAilment | null
+  triedPotionIds: BardwallPotionId[]
 }
 
 export interface BardwallPassage {
@@ -74,6 +92,8 @@ export const createDefaultBardwallState = (): BardwallState => ({
   lastNight: null,
   heliconiaMet: false,
   caveUnlocked: false,
+  ailment: null,
+  triedPotionIds: [],
 })
 
 const clampMeter = (value: unknown, fallback: number): number => {
@@ -134,6 +154,17 @@ export function loadBardwallState(): BardwallState {
         : null,
       heliconiaMet: Boolean(stored?.heliconiaMet),
       caveUnlocked: Boolean(stored?.caveUnlocked),
+      ailment: stored?.ailment && typeof stored.ailment === 'object'
+        ? (() => {
+            const potion = BARDWALL_WYRM_POTIONS.find((candidate) => candidate.id === stored.ailment?.potionId)
+            return potion
+              ? { potionId: potion.id, name: potion.ailment, icon: potion.icon, description: potion.description }
+              : null
+          })()
+        : null,
+      triedPotionIds: Array.isArray(stored?.triedPotionIds)
+        ? stored.triedPotionIds.filter((id): id is BardwallPotionId => BARDWALL_WYRM_POTIONS.some((potion) => potion.id === id))
+        : [],
     }
   } catch {
     return createDefaultBardwallState()
@@ -197,6 +228,27 @@ export function offerFlowerToHeliconia(state: BardwallState): BardwallState {
     inventory: { ...state.inventory, flower: state.inventory.flower - 1 },
     heliconiaMet: true,
     caveUnlocked: true,
+  }
+}
+
+export function drinkWyrmPotion(state: BardwallState, potionId: BardwallPotionId): BardwallState {
+  if (state.ailment) throw new Error('The bard must be healed first')
+  const potion = BARDWALL_WYRM_POTIONS.find((candidate) => candidate.id === potionId)
+  if (!potion) throw new Error('Potion not found')
+  return {
+    ...state,
+    energy: Math.max(0, state.energy - 25),
+    ailment: { potionId: potion.id, name: potion.ailment, icon: potion.icon, description: potion.description },
+    triedPotionIds: [...new Set([...state.triedPotionIds, potion.id])],
+  }
+}
+
+export function healBardAtApothecary(state: BardwallState): BardwallState {
+  if (!state.ailment) return state
+  return {
+    ...state,
+    energy: Math.min(100, state.energy + 25),
+    ailment: null,
   }
 }
 

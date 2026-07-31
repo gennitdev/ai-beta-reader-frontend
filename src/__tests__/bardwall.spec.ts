@@ -4,8 +4,10 @@ import {
   BARDWALL_STORAGE_KEY,
   calculateBardwallPay,
   createDefaultBardwallState,
+  drinkWyrmPotion,
   getBardwallDateKey,
   getBardwallPassages,
+  healBardAtApothecary,
   loadBardwallState,
   offerFlowerToHeliconia,
   purchaseBardwallFood,
@@ -71,6 +73,8 @@ describe('Bardwall game helpers', () => {
       lastNight: null,
       heliconiaMet: false,
       caveUnlocked: false,
+      ailment: null,
+      triedPotionIds: [],
     })
   })
 
@@ -102,6 +106,19 @@ describe('Bardwall game helpers', () => {
     const revealed = offerFlowerToHeliconia(purchased)
     expect(revealed).toMatchObject({ inventory: { flower: 0 }, heliconiaMet: true, caveUnlocked: true })
     expect(() => offerFlowerToHeliconia(createDefaultBardwallState())).toThrow('A flower is required')
+  })
+
+  it('applies every wyrm potion as an illness and lets the apothecary heal it', () => {
+    const poisoned = drinkWyrmPotion(createDefaultBardwallState(), 'gold')
+    expect(poisoned).toMatchObject({
+      energy: 75,
+      ailment: { potionId: 'gold', name: 'Gilded Fever' },
+      triedPotionIds: ['gold'],
+    })
+    expect(() => drinkWyrmPotion(poisoned, 'blue')).toThrow('must be healed first')
+
+    const healed = healBardAtApothecary(poisoned)
+    expect(healed).toMatchObject({ energy: 100, ailment: null, triedPotionIds: ['gold'] })
   })
 
   it('consumes a full meal and applies lodging energy at the end of the day', () => {

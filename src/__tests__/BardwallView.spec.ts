@@ -159,4 +159,37 @@ describe('BardwallView', () => {
       caveUnlocked: true,
     })
   })
+
+  it('loses the wyrm’s potion game and recovers at the apothecary', async () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      caveUnlocked: true,
+      heliconiaMet: true,
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 0, coinsEarned: 0, locked: false },
+    })
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    expect(wrapper.find('[data-testid="map-apothecary"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="map-cave"]').trigger('click')
+    expect(wrapper.text()).toContain('The Game of the Last Word')
+    expect(wrapper.text()).toContain('The Wyrm’s Courtesy')
+
+    await wrapper.get('[data-testid="play-wyrms-courtesy"]').trigger('click')
+    await wrapper.get('[data-testid="drink-gold"]').trigger('click')
+    expect(wrapper.text()).toContain('Gilded Fever')
+    expect(wrapper.text()).toContain('You were so nearly correct')
+    await wrapper.get('[data-testid="return-sick-to-town"]').trigger('click')
+    expect(wrapper.text()).toContain('Seek treatment at Moth & Mortar')
+
+    await wrapper.get('[data-testid="map-apothecary"]').trigger('click')
+    expect(wrapper.text()).toContain('Cave work, obviously')
+    await wrapper.get('[data-testid="receive-treatment"]').trigger('click')
+    expect(wrapper.text()).toContain('Gilded Fever treated')
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({
+      energy: 100,
+      ailment: null,
+      triedPotionIds: ['gold'],
+    })
+  })
 })

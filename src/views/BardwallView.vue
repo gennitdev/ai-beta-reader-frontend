@@ -9,17 +9,21 @@ import {
   BARDWALL_DAILY_NOURISHMENT,
   BARDWALL_FLOWER_PRICE,
   BARDWALL_MARKET_ITEMS,
+  BARDWALL_WYRM_POTIONS,
   calculateBardwallPay,
   getBardwallDateKey,
   getBardwallPassages,
+  healBardAtApothecary,
   loadBardwallState,
   offerFlowerToHeliconia,
   purchaseBardwallFood,
   purchaseBardwallFlower,
+  drinkWyrmPotion,
   resolveBardwallNight,
   saveBardwallState,
   type BardwallFoodId,
   type BardwallLodging,
+  type BardwallPotionId,
   type BardwallPassage,
 } from '@/lib/bardwall'
 
@@ -37,7 +41,7 @@ interface RevisionOffering {
 }
 
 const { books, loadBooks, getBookRevisionActivity, getChapterRevisions } = useDatabase()
-const screen = ref<'gate' | 'goal' | 'town' | 'amphitheater' | 'reward' | 'market' | 'night' | 'morning' | 'inn' | 'shrine' | 'camp' | 'challenge' | 'cave'>('gate')
+const screen = ref<'gate' | 'goal' | 'town' | 'amphitheater' | 'reward' | 'market' | 'night' | 'morning' | 'inn' | 'shrine' | 'apothecary' | 'camp' | 'challenge' | 'cave' | 'wyrm'>('gate')
 const game = ref(loadBardwallState())
 const offerings = ref<RevisionOffering[]>([])
 const loadingOfferings = ref(false)
@@ -54,6 +58,7 @@ const nightError = ref<string | null>(null)
 const innAdviceShown = ref(false)
 const heliconiaEncounterActive = ref(false)
 const shrineMessage = ref<string | null>(null)
+const treatmentMessage = ref<string | null>(null)
 
 const selectedOffering = computed(() => offerings.value.find((item) => item.id === selectedOfferingId.value) ?? null)
 const selectedPassages = computed(() => selectedOffering.value?.passages.filter((_, index) => selectedPassageIndexes.value.includes(index)) ?? [])
@@ -233,6 +238,23 @@ const offerFlower = () => {
   }
 }
 
+const drinkPotion = (potionId: BardwallPotionId) => {
+  try {
+    game.value = drinkWyrmPotion(game.value, potionId)
+    saveBardwallState(game.value)
+  } catch {
+    // The encounter is disabled while an ailment is active.
+  }
+}
+
+const receiveTreatment = () => {
+  const ailmentName = game.value.ailment?.name
+  if (!ailmentName) return
+  game.value = healBardAtApothecary(game.value)
+  saveBardwallState(game.value)
+  treatmentMessage.value = `${ailmentName} treated. Your lost energy has been restored.`
+}
+
 const selectMapLocation = async (location: BardwallLocation) => {
   if (location === 'amphitheater') {
     await visitAmphitheater()
@@ -242,6 +264,7 @@ const selectMapLocation = async (location: BardwallLocation) => {
     heliconiaEncounterActive.value = false
     shrineMessage.value = null
   }
+  if (location === 'apothecary') treatmentMessage.value = null
   screen.value = location
 }
 
@@ -306,6 +329,7 @@ onMounted(() => {
           <span class="inline-flex items-center gap-1.5"><CurrencyDollarIcon class="h-4 w-4 text-amber-300" /> {{ coinLabel(game.coins) }}</span>
           <span>⚡ {{ game.energy }} energy</span>
           <span>🍽️ {{ game.hunger }} hunger</span>
+          <span v-if="game.ailment" class="font-semibold text-lime-300">{{ game.ailment.icon }} {{ game.ailment.name }}</span>
           <span>{{ game.storiesTold }} stories told</span>
         </div>
       </header>
@@ -372,7 +396,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="screen === 'town'" class="py-10">
-        <div class="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
+        <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
           <article class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-7 shadow-xl">
             <p class="text-sm font-medium text-amber-300">Dusk settles over the crooked roofs.</p>
             <h2 class="mt-3 font-serif text-4xl font-bold">The story must go on.</h2>
@@ -391,6 +415,11 @@ onMounted(() => {
             <BardwallTownMap class="mt-7" :cave-unlocked="game.caveUnlocked" @select="selectMapLocation" />
           </article>
           <aside class="space-y-4">
+            <div v-if="game.ailment" class="rounded-2xl border border-lime-300/40 bg-lime-300/10 p-5">
+              <h3 class="font-serif text-xl font-semibold text-lime-200">{{ game.ailment.icon }} {{ game.ailment.name }}</h3>
+              <p class="mt-2 text-sm leading-6 text-stone-300">{{ game.ailment.description }}</p>
+              <button data-testid="go-to-apothecary" class="mt-4 text-sm font-semibold text-lime-200 underline underline-offset-4" @click="screen = 'apothecary'">Seek treatment at Moth & Mortar</button>
+            </div>
             <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
               <h3 class="font-serif text-xl font-semibold">How you feel</h3>
               <div class="mt-4 space-y-4">
@@ -415,12 +444,16 @@ onMounted(() => {
             </div>
             <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
               <h3 class="font-serif text-xl font-semibold">Your inventory</h3>
-              <ul class="mt-3 grid grid-cols-3 gap-2 text-center text-xs text-stone-300">
-                <li v-if="game.inventory.tent" class="rounded-lg bg-black/20 p-2">⛺<span class="mt-1 block">Tent</span></li>
-                <li v-for="item in foodInventory" :key="item.id" class="rounded-lg bg-black/20 p-2">
-                  {{ item.icon }}<span class="mt-1 block">{{ item.name }} ×{{ game.inventory[item.id] }}</span>
+              <ul class="mt-3 space-y-2 text-sm text-stone-300">
+                <li v-if="game.inventory.tent" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
+                  <span class="text-xl">⛺</span><span class="min-w-0 flex-1">Tent</span><span class="text-xs text-stone-500">×1</span>
                 </li>
-                <li v-if="game.inventory.flower" class="rounded-lg bg-black/20 p-2">🌺<span class="mt-1 block">Red flower ×{{ game.inventory.flower }}</span></li>
+                <li v-for="item in foodInventory" :key="item.id" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
+                  <span class="text-xl">{{ item.icon }}</span><span class="min-w-0 flex-1">{{ item.name }}</span><span class="text-xs text-stone-500">×{{ game.inventory[item.id] }}</span>
+                </li>
+                <li v-if="game.inventory.flower" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
+                  <span class="text-xl">🌺</span><span class="min-w-0 flex-1">Red shrine flower</span><span class="text-xs text-stone-500">×{{ game.inventory.flower }}</span>
+                </li>
               </ul>
               <p v-if="!foodInventory.length" class="mt-3 text-sm text-stone-500">Your food pouch is empty. Visit the market before nightfall.</p>
             </div>
@@ -485,6 +518,38 @@ onMounted(() => {
         </section>
       </div>
 
+      <div v-else-if="screen === 'apothecary'" class="py-8">
+        <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <section class="mx-auto mt-5 max-w-3xl overflow-hidden rounded-2xl border border-lime-200/25 bg-[linear-gradient(150deg,#273324,#111810)] shadow-2xl">
+          <div class="border-b border-lime-200/10 p-7 sm:p-9">
+            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-lime-300">Bottles in the windows, moths in the rafters</p>
+            <h2 class="mt-2 font-serif text-4xl font-bold">Moth & Mortar</h2>
+            <p class="mt-3 font-serif text-lg leading-8 text-stone-300">The apothecary smells of rosemary, rainwater, and remedies invented for ailments no sensible person would acquire.</p>
+          </div>
+          <div class="grid gap-6 p-7 sm:grid-cols-[0.35fr_0.65fr] sm:p-9">
+            <div class="flex min-h-44 items-center justify-center rounded-xl border border-lime-200/15 bg-black/20 text-center">
+              <div><span class="text-5xl">🧑‍⚕️</span><p class="mt-2 text-sm font-semibold text-lime-200">Iona, apothecary</p><p class="text-xs text-stone-500">Portrait placeholder</p></div>
+            </div>
+            <div>
+              <template v-if="game.ailment">
+                <p class="font-serif text-lg leading-8 text-stone-200">“{{ game.ailment.name }}. Cave work, obviously. Sit down before your symptoms become interesting.”</p>
+                <div class="mt-4 rounded-xl border border-lime-300/20 bg-lime-300/5 p-4">
+                  <p class="font-semibold text-lime-200">{{ game.ailment.icon }} {{ game.ailment.name }}</p>
+                  <p class="mt-1 text-sm leading-6 text-stone-400">{{ game.ailment.description }}</p>
+                </div>
+                <p class="mt-4 text-sm text-stone-400">Bardwall treats cave poisoning without charge. The town prefers its storytellers alive.</p>
+                <button data-testid="receive-treatment" class="mt-5 rounded-lg bg-lime-300 px-5 py-3 font-semibold text-[#182013] hover:bg-lime-200" @click="receiveTreatment">Accept the remedy · Free</button>
+              </template>
+              <template v-else>
+                <p class="font-serif text-lg leading-8 text-stone-200">“You are currently suffering only from ordinary ambition. I have no cure for that.”</p>
+                <p v-if="treatmentMessage" class="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-200">{{ treatmentMessage }}</p>
+                <p class="mt-4 text-sm leading-6 text-stone-400">Iona keeps a shelf reserved for the cave. Every bottle on it has been opened more than once.</p>
+              </template>
+            </div>
+          </div>
+        </section>
+      </div>
+
       <div v-else-if="screen === 'camp'" class="py-8">
         <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-emerald-300/20 bg-[radial-gradient(circle_at_top,#243c2f,#101a15_65%)] p-8 text-center shadow-2xl">
@@ -510,7 +575,63 @@ onMounted(() => {
           <div class="mx-auto mt-7 flex h-52 max-w-md items-end justify-center rounded-t-[50%] border-x border-t border-stone-500/30 bg-black/70 pb-7 text-6xl">🕯️</div>
           <h2 class="mt-7 font-serif text-4xl font-bold">The Unwinnable Cave</h2>
           <blockquote class="mx-auto mt-5 max-w-2xl font-serif text-xl italic leading-9 text-violet-100">“Some games can be played in the cave. None of them can be won.”</blockquote>
-          <p class="mx-auto mt-5 max-w-xl text-stone-400">The first game has not yet been laid out. Still, something in the dark has already taken its seat across from you.</p>
+          <p v-if="game.ailment" class="mx-auto mt-5 max-w-xl rounded-xl border border-lime-300/30 bg-lime-300/10 p-4 text-sm text-lime-100">You are still suffering from {{ game.ailment.name }}. The cave will wait while you seek treatment at Moth & Mortar.</p>
+          <div class="mt-8 grid gap-4 text-left sm:grid-cols-2">
+            <article class="rounded-xl border border-stone-600/60 bg-black/30 p-5 opacity-70">
+              <p class="text-xs font-semibold uppercase tracking-wider text-stone-400">Being prepared</p>
+              <h3 class="mt-2 font-serif text-2xl font-semibold">The Game of the Last Word</h3>
+              <p class="mt-3 text-sm leading-6 text-stone-400">The cave continues every story after you try to end it. The speaking stones are not yet ready.</p>
+              <span class="mt-5 inline-block rounded-full bg-stone-700 px-3 py-1 text-xs">Coming soon</span>
+            </article>
+            <article class="rounded-xl border border-amber-300/30 bg-amber-300/5 p-5">
+              <p class="text-xs font-semibold uppercase tracking-wider text-amber-300">A table set for one</p>
+              <h3 class="mt-2 font-serif text-2xl font-semibold">The Wyrm’s Courtesy</h3>
+              <p class="mt-3 text-sm leading-6 text-stone-300">A courteous creature promises you its hoard if you choose the one potion that will not make you ill.</p>
+              <button data-testid="play-wyrms-courtesy" class="mt-5 rounded-lg bg-amber-300 px-4 py-2.5 font-semibold text-[#281d10] hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="Boolean(game.ailment)" @click="screen = 'wyrm'">Take your seat</button>
+            </article>
+          </div>
+        </section>
+      </div>
+
+      <div v-else-if="screen === 'wyrm'" class="py-8">
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'cave'"><ArrowLeftIcon class="h-4 w-4" /> Leave the table</button>
+        <section class="mx-auto mt-5 max-w-5xl overflow-hidden rounded-2xl border border-amber-300/25 bg-[radial-gradient(circle_at_top,#49351c,#15100b_62%)] p-7 shadow-2xl sm:p-10">
+          <div class="text-center">
+            <p class="text-xs font-semibold uppercase tracking-[0.35em] text-amber-300">The game is always set</p>
+            <div class="mt-5 text-7xl">🐉</div>
+            <h2 class="mt-4 font-serif text-4xl font-bold">The Wyrm’s Courtesy</h2>
+          </div>
+
+          <template v-if="!game.ailment">
+            <p class="mx-auto mt-5 max-w-2xl text-center font-serif text-xl leading-9 text-stone-200">“Welcome, bard. One cordial is harmless. Drink it, and every bright thing behind me is yours.”</p>
+            <div class="mt-7 rounded-xl border border-amber-200/15 bg-black/25 p-4 text-center text-sm text-amber-100">Behind the wyrm: coins, crowns, unfinished manuscripts, and several objects you remember losing as a child.</div>
+            <div class="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <button
+                v-for="potion in BARDWALL_WYRM_POTIONS"
+                :key="potion.id"
+                type="button"
+                :data-testid="`drink-${potion.id}`"
+                class="group rounded-xl border border-stone-600 bg-black/25 p-4 text-center transition hover:-translate-y-1 hover:border-amber-300"
+                @click="drinkPotion(potion.id)"
+              >
+                <span class="mx-auto flex h-14 w-10 items-center justify-center rounded-b-xl rounded-t-sm border border-white/30 text-2xl shadow-[0_0_20px_rgba(255,255,255,0.08)]" :style="{ backgroundColor: potion.color }">{{ potion.icon }}</span>
+                <strong class="mt-3 block font-serif text-sm">{{ potion.name }}</strong>
+                <span v-if="game.triedPotionIds.includes(potion.id)" class="mt-2 block text-[10px] uppercase tracking-wider text-stone-500">Tried before</span>
+              </button>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="mx-auto mt-7 max-w-2xl text-center">
+              <div class="text-6xl">{{ game.ailment.icon }}</div>
+              <p class="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-lime-300">That was not the harmless one</p>
+              <h3 class="mt-2 font-serif text-4xl font-bold text-lime-100">{{ game.ailment.name }}</h3>
+              <p class="mt-4 font-serif text-lg leading-8 text-stone-300">{{ game.ailment.description }}</p>
+              <blockquote class="mt-6 rounded-xl border border-amber-200/15 bg-black/25 p-5 font-serif text-lg italic text-amber-100">“What dreadful luck,” says the wyrm. “You were so nearly correct.”</blockquote>
+              <p class="mt-5 text-sm text-stone-400">You lose 25 energy and wake outside the cave. Iona at Moth & Mortar can treat the poisoning.</p>
+              <button data-testid="return-sick-to-town" class="mt-6 rounded-lg bg-lime-300 px-5 py-3 font-semibold text-[#182013] hover:bg-lime-200" @click="screen = 'town'">Return to Bardwall for healing</button>
+            </div>
+          </template>
         </section>
       </div>
 
