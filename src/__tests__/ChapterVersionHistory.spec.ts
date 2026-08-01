@@ -54,4 +54,28 @@ describe('ChapterVersionHistory', () => {
     ])
     expect(wrapper.text()).not.toContain('The moon was bright.')
   })
+
+  it('renders a discarded revision as an unlinked tombstone', async () => {
+    const discardedRevisions = [
+      revisions[0],
+      { ...revisions[1], revision_kind: 'save' as const, text: '', discarded_at: '2026-08-01T12:00:00.000Z' },
+    ]
+    const wrapper = mount(ChapterVersionHistory, {
+      props: { bookId: 'book-1', chapterId: 'chapter-1', revisions: discardedRevisions },
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to"><slot /></a>',
+          },
+        },
+      },
+    })
+
+    await wrapper.get('button').trigger('click')
+
+    expect(wrapper.findAll('a')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Revision discarded')
+    expect(wrapper.text()).toContain('4 words recorded')
+  })
 })

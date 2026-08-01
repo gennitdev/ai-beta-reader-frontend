@@ -162,6 +162,46 @@ describe('chapters', () => {
     expect(revisions.some((revision) => revision.text === 'Once upon a darker time.')).toBe(true)
     expect((await db.getChapters('book-1'))[0].text).toBe('Once upon a time.')
   })
+
+  it('discards an old snapshot while retaining its revision and activity tombstones', async () => {
+    await db.saveChapter(chapter())
+    await db.saveChapter(chapter({ text: 'Once upon a darker time.', word_count: 5 }))
+    await db.saveChapter(chapter({ text: 'Once upon a much darker time.', word_count: 6 }))
+    const beforeDiscard = await db.getChapterRevisions('ch-1')
+    const current = beforeDiscard[0]
+    const oldRevision = beforeDiscard[1]
+
+    const discarded = await db.discardChapterRevision(oldRevision.id)
+
+    expect(discarded).toMatchObject({ id: oldRevision.id, text: '' })
+    expect(discarded.discarded_at).toEqual(expect.any(String))
+    const revisions = await db.getChapterRevisions('ch-1')
+    expect(revisions).toHaveLength(3)
+    expect(revisions.find((revision) => revision.id === oldRevision.id)).toMatchObject({
+      text: '',
+      word_count: 5,
+      words_added: oldRevision.words_added,
+    })
+    expect(revisions.find((revision) => revision.id === oldRevision.id)?.discarded_at).toEqual(expect.any(String))
+    expect(revisions.find((revision) => revision.id === current.id)?.text).toBe('Once upon a much darker time.')
+
+    const activity = await db.getBookRevisionActivity('book-1')
+    expect(activity.find((event) => event.id === oldRevision.id)).toMatchObject({
+      revision_available: false,
+      revision_discarded: true,
+    })
+    await expect(db.restoreChapterRevision(oldRevision.id)).rejects.toThrow('not found')
+    await expect(db.discardChapterRevision(current.id)).rejects.toThrow('current saved version')
+  })
+
+  it('never allows the original baseline snapshot to be discarded', async () => {
+    await db.saveChapter(chapter(), { createRevision: false })
+    await db.saveChapter(chapter({ text: 'A revised beginning.', word_count: 3 }))
+    const baseline = (await db.getChapterRevisions('ch-1'))
+      .find((revision) => revision.revision_kind === 'baseline')
+
+    await expect(db.discardChapterRevision(baseline!.id)).rejects.toThrow('original version')
+  })
 })
 
 describe('parts', () => {

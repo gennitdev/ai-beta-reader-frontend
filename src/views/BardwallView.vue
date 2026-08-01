@@ -117,6 +117,7 @@ const loadOfferings = async () => {
         const revision = revisions[index]
         if (!revision) continue
         const previous = revisions[index + 1]
+        if (revision.discarded_at || previous?.discarded_at) continue
         const passages = getBardwallPassages(previous?.text ?? '', revision.text)
           .map((passage, passageIndex) => ({ ...passage, id: `${revision.id}:${passageIndex}` }))
           .filter((passage) => !game.value.toldPassageIds.includes(passage.id))

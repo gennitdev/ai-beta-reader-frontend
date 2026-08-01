@@ -183,6 +183,18 @@ export function useDatabase() {
     }
   }
 
+  async function discardChapterRevision(revisionId: string): Promise<ChapterRevision> {
+    try {
+      error.value = null
+      await initializeDatabase()
+      return await db.discardChapterRevision(revisionId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to discard chapter version'
+      console.error('Discard chapter version error:', e)
+      throw e
+    }
+  }
+
   async function getBookRevisionActivity(bookId: string): Promise<ChapterRevisionActivity[]> {
     try {
       error.value = null
@@ -968,6 +980,7 @@ export function useDatabase() {
     saveChapter,
     getChapterRevisions,
     restoreChapterRevision,
+    discardChapterRevision,
     getBookRevisionActivity,
     deleteChapter,
 

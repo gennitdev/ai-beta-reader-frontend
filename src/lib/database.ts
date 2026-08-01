@@ -77,6 +77,7 @@ export interface ChapterRevision {
   words_removed: number;
   revision_kind: 'save' | 'baseline';
   created_at: string;
+  discarded_at?: string | null;
 }
 
 export interface ChapterRevisionActivity {
@@ -88,6 +89,7 @@ export interface ChapterRevisionActivity {
   words_removed: number;
   word_count_deleted: number;
   revision_available: boolean;
+  revision_discarded?: boolean;
   created_at: string;
 }
 
@@ -388,6 +390,7 @@ function toWebChapterRevision(row: unknown[]): ChapterRevision {
     words_removed: Number(row[7] ?? 0),
     revision_kind: row[8] === 'baseline' ? 'baseline' : 'save',
     created_at: String(row[9]),
+    discarded_at: typeof row[10] === 'string' ? row[10] : null,
   };
 }
 
@@ -403,6 +406,8 @@ function toNativeChapterRevision(row: QueryRow): ChapterRevision {
     words_removed: Number(readQueryRowValue(row, 7, 'words_removed') ?? 0),
     revision_kind: readQueryRowValue(row, 8, 'revision_kind') === 'baseline' ? 'baseline' : 'save',
     created_at: String(readQueryRowValue(row, 9, 'created_at')),
+    discarded_at: typeof readQueryRowValue(row, 10, 'discarded_at') === 'string'
+      ? readQueryRowValue(row, 10, 'discarded_at') as string : null,
   };
 }
 
@@ -886,6 +891,7 @@ export class AppDatabase {
         words_removed INTEGER NOT NULL DEFAULT 0,
         revision_kind TEXT NOT NULL DEFAULT 'save',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        discarded_at TIMESTAMP,
         FOREIGN KEY (chapter_id) REFERENCES chapters(id),
         FOREIGN KEY (book_id) REFERENCES books(id)
       );
@@ -899,6 +905,7 @@ export class AppDatabase {
         words_added INTEGER NOT NULL DEFAULT 0,
         words_removed INTEGER NOT NULL DEFAULT 0,
         word_count_deleted INTEGER NOT NULL DEFAULT 0,
+        revision_discarded INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (book_id) REFERENCES books(id)
       );
@@ -1124,9 +1131,11 @@ export class AppDatabase {
         words_removed INTEGER NOT NULL DEFAULT 0,
         revision_kind TEXT NOT NULL DEFAULT 'save',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        discarded_at TIMESTAMP,
         FOREIGN KEY (chapter_id) REFERENCES chapters(id),
         FOREIGN KEY (book_id) REFERENCES books(id)
       )`,
+      `ALTER TABLE chapter_revisions ADD COLUMN discarded_at TIMESTAMP`,
       `CREATE INDEX IF NOT EXISTS idx_chapter_revisions_chapter_created ON chapter_revisions(chapter_id, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_chapter_revisions_book_created ON chapter_revisions(book_id, created_at DESC)`,
       `CREATE TABLE IF NOT EXISTS chapter_activity (
@@ -1138,9 +1147,11 @@ export class AppDatabase {
         words_added INTEGER NOT NULL DEFAULT 0,
         words_removed INTEGER NOT NULL DEFAULT 0,
         word_count_deleted INTEGER NOT NULL DEFAULT 0,
+        revision_discarded INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (book_id) REFERENCES books(id)
       )`,
+      `ALTER TABLE chapter_activity ADD COLUMN revision_discarded INTEGER NOT NULL DEFAULT 0`,
       `CREATE INDEX IF NOT EXISTS idx_chapter_activity_book_created ON chapter_activity(book_id, created_at DESC)`,
       `INSERT OR IGNORE INTO chapter_activity
         (id, book_id, chapter_id, chapter_title, activity_type, words_added, words_removed, word_count_deleted, created_at)
@@ -1384,7 +1395,7 @@ export class AppDatabase {
 
   async getChapterRevisions(chapterId: string): Promise<ChapterRevision[]> {
     const query = `SELECT id, chapter_id, book_id, title, text, word_count, words_added, words_removed,
-                          revision_kind, created_at
+                          revision_kind, created_at, discarded_at
                    FROM chapter_revisions WHERE chapter_id = ? ORDER BY created_at DESC, rowid DESC`;
     if (this.isNative) {
       const result = await this.db.query(query, [chapterId]);
@@ -1394,10 +1405,58 @@ export class AppDatabase {
     return result[0]?.values.map(toWebChapterRevision) ?? [];
   }
 
+  async discardChapterRevision(revisionId: string): Promise<ChapterRevision> {
+    const revisionQuery = `SELECT id, chapter_id, book_id, title, text, word_count, words_added, words_removed,
+                                  revision_kind, created_at, discarded_at
+                           FROM chapter_revisions WHERE id = ? LIMIT 1`;
+    let target: ChapterRevision | null = null;
+    if (this.isNative) {
+      const result = await this.db.query(revisionQuery, [revisionId]);
+      target = result.values?.[0] ? toNativeChapterRevision(result.values[0]) : null;
+    } else {
+      const result = this.db.exec(revisionQuery, [revisionId]);
+      target = result[0]?.values?.[0] ? toWebChapterRevision(result[0].values[0]) : null;
+    }
+
+    if (!target) throw new Error('Chapter version not found');
+    if (target.discarded_at) throw new Error('Chapter version has already been discarded');
+    if (target.revision_kind === 'baseline') throw new Error('The original version cannot be discarded');
+
+    const latestQuery = `SELECT id FROM chapter_revisions
+                         WHERE chapter_id = ? AND discarded_at IS NULL
+                         ORDER BY created_at DESC, rowid DESC LIMIT 1`;
+    let latestRevisionId: string | null = null;
+    if (this.isNative) {
+      const result = await this.db.query(latestQuery, [target.chapter_id]);
+      latestRevisionId = result.values?.[0]
+        ? String(readQueryRowValue(result.values[0], 0, 'id')) : null;
+    } else {
+      const result = this.db.exec(latestQuery, [target.chapter_id]);
+      latestRevisionId = result[0]?.values?.[0] ? String(result[0].values[0][0]) : null;
+    }
+    if (latestRevisionId === revisionId) throw new Error('The current saved version cannot be discarded');
+
+    const discardedAt = new Date().toISOString();
+    const discardRevisionQuery = `UPDATE chapter_revisions
+                                  SET text = '', discarded_at = ?
+                                  WHERE id = ? AND discarded_at IS NULL`;
+    const discardActivityQuery = `UPDATE chapter_activity SET revision_discarded = 1 WHERE id = ?`;
+    if (this.isNative) {
+      await this.db.run(discardRevisionQuery, [discardedAt, revisionId]);
+      await this.db.run(discardActivityQuery, [revisionId]);
+    } else {
+      this.db.run(discardRevisionQuery, [discardedAt, revisionId]);
+      this.db.run(discardActivityQuery, [revisionId]);
+      this.requestPersistence();
+    }
+
+    return { ...target, text: '', discarded_at: discardedAt };
+  }
+
   async restoreChapterRevision(revisionId: string): Promise<ChapterRevision> {
     const revisionQuery = `SELECT id, chapter_id, book_id, title, text, word_count, words_added, words_removed,
-                                  revision_kind, created_at
-                           FROM chapter_revisions WHERE id = ? LIMIT 1`;
+                                  revision_kind, created_at, discarded_at
+                           FROM chapter_revisions WHERE id = ? AND discarded_at IS NULL LIMIT 1`;
     const chapterQuery = `SELECT id, book_id, part_id, title, text, word_count, created_at
                           FROM chapters WHERE id = ? LIMIT 1`;
 
@@ -1438,7 +1497,8 @@ export class AppDatabase {
   async getBookRevisionActivity(bookId: string): Promise<ChapterRevisionActivity[]> {
     const query = `SELECT a.id, a.chapter_id, a.chapter_title, a.activity_type, a.words_added,
                           a.words_removed, a.word_count_deleted, a.created_at,
-                          CASE WHEN r.id IS NULL THEN 0 ELSE 1 END AS revision_available
+                          CASE WHEN r.id IS NULL OR r.discarded_at IS NOT NULL THEN 0 ELSE 1 END AS revision_available,
+                          a.revision_discarded
                    FROM chapter_activity a
                    LEFT JOIN chapter_revisions r ON r.id = a.id
                    WHERE a.book_id = ? ORDER BY a.created_at ASC, a.rowid ASC`;
@@ -1454,6 +1514,7 @@ export class AppDatabase {
         words_removed: Number(readQueryRowValue(row, 5, 'words_removed') ?? 0),
         word_count_deleted: Number(readQueryRowValue(row, 6, 'word_count_deleted') ?? 0),
         revision_available: Boolean(readQueryRowValue(row, 8, 'revision_available')),
+        revision_discarded: Boolean(readQueryRowValue(row, 9, 'revision_discarded')),
         created_at: String(readQueryRowValue(row, 7, 'created_at')),
       }));
     }
@@ -1467,6 +1528,7 @@ export class AppDatabase {
       words_removed: Number(row[5] ?? 0),
       word_count_deleted: Number(row[6] ?? 0),
       revision_available: Boolean(row[8]),
+      revision_discarded: Boolean(row[9]),
       created_at: String(row[7]),
     })) ?? [];
   }

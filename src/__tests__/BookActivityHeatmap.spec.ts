@@ -19,6 +19,18 @@ const activity: ChapterRevisionActivity[] = [
     created_at: today,
   },
   {
+    id: 'save-discarded',
+    chapter_id: 'chapter-3',
+    chapter_title: 'A Vanished Draft',
+    activity_type: 'save',
+    words_added: 42,
+    words_removed: 17,
+    word_count_deleted: 0,
+    revision_available: false,
+    revision_discarded: true,
+    created_at: today,
+  },
+  {
     id: 'delete-1',
     chapter_id: 'chapter-2',
     chapter_title: 'The Lost Road',
@@ -63,6 +75,9 @@ describe('BookActivityHeatmap', () => {
     expect(wrapper.get('a[href="/books/book-1/chapters/chapter-1/versions/save-1"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('The Lost Road')
     expect(wrapper.text()).toContain('940 words deleted')
+    expect(wrapper.text()).toContain('A Vanished Draft')
+    expect(wrapper.text()).toContain('Revision discarded')
+    expect(wrapper.find('a[href*="save-discarded"]').exists()).toBe(false)
 
     wrapper.unmount()
   })

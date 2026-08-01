@@ -161,8 +161,8 @@ const hideTooltip = () => {
           :key="event.id"
           class="flex items-start gap-3 rounded-lg bg-gray-50 px-3 py-2.5 dark:bg-navy-900"
         >
-          <span class="mt-0.5 rounded-md p-1.5" :class="event.activity_type === 'delete' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-gold-100 text-gold-700 dark:bg-gold-900/40 dark:text-gold-300'">
-            <TrashIcon v-if="event.activity_type === 'delete'" class="h-4 w-4" />
+          <span class="mt-0.5 rounded-md p-1.5" :class="event.activity_type === 'delete' || event.revision_discarded ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-gold-100 text-gold-700 dark:bg-gold-900/40 dark:text-gold-300'">
+            <TrashIcon v-if="event.activity_type === 'delete' || event.revision_discarded" class="h-4 w-4" />
             <DocumentTextIcon v-else class="h-4 w-4" />
           </span>
           <div class="min-w-0 flex-1">
@@ -179,6 +179,9 @@ const hideTooltip = () => {
             </div>
             <p v-if="event.activity_type === 'delete'" class="mt-0.5 text-xs text-rose-600 dark:text-rose-300">
               Chapter deleted · {{ event.word_count_deleted.toLocaleString() }} words deleted
+            </p>
+            <p v-else-if="event.revision_discarded" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              Revision discarded · historical change totals retained
             </p>
             <p v-else class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
               Saved revision · <span class="text-emerald-600 dark:text-emerald-400">+{{ event.words_added }}</span>

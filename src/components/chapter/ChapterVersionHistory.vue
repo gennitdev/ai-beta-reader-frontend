@@ -48,9 +48,23 @@ const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
         Your next chapter save will appear here.
       </p>
       <div v-else class="max-h-72 overflow-y-auto">
+        <template v-for="revision in revisions" :key="revision.id">
+          <div
+            v-if="revision.discarded_at"
+            class="flex w-full items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/70 px-4 py-3 text-left last:border-b-0 dark:border-gray-700 dark:bg-navy-900/40"
+          >
+            <span>
+              <span class="block text-sm font-medium text-gray-500 line-through decoration-gray-400 dark:text-gray-400">
+                {{ formatDate(revision.created_at) }}
+              </span>
+              <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Revision discarded</span>
+            </span>
+            <span class="shrink-0 text-xs text-gray-400 dark:text-gray-500">
+              {{ revision.word_count.toLocaleString() }} words recorded
+            </span>
+          </div>
           <RouterLink
-            v-for="revision in revisions"
-            :key="revision.id"
+            v-else
             :to="`/books/${bookId}/chapters/${chapterId}/versions/${revision.id}`"
             class="flex w-full items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-navy-700"
           >
@@ -68,6 +82,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
               <ChevronRightIcon class="h-4 w-4 text-gray-400" />
             </span>
           </RouterLink>
+        </template>
       </div>
     </div>
   </section>

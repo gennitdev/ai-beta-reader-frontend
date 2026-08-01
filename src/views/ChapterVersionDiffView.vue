@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftIcon, ArrowPathIcon, ClockIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, ArrowPathIcon, ClockIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import { useDatabase } from '@/composables/useDatabase'
 import type { ChapterRevision } from '@/lib/database'
 import { createRevisionDiff, getRevisionDiffStats } from '@/lib/revisionDiff'
 
 const route = useRoute()
 const router = useRouter()
-const { getChapterRevisions, restoreChapterRevision } = useDatabase()
+const { discardChapterRevision, getChapterRevisions, restoreChapterRevision } = useDatabase()
 
 const bookId = computed(() => route.params.id as string)
 const chapterId = computed(() => route.params.chapterId as string)
@@ -21,13 +21,29 @@ const hasSelectedDiffMode = ref(false)
 const showRestoreConfirmation = ref(false)
 const restoring = ref(false)
 const restoreError = ref<string | null>(null)
+const showDiscardConfirmation = ref(false)
+const discarding = ref(false)
+const discardError = ref<string | null>(null)
 let desktopMediaQuery: MediaQueryList | null = null
 
 const revisionIndex = computed(() => revisions.value.findIndex((revision) => revision.id === revisionId.value))
 const revision = computed(() => revisions.value[revisionIndex.value] ?? null)
 const previousRevision = computed(() => revisions.value[revisionIndex.value + 1] ?? null)
-const diff = computed(() => createRevisionDiff(previousRevision.value?.text ?? '', revision.value?.text ?? ''))
+const comparisonAvailable = computed(() => Boolean(
+  revision.value && !revision.value.discarded_at && !previousRevision.value?.discarded_at,
+))
+const diff = computed(() => comparisonAvailable.value
+  ? createRevisionDiff(previousRevision.value?.text ?? '', revision.value?.text ?? '')
+  : [])
 const diffStats = computed(() => getRevisionDiffStats(diff.value))
+const displayedAdded = computed(() => comparisonAvailable.value ? diffStats.value.added : revision.value?.words_added ?? 0)
+const displayedRemoved = computed(() => comparisonAvailable.value ? diffStats.value.removed : revision.value?.words_removed ?? 0)
+const canDiscardRevision = computed(() => Boolean(
+  revision.value
+  && revision.value.revision_kind === 'save'
+  && !revision.value.discarded_at
+  && revisionIndex.value > 0,
+))
 const chapterUrl = computed(() => `/books/${bookId.value}/chapters/${chapterId.value}`)
 const bookUrl = computed(() => `/books/${bookId.value}`)
 
@@ -43,7 +59,7 @@ const syncDefaultDiffMode = (matches: boolean) => {
 const handleViewportChange = (event: MediaQueryListEvent) => syncDefaultDiffMode(event.matches)
 
 const restoreVersion = async () => {
-  if (!revision.value) return
+  if (!revision.value || revision.value.discarded_at) return
   restoring.value = true
   restoreError.value = null
   try {
@@ -56,6 +72,24 @@ const restoreVersion = async () => {
     restoreError.value = 'This version could not be restored. Please try again.'
   } finally {
     restoring.value = false
+  }
+}
+
+const discardVersion = async () => {
+  if (!revision.value || !canDiscardRevision.value) return
+  discarding.value = true
+  discardError.value = null
+  try {
+    await discardChapterRevision(revision.value.id)
+    revisions.value = await getChapterRevisions(chapterId.value)
+    showDiscardConfirmation.value = false
+  } catch (discardFailure) {
+    console.error('Failed to discard chapter version:', discardFailure)
+    discardError.value = discardFailure instanceof Error
+      ? discardFailure.message
+      : 'This version could not be discarded. Please try again.'
+  } finally {
+    discarding.value = false
   }
 }
 
@@ -109,7 +143,9 @@ onUnmounted(() => desktopMediaQuery?.removeEventListener('change', handleViewpor
         <header class="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-navy-800">
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-wide text-gold-700 dark:text-gold-300">Saved chapter version</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-gold-700 dark:text-gold-300">
+                {{ revision.discarded_at ? 'Discarded chapter revision' : 'Saved chapter version' }}
+              </p>
               <h1 class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{{ revision.title || 'Untitled chapter' }}</h1>
               <p class="mt-2 flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
                 <ClockIcon class="h-4 w-4" />
@@ -120,41 +156,55 @@ onUnmounted(() => desktopMediaQuery?.removeEventListener('change', handleViewpor
             <div class="rounded-lg bg-gray-50 px-4 py-3 text-sm dark:bg-navy-900">
               <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <span class="font-medium text-emerald-600 dark:text-emerald-400">
-                  +{{ diffStats.added.toLocaleString() }} {{ diffStats.added === 1 ? 'addition' : 'additions' }}
+                  +{{ displayedAdded.toLocaleString() }} {{ displayedAdded === 1 ? 'addition' : 'additions' }}
                 </span>
                 <span class="font-medium text-rose-600 dark:text-rose-400">
-                  −{{ diffStats.removed.toLocaleString() }} {{ diffStats.removed === 1 ? 'deletion' : 'deletions' }}
+                  −{{ displayedRemoved.toLocaleString() }} {{ displayedRemoved === 1 ? 'deletion' : 'deletions' }}
                 </span>
-                <span class="text-gray-500 dark:text-gray-400">{{ revision.word_count.toLocaleString() }} words in this version</span>
+                <span class="text-gray-500 dark:text-gray-400">
+                  {{ revision.word_count.toLocaleString() }} words {{ revision.discarded_at ? 'recorded before discard' : 'in this version' }}
+                </span>
               </div>
               <div
-                v-if="diffStats.added + diffStats.removed > 0"
+                v-if="displayedAdded + displayedRemoved > 0"
                 class="mt-2 flex h-2 w-full min-w-48 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
-                :aria-label="`${diffStats.added.toLocaleString()} additions and ${diffStats.removed.toLocaleString()} deletions`"
+                :aria-label="`${displayedAdded.toLocaleString()} additions and ${displayedRemoved.toLocaleString()} deletions`"
                 role="img"
               >
                 <span
                   class="bg-emerald-500"
-                  :style="{ width: `${(diffStats.added / (diffStats.added + diffStats.removed)) * 100}%` }"
+                  :style="{ width: `${(displayedAdded / (displayedAdded + displayedRemoved)) * 100}%` }"
                 ></span>
                 <span class="flex-1 bg-rose-500"></span>
               </div>
             </div>
-              <span v-if="revisionIndex === 0" class="text-xs font-medium text-gray-500 dark:text-gray-400">Current saved version</span>
-              <button
-                v-else
-                type="button"
-                data-testid="open-restore"
-                class="inline-flex items-center gap-2 rounded-lg border border-gold-500 px-3 py-2 text-sm font-medium text-gold-700 hover:bg-gold-50 dark:text-gold-300 dark:hover:bg-gold-900/20"
-                @click="showRestoreConfirmation = true"
-              >
-                <ArrowPathIcon class="h-4 w-4" />
-                Restore this version
-              </button>
+              <span v-if="revision.discarded_at" class="text-xs font-medium text-gray-500 dark:text-gray-400">Snapshot permanently discarded</span>
+              <span v-else-if="revisionIndex === 0" class="text-xs font-medium text-gray-500 dark:text-gray-400">Current saved version</span>
+              <div v-else class="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  data-testid="open-restore"
+                  class="inline-flex items-center gap-2 rounded-lg border border-gold-500 px-3 py-2 text-sm font-medium text-gold-700 hover:bg-gold-50 dark:text-gold-300 dark:hover:bg-gold-900/20"
+                  @click="showRestoreConfirmation = true; showDiscardConfirmation = false"
+                >
+                  <ArrowPathIcon class="h-4 w-4" />
+                  Restore this version
+                </button>
+                <button
+                  v-if="canDiscardRevision"
+                  type="button"
+                  data-testid="open-discard"
+                  class="inline-flex items-center gap-2 rounded-lg border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-900/20"
+                  @click="showDiscardConfirmation = true; showRestoreConfirmation = false"
+                >
+                  <TrashIcon class="h-4 w-4" />
+                  Discard revision
+                </button>
+              </div>
             </div>
           </div>
 
-          <div v-if="revision.title !== previousRevision?.title" class="mt-5 grid gap-3 border-t border-gray-200 pt-5 text-sm dark:border-gray-700 sm:grid-cols-2">
+          <div v-if="comparisonAvailable && revision.title !== previousRevision?.title" class="mt-5 grid gap-3 border-t border-gray-200 pt-5 text-sm dark:border-gray-700 sm:grid-cols-2">
             <div v-if="previousRevision" class="rounded-lg bg-rose-50 px-3 py-2 dark:bg-rose-900/20">
               <span class="block text-xs text-rose-600 dark:text-rose-300">Previous title</span>
               <span class="text-gray-800 dark:text-gray-200">{{ previousRevision.title || 'Untitled chapter' }}</span>
@@ -182,7 +232,41 @@ onUnmounted(() => desktopMediaQuery?.removeEventListener('change', handleViewpor
           </div>
         </section>
 
-        <section class="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800">
+        <section v-if="showDiscardConfirmation" class="mt-4 rounded-xl border border-rose-300 bg-rose-50 p-4 dark:border-rose-700 dark:bg-rose-900/20">
+          <h2 class="font-semibold text-gray-900 dark:text-white">Permanently discard this revision?</h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+            Its title, date, word count, and change totals will remain as a tombstone, but its saved text and original diff cannot be recovered. If a later revision was compared with this one, that comparison will also become unavailable.
+          </p>
+          <p class="mt-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+            Your current chapter and writing activity will not change.
+          </p>
+          <p v-if="discardError" class="mt-2 text-sm text-rose-600 dark:text-rose-300">{{ discardError }}</p>
+          <div class="mt-4 flex gap-2">
+            <button type="button" data-testid="confirm-discard" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-60" :disabled="discarding" @click="discardVersion">
+              {{ discarding ? 'Discarding…' : 'Discard revision permanently' }}
+            </button>
+            <button type="button" class="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-navy-800" :disabled="discarding" @click="showDiscardConfirmation = false">
+              Cancel
+            </button>
+          </div>
+        </section>
+
+        <section v-if="revision.discarded_at" class="mt-6 rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-navy-800">
+          <TrashIcon class="mx-auto h-9 w-9 text-gray-400" />
+          <h2 class="mt-3 text-lg font-semibold text-gray-900 dark:text-white">Revision discarded</h2>
+          <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">
+            The saved text and original comparison were permanently removed. This tombstone remains so the chapter history and activity heatmap still record when the save occurred.
+          </p>
+        </section>
+
+        <section v-else-if="!comparisonAvailable" class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-8 text-center shadow-sm dark:border-amber-800 dark:bg-amber-900/20">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Original comparison unavailable</h2>
+          <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-gray-600 dark:text-gray-300">
+            This revision followed a snapshot that was discarded. Its historical change totals remain above, but reconstructing the original diff would require the removed text.
+          </p>
+        </section>
+
+        <section v-else class="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800">
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-4 dark:border-gray-700 sm:px-6">
             <div>
               <h2 class="font-semibold text-gray-900 dark:text-white">What changed</h2>
