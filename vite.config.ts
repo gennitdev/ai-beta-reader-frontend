@@ -17,6 +17,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.{ts,vue}'],
+      thresholds: {
+        statements: 49,
+        branches: 34,
+        functions: 44,
+        lines: 50,
+      },
     },
   },
   css: {
