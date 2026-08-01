@@ -274,6 +274,8 @@ cd electron && npm install   # first time only
 cd electron && npm run electron:start  # run desktop app (after npm run build)
 ```
 
+Pull request titles follow Conventional Commits so squash merges can drive semantic versioning. See [Releases](docs/releases.md) for title examples and the automated GitHub release process.
+
 ## Hosting & Deployment
 
 - **Web (beta-bot.net)**: Vercel builds from `main`. Make sure the env vars above are set in Vercel before deploying.
