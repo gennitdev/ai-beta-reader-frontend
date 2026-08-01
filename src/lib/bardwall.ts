@@ -72,6 +72,9 @@ export const BARDWALL_STORY_RUBRIC = [
   { key: 'promptIntegration', name: 'Prompt integration', description: 'The cards materially shape the events rather than being named or paraphrased.' },
 ] as const
 
+export const DEFAULT_BARDWALL_JUDGE_RUBRIC = 'Reward concrete scenes, specific physical and sensory details, distinctive characters with identifiable desires, meaningful choices, clear cause and effect, controlled prose, and prompts that materially shape events. Do not reward vague abstractions, generic morals, synopsis, or merely paraphrasing the cards.'
+export const DEFAULT_BARDWALL_ORLA_PROMPT = 'Write a vivid, dramatized story about a character with a specific immediate desire. Ground it in a physical setting, use concrete sensory detail, let a meaningful choice cause the outcome, and integrate all three cards as plot elements rather than labels. Avoid vague abstractions, summarized character arcs, and generic morals.'
+
 export type BardwallFoodId = typeof BARDWALL_FOOD_ITEMS[number]['id']
 export type BardwallLodging = 'tent' | 'inn'
 export type BardwallPotionId = typeof BARDWALL_WYRM_POTIONS[number]['id']
@@ -104,6 +107,11 @@ export interface BardwallChallengeState {
   drawNumber: number
   playerStory: string
   result: BardwallChallengeResult | null
+}
+
+export interface BardwallChallengeRules {
+  judgeRubric: string
+  orlaPrompt: string
 }
 
 export interface BardwallLastWordTurn {
@@ -164,6 +172,7 @@ export interface BardwallState {
   challenge: BardwallChallengeState
   challengesWon: number
   challengesLost: number
+  challengeRules: BardwallChallengeRules
   lastWordStories: BardwallLastWordStory[]
 }
 
@@ -203,6 +212,10 @@ export const createDefaultBardwallState = (): BardwallState => ({
   challenge: { phase: 'setup', goal: 250, wager: null, cards: [], drawNumber: 0, playerStory: '', result: null },
   challengesWon: 0,
   challengesLost: 0,
+  challengeRules: {
+    judgeRubric: DEFAULT_BARDWALL_JUDGE_RUBRIC,
+    orlaPrompt: DEFAULT_BARDWALL_ORLA_PROMPT,
+  },
   lastWordStories: [],
 })
 
@@ -269,6 +282,20 @@ function loadChallenge(value: unknown): BardwallChallengeState {
     drawNumber: Math.max(0, Math.floor(Number(stored.drawNumber) || 0)),
     playerStory: typeof stored.playerStory === 'string' ? stored.playerStory : '',
     result: loadChallengeResult(stored.result),
+  }
+}
+
+function loadChallengeRules(value: unknown): BardwallChallengeRules {
+  const fallback = createDefaultBardwallState().challengeRules
+  if (!value || typeof value !== 'object') return fallback
+  const stored = value as Partial<BardwallChallengeRules>
+  return {
+    judgeRubric: typeof stored.judgeRubric === 'string' && stored.judgeRubric.trim()
+      ? stored.judgeRubric.trim().slice(0, 4000)
+      : fallback.judgeRubric,
+    orlaPrompt: typeof stored.orlaPrompt === 'string' && stored.orlaPrompt.trim()
+      ? stored.orlaPrompt.trim().slice(0, 4000)
+      : fallback.orlaPrompt,
   }
 }
 
@@ -371,6 +398,7 @@ export function loadBardwallState(): BardwallState {
       challenge: loadChallenge(stored?.challenge),
       challengesWon: Math.max(0, Math.floor(Number(stored?.challengesWon) || 0)),
       challengesLost: Math.max(0, Math.floor(Number(stored?.challengesLost) || 0)),
+      challengeRules: loadChallengeRules(stored?.challengeRules),
       lastWordStories: loadLastWordStories(stored?.lastWordStories),
     }
   } catch {
@@ -486,6 +514,26 @@ export function purchaseBardwallFood(state: BardwallState, foodId: BardwallFoodI
   }
 }
 
+export function eatBardwallFood(state: BardwallState, foodId: BardwallFoodId): BardwallState {
+  const item = BARDWALL_FOOD_ITEMS.find((candidate) => candidate.id === foodId)
+  if (!item) throw new Error('Food not found')
+  if (state.inventory[foodId] < 1) throw new Error(`${item.name} is not in your inventory`)
+  return {
+    ...state,
+    hunger: Math.max(0, state.hunger - item.nourishment),
+    energy: Math.min(100, state.energy + Math.ceil(item.nourishment / 4)),
+    inventory: { ...state.inventory, [foodId]: state.inventory[foodId] - 1 },
+  }
+}
+
+export function updateBardwallChallengeRules(state: BardwallState, rules: BardwallChallengeRules): BardwallState {
+  const judgeRubric = rules.judgeRubric.trim()
+  const orlaPrompt = rules.orlaPrompt.trim()
+  if (!judgeRubric || !orlaPrompt) throw new Error('Both table rules are required')
+  if (judgeRubric.length > 4000 || orlaPrompt.length > 4000) throw new Error('Each table rule must be 4,000 characters or fewer')
+  return { ...state, challengeRules: { judgeRubric, orlaPrompt } }
+}
+
 export function purchaseBardwallFlower(state: BardwallState): BardwallState {
   if (state.coins < BARDWALL_FLOWER_PRICE) throw new Error('Not enough coins')
   return {
@@ -517,7 +565,7 @@ export function startBardwallChallenge(
   const inventory = { ...state.inventory }
   let coins = state.coins
   if (wager.type === 'coins') {
-    if (![1, 5, 10].includes(wager.amount) || coins < wager.amount) throw new Error('That coin wager is not available')
+    if (!Number.isInteger(wager.amount) || wager.amount < 1 || coins < wager.amount) throw new Error('That coin wager is not available')
     coins -= wager.amount
   } else {
     if (!BARDWALL_FOOD_ITEMS.some((item) => item.id === wager.itemId) || inventory[wager.itemId] < 1) throw new Error('That item is not available to wager')
@@ -562,7 +610,7 @@ export function resolveBardwallChallenge(state: BardwallState, result: BardwallC
   if (!wager) throw new Error('Challenge wager not found')
   const inventory = { ...state.inventory }
   let coins = state.coins
-  const multiplier = result.outcome === 'win' ? 3 : result.outcome === 'draw' ? 1 : 0
+  const multiplier = result.outcome === 'win' ? 2 : result.outcome === 'draw' ? 1 : 0
   if (wager.type === 'coins') coins += wager.amount * multiplier
   else inventory[wager.itemId] += multiplier
   return {

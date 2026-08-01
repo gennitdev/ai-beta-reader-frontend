@@ -7,6 +7,7 @@ import {
   calculateBardwallPay,
   createDefaultBardwallState,
   drinkWyrmPotion,
+  eatBardwallFood,
   getBardwallDateKey,
   getBardwallChallengeWordRange,
   getBardwallPassages,
@@ -24,6 +25,7 @@ import {
   startBardwallChallenge,
   startBardwallLastWordStory,
   toggleBardwallChallengeCard,
+  updateBardwallChallengeRules,
   updateBardwallLastWordDraft,
 } from '@/lib/bardwall'
 
@@ -139,6 +141,28 @@ describe('Bardwall game helpers', () => {
     expect(() => purchaseBardwallFood(createDefaultBardwallState(), 'stew')).toThrow('Not enough coins')
   })
 
+  it('lets the bard eat carried food immediately', () => {
+    const initial = { ...createDefaultBardwallState(), hunger: 80, energy: 50 }
+    const fed = eatBardwallFood(initial, 'bread')
+
+    expect(fed).toMatchObject({ hunger: 30, energy: 63 })
+    expect(fed.inventory.bread).toBe(0)
+    expect(() => eatBardwallFood(fed, 'bread')).toThrow('Brown bread is not in your inventory')
+  })
+
+  it('persists custom instructions for the judge and Orla', () => {
+    const customized = updateBardwallChallengeRules(createDefaultBardwallState(), {
+      judgeRubric: 'Reward jokes about geese.',
+      orlaPrompt: 'Write a solemn tale about a turnip.',
+    })
+    saveBardwallState(customized)
+
+    expect(loadBardwallState().challengeRules).toEqual({
+      judgeRubric: 'Reward jokes about geese.',
+      orlaPrompt: 'Write a solemn tale about a turnip.',
+    })
+  })
+
   it('buys and offers a flower to reveal Heliconia’s cave', () => {
     const purchased = purchaseBardwallFlower({ ...createDefaultBardwallState(), coins: 3 })
     expect(purchased).toMatchObject({ coins: 0, inventory: { flower: 1 } })
@@ -176,8 +200,18 @@ describe('Bardwall game helpers', () => {
       playerLengthPenalty: 0,
       rivalLengthPenalty: 0,
     })
-    expect(state.coins).toBe(20)
+    expect(state.coins).toBe(15)
     expect(state.challengesWon).toBe(1)
+  })
+
+  it('accepts any affordable whole-coin wager and rejects unsafe amounts', () => {
+    const initial = { ...createDefaultBardwallState(), coins: 17 }
+    const started = startBardwallChallenge(initial, 100, { type: 'coins', amount: 13 }, () => 0)
+
+    expect(started.coins).toBe(4)
+    expect(started.challenge.wager).toEqual({ type: 'coins', amount: 13 })
+    expect(() => startBardwallChallenge(initial, 100, { type: 'coins', amount: 18 }, () => 0)).toThrow('not available')
+    expect(() => startBardwallChallenge(initial, 100, { type: 'coins', amount: 1.5 }, () => 0)).toThrow('not available')
   })
 
   it('allows ordinary food wagers but never exposes quest items as challenge cards', () => {

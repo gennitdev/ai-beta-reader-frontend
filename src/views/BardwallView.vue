@@ -15,11 +15,14 @@ import {
   BARDWALL_MARKET_ITEMS,
   BARDWALL_STORY_RUBRIC,
   BARDWALL_WYRM_POTIONS,
+  DEFAULT_BARDWALL_JUDGE_RUBRIC,
+  DEFAULT_BARDWALL_ORLA_PROMPT,
   HELICONIA_PERSISTENCE_MESSAGES,
   calculateBardwallPay,
   advanceBardwallChallengeDraft,
   appendBardwallLastWordExchange,
   countBardwallWords,
+  eatBardwallFood,
   getBardwallDateKey,
   getBardwallChallengeWordRange,
   getBardwallPassages,
@@ -37,6 +40,7 @@ import {
   startBardwallChallenge,
   startBardwallLastWordStory,
   toggleBardwallChallengeCard,
+  updateBardwallChallengeRules,
   updateBardwallLastWordDraft,
   type BardwallFoodId,
   type BardwallLodging,
@@ -79,6 +83,7 @@ const lastReward = ref({ coins: 0, words: 0 })
 const goalChoice = ref<number | 'custom'>(500)
 const customGoal = ref('')
 const marketMessage = ref<string | null>(null)
+const inventoryMessage = ref<string | null>(null)
 const lodgingChoice = ref<BardwallLodging>('tent')
 const mealSelection = ref<Partial<Record<BardwallFoodId, number>>>({})
 const nightError = ref<string | null>(null)
@@ -95,6 +100,10 @@ const challengeWagerChoice = ref(game.value.coins >= 1
   : `item:${BARDWALL_FOOD_ITEMS.find((item) => game.value.inventory[item.id] > 0)?.id ?? ''}`)
 const challengeMessage = ref<string | null>(null)
 const judgingChallenge = ref(false)
+const customChallengeWager = ref('')
+const showChallengeRulesEditor = ref(false)
+const challengeJudgeRubricDraft = ref(game.value.challengeRules.judgeRubric)
+const challengeOrlaPromptDraft = ref(game.value.challengeRules.orlaPrompt)
 const selectedLastWordStoryId = ref<string | null>(null)
 const lastWordMessage = ref<string | null>(null)
 const caveSpeaking = ref(false)
@@ -136,6 +145,29 @@ const challengeWordGuidance = computed(() => {
   return 'Your story is within the challenge range.'
 })
 const challengeFoodWagers = computed(() => BARDWALL_FOOD_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
+const challengeWagerValid = computed(() => {
+  const [type, value] = challengeWagerChoice.value.split(':')
+  if (type === 'coins') {
+    const amount = value === 'custom' ? Number(customChallengeWager.value) : Number(value)
+    return Number.isInteger(amount) && amount >= 1 && amount <= game.value.coins
+  }
+  return type === 'item'
+    && BARDWALL_FOOD_ITEMS.some((item) => item.id === value)
+    && game.value.inventory[value as BardwallFoodId] > 0
+})
+const customChallengeWagerGuidance = computed(() => {
+  if (challengeWagerChoice.value !== 'coins:custom') return null
+  const amount = Number(customChallengeWager.value)
+  if (!Number.isInteger(amount) || amount < 1) return 'Enter a whole-number wager of at least 1 coin.'
+  if (amount > game.value.coins) return `You only have ${game.value.coins.toLocaleString()} ${game.value.coins === 1 ? 'coin' : 'coins'}.`
+  return `Orla will match your ${amount.toLocaleString()}-coin wager.`
+})
+const challengeRulesValid = computed(() => (
+  challengeJudgeRubricDraft.value.trim().length > 0
+  && challengeJudgeRubricDraft.value.length <= 4000
+  && challengeOrlaPromptDraft.value.trim().length > 0
+  && challengeOrlaPromptDraft.value.length <= 4000
+))
 const lastWordStories = computed(() => [...game.value.lastWordStories].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
 const selectedLastWordStory = computed(() => game.value.lastWordStories.find((story) => story.id === selectedLastWordStoryId.value) ?? null)
 const lastWordDraftCount = computed(() => countBardwallWords(selectedLastWordStory.value?.draft ?? ''))
@@ -347,9 +379,29 @@ const buyCafeFood = (foodId: BardwallFoodId) => {
   }
 }
 
+const eatFood = (foodId: BardwallFoodId) => {
+  const item = BARDWALL_FOOD_ITEMS.find((candidate) => candidate.id === foodId)
+  if (!item) return
+  const previousHunger = game.value.hunger
+  const previousEnergy = game.value.energy
+  try {
+    game.value = eatBardwallFood(game.value, foodId)
+    saveBardwallState(game.value)
+    const hungerReduced = previousHunger - game.value.hunger
+    const energyRestored = game.value.energy - previousEnergy
+    const effects = [
+      hungerReduced ? `${hungerReduced} less hunger` : null,
+      energyRestored ? `${energyRestored} energy restored` : null,
+    ].filter(Boolean).join(' · ')
+    inventoryMessage.value = effects ? `${item.name} eaten · ${effects}.` : `${item.name} eaten. It was still worth having.`
+  } catch (error) {
+    inventoryMessage.value = error instanceof Error ? error.message : 'That food could not be eaten.'
+  }
+}
+
 const parseChallengeWager = (): BardwallChallengeWager | null => {
   const [type, value] = challengeWagerChoice.value.split(':')
-  if (type === 'coins') return { type: 'coins', amount: Number(value) }
+  if (type === 'coins') return { type: 'coins', amount: value === 'custom' ? Number(customChallengeWager.value) : Number(value) }
   if (type === 'item' && BARDWALL_FOOD_ITEMS.some((item) => item.id === value)) return { type: 'item', itemId: value as BardwallFoodId }
   return null
 }
@@ -366,7 +418,10 @@ const chooseAffordableChallengeWager = () => {
 
 const beginCoffeehouseChallenge = () => {
   const wager = parseChallengeWager()
-  if (!wager) return
+  if (!wager || !challengeWagerValid.value) {
+    challengeMessage.value = 'Choose a wager you can cover before the cards are dealt.'
+    return
+  }
   try {
     game.value = startBardwallChallenge(game.value, challengeGoalChoice.value, wager)
     saveBardwallState(game.value)
@@ -411,6 +466,8 @@ const judgeChallenge = async () => {
       goal: game.value.challenge.goal,
       cards: challengeCards.value.map(({ card }) => ({ name: card.name, meaning: card.meaning })),
       playerStory: game.value.challenge.playerStory,
+      judgeRubric: game.value.challengeRules.judgeRubric,
+      orlaPrompt: game.value.challengeRules.orlaPrompt,
     })
     game.value = resolveBardwallChallenge(game.value, result)
     saveBardwallState(game.value)
@@ -426,6 +483,32 @@ const beginAnotherChallenge = () => {
   saveBardwallState(game.value)
   chooseAffordableChallengeWager()
   challengeMessage.value = null
+}
+
+const openChallengeRulesEditor = () => {
+  challengeJudgeRubricDraft.value = game.value.challengeRules.judgeRubric
+  challengeOrlaPromptDraft.value = game.value.challengeRules.orlaPrompt
+  showChallengeRulesEditor.value = true
+}
+
+const closeChallengeRulesEditor = () => {
+  showChallengeRulesEditor.value = false
+}
+
+const restoreDefaultChallengeRules = () => {
+  challengeJudgeRubricDraft.value = DEFAULT_BARDWALL_JUDGE_RUBRIC
+  challengeOrlaPromptDraft.value = DEFAULT_BARDWALL_ORLA_PROMPT
+}
+
+const saveChallengeRules = () => {
+  if (!challengeRulesValid.value) return
+  game.value = updateBardwallChallengeRules(game.value, {
+    judgeRubric: challengeJudgeRubricDraft.value,
+    orlaPrompt: challengeOrlaPromptDraft.value,
+  })
+  saveBardwallState(game.value)
+  showChallengeRulesEditor.value = false
+  challengeMessage.value = 'The table rules have been changed. Tamsin looks troubled; Orla looks even more so.'
 }
 
 const beginLastWordStory = () => {
@@ -602,6 +685,7 @@ const beginBardwallAgain = async () => {
   goalChoice.value = 500
   customGoal.value = ''
   marketMessage.value = null
+  inventoryMessage.value = null
   lodgingChoice.value = 'tent'
   mealSelection.value = {}
   nightError.value = null
@@ -612,7 +696,11 @@ const beginBardwallAgain = async () => {
   treatmentMessage.value = null
   challengeGoalChoice.value = 250
   challengeWagerChoice.value = 'item:bread'
+  customChallengeWager.value = ''
   challengeMessage.value = null
+  challengeJudgeRubricDraft.value = DEFAULT_BARDWALL_JUDGE_RUBRIC
+  challengeOrlaPromptDraft.value = DEFAULT_BARDWALL_ORLA_PROMPT
+  showChallengeRulesEditor.value = false
   selectedLastWordStoryId.value = null
   lastWordMessage.value = null
   caveSpeaking.value = false
@@ -782,12 +870,13 @@ watch(() => [route.params.location, route.params.activity], () => {
             </div>
             <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
               <h3 class="font-serif text-xl font-semibold">Your inventory</h3>
+              <p v-if="inventoryMessage" data-testid="inventory-message" class="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-2.5 text-xs leading-5 text-emerald-200">{{ inventoryMessage }}</p>
               <ul class="mt-3 space-y-2 text-sm text-stone-300">
                 <li v-if="game.inventory.tent" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
                   <span class="text-xl">⛺</span><span class="min-w-0 flex-1">Tent</span><span class="text-xs text-stone-500">×1</span>
                 </li>
                 <li v-for="item in foodInventory" :key="item.id" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
-                  <span class="text-xl">{{ item.icon }}</span><span class="min-w-0 flex-1">{{ item.name }}</span><span class="text-xs text-stone-500">×{{ game.inventory[item.id] }}</span>
+                  <span class="text-xl">{{ item.icon }}</span><span class="min-w-0 flex-1">{{ item.name }}</span><span class="text-xs text-stone-500">×{{ game.inventory[item.id] }}</span><button :data-testid="`eat-${item.id}`" type="button" class="rounded-md border border-stone-600 px-2.5 py-1 text-xs font-semibold text-stone-200 hover:border-emerald-300 hover:text-emerald-200" @click="eatFood(item.id)">Eat</button>
                 </li>
                 <li v-if="game.inventory.flower" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
                   <span class="text-xl">🌺</span><span class="min-w-0 flex-1">Red shrine flower</span><span class="text-xs text-stone-500">×{{ game.inventory.flower }}</span>
@@ -809,7 +898,7 @@ watch(() => [route.params.location, route.params.activity], () => {
           </div>
           <div class="grid gap-5 p-6 sm:grid-cols-[0.35fr_0.65fr] sm:p-8">
             <div class="flex min-h-44 items-center justify-center rounded-xl border border-amber-200/15 bg-amber-100/5 text-center">
-              <div><span class="text-5xl">🧔</span><p class="mt-2 text-sm font-semibold text-amber-200">Merrick, innkeeper</p><p class="text-xs text-stone-500">Portrait placeholder</p></div>
+              <div><span class="text-5xl">🧔</span><p class="mt-2 text-sm font-semibold text-amber-200">Merrick, innkeeper</p></div>
             </div>
             <div>
               <p class="font-serif text-lg leading-8 text-stone-200">“A room is {{ BARDWALL_INN_PRICE }} coins when the bells ring. Until then, you’re welcome to warm your hands.”</p>
@@ -877,7 +966,7 @@ watch(() => [route.params.location, route.params.activity], () => {
           </div>
           <div class="grid gap-6 p-7 sm:grid-cols-[0.35fr_0.65fr] sm:p-9">
             <div class="flex min-h-44 items-center justify-center rounded-xl border border-lime-200/15 bg-black/20 text-center">
-              <div><span class="text-5xl">🧑‍⚕️</span><p class="mt-2 text-sm font-semibold text-lime-200">Iona, apothecary</p><p class="text-xs text-stone-500">Portrait placeholder</p></div>
+              <div><span class="text-5xl">🧑‍⚕️</span><p class="mt-2 text-sm font-semibold text-lime-200">Iona, apothecary</p></div>
             </div>
             <div>
               <template v-if="game.ailment">
@@ -938,10 +1027,28 @@ watch(() => [route.params.location, route.params.activity], () => {
             <main class="min-w-0 rounded-xl border border-stone-700/70 bg-black/15 p-5 sm:p-6">
               <p v-if="challengeMessage" class="mb-5 rounded-lg border border-rose-300/25 bg-rose-300/10 p-3 text-sm text-rose-200">{{ challengeMessage }} <button v-if="challengeMessage.includes('OpenAI')" class="ml-1 underline" @click="router.push('/settings')">Open Settings</button></p>
 
-              <template v-if="game.challenge.phase === 'setup'">
+              <section v-if="showChallengeRulesEditor" data-testid="challenge-rules-editor">
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-orange-300">The rules are apparently negotiable</p>
+                <h3 class="mt-2 font-serif text-3xl font-bold">Adjust the table.</h3>
+                <p class="mt-3 text-sm leading-6 text-stone-400">These instructions persist across rounds. Tamsin remains the neutral judge, but no posted house rule says you cannot explain what she ought to value—or tell Orla how to write.</p>
+                <label for="challenge-judge-rubric" class="mt-6 block text-sm font-semibold">Tamsin’s judging rubric</label>
+                <textarea id="challenge-judge-rubric" v-model="challengeJudgeRubricDraft" data-testid="challenge-judge-rubric" maxlength="4000" class="mt-2 min-h-40 w-full rounded-xl border border-stone-600 bg-[#110f0e] p-4 text-sm leading-6 text-stone-100 outline-none focus:border-orange-200"></textarea>
+                <p class="mt-1 text-right text-xs text-stone-500">{{ challengeJudgeRubricDraft.length.toLocaleString() }} / 4,000</p>
+                <label for="challenge-orla-prompt" class="mt-5 block text-sm font-semibold">Instructions for Orla’s submission</label>
+                <textarea id="challenge-orla-prompt" v-model="challengeOrlaPromptDraft" data-testid="challenge-orla-prompt" maxlength="4000" class="mt-2 min-h-40 w-full rounded-xl border border-stone-600 bg-[#110f0e] p-4 text-sm leading-6 text-stone-100 outline-none focus:border-orange-200"></textarea>
+                <p class="mt-1 text-right text-xs text-stone-500">{{ challengeOrlaPromptDraft.length.toLocaleString() }} / 4,000</p>
+                <div class="mt-5 flex flex-wrap gap-3">
+                  <button data-testid="save-challenge-rules" class="rounded-lg bg-orange-200 px-4 py-2.5 font-semibold text-[#302018] hover:bg-orange-100 disabled:opacity-40" :disabled="!challengeRulesValid" @click="saveChallengeRules">Save table rules</button>
+                  <button class="rounded-lg border border-stone-600 px-4 py-2.5 text-sm font-semibold hover:border-stone-400" @click="restoreDefaultChallengeRules">Restore defaults</button>
+                  <button class="rounded-lg px-4 py-2.5 text-sm text-stone-400 hover:text-white" @click="closeChallengeRulesEditor">Cancel</button>
+                </div>
+              </section>
+
+              <template v-else-if="game.challenge.phase === 'setup'">
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-orange-300">Take a seat</p>
                 <h3 class="mt-2 font-serif text-3xl font-bold">Set the terms.</h3>
-                <p class="mt-3 text-sm leading-6 text-stone-400">Choose your story length and place one safe wager. Orla and Tamsin will each match it.</p>
+                <p class="mt-3 text-sm leading-6 text-stone-400">Choose your story length and place one safe wager. Orla will match it. Tamsin judges without putting anything on the table.</p>
+                <button data-testid="open-challenge-rules" class="mt-4 text-sm font-semibold text-orange-200 underline decoration-orange-200/40 underline-offset-4 hover:text-orange-100" @click="openChallengeRulesEditor">Customize Tamsin’s rubric and Orla’s prompt</button>
                 <h4 class="mt-6 text-sm font-semibold">Story goal</h4>
                 <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <button v-for="goal in ([100, 250, 500, 1000] as const)" :key="goal" class="rounded-lg border px-3 py-2.5 text-sm font-semibold" :class="challengeGoalChoice === goal ? 'border-orange-200 bg-orange-200 text-[#302018]' : 'border-stone-600 hover:border-stone-400'" @click="challengeGoalChoice = goal">{{ goal.toLocaleString() }} words</button>
@@ -950,9 +1057,14 @@ watch(() => [route.params.location, route.params.activity], () => {
                 <div class="mt-3 grid gap-2 sm:grid-cols-2">
                   <label v-for="amount in [1, 5, 10]" :key="amount" class="flex cursor-pointer items-center gap-3 rounded-lg border border-stone-700 p-3 has-[:checked]:border-orange-300 has-[:checked]:bg-orange-300/10" :class="game.coins < amount ? 'pointer-events-none opacity-40' : ''"><input v-model="challengeWagerChoice" type="radio" :value="`coins:${amount}`" :disabled="game.coins < amount" /><span>🪙 {{ amount }} {{ amount === 1 ? 'coin' : 'coins' }}</span></label>
                   <label v-for="item in challengeFoodWagers" :key="item.id" class="flex cursor-pointer items-center gap-3 rounded-lg border border-stone-700 p-3 has-[:checked]:border-orange-300 has-[:checked]:bg-orange-300/10"><input v-model="challengeWagerChoice" type="radio" :value="`item:${item.id}`" /><span>{{ item.icon }} {{ item.name }}</span></label>
+                  <label class="rounded-lg border border-stone-700 p-3 has-[:checked]:border-orange-300 has-[:checked]:bg-orange-300/10 sm:col-span-2" :class="game.coins < 1 ? 'pointer-events-none opacity-40' : 'cursor-pointer'">
+                    <span class="flex items-center gap-3"><input v-model="challengeWagerChoice" data-testid="custom-wager-option" type="radio" value="coins:custom" :disabled="game.coins < 1" /><span>🪙 Custom coin wager</span></span>
+                    <input v-model="customChallengeWager" data-testid="custom-wager-amount" type="number" min="1" :max="game.coins" step="1" inputmode="numeric" class="mt-3 w-full rounded-lg border-stone-600 bg-stone-950 text-stone-100 focus:border-orange-300 focus:ring-orange-300" :disabled="game.coins < 1" placeholder="Enter a whole number" @focus="challengeWagerChoice = 'coins:custom'" @input="challengeWagerChoice = 'coins:custom'" />
+                    <span v-if="challengeWagerChoice === 'coins:custom' && customChallengeWagerGuidance" class="mt-2 block text-xs" :class="challengeWagerValid ? 'text-emerald-300' : 'text-rose-300'">{{ customChallengeWagerGuidance }}</span>
+                  </label>
                 </div>
-                <p class="mt-4 text-xs text-stone-500">The table will hold three matching stakes. Win and take all three; draw and reclaim yours; lose and your stake is gone.</p>
-                <button data-testid="start-coffeehouse-challenge" class="mt-6 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100" @click="beginCoffeehouseChallenge">Place the wager and draw</button>
+                <p class="mt-4 text-xs text-stone-500">The table will hold your stake and Orla’s match. Win and take both; draw and reclaim yours; lose and Orla takes them.</p>
+                <button data-testid="start-coffeehouse-challenge" class="mt-6 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40" :disabled="!challengeWagerValid" @click="beginCoffeehouseChallenge">Place the wager and draw</button>
               </template>
 
               <template v-else-if="game.challenge.phase === 'draft'">
@@ -970,8 +1082,9 @@ watch(() => [route.params.location, route.params.activity], () => {
                 <h3 class="mt-2 font-serif text-3xl font-bold">Tell your story.</h3>
                 <div class="mt-5 grid gap-2 sm:grid-cols-3"><div v-for="entry in challengeCards" :key="entry.card.id" class="rounded-lg border border-orange-200/20 bg-orange-200/5 p-3"><span class="text-xl">{{ entry.card.icon }}</span><strong class="ml-2 text-sm">{{ entry.card.name }}</strong><p class="mt-2 text-xs text-stone-400">{{ entry.card.meaning }}</p></div></div>
                 <section data-testid="challenge-rubric" class="mt-5 rounded-xl border border-orange-200/20 bg-orange-200/5 p-4">
-                  <h4 class="font-serif text-lg font-semibold text-orange-100">How Tamsin judges</h4>
+                  <div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-serif text-lg font-semibold text-orange-100">How Tamsin judges</h4><button class="text-xs font-semibold text-orange-200 underline" @click="openChallengeRulesEditor">Change the table rules</button></div>
                   <p class="mt-1 text-xs leading-5 text-stone-400">Each category is worth 10 points. Both stories must meet the same word-count range before Tamsin will judge them.</p>
+                  <p class="mt-3 whitespace-pre-wrap rounded-lg border border-orange-200/15 bg-black/20 p-3 text-xs leading-5 text-orange-100">{{ game.challengeRules.judgeRubric }}</p>
                   <div class="mt-4 grid gap-3 sm:grid-cols-2">
                     <div v-for="item in BARDWALL_STORY_RUBRIC" :key="item.key" class="rounded-lg border border-stone-700/70 bg-black/20 p-3">
                       <strong class="block text-sm text-stone-200">{{ item.name }}</strong>
@@ -1005,6 +1118,12 @@ watch(() => [route.params.location, route.params.activity], () => {
                   <div v-for="item in BARDWALL_STORY_RUBRIC" :key="item.key" class="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2 border-b border-stone-800 py-3 text-sm"><div><strong class="block text-stone-200">{{ item.name }}</strong><span class="mt-0.5 block text-xs leading-5 text-stone-500">{{ item.description }}</span></div><span class="text-center text-orange-100">{{ game.challenge.result.playerScores[item.key] }} / 10</span><span class="text-center text-violet-100">{{ game.challenge.result.rivalScores[item.key] }} / 10</span></div>
                   <div v-if="game.challenge.result.playerLengthPenalty || game.challenge.result.rivalLengthPenalty" class="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2 border-b border-stone-800 py-3 text-sm text-rose-200"><span>Length deduction</span><span class="text-center">−{{ game.challenge.result.playerLengthPenalty }}</span><span class="text-center">−{{ game.challenge.result.rivalLengthPenalty }}</span></div>
                   <div class="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2 pt-4 font-semibold"><span>Adjusted total</span><span class="text-center text-xl text-orange-200">{{ scoreTotal(game.challenge.result.playerScores, game.challenge.result.playerLengthPenalty) }}</span><span class="text-center text-xl text-violet-200">{{ scoreTotal(game.challenge.result.rivalScores, game.challenge.result.rivalLengthPenalty) }}</span></div>
+                </section>
+                <section v-if="game.challenge.result.outcome === 'lose'" data-testid="losing-rules-cta" class="mt-6 rounded-xl border border-fuchsia-300/30 bg-fuchsia-300/10 p-5">
+                  <p class="text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-200">Are you losing too much?</p>
+                  <h4 class="mt-2 font-serif text-xl font-semibold">Change what “winning” means.</h4>
+                  <p class="mt-2 text-sm leading-6 text-stone-300">Try changing Tamsin’s judging rubric—or the prompt Orla receives for her submission. This is an entirely neutral suggestion from the management.</p>
+                  <button data-testid="losing-edit-rules" class="mt-4 rounded-lg bg-fuchsia-200 px-4 py-2.5 text-sm font-semibold text-[#28142b] hover:bg-fuchsia-100" @click="openChallengeRulesEditor">Adjust the table rules</button>
                 </section>
                 <button data-testid="another-coffeehouse-challenge" class="mt-6 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100" @click="beginAnotherChallenge">Play another round</button>
               </template>

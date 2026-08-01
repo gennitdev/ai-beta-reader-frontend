@@ -2,7 +2,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { ChapterRevision, ChapterRevisionActivity } from '@/lib/database'
-import { createDefaultBardwallState, getBardwallDateKey, HELICONIA_PERSISTENCE_MESSAGES, saveBardwallState } from '@/lib/bardwall'
+import {
+  BARDWALL_CHALLENGE_CARDS,
+  createDefaultBardwallState,
+  getBardwallDateKey,
+  HELICONIA_PERSISTENCE_MESSAGES,
+  saveBardwallState,
+} from '@/lib/bardwall'
 
 const { books, activity, revisions } = vi.hoisted(() => ({
   books: { value: [{ id: 'book-1', title: 'Ghost Stories' }] },
@@ -111,11 +117,82 @@ describe('BardwallView', () => {
     await flushPromises()
 
     expect(runBardwallStoryChallenge).toHaveBeenCalledOnce()
+    expect(runBardwallStoryChallenge).toHaveBeenCalledWith('sk-test', expect.objectContaining({
+      judgeRubric: expect.stringContaining('concrete scenes'),
+      orlaPrompt: expect.stringContaining('specific immediate desire'),
+    }))
     expect(wrapper.text()).toContain('The table is yours.')
     expect(wrapper.text()).toContain('Your three symbols became one inevitable ending.')
     expect(wrapper.get('[data-testid="challenge-story-comparison"]').text()).toContain(story)
     expect(wrapper.get('[data-testid="challenge-story-comparison"]').text()).toContain('Orla told a moonlit story.')
-    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({ coins: 22, challengesWon: 1 })
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({ coins: 21, challengesWon: 1 })
+  })
+
+  it('accepts a custom wager and saves custom table rules', async () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      coins: 17,
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 0, coinsEarned: 0, locked: false },
+    })
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    await wrapper.get('[data-testid="map-challenge"]').trigger('click')
+    expect(wrapper.text()).toContain('Orla will match it')
+    expect(wrapper.text()).toContain('Tamsin judges without putting anything on the table')
+
+    await wrapper.get('[data-testid="open-challenge-rules"]').trigger('click')
+    await wrapper.get('[data-testid="challenge-judge-rubric"]').setValue('Reward jokes about geese.')
+    await wrapper.get('[data-testid="challenge-orla-prompt"]').setValue('Write a solemn tale about a turnip.')
+    await wrapper.get('[data-testid="save-challenge-rules"]').trigger('click')
+
+    await wrapper.get('[data-testid="custom-wager-amount"]').setValue('18')
+    expect(wrapper.get('[data-testid="start-coffeehouse-challenge"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('You only have 17 coins')
+    await wrapper.get('[data-testid="custom-wager-amount"]').setValue('13')
+    expect(wrapper.get('[data-testid="start-coffeehouse-challenge"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="start-coffeehouse-challenge"]').trigger('click')
+
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({
+      coins: 4,
+      challenge: { phase: 'draft', wager: { type: 'coins', amount: 13 } },
+      challengeRules: {
+        judgeRubric: 'Reward jokes about geese.',
+        orlaPrompt: 'Write a solemn tale about a turnip.',
+      },
+    })
+  })
+
+  it('offers a table-rules escape hatch after Orla wins', async () => {
+    const defaultState = createDefaultBardwallState()
+    saveBardwallState({
+      ...defaultState,
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 0, coinsEarned: 0, locked: false },
+      challenge: {
+        phase: 'result',
+        goal: 100,
+        wager: { type: 'coins', amount: 1 },
+        cards: BARDWALL_CHALLENGE_CARDS.slice(0, 3).map((card) => ({ cardId: card.id, held: true })),
+        drawNumber: 1,
+        playerStory: 'A concrete but tragically defeated story.',
+        result: {
+          outcome: 'lose',
+          rivalStory: 'Orla wins this one.',
+          explanation: 'A perfectly neutral decision.',
+          playerScores: { sceneSpecificity: 7, characterAgency: 7, narrativeMovement: 7, craftCoherence: 7, promptIntegration: 7 },
+          rivalScores: { sceneSpecificity: 8, characterAgency: 8, narrativeMovement: 8, craftCoherence: 8, promptIntegration: 8 },
+          playerLengthPenalty: 0,
+          rivalLengthPenalty: 0,
+        },
+      },
+    })
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    await wrapper.get('[data-testid="map-challenge"]').trigger('click')
+    expect(wrapper.get('[data-testid="losing-rules-cta"]').text()).toContain('Are you losing too much?')
+    await wrapper.get('[data-testid="losing-edit-rules"]').trigger('click')
+    expect(wrapper.find('[data-testid="challenge-rules-editor"]').exists()).toBe(true)
   })
 
   it('starts, saves, and continues an unwinnable Last Word story', async () => {
@@ -263,6 +340,28 @@ describe('BardwallView', () => {
 
     await wrapper.get('[data-testid="begin-next-day"]').trigger('click')
     expect(wrapper.text()).toContain('Name today’s measure.')
+  })
+
+  it('lets the bard eat food from inventory before ending the day', async () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      hunger: 80,
+      energy: 50,
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 0, coinsEarned: 0, locked: false },
+    })
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    await wrapper.get('[data-testid="eat-bread"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="inventory-message"]').text()).toContain('Brown bread eaten')
+    expect(wrapper.text()).toContain('Hunger30 / 100')
+    expect(wrapper.text()).toContain('Energy63 / 100')
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({
+      hunger: 30,
+      energy: 63,
+      inventory: { bread: 0 },
+    })
   })
 
   it('follows the innkeeper’s advice and reveals Heliconia’s cave', async () => {
