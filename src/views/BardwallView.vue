@@ -397,7 +397,7 @@ onMounted(() => {
 
       <div v-else-if="screen === 'town'" class="py-10">
         <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <article class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-7 shadow-xl">
+          <article class="min-w-0 rounded-2xl border border-stone-700/70 bg-stone-900/40 p-7 shadow-xl">
             <p class="text-sm font-medium text-amber-300">Dusk settles over the crooked roofs.</p>
             <h2 class="mt-3 font-serif text-4xl font-bold">The story must go on.</h2>
             <p class="mt-5 max-w-2xl font-serif text-lg leading-8 text-stone-300">

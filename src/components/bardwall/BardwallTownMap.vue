@@ -7,21 +7,21 @@ const props = defineProps<{ caveUnlocked: boolean }>()
 const emit = defineEmits<{ select: [location: BardwallLocation] }>()
 
 const locations = computed(() => [
-  { id: 'inn' as const, name: 'Crooked Lantern Inn', detail: 'Rooms, rumors, and advice', icon: '🏠', x: 20, y: 22, tone: 'amber' },
-  { id: 'shrine' as const, name: 'Shrine of Heliconia', detail: 'Town Square', icon: '🌺', x: 42, y: 40, tone: 'rose' },
-  { id: 'apothecary' as const, name: 'Moth & Mortar', detail: 'Apothecary and physic', icon: '⚗️', x: 15, y: 48, tone: 'emerald' },
-  { id: 'market' as const, name: 'Night Market', detail: 'Food, flowers, and provisions', icon: '🏮', x: 63, y: 55, tone: 'amber' },
-  { id: 'challenge' as const, name: 'Challenge Hall', detail: 'Coming soon', icon: '🎭', x: 25, y: 68, tone: 'stone' },
-  { id: 'amphitheater' as const, name: 'Stone Amphitheater', detail: 'Tell the ghosts a story', icon: '👻', x: 79, y: 18, tone: 'sky' },
-  { id: 'camp' as const, name: 'Forest Camp', detail: 'Your tent beyond the wall', icon: '⛺', x: 77, y: 70, tone: 'emerald' },
+  { id: 'inn' as const, name: 'Crooked Lantern Inn', detail: 'Rooms, rumors, and advice', icon: '🏠', x: 22, y: 19, tone: 'amber' },
+  { id: 'shrine' as const, name: 'Shrine of Heliconia', detail: 'Town Square', icon: '🌺', x: 43, y: 38, tone: 'rose' },
+  { id: 'apothecary' as const, name: 'Moth & Mortar', detail: 'Apothecary and physic', icon: '⚗️', x: 17, y: 51, tone: 'emerald' },
+  { id: 'market' as const, name: 'Night Market', detail: 'Food, flowers, and provisions', icon: '🏮', x: 60, y: 56, tone: 'amber' },
+  { id: 'challenge' as const, name: 'Challenge Hall', detail: 'Coming soon', icon: '🎭', x: 27, y: 76, tone: 'stone' },
+  { id: 'amphitheater' as const, name: 'Stone Amphitheater', detail: 'Tell the ghosts a story', icon: '👻', x: 78, y: 17, tone: 'sky' },
+  { id: 'camp' as const, name: 'Forest Camp', detail: 'Your tent beyond the wall', icon: '⛺', x: 70, y: 68, tone: 'emerald' },
   ...(props.caveUnlocked
-    ? [{ id: 'cave' as const, name: 'The Unwinnable Cave', detail: 'Some games can be played here', icon: '🕯️', x: 91, y: 84, tone: 'violet' }]
+    ? [{ id: 'cave' as const, name: 'The Unwinnable Cave', detail: 'Some games can be played here', icon: '🕯️', x: 96, y: 89, tone: 'violet' }]
     : []),
 ])
 </script>
 
 <template>
-  <section class="overflow-hidden rounded-2xl border border-[#8b7653]/60 bg-[#d7c49b] p-3 text-[#2b271e] shadow-2xl sm:p-5">
+  <section class="w-full min-w-0 overflow-hidden rounded-2xl border border-[#8b7653]/60 bg-[#d7c49b] p-3 text-[#2b271e] shadow-2xl sm:p-5">
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3 px-2">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.28em] text-[#725b32]">Choose a destination</p>
@@ -30,7 +30,7 @@ const locations = computed(() => [
       <p class="max-w-sm text-sm text-[#65583f]">The walls keep out many things. They have never managed to keep out a story.</p>
     </div>
 
-    <div class="bardwall-map relative grid gap-3 overflow-hidden rounded-xl border-2 border-[#796946]/60 p-4 sm:block sm:aspect-[16/10] sm:min-h-[34rem]">
+    <div class="bardwall-map relative grid w-full min-w-0 gap-3 overflow-hidden rounded-xl border-2 border-[#796946]/60 p-4 sm:block sm:aspect-[16/10] sm:min-h-[34rem]">
       <div class="pointer-events-none absolute inset-0 hidden sm:block">
         <div class="absolute left-[4%] top-[7%] h-[78%] w-[61%] rounded-[45%_38%_42%_48%] border-[10px] border-double border-[#635c49]/70 bg-[#a9b27a]/35"></div>
         <div class="absolute bottom-[8%] right-[5%] top-[6%] w-[34%] rounded-[45%] bg-[#314533]/35"></div>
@@ -42,7 +42,8 @@ const locations = computed(() => [
         :key="location.id"
         type="button"
         :data-testid="`map-${location.id}`"
-        class="map-location group z-10 flex items-center gap-3 rounded-xl border border-[#6f6248]/60 bg-[#efe2bd]/95 p-3 text-left shadow-md transition hover:-translate-y-1 hover:border-[#3d3525] hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#5f4927] sm:w-44"
+        class="map-location group z-10 flex items-center gap-3 rounded-xl border border-[#6f6248]/60 bg-[#efe2bd]/95 p-3 text-left shadow-md transition hover:border-[#3d3525] hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#5f4927] sm:w-44"
+        :class="{ 'map-location--right': location.id === 'cave' }"
         :style="{ '--map-x': `${location.x}%`, '--map-y': `${location.y}%` }"
         @click="emit('select', location.id)"
       >
@@ -79,6 +80,14 @@ const locations = computed(() => [
 
   .map-location:hover {
     transform: translate(-50%, calc(-50% - 0.25rem));
+  }
+
+  .map-location--right {
+    transform: translate(-100%, -50%);
+  }
+
+  .map-location--right:hover {
+    transform: translate(-100%, calc(-50% - 0.25rem));
   }
 }
 </style>
