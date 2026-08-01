@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon, BookOpenIcon, CurrencyDollarIcon, MoonIcon, SparklesIcon } from '@heroicons/vue/24/outline'
 import { useDatabase } from '@/composables/useDatabase'
 import BardwallTownMap, { type BardwallLocation } from '@/components/bardwall/BardwallTownMap.vue'
@@ -40,8 +41,15 @@ interface RevisionOffering {
   wordCount: number
 }
 
+type BardwallScreen = 'gate' | 'goal' | 'town' | 'amphitheater' | 'reward' | 'market' | 'night' | 'morning' | 'inn' | 'shrine' | 'apothecary' | 'camp' | 'challenge' | 'cave' | 'wyrm'
+
+const routeLocations = new Set<BardwallLocation>(['amphitheater', 'market', 'inn', 'shrine', 'apothecary', 'camp', 'challenge', 'cave'])
+
 const { books, loadBooks, getBookRevisionActivity, getChapterRevisions } = useDatabase()
-const screen = ref<'gate' | 'goal' | 'town' | 'amphitheater' | 'reward' | 'market' | 'night' | 'morning' | 'inn' | 'shrine' | 'apothecary' | 'camp' | 'challenge' | 'cave' | 'wyrm'>('gate')
+const route = useRoute()
+const router = useRouter()
+const screen = ref<BardwallScreen>('gate')
+const hasEntered = ref(false)
 const game = ref(loadBardwallState())
 const offerings = ref<RevisionOffering[]>([])
 const loadingOfferings = ref(false)
@@ -130,7 +138,52 @@ const loadOfferings = async () => {
   }
 }
 
+const routeLocation = () => typeof route.params.location === 'string' ? route.params.location : null
+
+const syncScreenFromRoute = async () => {
+  const location = routeLocation()
+  const activity = typeof route.params.activity === 'string' ? route.params.activity : null
+  if (!location) {
+    if (hasEntered.value) screen.value = 'town'
+    return
+  }
+  if (!routeLocations.has(location as BardwallLocation)) {
+    await router.replace({ name: 'bardwall' })
+    return
+  }
+
+  hasEntered.value = true
+  if (location === 'cave' && activity === 'wyrm') {
+    screen.value = 'wyrm'
+    return
+  }
+  screen.value = location as BardwallLocation
+  if (location === 'amphitheater' && !offerings.value.length && !loadingOfferings.value) {
+    await loadOfferings()
+  }
+}
+
+const goToTown = async () => {
+  screen.value = 'town'
+  await router.push({ name: 'bardwall' })
+}
+
+const goToLocation = async (location: BardwallLocation) => {
+  screen.value = location
+  await router.push({ name: 'bardwall-location', params: { location } })
+}
+
+const goToWyrmGame = async () => {
+  screen.value = 'wyrm'
+  await router.push({ name: 'bardwall-location', params: { location: 'cave', activity: 'wyrm' } })
+}
+
 const enterBardwall = async () => {
+  hasEntered.value = true
+  if (routeLocation()) {
+    await syncScreenFromRoute()
+    return
+  }
   screen.value = dailyGoal.value ? 'town' : 'goal'
   if (dailyGoal.value && !offerings.value.length) await loadOfferings()
 }
@@ -150,11 +203,6 @@ const setDailyGoal = async () => {
   saveBardwallState(game.value)
   screen.value = 'town'
   if (!offerings.value.length) await loadOfferings()
-}
-
-const visitAmphitheater = async () => {
-  screen.value = 'amphitheater'
-  if (!offerings.value.length && !loadingOfferings.value) await loadOfferings()
 }
 
 const selectOffering = (offering: RevisionOffering) => {
@@ -200,10 +248,10 @@ const tellStory = () => {
   screen.value = 'reward'
 }
 
-const returnToTown = () => {
+const returnToTown = async () => {
   selectedOfferingId.value = null
   selectedPassageIndexes.value = []
-  screen.value = 'town'
+  await goToTown()
 }
 
 const buyFood = (foodId: BardwallFoodId) => {
@@ -256,16 +304,22 @@ const receiveTreatment = () => {
 }
 
 const selectMapLocation = async (location: BardwallLocation) => {
-  if (location === 'amphitheater') {
-    await visitAmphitheater()
-    return
-  }
   if (location === 'shrine') {
     heliconiaEncounterActive.value = false
     shrineMessage.value = null
   }
   if (location === 'apothecary') treatmentMessage.value = null
-  screen.value = location
+  await goToLocation(location)
+  if (location === 'amphitheater' && !offerings.value.length && !loadingOfferings.value) await loadOfferings()
+}
+
+const cancelNight = async () => {
+  const location = routeLocation()
+  if (location && routeLocations.has(location as BardwallLocation)) {
+    screen.value = location as BardwallLocation
+    return
+  }
+  await goToTown()
 }
 
 const changeMealQuantity = (foodId: BardwallFoodId, change: number) => {
@@ -299,6 +353,11 @@ const beginNextDay = () => {
 
 onMounted(() => {
   game.value = loadBardwallState()
+  void syncScreenFromRoute()
+})
+
+watch(() => [route.params.location, route.params.activity], () => {
+  void syncScreenFromRoute()
 })
 </script>
 
@@ -418,7 +477,7 @@ onMounted(() => {
             <div v-if="game.ailment" class="rounded-2xl border border-lime-300/40 bg-lime-300/10 p-5">
               <h3 class="font-serif text-xl font-semibold text-lime-200">{{ game.ailment.icon }} {{ game.ailment.name }}</h3>
               <p class="mt-2 text-sm leading-6 text-stone-300">{{ game.ailment.description }}</p>
-              <button data-testid="go-to-apothecary" class="mt-4 text-sm font-semibold text-lime-200 underline underline-offset-4" @click="screen = 'apothecary'">Seek treatment at Moth & Mortar</button>
+              <button data-testid="go-to-apothecary" class="mt-4 text-sm font-semibold text-lime-200 underline underline-offset-4" @click="goToLocation('apothecary')">Seek treatment at Moth & Mortar</button>
             </div>
             <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
               <h3 class="font-serif text-xl font-semibold">How you feel</h3>
@@ -462,7 +521,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="screen === 'inn'" class="py-8">
-        <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl overflow-hidden rounded-2xl border border-amber-300/30 bg-[linear-gradient(145deg,#332516,#17130e)] shadow-2xl">
           <div class="border-b border-amber-200/15 bg-black/20 p-6 sm:p-8">
             <p class="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">A fire, a ledger, seven crooked lanterns</p>
@@ -486,7 +545,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="screen === 'shrine'" class="py-8">
-        <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-rose-300/30 bg-[radial-gradient(circle_at_top,#4a2538,#171218_62%)] p-7 text-center shadow-2xl sm:p-10">
           <p class="text-xs font-semibold uppercase tracking-[0.3em] text-rose-300">Town Square</p>
           <div class="mx-auto mt-6 flex h-40 w-40 items-center justify-center rounded-full border border-rose-200/30 bg-black/20 text-7xl shadow-[0_0_50px_rgba(251,113,133,0.12)]">🌺</div>
@@ -499,7 +558,7 @@ onMounted(() => {
               <p class="font-semibold text-violet-200">Heliconia gives you a map.</p>
               <p class="mt-2 text-sm leading-6 text-stone-300">A cave and a narrow forest path appear in violet ink. “Some games can be played in the cave,” she warns. “None of them can be won.”</p>
             </div>
-            <button data-testid="return-with-cave-map" class="mt-7 rounded-lg bg-rose-300 px-5 py-3 font-semibold text-[#331522] hover:bg-rose-200" @click="screen = 'town'">Return to the map</button>
+            <button data-testid="return-with-cave-map" class="mt-7 rounded-lg bg-rose-300 px-5 py-3 font-semibold text-[#331522] hover:bg-rose-200" @click="goToTown">Return to the map</button>
           </template>
 
           <template v-else-if="game.heliconiaMet">
@@ -519,7 +578,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="screen === 'apothecary'" class="py-8">
-        <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl overflow-hidden rounded-2xl border border-lime-200/25 bg-[linear-gradient(150deg,#273324,#111810)] shadow-2xl">
           <div class="border-b border-lime-200/10 p-7 sm:p-9">
             <p class="text-xs font-semibold uppercase tracking-[0.3em] text-lime-300">Bottles in the windows, moths in the rafters</p>
@@ -551,7 +610,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="screen === 'camp'" class="py-8">
-        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-emerald-300/20 bg-[radial-gradient(circle_at_top,#243c2f,#101a15_65%)] p-8 text-center shadow-2xl">
           <div class="text-7xl">⛺</div>
           <h2 class="mt-5 font-serif text-4xl font-bold">Forest Camp</h2>
@@ -561,7 +620,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="screen === 'challenge'" class="py-8">
-        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-stone-600 bg-stone-900/60 p-10 text-center">
           <div class="text-6xl">🎭</div><h2 class="mt-5 font-serif text-4xl font-bold">Challenge Hall</h2>
           <p class="mx-auto mt-4 max-w-xl text-stone-400">The doors are being painted and the judges are still arguing about the rules. Storytelling challenges will be held here soon.</p>
@@ -569,7 +628,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="screen === 'cave'" class="py-8">
-        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-4xl overflow-hidden rounded-2xl border border-violet-300/25 bg-[radial-gradient(circle_at_50%_0%,#34284d,#09080d_65%)] p-8 text-center shadow-2xl sm:p-12">
           <p class="text-xs font-semibold uppercase tracking-[0.35em] text-violet-300">Deep in the haunted wood</p>
           <div class="mx-auto mt-7 flex h-52 max-w-md items-end justify-center rounded-t-[50%] border-x border-t border-stone-500/30 bg-black/70 pb-7 text-6xl">🕯️</div>
@@ -587,14 +646,14 @@ onMounted(() => {
               <p class="text-xs font-semibold uppercase tracking-wider text-amber-300">A table set for one</p>
               <h3 class="mt-2 font-serif text-2xl font-semibold">The Wyrm’s Courtesy</h3>
               <p class="mt-3 text-sm leading-6 text-stone-300">A courteous creature promises you its hoard if you choose the one potion that will not make you ill.</p>
-              <button data-testid="play-wyrms-courtesy" class="mt-5 rounded-lg bg-amber-300 px-4 py-2.5 font-semibold text-[#281d10] hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="Boolean(game.ailment)" @click="screen = 'wyrm'">Take your seat</button>
+              <button data-testid="play-wyrms-courtesy" class="mt-5 rounded-lg bg-amber-300 px-4 py-2.5 font-semibold text-[#281d10] hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="Boolean(game.ailment)" @click="goToWyrmGame">Take your seat</button>
             </article>
           </div>
         </section>
       </div>
 
       <div v-else-if="screen === 'wyrm'" class="py-8">
-        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'cave'"><ArrowLeftIcon class="h-4 w-4" /> Leave the table</button>
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToLocation('cave')"><ArrowLeftIcon class="h-4 w-4" /> Leave the table</button>
         <section class="mx-auto mt-5 max-w-5xl overflow-hidden rounded-2xl border border-amber-300/25 bg-[radial-gradient(circle_at_top,#49351c,#15100b_62%)] p-7 shadow-2xl sm:p-10">
           <div class="text-center">
             <p class="text-xs font-semibold uppercase tracking-[0.35em] text-amber-300">The game is always set</p>
@@ -629,14 +688,14 @@ onMounted(() => {
               <p class="mt-4 font-serif text-lg leading-8 text-stone-300">{{ game.ailment.description }}</p>
               <blockquote class="mt-6 rounded-xl border border-amber-200/15 bg-black/25 p-5 font-serif text-lg italic text-amber-100">“What dreadful luck,” says the wyrm. “You were so nearly correct.”</blockquote>
               <p class="mt-5 text-sm text-stone-400">You lose 25 energy and wake outside the cave. Iona at Moth & Mortar can treat the poisoning.</p>
-              <button data-testid="return-sick-to-town" class="mt-6 rounded-lg bg-lime-300 px-5 py-3 font-semibold text-[#182013] hover:bg-lime-200" @click="screen = 'town'">Return to Bardwall for healing</button>
+              <button data-testid="return-sick-to-town" class="mt-6 rounded-lg bg-lime-300 px-5 py-3 font-semibold text-[#182013] hover:bg-lime-200" @click="goToTown">Return to Bardwall for healing</button>
             </div>
           </template>
         </section>
       </div>
 
       <div v-else-if="screen === 'market'" class="py-8">
-        <button data-testid="leave-market" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to town</button>
+        <button data-testid="leave-market" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to town</button>
         <div class="mt-5 rounded-2xl border border-stone-700/70 bg-stone-900/40 p-6">
           <p class="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">Lantern Row</p>
           <div class="mt-2 flex flex-wrap items-end justify-between gap-4">
@@ -676,7 +735,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="screen === 'night'" class="py-8">
-        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Not yet—return to town</button>
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="cancelNight"><ArrowLeftIcon class="h-4 w-4" /> Not yet—return to town</button>
         <div class="mt-5 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <section class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-6">
             <p class="text-xs font-semibold uppercase tracking-[0.3em] text-violet-300">The last bells ring</p>
@@ -741,7 +800,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="screen === 'amphitheater'" class="py-8">
-        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="screen = 'town'"><ArrowLeftIcon class="h-4 w-4" /> Back to town</button>
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to town</button>
         <div class="mt-5 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
           <section class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
             <h2 class="font-serif text-2xl font-bold">Choose a recent telling</h2>

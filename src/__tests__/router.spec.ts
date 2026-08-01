@@ -19,6 +19,16 @@ describe('router', () => {
     expect(router.resolve('/').name).toBe('home')
   })
 
+  it('keeps Bardwall locations and cave activities inside Bardwall routes', () => {
+    const market = router.resolve('/bardwall/market')
+    expect(market.name).toBe('bardwall-location')
+    expect(market.params.location).toBe('market')
+
+    const wyrm = router.resolve('/bardwall/cave/wyrm')
+    expect(wyrm.name).toBe('bardwall-location')
+    expect(wyrm.params).toMatchObject({ location: 'cave', activity: 'wyrm' })
+  })
+
   it('nests chapter/part/wiki routes under the book route', () => {
     const book = router.getRoutes().find((r) => r.name === 'book-chapter')
     expect(book?.path).toBe('/books/:id/chapters/:chapterId')

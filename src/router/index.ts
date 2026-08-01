@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+const bardwallView = () => import('../views/BardwallView.vue')
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -131,7 +133,12 @@ const router = createRouter({
     {
       path: '/bardwall',
       name: 'bardwall',
-      component: () => import('../views/BardwallView.vue')
+      component: bardwallView
+    },
+    {
+      path: '/bardwall/:location/:activity?',
+      name: 'bardwall-location',
+      component: bardwallView
     }
   ]
 })

@@ -31,6 +31,16 @@ const { books, activity, revisions } = vi.hoisted(() => ({
   ] as ChapterRevision[],
 }))
 
+const { routerPush, routerReplace } = vi.hoisted(() => ({
+  routerPush: vi.fn(async () => {}),
+  routerReplace: vi.fn(async () => {}),
+}))
+
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ params: {} }),
+  useRouter: () => ({ push: routerPush, replace: routerReplace }),
+}))
+
 vi.mock('@/composables/useDatabase', () => ({
   useDatabase: () => ({
     books,
@@ -42,7 +52,11 @@ vi.mock('@/composables/useDatabase', () => ({
 
 import BardwallView from '@/views/BardwallView.vue'
 
-afterEach(() => localStorage.clear())
+afterEach(() => {
+  localStorage.clear()
+  routerPush.mockClear()
+  routerReplace.mockClear()
+})
 
 describe('BardwallView', () => {
   it('completes the amphitheater story and coin loop', async () => {
@@ -93,6 +107,7 @@ describe('BardwallView', () => {
     await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
     expect(wrapper.text()).toContain('Day 1')
     await wrapper.get('[data-testid="map-market"]').trigger('click')
+    expect(routerPush).toHaveBeenCalledWith({ name: 'bardwall-location', params: { location: 'market' } })
     expect(wrapper.text()).toContain('Bardwall Night Market')
     await wrapper.get('[data-testid="buy-apple"]').trigger('click')
     expect(wrapper.text()).toContain('Orchard apple added to your pack.')
