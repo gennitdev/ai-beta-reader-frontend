@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   BARDWALL_STORAGE_KEY,
+  HELICONIA_PERSISTENCE_MESSAGES,
   calculateBardwallPay,
   createDefaultBardwallState,
   drinkWyrmPotion,
@@ -73,6 +74,7 @@ describe('Bardwall game helpers', () => {
       },
       lastNight: null,
       heliconiaMet: false,
+      heliconiaVisits: 0,
       caveUnlocked: false,
       ailment: null,
       triedPotionIds: [],
@@ -119,8 +121,18 @@ describe('Bardwall game helpers', () => {
     expect(purchased).toMatchObject({ coins: 0, inventory: { flower: 1 } })
 
     const revealed = offerFlowerToHeliconia(purchased)
-    expect(revealed).toMatchObject({ inventory: { flower: 0 }, heliconiaMet: true, caveUnlocked: true })
+    expect(revealed).toMatchObject({ inventory: { flower: 0 }, heliconiaMet: true, heliconiaVisits: 1, caveUnlocked: true })
+    const returnVisit = offerFlowerToHeliconia({
+      ...revealed,
+      inventory: { ...revealed.inventory, flower: 1 },
+    })
+    expect(returnVisit).toMatchObject({ inventory: { flower: 0 }, heliconiaVisits: 2, caveUnlocked: true })
     expect(() => offerFlowerToHeliconia(createDefaultBardwallState())).toThrow('A flower is required')
+  })
+
+  it('has ten distinct words of persistence from Heliconia', () => {
+    expect(HELICONIA_PERSISTENCE_MESSAGES).toHaveLength(10)
+    expect(new Set(HELICONIA_PERSISTENCE_MESSAGES).size).toBe(10)
   })
 
   it('applies every wyrm potion as an illness and lets the apothecary heal it', () => {

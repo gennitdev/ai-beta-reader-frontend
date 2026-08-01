@@ -52,21 +52,11 @@ const emit = defineEmits<{
 <template>
   <section class="rounded-lg border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-navy-800">
     <div class="p-6">
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Linked Wiki Pages</h3>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Permanent links from this chapter to related wiki pages.
-          </p>
-        </div>
-        <button
-          v-if="!isEditing && links.length"
-          type="button"
-          class="text-xs font-medium text-gold-600 transition-colors hover:text-gold-700 dark:text-gold-400 dark:hover:text-gold-300"
-          @click="emit('startEdit')"
-        >
-          Edit links
-        </button>
+      <div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Linked Wiki Pages</h3>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Permanent links from this chapter to related wiki pages.
+        </p>
       </div>
 
       <div v-if="loading" class="mt-4 text-sm text-gray-500 dark:text-gray-400">
@@ -135,12 +125,12 @@ const emit = defineEmits<{
       </p>
 
       <button
-        v-if="!isEditing && !links.length"
+        v-if="!isEditing"
         type="button"
-        class="mt-5 block w-full border-t border-gray-200 pt-4 text-left text-xs font-medium text-gold-600 transition-colors hover:text-gold-700 dark:border-gray-700 dark:text-gold-400 dark:hover:text-gold-300"
+        class="mt-5 block w-full rounded-md border border-gold-300 px-4 py-2.5 text-center text-sm font-medium text-gold-700 transition-colors hover:border-gold-400 hover:bg-gold-50 dark:border-gold-700 dark:text-gold-300 dark:hover:bg-gold-900/20"
         @click="emit('startEdit')"
       >
-        Add links
+        {{ links.length ? 'Edit links' : 'Add links' }}
       </button>
     </div>
   </section>

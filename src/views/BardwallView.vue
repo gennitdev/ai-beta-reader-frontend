@@ -11,6 +11,7 @@ import {
   BARDWALL_FLOWER_PRICE,
   BARDWALL_MARKET_ITEMS,
   BARDWALL_WYRM_POTIONS,
+  HELICONIA_PERSISTENCE_MESSAGES,
   calculateBardwallPay,
   getBardwallDateKey,
   getBardwallPassages,
@@ -66,6 +67,7 @@ const mealSelection = ref<Partial<Record<BardwallFoodId, number>>>({})
 const nightError = ref<string | null>(null)
 const innAdviceShown = ref(false)
 const heliconiaEncounterActive = ref(false)
+const heliconiaReturnVisit = ref(false)
 const shrineMessage = ref<string | null>(null)
 const treatmentMessage = ref<string | null>(null)
 const showResetDialog = ref(false)
@@ -88,6 +90,10 @@ const selectedNourishment = computed(() => BARDWALL_MARKET_ITEMS.reduce((total, 
 ), 0))
 const nourishmentDeficit = computed(() => Math.max(0, BARDWALL_DAILY_NOURISHMENT - selectedNourishment.value))
 const foodInventory = computed(() => BARDWALL_MARKET_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
+const heliconiaMessage = computed(() => {
+  const messageIndex = Math.max(0, game.value.heliconiaVisits - 2) % HELICONIA_PERSISTENCE_MESSAGES.length
+  return HELICONIA_PERSISTENCE_MESSAGES[messageIndex]
+})
 const canResetBardwall = computed(() => resetConfirmation.value.trim() === 'BARDWALL')
 
 const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
@@ -282,8 +288,10 @@ const buyFlower = () => {
 
 const offerFlower = () => {
   try {
+    const isReturnVisit = game.value.heliconiaMet
     game.value = offerFlowerToHeliconia(game.value)
     saveBardwallState(game.value)
+    heliconiaReturnVisit.value = isReturnVisit
     heliconiaEncounterActive.value = true
     shrineMessage.value = null
   } catch {
@@ -311,6 +319,7 @@ const receiveTreatment = () => {
 const selectMapLocation = async (location: BardwallLocation) => {
   if (location === 'shrine') {
     heliconiaEncounterActive.value = false
+    heliconiaReturnVisit.value = false
     shrineMessage.value = null
   }
   if (location === 'apothecary') treatmentMessage.value = null
@@ -378,6 +387,7 @@ const beginBardwallAgain = async () => {
   nightError.value = null
   innAdviceShown.value = false
   heliconiaEncounterActive.value = false
+  heliconiaReturnVisit.value = false
   shrineMessage.value = null
   treatmentMessage.value = null
   hasEntered.value = false
@@ -594,19 +604,30 @@ watch(() => [route.params.location, route.params.activity], () => {
           <div class="mx-auto mt-6 flex h-40 w-40 items-center justify-center rounded-full border border-rose-200/30 bg-black/20 text-7xl shadow-[0_0_50px_rgba(251,113,133,0.12)]">🌺</div>
 
           <template v-if="heliconiaEncounterActive">
-            <p class="mt-7 text-xs font-semibold uppercase tracking-[0.3em] text-rose-300">The goddess appears in person</p>
+            <p class="mt-7 text-xs font-semibold uppercase tracking-[0.3em] text-rose-300">{{ heliconiaReturnVisit ? 'The goddess returns' : 'The goddess appears in person' }}</p>
             <h2 class="mt-3 font-serif text-4xl font-bold">Heliconia</h2>
-            <p class="mx-auto mt-5 max-w-2xl font-serif text-xl leading-9 text-stone-200">“I keep faith with lost causes, impossible books, and games whose endings were decided before their beginnings.”</p>
-            <div class="mx-auto mt-6 max-w-xl rounded-xl border border-violet-300/25 bg-violet-300/10 p-5 text-left">
-              <p class="font-semibold text-violet-200">Heliconia gives you a map.</p>
-              <p class="mt-2 text-sm leading-6 text-stone-300">A cave and a narrow forest path appear in violet ink. “Some games can be played in the cave,” she warns. “None of them can be won.”</p>
-            </div>
-            <button data-testid="return-with-cave-map" class="mt-7 rounded-lg bg-rose-300 px-5 py-3 font-semibold text-[#331522] hover:bg-rose-200" @click="goToTown">Return to the map</button>
+            <template v-if="heliconiaReturnVisit">
+              <p class="mx-auto mt-5 max-w-2xl font-serif text-xl leading-9 text-stone-200">“{{ heliconiaMessage }}”</p>
+              <p class="mx-auto mt-5 max-w-xl text-sm leading-6 text-stone-400">She takes the flower between two fingers. For a moment, every impossible road in the world seems lit from within.</p>
+              <button data-testid="return-after-heliconia-counsel" class="mt-7 rounded-lg bg-rose-300 px-5 py-3 font-semibold text-[#331522] hover:bg-rose-200" @click="goToTown">Carry her words back to town</button>
+            </template>
+            <template v-else>
+              <p class="mx-auto mt-5 max-w-2xl font-serif text-xl leading-9 text-stone-200">“I keep faith with lost causes, impossible books, and games whose endings were decided before their beginnings.”</p>
+              <div class="mx-auto mt-6 max-w-xl rounded-xl border border-violet-300/25 bg-violet-300/10 p-5 text-left">
+                <p class="font-semibold text-violet-200">Heliconia gives you a map.</p>
+                <p class="mt-2 text-sm leading-6 text-stone-300">A cave and a narrow forest path appear in violet ink. “Some games can be played in the cave,” she warns. “None of them can be won.”</p>
+              </div>
+              <button data-testid="return-with-cave-map" class="mt-7 rounded-lg bg-rose-300 px-5 py-3 font-semibold text-[#331522] hover:bg-rose-200" @click="goToTown">Return to the map</button>
+            </template>
           </template>
 
           <template v-else-if="game.heliconiaMet">
             <h2 class="mt-7 font-serif text-4xl font-bold">Shrine of Heliconia</h2>
             <p class="mx-auto mt-4 max-w-xl font-serif text-lg leading-8 text-stone-300">The flower is gone. The stone is warm. In your pocket, the goddess’s map still shows the path to the cave.</p>
+            <p class="mt-4 text-sm text-stone-300">In your pack: {{ game.inventory.flower }} {{ game.inventory.flower === 1 ? 'flower' : 'flowers' }}</p>
+            <p class="mx-auto mt-2 max-w-xl text-sm text-stone-500">The offering bowl waits. Heliconia is known to answer those who return to an impossible task.</p>
+            <p v-if="shrineMessage" class="mt-3 text-sm text-rose-300">{{ shrineMessage }}</p>
+            <button data-testid="offer-flower" type="button" class="mt-6 rounded-lg bg-rose-300 px-5 py-3 font-semibold text-[#331522] hover:bg-rose-200" @click="offerFlower">Place another flower on the shrine</button>
           </template>
 
           <template v-else>

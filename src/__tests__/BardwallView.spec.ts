@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { ChapterRevision, ChapterRevisionActivity } from '@/lib/database'
-import { createDefaultBardwallState, getBardwallDateKey, saveBardwallState } from '@/lib/bardwall'
+import { createDefaultBardwallState, getBardwallDateKey, HELICONIA_PERSISTENCE_MESSAGES, saveBardwallState } from '@/lib/bardwall'
 
 const { books, activity, revisions } = vi.hoisted(() => ({
   books: { value: [{ id: 'book-1', title: 'Ghost Stories' }] },
@@ -203,6 +203,33 @@ describe('BardwallView', () => {
       coins: 0,
       inventory: { flower: 0 },
       heliconiaMet: true,
+      caveUnlocked: true,
+      heliconiaVisits: 1,
+    })
+  })
+
+  it('lets a returning bard offer another flower for Heliconia’s counsel', async () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      heliconiaMet: true,
+      heliconiaVisits: 1,
+      caveUnlocked: true,
+      inventory: { ...createDefaultBardwallState().inventory, flower: 1 },
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 0, coinsEarned: 0, locked: false },
+    })
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    await wrapper.get('[data-testid="map-shrine"]').trigger('click')
+    expect(wrapper.text()).toContain('Place another flower on the shrine')
+    await wrapper.get('[data-testid="offer-flower"]').trigger('click')
+
+    expect(wrapper.text()).toContain('The goddess returns')
+    expect(wrapper.text()).toContain(HELICONIA_PERSISTENCE_MESSAGES[0])
+    expect(wrapper.text()).toContain('Carry her words back to town')
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({
+      inventory: { flower: 0 },
+      heliconiaVisits: 2,
       caveUnlocked: true,
     })
   })

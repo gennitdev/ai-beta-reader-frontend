@@ -5,6 +5,19 @@ export const BARDWALL_INN_PRICE = 100
 export const BARDWALL_DAILY_NOURISHMENT = 100
 export const BARDWALL_FLOWER_PRICE = 3
 
+export const HELICONIA_PERSISTENCE_MESSAGES = [
+  'You came back. Most miracles begin with something less dramatic and more difficult: coming back.',
+  'The page does not ask whether you felt brave. It remembers only that you returned.',
+  'A lost cause is merely a cause whose witnesses left too early. Stay a little longer.',
+  'You are allowed to write badly today. Persistence is not perfection; it is the refusal to abandon the road.',
+  'Some days the work advances by a chapter. Some days by a sentence. Both are movement.',
+  'Do not confuse slowness with failure. Roots are slow, and still they split stone.',
+  'The unwinnable game still has moves worth making. The impossible book still has pages worth writing.',
+  'Rest when you must. Returning after rest is also a form of devotion.',
+  'No honest effort is wasted. Even the words you cut taught the surviving words where to stand.',
+  'You need not know how the story ends to keep faith with the next true sentence.',
+] as const
+
 export const BARDWALL_WYRM_POTIONS = [
   { id: 'gold', name: 'Sun-gold cordial', color: '#e7b84b', ailment: 'Gilded Fever', icon: '☀️', description: 'Your skin burns with fever while every shadow appears full of treasure.' },
   { id: 'blue', name: 'Moon-blue tincture', color: '#6ea8d9', ailment: 'The Lost Lexicon', icon: '🌙', description: 'Common words flee from you precisely when you need them.' },
@@ -61,6 +74,7 @@ export interface BardwallState {
   inventory: BardwallInventory
   lastNight: BardwallNightSummary | null
   heliconiaMet: boolean
+  heliconiaVisits: number
   caveUnlocked: boolean
   ailment: BardwallAilment | null
   triedPotionIds: BardwallPotionId[]
@@ -91,6 +105,7 @@ export const createDefaultBardwallState = (): BardwallState => ({
   },
   lastNight: null,
   heliconiaMet: false,
+  heliconiaVisits: 0,
   caveUnlocked: false,
   ailment: null,
   triedPotionIds: [],
@@ -153,6 +168,10 @@ export function loadBardwallState(): BardwallState {
           }
         : null,
       heliconiaMet: Boolean(stored?.heliconiaMet),
+      heliconiaVisits: Math.max(
+        stored?.heliconiaMet ? 1 : 0,
+        Math.floor(Number(stored?.heliconiaVisits) || 0),
+      ),
       caveUnlocked: Boolean(stored?.caveUnlocked),
       ailment: stored?.ailment && typeof stored.ailment === 'object'
         ? (() => {
@@ -233,6 +252,7 @@ export function offerFlowerToHeliconia(state: BardwallState): BardwallState {
     ...state,
     inventory: { ...state.inventory, flower: state.inventory.flower - 1 },
     heliconiaMet: true,
+    heliconiaVisits: state.heliconiaVisits + 1,
     caveUnlocked: true,
   }
 }

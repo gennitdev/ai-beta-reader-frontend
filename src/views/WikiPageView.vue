@@ -1195,21 +1195,11 @@ watch(
 
         <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
           <div class="p-6">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Source Chapters</h3>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Chapters linked to this wiki page as source material.
-                </p>
-              </div>
-              <button
-                v-if="!isEditingLinkedChapters"
-                type="button"
-                class="text-xs font-medium text-gold-600 transition-colors hover:text-gold-700 dark:text-gold-400 dark:hover:text-gold-300"
-                @click="startEditingLinkedChapters"
-              >
-                {{ linkedChapters.length ? 'Edit links' : 'Add links' }}
-              </button>
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Source Chapters</h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Chapters linked to this wiki page as source material.
+              </p>
             </div>
 
             <div v-if="loadingLinkedChapters" class="mt-4 text-sm text-gray-500 dark:text-gray-400">
@@ -1269,6 +1259,15 @@ watch(
             <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
               No source chapters linked yet.
             </p>
+
+            <button
+              v-if="!isEditingLinkedChapters"
+              type="button"
+              class="mt-5 block w-full rounded-md border border-gold-300 px-4 py-2.5 text-center text-sm font-medium text-gold-700 transition-colors hover:border-gold-400 hover:bg-gold-50 dark:border-gold-700 dark:text-gold-300 dark:hover:bg-gold-900/20"
+              @click="startEditingLinkedChapters"
+            >
+              {{ linkedChapters.length ? 'Edit links' : 'Add links' }}
+            </button>
           </div>
         </div>
 
