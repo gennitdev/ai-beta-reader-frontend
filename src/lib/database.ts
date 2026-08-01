@@ -3,7 +3,9 @@ import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import initSqlJs from 'sql.js';
 import type { WikiPageType } from '@/types/bookView';
 import {
+  DATABASE_EXPORT_VERSION,
   IMAGE_ASSET_COLUMNS,
+  WIKI_PAGE_COLUMNS,
   normalizeDatabaseImportData,
   normalizeImageAssetImportRows,
   type CapacitorExportShape,
@@ -1973,7 +1975,7 @@ export class AppDatabase {
       };
 
       const exportData = {
-        version: 4,
+        version: DATABASE_EXPORT_VERSION,
         books,
         chapters: allChapters,
         chapter_revisions: getAllFromTable('chapter_revisions'),
@@ -1981,7 +1983,7 @@ export class AppDatabase {
         book_parts: getAllFromTable('book_parts'),
         chapter_summaries: getAllFromTable('chapter_summaries'),
         part_summaries: getAllFromTable('part_summaries'),
-        wiki_pages: getAllFromTable('wiki_pages'),
+        wiki_pages: getAllObjectsFromTable('wiki_pages', WIKI_PAGE_COLUMNS),
         book_characters: getAllFromTable('book_characters'),
         chapter_reviews: getAllFromTable('chapter_reviews'),
         custom_reviewer_profiles: getAllFromTable('custom_reviewer_profiles'),
@@ -2134,7 +2136,7 @@ export class AppDatabase {
     // Neon exports tables as arrays of objects with column names
     const sourceData = isRecord(jsonData) ? jsonData : {};
     const transformedData: DatabaseImportData = {
-      version: 4,
+      version: DATABASE_EXPORT_VERSION,
       books: [],
       chapters: [],
       chapter_revisions: [],

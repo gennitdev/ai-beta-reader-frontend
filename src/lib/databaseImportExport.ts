@@ -1,3 +1,5 @@
+export const DATABASE_EXPORT_VERSION = 5
+
 export const IMAGE_ASSET_COLUMNS = [
   'id',
   'book_id',
@@ -10,6 +12,23 @@ export const IMAGE_ASSET_COLUMNS = [
   'notes',
   'created_at',
   'updated_at',
+]
+
+export const WIKI_PAGE_COLUMNS = [
+  'id',
+  'book_id',
+  'page_name',
+  'page_type',
+  'content',
+  'summary',
+  'aliases',
+  'tags',
+  'is_major',
+  'created_by_ai',
+  'created_at',
+  'updated_at',
+  'is_pinned',
+  'cover_image_id',
 ]
 
 export type ImportRow = Record<string, unknown> | unknown[]
@@ -98,7 +117,7 @@ export function convertCapacitorExport(exportData: CapacitorExportShape): Databa
   }
 
   return {
-    version: 4,
+    version: DATABASE_EXPORT_VERSION,
     books: rowsToObjects('books'),
     chapters: rowsToObjects('chapters'),
     chapter_revisions: rowsToObjects('chapter_revisions'),

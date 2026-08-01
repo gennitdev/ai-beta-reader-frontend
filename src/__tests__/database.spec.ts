@@ -373,6 +373,38 @@ describe('wiki pages', () => {
       db.createWikiPage({ book_id: 'book-1', page_name: 'Alice', content: '', summary: '' }),
     ).rejects.toThrow()
   })
+
+  it('preserves alternate names through database backup and restore', async () => {
+    const wikiId = await db.createWikiPage({
+      book_id: 'book-1',
+      page_name: 'Alice Liddell',
+      content: '# Alice',
+      summary: 'A hero.',
+      page_type: 'character',
+      aliases: ['Alice', 'Ally'],
+    })
+
+    const backup = await db.exportDatabase()
+    const serialized = JSON.parse(new TextDecoder().decode(backup)) as {
+      version: number
+      wiki_pages: Array<Record<string, unknown>>
+    }
+    expect(serialized.version).toBe(5)
+    expect(serialized.wiki_pages).toContainEqual(expect.objectContaining({
+      id: wikiId,
+      page_name: 'Alice Liddell',
+      aliases: '["Alice","Ally"]',
+    }))
+
+    const restoredDb = await makeDb()
+    await restoredDb.importDatabase(backup)
+
+    expect(await restoredDb.getWikiPageById(wikiId)).toMatchObject({
+      page_name: 'Alice Liddell',
+      aliases: '["Alice","Ally"]',
+    })
+    expect(await restoredDb.getWikiPage('book-1', 'Ally')).toMatchObject({ id: wikiId })
+  })
 })
 
 describe('image assets', () => {
