@@ -15,12 +15,15 @@ import {
   purchaseBardwallFood,
   purchaseBardwallFlower,
   advanceBardwallChallengeDraft,
+  appendBardwallLastWordExchange,
   resolveBardwallChallenge,
   resetBardwallState,
   resolveBardwallNight,
   saveBardwallState,
   startBardwallChallenge,
+  startBardwallLastWordStory,
   toggleBardwallChallengeCard,
+  updateBardwallLastWordDraft,
 } from '@/lib/bardwall'
 
 afterEach(() => localStorage.clear())
@@ -142,6 +145,39 @@ describe('Bardwall game helpers', () => {
     expect(state.inventory.bread).toBe(0)
     expect(BARDWALL_CHALLENGE_CARDS).toHaveLength(18)
     expect(() => startBardwallChallenge(initial, 100, { type: 'coins', amount: 1 }, () => 0)).toThrow('not available')
+  })
+
+  it('persists unfinished Last Word stories, drafts, and equal-turn exchanges', () => {
+    const created = startBardwallLastWordStory(createDefaultBardwallState(), {
+      id: 'echo-1',
+      now: '2026-07-31T12:00:00.000Z',
+    })
+    let state = updateBardwallLastWordDraft(created.state, created.storyId, 'Once beneath the roots')
+    saveBardwallState(state)
+
+    expect(loadBardwallState().lastWordStories[0]).toMatchObject({
+      id: 'echo-1',
+      title: 'An Unfinished Story',
+      draft: 'Once beneath the roots',
+      turns: [],
+    })
+
+    state = appendBardwallLastWordExchange(
+      state,
+      created.storyId,
+      'Once beneath the roots',
+      'something patient opened its eyes',
+      '2026-08-01T12:00:00.000Z',
+    )
+    expect(state.lastWordStories[0]).toMatchObject({
+      title: 'Once beneath the roots',
+      draft: '',
+      updatedAt: '2026-08-01T12:00:00.000Z',
+      turns: [
+        { speaker: 'bard', wordCount: 4 },
+        { speaker: 'cave', wordCount: 5 },
+      ],
+    })
   })
 
   it('applies every wyrm potion as an illness and lets the apothecary heal it', () => {

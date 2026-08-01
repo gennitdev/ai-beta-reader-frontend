@@ -89,6 +89,22 @@ export interface BardwallChallengeState {
   result: BardwallChallengeResult | null
 }
 
+export interface BardwallLastWordTurn {
+  speaker: 'bard' | 'cave'
+  text: string
+  wordCount: number
+  createdAt: string
+}
+
+export interface BardwallLastWordStory {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  draft: string
+  turns: BardwallLastWordTurn[]
+}
+
 export interface BardwallAilment {
   potionId: BardwallPotionId
   name: string
@@ -131,6 +147,7 @@ export interface BardwallState {
   challenge: BardwallChallengeState
   challengesWon: number
   challengesLost: number
+  lastWordStories: BardwallLastWordStory[]
 }
 
 export interface BardwallPassage {
@@ -169,6 +186,7 @@ export const createDefaultBardwallState = (): BardwallState => ({
   challenge: { phase: 'setup', goal: 250, wager: null, cards: [], drawNumber: 0, playerStory: '', result: null },
   challengesWon: 0,
   challengesLost: 0,
+  lastWordStories: [],
 })
 
 const clampMeter = (value: unknown, fallback: number): number => {
@@ -206,6 +224,36 @@ function loadChallenge(value: unknown): BardwallChallengeState {
     playerStory: typeof stored.playerStory === 'string' ? stored.playerStory : '',
     result: stored.result && typeof stored.result === 'object' ? stored.result : null,
   }
+}
+
+function loadLastWordStories(value: unknown): BardwallLastWordStory[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return []
+    const stored = entry as Partial<BardwallLastWordStory>
+    if (typeof stored.id !== 'string' || !stored.id) return []
+    const turns = Array.isArray(stored.turns)
+      ? stored.turns.flatMap((turn) => {
+          if (!turn || typeof turn !== 'object') return []
+          const candidate = turn as Partial<BardwallLastWordTurn>
+          if ((candidate.speaker !== 'bard' && candidate.speaker !== 'cave') || typeof candidate.text !== 'string' || !candidate.text.trim()) return []
+          return [{
+            speaker: candidate.speaker,
+            text: candidate.text,
+            wordCount: countBardwallWords(candidate.text),
+            createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
+          }]
+        })
+      : []
+    return [{
+      id: stored.id,
+      title: typeof stored.title === 'string' && stored.title.trim() ? stored.title : 'An Unfinished Story',
+      createdAt: typeof stored.createdAt === 'string' ? stored.createdAt : '',
+      updatedAt: typeof stored.updatedAt === 'string' ? stored.updatedAt : '',
+      draft: typeof stored.draft === 'string' ? stored.draft : '',
+      turns,
+    }]
+  })
 }
 
 export function getBardwallDateKey(date = new Date()): string {
@@ -270,6 +318,7 @@ export function loadBardwallState(): BardwallState {
       challenge: loadChallenge(stored?.challenge),
       challengesWon: Math.max(0, Math.floor(Number(stored?.challengesWon) || 0)),
       challengesLost: Math.max(0, Math.floor(Number(stored?.challengesLost) || 0)),
+      lastWordStories: loadLastWordStories(stored?.lastWordStories),
     }
   } catch {
     return createDefaultBardwallState()
@@ -286,6 +335,67 @@ export function resetBardwallState(): BardwallState {
   const state = createDefaultBardwallState()
   saveBardwallState(state)
   return state
+}
+
+const createLastWordTitle = (text: string): string => {
+  const words = text.trim().replace(/\s+/g, ' ').split(' ')
+  if (!words[0]) return 'An Unfinished Story'
+  const opening = words.slice(0, 6).join(' ')
+  return words.length > 6 ? `${opening}…` : opening
+}
+
+export function startBardwallLastWordStory(
+  state: BardwallState,
+  options: { id?: string; now?: string } = {},
+): { state: BardwallState; storyId: string } {
+  const now = options.now ?? new Date().toISOString()
+  const storyId = options.id ?? (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `last-word-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const story: BardwallLastWordStory = {
+    id: storyId,
+    title: 'An Unfinished Story',
+    createdAt: now,
+    updatedAt: now,
+    draft: '',
+    turns: [],
+  }
+  return { state: { ...state, lastWordStories: [story, ...state.lastWordStories] }, storyId }
+}
+
+export function updateBardwallLastWordDraft(state: BardwallState, storyId: string, draft: string): BardwallState {
+  return {
+    ...state,
+    lastWordStories: state.lastWordStories.map((story) => story.id === storyId ? { ...story, draft } : story),
+  }
+}
+
+export function appendBardwallLastWordExchange(
+  state: BardwallState,
+  storyId: string,
+  bardText: string,
+  caveText: string,
+  now = new Date().toISOString(),
+): BardwallState {
+  if (!bardText.trim() || !caveText.trim()) throw new Error('Both voices must add words to the story.')
+  return {
+    ...state,
+    lastWordStories: state.lastWordStories.map((story) => {
+      if (story.id !== storyId) return story
+      const firstExchange = story.turns.length === 0
+      return {
+        ...story,
+        title: firstExchange ? createLastWordTitle(bardText) : story.title,
+        updatedAt: now,
+        draft: '',
+        turns: [
+          ...story.turns,
+          { speaker: 'bard', text: bardText.trim(), wordCount: countBardwallWords(bardText), createdAt: now },
+          { speaker: 'cave', text: caveText.trim(), wordCount: countBardwallWords(caveText), createdAt: now },
+        ],
+      }
+    }),
+  }
 }
 
 export function getBardwallPassages(previousText: string, nextText: string): BardwallPassage[] {

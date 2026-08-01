@@ -36,7 +36,10 @@ const { routerPush, routerReplace } = vi.hoisted(() => ({
   routerReplace: vi.fn(async () => {}),
 }))
 
-const { runBardwallStoryChallenge } = vi.hoisted(() => ({ runBardwallStoryChallenge: vi.fn() }))
+const { runBardwallStoryChallenge, continueBardwallLastWordStory } = vi.hoisted(() => ({
+  runBardwallStoryChallenge: vi.fn(),
+  continueBardwallLastWordStory: vi.fn(),
+}))
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: {} }),
@@ -52,7 +55,7 @@ vi.mock('@/composables/useDatabase', () => ({
   }),
 }))
 
-vi.mock('@/lib/openai', () => ({ runBardwallStoryChallenge }))
+vi.mock('@/lib/openai', () => ({ runBardwallStoryChallenge, continueBardwallLastWordStory }))
 
 import BardwallView from '@/views/BardwallView.vue'
 
@@ -61,6 +64,7 @@ afterEach(() => {
   routerPush.mockClear()
   routerReplace.mockClear()
   runBardwallStoryChallenge.mockReset()
+  continueBardwallLastWordStory.mockReset()
 })
 
 describe('BardwallView', () => {
@@ -97,6 +101,44 @@ describe('BardwallView', () => {
     expect(wrapper.text()).toContain('The table is yours.')
     expect(wrapper.text()).toContain('Your three symbols became one inevitable ending.')
     expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({ coins: 22, challengesWon: 1 })
+  })
+
+  it('starts, saves, and continues an unwinnable Last Word story', async () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      caveUnlocked: true,
+      heliconiaMet: true,
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 0, coinsEarned: 0, locked: false },
+    })
+    localStorage.setItem('openai_api_key', 'sk-test')
+    continueBardwallLastWordStory.mockResolvedValue('and something answered from below')
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    await wrapper.get('[data-testid="map-cave"]').trigger('click')
+    await wrapper.get('[data-testid="play-last-word"]').trigger('click')
+    await wrapper.get('[data-testid="new-last-word-story"]').trigger('click')
+    await wrapper.get('[data-testid="last-word-draft"]').setValue('Once beneath the roots')
+
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}').lastWordStories[0].draft).toBe('Once beneath the roots')
+    await wrapper.get('[data-testid="submit-last-word-turn"]').trigger('click')
+    await flushPromises()
+
+    expect(continueBardwallLastWordStory).toHaveBeenCalledWith('sk-test', expect.objectContaining({
+      bardText: 'Once beneath the roots',
+      targetWords: 4,
+    }))
+    expect(wrapper.text()).toContain('It still has the last word.')
+    expect(wrapper.text()).toContain('and something answered from below')
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}').lastWordStories[0]).toMatchObject({
+      title: 'Once beneath the roots',
+      draft: '',
+      turns: [{ speaker: 'bard' }, { speaker: 'cave' }],
+    })
+
+    await wrapper.get('[data-testid="last-word-story-shelf"]').trigger('click')
+    expect(wrapper.text()).toContain('Stories still echoing')
+    expect(wrapper.text()).toContain('1 exchange')
   })
 
   it('requires typed confirmation before beginning Bardwall again', async () => {

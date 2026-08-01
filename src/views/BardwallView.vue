@@ -17,6 +17,7 @@ import {
   HELICONIA_PERSISTENCE_MESSAGES,
   calculateBardwallPay,
   advanceBardwallChallengeDraft,
+  appendBardwallLastWordExchange,
   countBardwallWords,
   getBardwallDateKey,
   getBardwallPassages,
@@ -32,14 +33,16 @@ import {
   resetBardwallState,
   saveBardwallState,
   startBardwallChallenge,
+  startBardwallLastWordStory,
   toggleBardwallChallengeCard,
+  updateBardwallLastWordDraft,
   type BardwallFoodId,
   type BardwallLodging,
   type BardwallPotionId,
   type BardwallPassage,
   type BardwallChallengeWager,
 } from '@/lib/bardwall'
-import { runBardwallStoryChallenge } from '@/lib/openai'
+import { continueBardwallLastWordStory, runBardwallStoryChallenge } from '@/lib/openai'
 
 interface RewardPassage extends BardwallPassage {
   id: string
@@ -54,7 +57,7 @@ interface RevisionOffering {
   wordCount: number
 }
 
-type BardwallScreen = 'gate' | 'goal' | 'town' | 'amphitheater' | 'reward' | 'market' | 'night' | 'morning' | 'inn' | 'shrine' | 'apothecary' | 'camp' | 'challenge' | 'cave' | 'wyrm'
+type BardwallScreen = 'gate' | 'goal' | 'town' | 'amphitheater' | 'reward' | 'market' | 'night' | 'morning' | 'inn' | 'shrine' | 'apothecary' | 'camp' | 'challenge' | 'cave' | 'last-word' | 'wyrm'
 
 const routeLocations = new Set<BardwallLocation>(['amphitheater', 'market', 'inn', 'shrine', 'apothecary', 'camp', 'challenge', 'cave'])
 
@@ -89,6 +92,9 @@ const challengeWagerChoice = ref(game.value.coins >= 1
   : `item:${BARDWALL_FOOD_ITEMS.find((item) => game.value.inventory[item.id] > 0)?.id ?? ''}`)
 const challengeMessage = ref<string | null>(null)
 const judgingChallenge = ref(false)
+const selectedLastWordStoryId = ref<string | null>(null)
+const lastWordMessage = ref<string | null>(null)
+const caveSpeaking = ref(false)
 
 const selectedOffering = computed(() => offerings.value.find((item) => item.id === selectedOfferingId.value) ?? null)
 const selectedPassages = computed(() => selectedOffering.value?.passages.filter((_, index) => selectedPassageIndexes.value.includes(index)) ?? [])
@@ -114,6 +120,9 @@ const challengeCards = computed(() => game.value.challenge.cards.map((draftCard)
 const heldChallengeCards = computed(() => game.value.challenge.cards.filter((card) => card.held).length)
 const challengeStoryWordCount = computed(() => countBardwallWords(game.value.challenge.playerStory))
 const challengeFoodWagers = computed(() => BARDWALL_FOOD_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
+const lastWordStories = computed(() => [...game.value.lastWordStories].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+const selectedLastWordStory = computed(() => game.value.lastWordStories.find((story) => story.id === selectedLastWordStoryId.value) ?? null)
+const lastWordDraftCount = computed(() => countBardwallWords(selectedLastWordStory.value?.draft ?? ''))
 const heliconiaMessage = computed(() => {
   const messageIndex = Math.max(0, game.value.heliconiaVisits - 2) % HELICONIA_PERSISTENCE_MESSAGES.length
   return HELICONIA_PERSISTENCE_MESSAGES[messageIndex]
@@ -192,6 +201,10 @@ const syncScreenFromRoute = async () => {
     screen.value = 'wyrm'
     return
   }
+  if (location === 'cave' && activity === 'last-word') {
+    screen.value = 'last-word'
+    return
+  }
   screen.value = location as BardwallLocation
   if (location === 'amphitheater' && !offerings.value.length && !loadingOfferings.value) {
     await loadOfferings()
@@ -211,6 +224,13 @@ const goToLocation = async (location: BardwallLocation) => {
 const goToWyrmGame = async () => {
   screen.value = 'wyrm'
   await router.push({ name: 'bardwall-location', params: { location: 'cave', activity: 'wyrm' } })
+}
+
+const goToLastWordGame = async () => {
+  screen.value = 'last-word'
+  selectedLastWordStoryId.value = null
+  lastWordMessage.value = null
+  await router.push({ name: 'bardwall-location', params: { location: 'cave', activity: 'last-word' } })
 }
 
 const enterBardwall = async () => {
@@ -392,6 +412,67 @@ const beginAnotherChallenge = () => {
   challengeMessage.value = null
 }
 
+const beginLastWordStory = () => {
+  const created = startBardwallLastWordStory(game.value)
+  game.value = created.state
+  selectedLastWordStoryId.value = created.storyId
+  lastWordMessage.value = null
+  saveBardwallState(game.value)
+}
+
+const openLastWordStory = (storyId: string) => {
+  selectedLastWordStoryId.value = storyId
+  lastWordMessage.value = null
+}
+
+const returnToLastWordShelf = () => {
+  selectedLastWordStoryId.value = null
+  lastWordMessage.value = null
+}
+
+const updateLastWordDraft = (event: Event) => {
+  if (!selectedLastWordStoryId.value) return
+  const draft = (event.target as HTMLTextAreaElement).value
+  game.value = updateBardwallLastWordDraft(game.value, selectedLastWordStoryId.value, draft)
+  saveBardwallState(game.value)
+}
+
+const askCaveToContinue = async () => {
+  const story = selectedLastWordStory.value
+  if (!story || lastWordDraftCount.value < 1 || lastWordDraftCount.value > 2000) return
+  const apiKey = localStorage.getItem('openai_api_key') ?? ''
+  if (!apiKey) {
+    lastWordMessage.value = 'Add your OpenAI API key in Settings before the speaking stones can answer.'
+    return
+  }
+
+  const bardText = story.draft
+  caveSpeaking.value = true
+  lastWordMessage.value = null
+  try {
+    const continuation = await continueBardwallLastWordStory(apiKey, {
+      title: story.title,
+      turns: story.turns.map((turn) => ({ speaker: turn.speaker, text: turn.text })),
+      bardText,
+      targetWords: lastWordDraftCount.value,
+    })
+    game.value = appendBardwallLastWordExchange(game.value, story.id, bardText, continuation)
+    saveBardwallState(game.value)
+    lastWordMessage.value = `You offered ${countBardwallWords(bardText).toLocaleString()} words. The cave answered with ${countBardwallWords(continuation).toLocaleString()}. It still has the last word.`
+  } catch (error) {
+    lastWordMessage.value = error instanceof Error ? error.message : 'The speaking stones fell unexpectedly silent.'
+  } finally {
+    caveSpeaking.value = false
+  }
+}
+
+const formatLastWordDate = (value: string) => {
+  if (!value) return 'Awaiting its first words'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Date unknown'
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+}
+
 const wagerLabel = (wager: BardwallChallengeWager | null) => {
   if (!wager) return 'No wager'
   if (wager.type === 'coins') return `${wager.amount} ${wager.amount === 1 ? 'coin' : 'coins'}`
@@ -516,6 +597,9 @@ const beginBardwallAgain = async () => {
   challengeGoalChoice.value = 250
   challengeWagerChoice.value = 'item:bread'
   challengeMessage.value = null
+  selectedLastWordStoryId.value = null
+  lastWordMessage.value = null
+  caveSpeaking.value = false
   hasEntered.value = false
   screen.value = 'gate'
   closeResetDialog()
@@ -898,11 +982,11 @@ watch(() => [route.params.location, route.params.activity], () => {
           <blockquote class="mx-auto mt-5 max-w-2xl font-serif text-xl italic leading-9 text-violet-100">“Some games can be played in the cave. None of them can be won.”</blockquote>
           <p v-if="game.ailment" class="mx-auto mt-5 max-w-xl rounded-xl border border-lime-300/30 bg-lime-300/10 p-4 text-sm text-lime-100">You are still suffering from {{ game.ailment.name }}. The cave will wait while you seek treatment at Moth & Mortar.</p>
           <div class="mt-8 grid gap-4 text-left sm:grid-cols-2">
-            <article class="rounded-xl border border-stone-600/60 bg-black/30 p-5 opacity-70">
-              <p class="text-xs font-semibold uppercase tracking-wider text-stone-400">Being prepared</p>
+            <article class="rounded-xl border border-violet-300/30 bg-violet-300/5 p-5">
+              <p class="text-xs font-semibold uppercase tracking-wider text-violet-300">The stones are listening</p>
               <h3 class="mt-2 font-serif text-2xl font-semibold">The Game of the Last Word</h3>
-              <p class="mt-3 text-sm leading-6 text-stone-400">The cave continues every story after you try to end it. The speaking stones are not yet ready.</p>
-              <span class="mt-5 inline-block rounded-full bg-stone-700 px-3 py-1 text-xs">Coming soon</span>
+              <p class="mt-3 text-sm leading-6 text-stone-300">Offer the cave any number of words. It will add roughly as many—and ensure that you can never finish the story.</p>
+              <button data-testid="play-last-word" class="mt-5 rounded-lg bg-violet-300 px-4 py-2.5 font-semibold text-[#21182d] hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="Boolean(game.ailment)" @click="goToLastWordGame">Speak to the stones</button>
             </article>
             <article class="rounded-xl border border-amber-300/30 bg-amber-300/5 p-5">
               <p class="text-xs font-semibold uppercase tracking-wider text-amber-300">A table set for one</p>
@@ -911,6 +995,58 @@ watch(() => [route.params.location, route.params.activity], () => {
               <button data-testid="play-wyrms-courtesy" class="mt-5 rounded-lg bg-amber-300 px-4 py-2.5 font-semibold text-[#281d10] hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="Boolean(game.ailment)" @click="goToWyrmGame">Take your seat</button>
             </article>
           </div>
+        </section>
+      </div>
+
+      <div v-else-if="screen === 'last-word'" class="py-8">
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToLocation('cave')"><ArrowLeftIcon class="h-4 w-4" /> Leave the speaking chamber</button>
+        <section class="mx-auto mt-5 max-w-5xl overflow-hidden rounded-2xl border border-violet-300/25 bg-[radial-gradient(circle_at_top,#302546,#0d0b12_62%)] p-6 shadow-2xl sm:p-10">
+          <template v-if="!selectedLastWordStory">
+            <div class="text-center">
+              <p class="text-xs font-semibold uppercase tracking-[0.35em] text-violet-300">The speaking chamber</p>
+              <div class="mt-5 text-6xl">🪨</div>
+              <h2 class="mt-4 font-serif text-4xl font-bold">The Game of the Last Word</h2>
+              <p class="mx-auto mt-5 max-w-2xl font-serif text-xl leading-9 text-violet-100">“Give me a word. Or several. I shall give you as many in return.”</p>
+              <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-stone-400">Begin another story or return to one already echoing in the dark. Every draft waits exactly where you left it. None can ever be finished.</p>
+              <button data-testid="new-last-word-story" class="mt-7 rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#21182d] hover:bg-violet-200" @click="beginLastWordStory">Begin a new story</button>
+            </div>
+
+            <div v-if="lastWordStories.length" class="mt-10 border-t border-violet-200/15 pt-8">
+              <h3 class="font-serif text-2xl font-semibold">Stories still echoing</h3>
+              <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                <button v-for="story in lastWordStories" :key="story.id" :data-testid="`last-word-story-${story.id}`" class="rounded-xl border border-stone-700 bg-black/25 p-5 text-left transition hover:border-violet-300/60 hover:bg-violet-300/5" @click="openLastWordStory(story.id)">
+                  <strong class="block font-serif text-xl text-violet-100">{{ story.title }}</strong>
+                  <span class="mt-2 block text-sm text-stone-400">{{ Math.floor(story.turns.length / 2) }} {{ story.turns.length === 2 ? 'exchange' : 'exchanges' }} · {{ story.turns.reduce((total, turn) => total + turn.wordCount, 0).toLocaleString() }} words</span>
+                  <span class="mt-1 block text-xs text-stone-500">{{ story.draft ? `${countBardwallWords(story.draft).toLocaleString()}-word draft saved · ` : '' }}{{ formatLastWordDate(story.updatedAt) }}</span>
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
+            <button data-testid="last-word-story-shelf" class="inline-flex items-center gap-2 text-sm text-violet-200 hover:text-white" @click="returnToLastWordShelf"><ArrowLeftIcon class="h-4 w-4" /> All unfinished stories</button>
+            <div class="mt-5 text-center">
+              <p class="text-xs font-semibold uppercase tracking-[0.35em] text-violet-300">A story without an ending</p>
+              <h2 class="mt-3 font-serif text-4xl font-bold">{{ selectedLastWordStory.title }}</h2>
+            </div>
+
+            <div data-testid="last-word-transcript" class="mx-auto mt-8 max-w-3xl space-y-4">
+              <div v-if="!selectedLastWordStory.turns.length" class="rounded-xl border border-dashed border-violet-300/30 bg-black/20 p-6 text-center font-serif text-lg italic text-stone-400">The story is waiting for its first word.</div>
+              <article v-for="(turn, index) in selectedLastWordStory.turns" :key="`${turn.createdAt}-${index}`" class="rounded-xl border p-5" :class="turn.speaker === 'cave' ? 'ml-0 border-violet-300/25 bg-violet-300/10 sm:ml-10' : 'mr-0 border-stone-600 bg-black/25 sm:mr-10'">
+                <div class="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wider" :class="turn.speaker === 'cave' ? 'text-violet-300' : 'text-stone-400'"><span>{{ turn.speaker === 'cave' ? 'The cave' : 'You' }}</span><span>{{ turn.wordCount.toLocaleString() }} {{ turn.wordCount === 1 ? 'word' : 'words' }}</span></div>
+                <p class="mt-3 whitespace-pre-wrap font-serif text-lg leading-8 text-stone-200">{{ turn.text }}</p>
+              </article>
+            </div>
+
+            <div class="mx-auto mt-8 max-w-3xl rounded-xl border border-violet-200/20 bg-black/30 p-5">
+              <div class="flex items-center justify-between gap-4 text-sm"><label for="last-word-draft" class="font-semibold">Your next words</label><span :class="lastWordDraftCount > 2000 ? 'text-rose-300' : 'text-stone-400'">{{ lastWordDraftCount.toLocaleString() }} / 2,000 words</span></div>
+              <textarea id="last-word-draft" data-testid="last-word-draft" :value="selectedLastWordStory.draft" class="mt-3 min-h-56 w-full rounded-xl border border-stone-600 bg-[#0b0910] p-4 font-serif text-lg leading-8 text-stone-100 outline-none focus:border-violet-300 disabled:opacity-60" placeholder="Write one word or a thousand…" :disabled="caveSpeaking" @input="updateLastWordDraft"></textarea>
+              <p class="mt-3 text-xs leading-5 text-stone-400">Your draft is saved locally as you write. The cave will answer with approximately the same number of words, then save both turns.</p>
+              <p v-if="lastWordMessage" class="mt-4 rounded-lg border p-3 text-sm" :class="lastWordMessage.includes('last word') ? 'border-violet-300/25 bg-violet-300/10 text-violet-100' : 'border-rose-300/25 bg-rose-300/10 text-rose-200'">{{ lastWordMessage }} <button v-if="lastWordMessage.includes('OpenAI')" class="ml-1 underline" @click="router.push('/settings')">Open Settings</button></p>
+              <button data-testid="submit-last-word-turn" class="mt-5 w-full rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#21182d] hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="lastWordDraftCount < 1 || lastWordDraftCount > 2000 || caveSpeaking" @click="askCaveToContinue">{{ caveSpeaking ? 'The stones are finding their words…' : 'Give the cave your words' }}</button>
+            </div>
+            <p class="mt-6 text-center font-serif italic text-stone-400">You may leave whenever you wish. The cave will remember what comes next.</p>
+          </template>
         </section>
       </div>
 

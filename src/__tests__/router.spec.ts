@@ -27,6 +27,10 @@ describe('router', () => {
     const wyrm = router.resolve('/bardwall/cave/wyrm')
     expect(wyrm.name).toBe('bardwall-location')
     expect(wyrm.params).toMatchObject({ location: 'cave', activity: 'wyrm' })
+
+    const lastWord = router.resolve('/bardwall/cave/last-word')
+    expect(lastWord.name).toBe('bardwall-location')
+    expect(lastWord.params).toMatchObject({ location: 'cave', activity: 'last-word' })
   })
 
   it('nests chapter/part/wiki routes under the book route', () => {
