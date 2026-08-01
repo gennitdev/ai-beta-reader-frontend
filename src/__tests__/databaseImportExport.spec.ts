@@ -54,6 +54,7 @@ describe('database import/export helpers', () => {
       },
     })
 
+    expect(normalized.version).toBe(5)
     expect(normalized.wiki_pages).toEqual([
       {
         id: 'wiki-1',

@@ -16,7 +16,17 @@ vi.mock('@capacitor/core', () => ({
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
-const EXPORT = { books: [{ id: 'b1', title: 'My Book' }], image_assets: [] }
+const EXPORT = {
+  version: 5,
+  books: [{ id: 'b1', title: 'My Book' }],
+  wiki_pages: [{
+    id: 'wiki-1',
+    book_id: 'b1',
+    page_name: 'Alice Liddell',
+    aliases: '["Alice","Ally"]',
+  }],
+  image_assets: [],
+}
 
 function fakeProvider(overrides: Partial<CloudProvider> = {}) {
   let stored: string | null = null
