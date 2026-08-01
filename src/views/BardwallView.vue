@@ -21,6 +21,7 @@ import {
   purchaseBardwallFlower,
   drinkWyrmPotion,
   resolveBardwallNight,
+  resetBardwallState,
   saveBardwallState,
   type BardwallFoodId,
   type BardwallLodging,
@@ -67,6 +68,8 @@ const innAdviceShown = ref(false)
 const heliconiaEncounterActive = ref(false)
 const shrineMessage = ref<string | null>(null)
 const treatmentMessage = ref<string | null>(null)
+const showResetDialog = ref(false)
+const resetConfirmation = ref('')
 
 const selectedOffering = computed(() => offerings.value.find((item) => item.id === selectedOfferingId.value) ?? null)
 const selectedPassages = computed(() => selectedOffering.value?.passages.filter((_, index) => selectedPassageIndexes.value.includes(index)) ?? [])
@@ -85,6 +88,7 @@ const selectedNourishment = computed(() => BARDWALL_MARKET_ITEMS.reduce((total, 
 ), 0))
 const nourishmentDeficit = computed(() => Math.max(0, BARDWALL_DAILY_NOURISHMENT - selectedNourishment.value))
 const foodInventory = computed(() => BARDWALL_MARKET_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
+const canResetBardwall = computed(() => resetConfirmation.value.trim() === 'BARDWALL')
 
 const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
   month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -351,6 +355,36 @@ const beginNextDay = () => {
   screen.value = 'goal'
 }
 
+const closeResetDialog = () => {
+  showResetDialog.value = false
+  resetConfirmation.value = ''
+}
+
+const beginBardwallAgain = async () => {
+  if (!canResetBardwall.value) return
+
+  game.value = resetBardwallState()
+  offerings.value = []
+  offeringError.value = null
+  selectedOfferingId.value = null
+  selectedPassageIndexes.value = []
+  lastReward.value = { coins: 0, words: 0 }
+  goalChoice.value = 500
+  customGoal.value = ''
+  marketMessage.value = null
+  lodgingChoice.value = 'tent'
+  mealSelection.value = {}
+  nightError.value = null
+  innAdviceShown.value = false
+  heliconiaEncounterActive.value = false
+  shrineMessage.value = null
+  treatmentMessage.value = null
+  hasEntered.value = false
+  screen.value = 'gate'
+  closeResetDialog()
+  await router.replace({ name: 'bardwall' })
+}
+
 onMounted(() => {
   game.value = loadBardwallState()
   void syncScreenFromRoute()
@@ -390,6 +424,14 @@ watch(() => [route.params.location, route.params.activity], () => {
           <span>🍽️ {{ game.hunger }} hunger</span>
           <span v-if="game.ailment" class="font-semibold text-lime-300">{{ game.ailment.icon }} {{ game.ailment.name }}</span>
           <span>{{ game.storiesTold }} stories told</span>
+          <button
+            data-testid="begin-bardwall-again"
+            type="button"
+            class="rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-400 transition hover:border-stone-500 hover:text-stone-200"
+            @click="showResetDialog = true"
+          >
+            Begin Bardwall Again
+          </button>
         </div>
       </header>
 
@@ -868,5 +910,57 @@ watch(() => [route.params.location, route.params.activity], () => {
         </div>
       </div>
     </section>
+
+    <Teleport to="body">
+      <div
+        v-if="showResetDialog"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+        @keydown.esc="closeResetDialog"
+      >
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-bardwall-title"
+          class="w-full max-w-lg rounded-2xl border border-amber-300/30 bg-[#111d18] p-6 text-stone-100 shadow-2xl sm:p-8"
+        >
+          <p class="text-xs font-semibold uppercase tracking-[0.28em] text-amber-300">Begin a new tale</p>
+          <h2 id="reset-bardwall-title" class="mt-2 font-serif text-3xl font-bold">Begin Bardwall again?</h2>
+          <p class="mt-4 leading-7 text-stone-300">
+            This permanently resets your coins, inventory, daily progress, energy, hunger, unlocked locations, ailments, challenges, and stories told.
+          </p>
+          <p class="mt-3 text-sm leading-6 text-stone-400">
+            Your books, chapters, revisions, and writing activity will not be changed.
+          </p>
+
+          <label for="reset-bardwall-confirmation" class="mt-6 block text-sm font-medium text-stone-200">
+            Type <strong class="text-amber-300">BARDWALL</strong> to confirm
+          </label>
+          <input
+            id="reset-bardwall-confirmation"
+            v-model="resetConfirmation"
+            data-testid="reset-bardwall-confirmation"
+            type="text"
+            autocomplete="off"
+            class="mt-2 w-full rounded-lg border border-stone-600 bg-black/20 px-3 py-2.5 text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
+            placeholder="BARDWALL"
+          />
+
+          <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button type="button" class="rounded-lg border border-stone-600 px-4 py-2.5 text-sm font-semibold text-stone-300 hover:border-stone-400 hover:text-white" @click="closeResetDialog">
+              Keep this tale
+            </button>
+            <button
+              data-testid="confirm-reset-bardwall"
+              type="button"
+              class="rounded-lg bg-amber-300 px-4 py-2.5 text-sm font-semibold text-[#13241d] transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="!canResetBardwall"
+              @click="beginBardwallAgain"
+            >
+              Begin again
+            </button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
   </main>
 </template>

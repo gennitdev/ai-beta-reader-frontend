@@ -12,6 +12,7 @@ import {
   offerFlowerToHeliconia,
   purchaseBardwallFood,
   purchaseBardwallFlower,
+  resetBardwallState,
   resolveBardwallNight,
   saveBardwallState,
 } from '@/lib/bardwall'
@@ -76,6 +77,20 @@ describe('Bardwall game helpers', () => {
       ailment: null,
       triedPotionIds: [],
     })
+  })
+
+  it('resets all Bardwall progress to a new game', () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      coins: 240,
+      day: 6,
+      caveUnlocked: true,
+      storiesTold: 9,
+      inventory: { ...createDefaultBardwallState().inventory, bread: 4, flower: 1 },
+    })
+
+    expect(resetBardwallState()).toEqual(createDefaultBardwallState())
+    expect(loadBardwallState()).toEqual(createDefaultBardwallState())
   })
 
   it('gives existing Bardwall saves the starter inventory when migrating', () => {

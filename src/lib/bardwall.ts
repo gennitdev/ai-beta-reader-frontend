@@ -177,6 +177,12 @@ export function saveBardwallState(state: BardwallState): void {
   }
 }
 
+export function resetBardwallState(): BardwallState {
+  const state = createDefaultBardwallState()
+  saveBardwallState(state)
+  return state
+}
+
 export function getBardwallPassages(previousText: string, nextText: string): BardwallPassage[] {
   return createRevisionDiff(previousText, nextText)
     .filter((segment) => segment.type === 'added')

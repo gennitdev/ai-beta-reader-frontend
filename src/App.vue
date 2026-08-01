@@ -523,9 +523,9 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
           <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeSideNav" />
           <div
             id="side-nav"
-            class="absolute inset-y-0 left-0 flex h-full w-72 max-w-[85%] flex-col bg-white px-6 py-6 shadow-xl dark:bg-navy-900"
+            class="absolute inset-y-0 left-0 flex h-full min-h-0 w-72 max-w-[85%] flex-col overflow-hidden bg-white px-6 py-6 shadow-xl dark:bg-navy-900"
           >
-            <div class="mb-4 flex items-start justify-between">
+            <div class="mb-4 flex shrink-0 items-start justify-between">
               <router-link
                 to="/"
                 class="block overflow-hidden rounded-xl ring-1 ring-navy-900/10 transition-opacity hover:opacity-90"
@@ -543,7 +543,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               </button>
             </div>
 
-            <nav class="flex-1 space-y-1 overflow-y-auto">
+            <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-6 pr-1">
               <RouterLink
                 v-for="item in standardSideNavItems"
                 :key="item.to"
@@ -564,6 +564,28 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
                   <span>{{ item.label }}</span>
                 </a>
               </RouterLink>
+
+              <!-- Books section -->
+              <template v-if="sortedBooks.length">
+                <div class="pt-4 pb-2">
+                  <h3 class="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    My Books
+                  </h3>
+                </div>
+                <router-link
+                  v-for="book in sortedBooks"
+                  :key="book.id"
+                  :to="`/books/${book.id}`"
+                  class="block rounded-lg px-3 py-1.5 text-sm leading-snug transition-colors"
+                  :class="isBookActive(book.id)
+                    ? 'bg-gold-100 text-gold-600 dark:bg-gold-900/40 dark:text-gold-300'
+                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-navy-800'"
+                  :aria-current="isBookActive(book.id) ? 'page' : undefined"
+                  @click="closeSideNav"
+                >
+                  {{ book.title || book.id }}
+                </router-link>
+              </template>
 
               <section v-if="featuredSideNavItems.length" class="mx-1 my-4 border-y border-amber-200/80 py-4 dark:border-amber-700/30">
                 <p class="px-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300">
@@ -595,28 +617,6 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
                   </a>
                 </RouterLink>
               </section>
-
-              <!-- Books section -->
-              <template v-if="sortedBooks.length">
-                <div class="pt-4 pb-2">
-                  <h3 class="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    My Books
-                  </h3>
-                </div>
-                <router-link
-                  v-for="book in sortedBooks"
-                  :key="book.id"
-                  :to="`/books/${book.id}`"
-                  class="block rounded-lg px-3 py-1.5 text-sm leading-snug transition-colors"
-                  :class="isBookActive(book.id)
-                    ? 'bg-gold-100 text-gold-600 dark:bg-gold-900/40 dark:text-gold-300'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-navy-800'"
-                  :aria-current="isBookActive(book.id) ? 'page' : undefined"
-                  @click="closeSideNav"
-                >
-                  {{ book.title || book.id }}
-                </router-link>
-              </template>
             </nav>
           </div>
         </div>

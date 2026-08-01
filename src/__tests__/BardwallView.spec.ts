@@ -59,6 +59,38 @@ afterEach(() => {
 })
 
 describe('BardwallView', () => {
+  it('requires typed confirmation before beginning Bardwall again', async () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      coins: 240,
+      day: 6,
+      caveUnlocked: true,
+      heliconiaMet: true,
+      storiesTold: 9,
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 500, coinsEarned: 100, locked: true },
+    })
+    const wrapper = mount(BardwallView, { attachTo: document.body })
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    await wrapper.get('[data-testid="begin-bardwall-again"]').trigger('click')
+    expect(document.body.textContent).toContain('Your books, chapters, revisions, and writing activity will not be changed.')
+
+    const confirmButton = document.body.querySelector<HTMLButtonElement>('[data-testid="confirm-reset-bardwall"]')
+    expect(confirmButton?.disabled).toBe(true)
+    const confirmationInput = document.body.querySelector<HTMLInputElement>('[data-testid="reset-bardwall-confirmation"]')
+    confirmationInput!.value = 'BARDWALL'
+    confirmationInput!.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+    expect(confirmButton?.disabled).toBe(false)
+    confirmButton?.click()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Enter Bardwall')
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toEqual(createDefaultBardwallState())
+    expect(routerReplace).toHaveBeenCalledWith({ name: 'bardwall' })
+    wrapper.unmount()
+  })
+
   it('completes the amphitheater story and coin loop', async () => {
     const wrapper = mount(BardwallView)
 
