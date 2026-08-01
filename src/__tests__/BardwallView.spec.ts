@@ -77,8 +77,10 @@ describe('BardwallView', () => {
     localStorage.setItem('openai_api_key', 'sk-test')
     runBardwallStoryChallenge.mockResolvedValue({
       outcome: 'win', rivalStory: 'Orla told a moonlit story.', explanation: 'Your three symbols became one inevitable ending.',
-      playerScores: { cards: 9, coherence: 9, invention: 9, language: 9, length: 10 },
-      rivalScores: { cards: 8, coherence: 8, invention: 8, language: 8, length: 10 },
+      playerScores: { sceneSpecificity: 9, characterAgency: 9, narrativeMovement: 9, craftCoherence: 9, promptIntegration: 10 },
+      rivalScores: { sceneSpecificity: 8, characterAgency: 8, narrativeMovement: 8, craftCoherence: 8, promptIntegration: 10 },
+      playerLengthPenalty: 0,
+      rivalLengthPenalty: 0,
     })
     const wrapper = mount(BardwallView)
 
@@ -92,14 +94,27 @@ describe('BardwallView', () => {
     for (const card of cards) await card.trigger('click')
     await wrapper.get('[data-testid="advance-challenge-draft"]').trigger('click')
 
+    expect(wrapper.get('[data-testid="challenge-rubric"]').text()).toContain('Scene & specificity')
+    expect(wrapper.get('[data-testid="challenge-rubric"]').text()).toContain('Character & agency')
+    expect(wrapper.text()).toContain('required 90–110')
+
+    const oversizedStory = Array.from({ length: 111 }, (_, index) => `word${index}`).join(' ')
+    await wrapper.get('[data-testid="challenge-story"]').setValue(oversizedStory)
+    expect(wrapper.get('[data-testid="challenge-word-guidance"]').text()).toBe('Cut at least 1 word.')
+    expect(wrapper.get('[data-testid="submit-challenge-story"]').attributes('disabled')).toBeDefined()
+
     const story = Array.from({ length: 100 }, (_, index) => `word${index}`).join(' ')
     await wrapper.get('[data-testid="challenge-story"]').setValue(story)
+    expect(wrapper.get('[data-testid="challenge-word-guidance"]').text()).toBe('Your story is within the challenge range.')
+    expect(wrapper.get('[data-testid="submit-challenge-story"]').attributes('disabled')).toBeUndefined()
     await wrapper.get('[data-testid="submit-challenge-story"]').trigger('click')
     await flushPromises()
 
     expect(runBardwallStoryChallenge).toHaveBeenCalledOnce()
     expect(wrapper.text()).toContain('The table is yours.')
     expect(wrapper.text()).toContain('Your three symbols became one inevitable ending.')
+    expect(wrapper.get('[data-testid="challenge-story-comparison"]').text()).toContain(story)
+    expect(wrapper.get('[data-testid="challenge-story-comparison"]').text()).toContain('Orla told a moonlit story.')
     expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({ coins: 22, challengesWon: 1 })
   })
 

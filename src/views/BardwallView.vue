@@ -13,6 +13,7 @@ import {
   BARDWALL_CHALLENGE_CARDS,
   BARDWALL_FOOD_ITEMS,
   BARDWALL_MARKET_ITEMS,
+  BARDWALL_STORY_RUBRIC,
   BARDWALL_WYRM_POTIONS,
   HELICONIA_PERSISTENCE_MESSAGES,
   calculateBardwallPay,
@@ -20,6 +21,7 @@ import {
   appendBardwallLastWordExchange,
   countBardwallWords,
   getBardwallDateKey,
+  getBardwallChallengeWordRange,
   getBardwallPassages,
   healBardAtApothecary,
   loadBardwallState,
@@ -41,6 +43,7 @@ import {
   type BardwallPotionId,
   type BardwallPassage,
   type BardwallChallengeWager,
+  type BardwallChallengeScores,
 } from '@/lib/bardwall'
 import { continueBardwallLastWordStory, runBardwallStoryChallenge } from '@/lib/openai'
 
@@ -119,6 +122,19 @@ const challengeCards = computed(() => game.value.challenge.cards.map((draftCard)
 })))
 const heldChallengeCards = computed(() => game.value.challenge.cards.filter((card) => card.held).length)
 const challengeStoryWordCount = computed(() => countBardwallWords(game.value.challenge.playerStory))
+const challengeWordRange = computed(() => getBardwallChallengeWordRange(game.value.challenge.goal))
+const challengeStoryInRange = computed(() => challengeStoryWordCount.value >= challengeWordRange.value.minimum && challengeStoryWordCount.value <= challengeWordRange.value.maximum)
+const challengeWordGuidance = computed(() => {
+  if (challengeStoryWordCount.value < challengeWordRange.value.minimum) {
+    const remaining = challengeWordRange.value.minimum - challengeStoryWordCount.value
+    return `Write at least ${remaining.toLocaleString()} more ${remaining === 1 ? 'word' : 'words'}.`
+  }
+  if (challengeStoryWordCount.value > challengeWordRange.value.maximum) {
+    const excess = challengeStoryWordCount.value - challengeWordRange.value.maximum
+    return `Cut at least ${excess.toLocaleString()} ${excess === 1 ? 'word' : 'words'}.`
+  }
+  return 'Your story is within the challenge range.'
+})
 const challengeFoodWagers = computed(() => BARDWALL_FOOD_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
 const lastWordStories = computed(() => [...game.value.lastWordStories].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
 const selectedLastWordStory = computed(() => game.value.lastWordStories.find((story) => story.id === selectedLastWordStoryId.value) ?? null)
@@ -382,7 +398,7 @@ const updateChallengeStory = (event: Event) => {
 }
 
 const judgeChallenge = async () => {
-  if (challengeStoryWordCount.value < game.value.challenge.goal) return
+  if (!challengeStoryInRange.value) return
   const apiKey = localStorage.getItem('openai_api_key')
   if (!apiKey) {
     challengeMessage.value = 'Add your OpenAI API key in Settings before the other bards can take their seats.'
@@ -478,7 +494,7 @@ const wagerLabel = (wager: BardwallChallengeWager | null) => {
   if (wager.type === 'coins') return `${wager.amount} ${wager.amount === 1 ? 'coin' : 'coins'}`
   return BARDWALL_FOOD_ITEMS.find((item) => item.id === wager.itemId)?.name ?? 'one item'
 }
-const scoreTotal = (scores: { cards: number; coherence: number; invention: number; language: number; length: number }) => Object.values(scores).reduce((total, score) => total + score, 0)
+const scoreTotal = (scores: BardwallChallengeScores, lengthPenalty = 0) => Math.max(0, Object.values(scores).reduce((total, score) => total + score, 0) - lengthPenalty)
 
 const buyFlower = () => {
   try {
@@ -895,15 +911,15 @@ watch(() => [route.params.location, route.params.activity], () => {
 
       <div v-else-if="screen === 'challenge'" class="py-8">
         <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
-        <section class="mx-auto mt-5 max-w-5xl overflow-hidden rounded-2xl border border-orange-200/20 bg-[linear-gradient(145deg,#33251c,#151311)] shadow-2xl">
+        <section class="mx-auto mt-5 max-w-6xl overflow-hidden rounded-2xl border border-orange-200/20 bg-[linear-gradient(145deg,#33251c,#151311)] shadow-2xl">
           <header class="border-b border-orange-200/15 bg-black/20 p-7 sm:p-9">
             <p class="text-xs font-semibold uppercase tracking-[0.3em] text-orange-300">Coffee, company, and dangerous confidence</p>
             <h2 class="mt-2 font-serif text-4xl font-bold">Ink & Ember Coffeehouse</h2>
             <p class="mt-3 max-w-3xl font-serif text-lg leading-8 text-stone-300">Bards crowd the long tables with ink-stained cups and stories they swear are almost finished. Orla Fen waves you over. Tamsin Quill is already shuffling the painted deck.</p>
           </header>
 
-          <div class="grid gap-6 p-6 lg:grid-cols-[0.7fr_1.3fr] sm:p-8">
-            <aside class="space-y-4">
+          <div class="grid gap-6 p-6 sm:p-8" :class="game.challenge.phase === 'result' ? 'lg:grid-cols-1' : 'lg:grid-cols-[0.7fr_1.3fr]'">
+            <aside v-if="game.challenge.phase !== 'result'" class="space-y-4">
               <section class="rounded-xl border border-orange-200/15 bg-black/20 p-5">
                 <h3 class="font-serif text-xl font-semibold">At the counter</h3>
                 <div class="mt-4 space-y-3">
@@ -953,19 +969,43 @@ watch(() => [route.params.location, route.params.activity], () => {
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-orange-300">The cards are set · {{ wagerLabel(game.challenge.wager) }} wagered</p>
                 <h3 class="mt-2 font-serif text-3xl font-bold">Tell your story.</h3>
                 <div class="mt-5 grid gap-2 sm:grid-cols-3"><div v-for="entry in challengeCards" :key="entry.card.id" class="rounded-lg border border-orange-200/20 bg-orange-200/5 p-3"><span class="text-xl">{{ entry.card.icon }}</span><strong class="ml-2 text-sm">{{ entry.card.name }}</strong><p class="mt-2 text-xs text-stone-400">{{ entry.card.meaning }}</p></div></div>
-                <div class="mt-5 flex items-center justify-between text-sm"><label for="challenge-story" class="font-semibold">Your telling</label><span :class="challengeStoryWordCount >= game.challenge.goal ? 'text-emerald-300' : 'text-stone-400'">{{ challengeStoryWordCount.toLocaleString() }} / {{ game.challenge.goal.toLocaleString() }} words</span></div>
+                <section data-testid="challenge-rubric" class="mt-5 rounded-xl border border-orange-200/20 bg-orange-200/5 p-4">
+                  <h4 class="font-serif text-lg font-semibold text-orange-100">How Tamsin judges</h4>
+                  <p class="mt-1 text-xs leading-5 text-stone-400">Each category is worth 10 points. Both stories must meet the same word-count range before Tamsin will judge them.</p>
+                  <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div v-for="item in BARDWALL_STORY_RUBRIC" :key="item.key" class="rounded-lg border border-stone-700/70 bg-black/20 p-3">
+                      <strong class="block text-sm text-stone-200">{{ item.name }}</strong>
+                      <span class="mt-1 block text-xs leading-5 text-stone-400">{{ item.description }}</span>
+                    </div>
+                  </div>
+                </section>
+                <div class="mt-5 flex flex-wrap items-center justify-between gap-2 text-sm"><label for="challenge-story" class="font-semibold">Your telling</label><span :class="challengeStoryInRange ? 'text-emerald-300' : 'text-stone-400'">{{ challengeStoryWordCount.toLocaleString() }} words · required {{ challengeWordRange.minimum.toLocaleString() }}–{{ challengeWordRange.maximum.toLocaleString() }}</span></div>
                 <textarea id="challenge-story" data-testid="challenge-story" :value="game.challenge.playerStory" class="mt-2 min-h-80 w-full rounded-xl border border-stone-600 bg-[#110f0e] p-4 font-serif leading-7 text-stone-100 outline-none focus:border-orange-200" placeholder="Begin the story…" @input="updateChallengeStory"></textarea>
-                <p class="mt-3 text-xs text-stone-500">Your draft is saved locally as you write. The judge considers card use, coherence, invention, language, and whether you substantially met the chosen length.</p>
-                <button data-testid="submit-challenge-story" class="mt-5 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40" :disabled="challengeStoryWordCount < game.challenge.goal || judgingChallenge" @click="judgeChallenge">{{ judgingChallenge ? 'Orla tells her story; Tamsin deliberates…' : 'Tell the story at the table' }}</button>
+                <p data-testid="challenge-word-guidance" class="mt-2 text-sm font-medium" :class="challengeStoryInRange ? 'text-emerald-300' : challengeStoryWordCount > challengeWordRange.maximum ? 'text-rose-300' : 'text-stone-400'">{{ challengeWordGuidance }}</p>
+                <p class="mt-3 text-xs text-stone-500">Your draft is saved locally as you write. Concrete events, character choices, and meaningful card use matter more than polished abstraction.</p>
+                <button data-testid="submit-challenge-story" class="mt-5 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40" :disabled="!challengeStoryInRange || judgingChallenge" @click="judgeChallenge">{{ judgingChallenge ? 'Orla tells her story; Tamsin deliberates…' : 'Tell the story at the table' }}</button>
               </template>
 
               <template v-else-if="game.challenge.result">
                 <p class="text-xs font-semibold uppercase tracking-[0.25em]" :class="game.challenge.result.outcome === 'win' ? 'text-emerald-300' : game.challenge.result.outcome === 'lose' ? 'text-rose-300' : 'text-sky-300'">Tamsin Quill’s decision</p>
                 <h3 class="mt-2 font-serif text-4xl font-bold">{{ game.challenge.result.outcome === 'win' ? 'The table is yours.' : game.challenge.result.outcome === 'lose' ? 'Orla takes the stakes.' : 'A draw. Your wager returns.' }}</h3>
                 <p class="mt-4 font-serif text-lg leading-8 text-stone-300">“{{ game.challenge.result.explanation }}”</p>
-                <div class="mt-6 grid gap-3 sm:grid-cols-2"><div class="rounded-xl border border-stone-700 p-4"><p class="text-sm font-semibold">Your story</p><p class="mt-2 text-3xl font-bold text-orange-200">{{ scoreTotal(game.challenge.result.playerScores) }} / 50</p></div><div class="rounded-xl border border-stone-700 p-4"><p class="text-sm font-semibold">Orla Fen</p><p class="mt-2 text-3xl font-bold text-violet-200">{{ scoreTotal(game.challenge.result.rivalScores) }} / 50</p></div></div>
-                <div class="mt-4 grid grid-cols-5 gap-1 text-center text-[10px] text-stone-400"><span v-for="label in ['Cards', 'Coherence', 'Invention', 'Language', 'Length']" :key="label">{{ label }}</span><template v-for="(scores, scoreIndex) in [game.challenge.result.playerScores, game.challenge.result.rivalScores]" :key="scoreIndex"><span>{{ scores.cards }}</span><span>{{ scores.coherence }}</span><span>{{ scores.invention }}</span><span>{{ scores.language }}</span><span>{{ scores.length }}</span></template></div>
-                <details class="mt-6 rounded-xl border border-stone-700 bg-black/20 p-4"><summary class="cursor-pointer font-semibold">Read Orla’s story</summary><p class="mt-4 whitespace-pre-wrap font-serif leading-7 text-stone-300">{{ game.challenge.result.rivalStory }}</p></details>
+                <div data-testid="challenge-story-comparison" class="mt-7 grid items-start gap-4 md:grid-cols-2">
+                  <article class="rounded-xl border border-orange-200/25 bg-orange-200/5 p-5">
+                    <div class="flex items-center justify-between gap-3"><h4 class="font-serif text-xl font-semibold text-orange-100">Your story</h4><span class="text-xs text-stone-400">{{ countBardwallWords(game.challenge.playerStory).toLocaleString() }} words</span></div>
+                    <p class="mt-4 whitespace-pre-wrap font-serif text-base leading-7 text-stone-200">{{ game.challenge.playerStory }}</p>
+                  </article>
+                  <article class="rounded-xl border border-violet-200/25 bg-violet-200/5 p-5">
+                    <div class="flex items-center justify-between gap-3"><h4 class="font-serif text-xl font-semibold text-violet-100">Orla Fen’s story</h4><span class="text-xs text-stone-400">{{ countBardwallWords(game.challenge.result.rivalStory).toLocaleString() }} words</span></div>
+                    <p class="mt-4 whitespace-pre-wrap font-serif text-base leading-7 text-stone-200">{{ game.challenge.result.rivalStory }}</p>
+                  </article>
+                </div>
+                <section class="mt-6 rounded-xl border border-stone-700 bg-black/20 p-5">
+                  <div class="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] gap-2 border-b border-stone-700 pb-3 text-sm font-semibold"><span>Scoring rubric</span><span class="text-center text-orange-200">You</span><span class="text-center text-violet-200">Orla</span></div>
+                  <div v-for="item in BARDWALL_STORY_RUBRIC" :key="item.key" class="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2 border-b border-stone-800 py-3 text-sm"><div><strong class="block text-stone-200">{{ item.name }}</strong><span class="mt-0.5 block text-xs leading-5 text-stone-500">{{ item.description }}</span></div><span class="text-center text-orange-100">{{ game.challenge.result.playerScores[item.key] }} / 10</span><span class="text-center text-violet-100">{{ game.challenge.result.rivalScores[item.key] }} / 10</span></div>
+                  <div v-if="game.challenge.result.playerLengthPenalty || game.challenge.result.rivalLengthPenalty" class="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2 border-b border-stone-800 py-3 text-sm text-rose-200"><span>Length deduction</span><span class="text-center">−{{ game.challenge.result.playerLengthPenalty }}</span><span class="text-center">−{{ game.challenge.result.rivalLengthPenalty }}</span></div>
+                  <div class="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2 pt-4 font-semibold"><span>Adjusted total</span><span class="text-center text-xl text-orange-200">{{ scoreTotal(game.challenge.result.playerScores, game.challenge.result.playerLengthPenalty) }}</span><span class="text-center text-xl text-violet-200">{{ scoreTotal(game.challenge.result.rivalScores, game.challenge.result.rivalLengthPenalty) }}</span></div>
+                </section>
                 <button data-testid="another-coffeehouse-challenge" class="mt-6 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100" @click="beginAnotherChallenge">Play another round</button>
               </template>
             </main>

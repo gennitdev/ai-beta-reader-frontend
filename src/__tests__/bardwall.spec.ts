@@ -8,6 +8,7 @@ import {
   createDefaultBardwallState,
   drinkWyrmPotion,
   getBardwallDateKey,
+  getBardwallChallengeWordRange,
   getBardwallPassages,
   healBardAtApothecary,
   loadBardwallState,
@@ -44,6 +45,13 @@ describe('Bardwall game helpers', () => {
 
   it('uses the writer local calendar day for daily goals', () => {
     expect(getBardwallDateKey(new Date(2026, 6, 31, 23, 30))).toBe('2026-07-31')
+  })
+
+  it('gives every challenge category a ten-percent word range', () => {
+    expect(getBardwallChallengeWordRange(100)).toEqual({ minimum: 90, maximum: 110 })
+    expect(getBardwallChallengeWordRange(250)).toEqual({ minimum: 225, maximum: 275 })
+    expect(getBardwallChallengeWordRange(500)).toEqual({ minimum: 450, maximum: 550 })
+    expect(getBardwallChallengeWordRange(1000)).toEqual({ minimum: 900, maximum: 1100 })
   })
 
   it('persists progress and safely handles invalid storage', () => {
@@ -91,6 +99,37 @@ describe('Bardwall game helpers', () => {
     })
   })
 
+  it('keeps legacy challenge results readable under the new rubric', () => {
+    const legacy = createDefaultBardwallState() as unknown as Record<string, unknown>
+    legacy.challenge = {
+      phase: 'result',
+      goal: 100,
+      wager: { type: 'coins', amount: 1 },
+      cards: BARDWALL_CHALLENGE_CARDS.slice(0, 3).map((card) => ({ cardId: card.id, held: true })),
+      drawNumber: 1,
+      playerStory: 'An older submitted story.',
+      result: {
+        outcome: 'lose',
+        rivalStory: 'An older rival story.',
+        explanation: 'An older decision.',
+        playerScores: { cards: 7, coherence: 6, invention: 5, language: 8, length: 10 },
+        rivalScores: { cards: 8, coherence: 7, invention: 6, language: 8, length: 10 },
+      },
+    }
+    localStorage.setItem(BARDWALL_STORAGE_KEY, JSON.stringify(legacy))
+
+    expect(loadBardwallState().challenge.result).toMatchObject({
+      playerScores: {
+        sceneSpecificity: 5,
+        characterAgency: 5,
+        narrativeMovement: 6,
+        craftCoherence: 7,
+        promptIntegration: 7,
+      },
+      playerLengthPenalty: 0,
+    })
+  })
+
   it('buys food and keeps it in the persistent inventory', () => {
     const state = { ...createDefaultBardwallState(), coins: 30 }
     const purchased = purchaseBardwallFood(state, 'bread')
@@ -132,8 +171,10 @@ describe('Bardwall game helpers', () => {
 
     state = resolveBardwallChallenge(state, {
       outcome: 'win', rivalStory: 'A rival tale.', explanation: 'A close victory.',
-      playerScores: { cards: 9, coherence: 9, invention: 9, language: 9, length: 10 },
-      rivalScores: { cards: 8, coherence: 8, invention: 8, language: 8, length: 10 },
+      playerScores: { sceneSpecificity: 9, characterAgency: 9, narrativeMovement: 9, craftCoherence: 9, promptIntegration: 10 },
+      rivalScores: { sceneSpecificity: 8, characterAgency: 8, narrativeMovement: 8, craftCoherence: 8, promptIntegration: 10 },
+      playerLengthPenalty: 0,
+      rivalLengthPenalty: 0,
     })
     expect(state.coins).toBe(20)
     expect(state.challengesWon).toBe(1)

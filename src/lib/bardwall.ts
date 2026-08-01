@@ -64,20 +64,37 @@ export const BARDWALL_CHALLENGE_CARDS = [
   { id: 'turning-wheel', name: 'The Turning Wheel', icon: '☸️', meaning: 'Fortune, repetition, a pattern finally broken.' },
 ] as const
 
+export const BARDWALL_STORY_RUBRIC = [
+  { key: 'sceneSpecificity', name: 'Scene & specificity', description: 'Concrete settings, physical details, actions, objects, and sensory information.' },
+  { key: 'characterAgency', name: 'Character & agency', description: 'Characters want identifiable things, behave distinctly, and make meaningful choices.' },
+  { key: 'narrativeMovement', name: 'Narrative movement', description: 'Events unfold through understandable cause and effect instead of being summarized.' },
+  { key: 'craftCoherence', name: 'Craft & coherence', description: 'The language, structure, voice, and progression are clear and effective.' },
+  { key: 'promptIntegration', name: 'Prompt integration', description: 'The cards materially shape the events rather than being named or paraphrased.' },
+] as const
+
 export type BardwallFoodId = typeof BARDWALL_FOOD_ITEMS[number]['id']
 export type BardwallLodging = 'tent' | 'inn'
 export type BardwallPotionId = typeof BARDWALL_WYRM_POTIONS[number]['id']
 export type BardwallChallengeCardId = typeof BARDWALL_CHALLENGE_CARDS[number]['id']
+export type BardwallChallengeScoreKey = typeof BARDWALL_STORY_RUBRIC[number]['key']
 export type BardwallInventory = Record<BardwallFoodId | 'tent' | 'flower', number>
 
 export type BardwallChallengeWager = { type: 'coins'; amount: number } | { type: 'item'; itemId: BardwallFoodId }
-export interface BardwallChallengeScores { cards: number; coherence: number; invention: number; language: number; length: number }
+export interface BardwallChallengeScores {
+  sceneSpecificity: number
+  characterAgency: number
+  narrativeMovement: number
+  craftCoherence: number
+  promptIntegration: number
+}
 export interface BardwallChallengeResult {
   outcome: 'win' | 'lose' | 'draw'
   rivalStory: string
   explanation: string
   playerScores: BardwallChallengeScores
   rivalScores: BardwallChallengeScores
+  playerLengthPenalty: number
+  rivalLengthPenalty: number
 }
 export interface BardwallChallengeState {
   phase: 'setup' | 'draft' | 'write' | 'result'
@@ -203,6 +220,35 @@ function loadInventory(value: unknown): BardwallInventory {
   ) as BardwallInventory
 }
 
+const normalizeStoredChallengeScores = (value: unknown): BardwallChallengeScores => {
+  const scores = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+  const score = (key: string, legacyKey?: string) => Math.min(10, Math.max(0, Number(scores[key] ?? (legacyKey ? scores[legacyKey] : 0)) || 0))
+  return {
+    sceneSpecificity: score('sceneSpecificity', 'invention'),
+    characterAgency: score('characterAgency', 'invention'),
+    narrativeMovement: score('narrativeMovement', 'coherence'),
+    craftCoherence: scores.craftCoherence == null
+      ? Math.round((score('coherence') + score('language')) / 2)
+      : score('craftCoherence'),
+    promptIntegration: score('promptIntegration', 'cards'),
+  }
+}
+
+const loadChallengeResult = (value: unknown): BardwallChallengeResult | null => {
+  if (!value || typeof value !== 'object') return null
+  const result = value as Partial<BardwallChallengeResult>
+  if (result.outcome !== 'win' && result.outcome !== 'lose' && result.outcome !== 'draw') return null
+  return {
+    outcome: result.outcome,
+    rivalStory: typeof result.rivalStory === 'string' ? result.rivalStory : '',
+    explanation: typeof result.explanation === 'string' ? result.explanation : '',
+    playerScores: normalizeStoredChallengeScores(result.playerScores),
+    rivalScores: normalizeStoredChallengeScores(result.rivalScores),
+    playerLengthPenalty: Math.max(0, Math.floor(Number(result.playerLengthPenalty) || 0)),
+    rivalLengthPenalty: Math.max(0, Math.floor(Number(result.rivalLengthPenalty) || 0)),
+  }
+}
+
 function loadChallenge(value: unknown): BardwallChallengeState {
   const fallback = createDefaultBardwallState().challenge
   if (!value || typeof value !== 'object') return fallback
@@ -222,7 +268,7 @@ function loadChallenge(value: unknown): BardwallChallengeState {
     cards,
     drawNumber: Math.max(0, Math.floor(Number(stored.drawNumber) || 0)),
     playerStory: typeof stored.playerStory === 'string' ? stored.playerStory : '',
-    result: stored.result && typeof stored.result === 'object' ? stored.result : null,
+    result: loadChallengeResult(stored.result),
   }
 }
 
@@ -261,6 +307,13 @@ export function getBardwallDateKey(date = new Date()): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+export function getBardwallChallengeWordRange(goal: number): { minimum: number; maximum: number } {
+  return {
+    minimum: Math.ceil(goal * 0.9),
+    maximum: Math.floor(goal * 1.1),
+  }
 }
 
 export function loadBardwallState(): BardwallState {
