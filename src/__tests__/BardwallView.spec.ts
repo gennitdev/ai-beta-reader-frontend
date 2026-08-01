@@ -36,6 +36,8 @@ const { routerPush, routerReplace } = vi.hoisted(() => ({
   routerReplace: vi.fn(async () => {}),
 }))
 
+const { runBardwallStoryChallenge } = vi.hoisted(() => ({ runBardwallStoryChallenge: vi.fn() }))
+
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: {} }),
   useRouter: () => ({ push: routerPush, replace: routerReplace }),
@@ -50,15 +52,53 @@ vi.mock('@/composables/useDatabase', () => ({
   }),
 }))
 
+vi.mock('@/lib/openai', () => ({ runBardwallStoryChallenge }))
+
 import BardwallView from '@/views/BardwallView.vue'
 
 afterEach(() => {
   localStorage.clear()
   routerPush.mockClear()
   routerReplace.mockClear()
+  runBardwallStoryChallenge.mockReset()
 })
 
 describe('BardwallView', () => {
+  it('plays a complete coffeehouse challenge and awards the matched stakes', async () => {
+    saveBardwallState({
+      ...createDefaultBardwallState(),
+      coins: 20,
+      dailyGoal: { date: getBardwallDateKey(), wordCount: 500, wordsTold: 0, coinsEarned: 0, locked: false },
+    })
+    localStorage.setItem('openai_api_key', 'sk-test')
+    runBardwallStoryChallenge.mockResolvedValue({
+      outcome: 'win', rivalStory: 'Orla told a moonlit story.', explanation: 'Your three symbols became one inevitable ending.',
+      playerScores: { cards: 9, coherence: 9, invention: 9, language: 9, length: 10 },
+      rivalScores: { cards: 8, coherence: 8, invention: 8, language: 8, length: 10 },
+    })
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    await wrapper.get('[data-testid="map-challenge"]').trigger('click')
+    expect(wrapper.text()).toContain('Ink & Ember Coffeehouse')
+    await wrapper.findAll('button').find((button) => button.text() === '100 words')!.trigger('click')
+    await wrapper.get('[data-testid="start-coffeehouse-challenge"]').trigger('click')
+    const cards = wrapper.findAll('[data-testid^="challenge-card-"]')
+    expect(cards).toHaveLength(3)
+    for (const card of cards) await card.trigger('click')
+    await wrapper.get('[data-testid="advance-challenge-draft"]').trigger('click')
+
+    const story = Array.from({ length: 100 }, (_, index) => `word${index}`).join(' ')
+    await wrapper.get('[data-testid="challenge-story"]').setValue(story)
+    await wrapper.get('[data-testid="submit-challenge-story"]').trigger('click')
+    await flushPromises()
+
+    expect(runBardwallStoryChallenge).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('The table is yours.')
+    expect(wrapper.text()).toContain('Your three symbols became one inevitable ending.')
+    expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}')).toMatchObject({ coins: 22, challengesWon: 1 })
+  })
+
   it('requires typed confirmation before beginning Bardwall again', async () => {
     saveBardwallState({
       ...createDefaultBardwallState(),

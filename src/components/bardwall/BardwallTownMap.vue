@@ -11,7 +11,7 @@ const locations = computed(() => [
   { id: 'shrine' as const, name: 'Shrine of Heliconia', detail: 'Town Square', icon: '🌺', x: 43, y: 38, tone: 'rose' },
   { id: 'apothecary' as const, name: 'Moth & Mortar', detail: 'Apothecary and physic', icon: '⚗️', x: 17, y: 51, tone: 'emerald' },
   { id: 'market' as const, name: 'Night Market', detail: 'Food, flowers, and provisions', icon: '🏮', x: 60, y: 56, tone: 'amber' },
-  { id: 'challenge' as const, name: 'Challenge Hall', detail: 'Coming soon', icon: '🎭', x: 27, y: 76, tone: 'stone' },
+  { id: 'challenge' as const, name: 'Ink & Ember', detail: 'Coffee, company, and story wagers', icon: '☕', x: 27, y: 76, tone: 'stone' },
   { id: 'amphitheater' as const, name: 'Stone Amphitheater', detail: 'Tell the ghosts a story', icon: '👻', x: 78, y: 17, tone: 'sky' },
   { id: 'camp' as const, name: 'Forest Camp', detail: 'Your tent beyond the wall', icon: '⛺', x: 70, y: 68, tone: 'emerald' },
   ...(props.caveUnlocked

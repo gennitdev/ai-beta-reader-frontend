@@ -9,10 +9,15 @@ import {
   BARDWALL_INN_PRICE,
   BARDWALL_DAILY_NOURISHMENT,
   BARDWALL_FLOWER_PRICE,
+  BARDWALL_CAFE_ITEMS,
+  BARDWALL_CHALLENGE_CARDS,
+  BARDWALL_FOOD_ITEMS,
   BARDWALL_MARKET_ITEMS,
   BARDWALL_WYRM_POTIONS,
   HELICONIA_PERSISTENCE_MESSAGES,
   calculateBardwallPay,
+  advanceBardwallChallengeDraft,
+  countBardwallWords,
   getBardwallDateKey,
   getBardwallPassages,
   healBardAtApothecary,
@@ -20,15 +25,21 @@ import {
   offerFlowerToHeliconia,
   purchaseBardwallFood,
   purchaseBardwallFlower,
+  resetBardwallChallenge,
+  resolveBardwallChallenge,
   drinkWyrmPotion,
   resolveBardwallNight,
   resetBardwallState,
   saveBardwallState,
+  startBardwallChallenge,
+  toggleBardwallChallengeCard,
   type BardwallFoodId,
   type BardwallLodging,
   type BardwallPotionId,
   type BardwallPassage,
+  type BardwallChallengeWager,
 } from '@/lib/bardwall'
+import { runBardwallStoryChallenge } from '@/lib/openai'
 
 interface RewardPassage extends BardwallPassage {
   id: string
@@ -72,6 +83,12 @@ const shrineMessage = ref<string | null>(null)
 const treatmentMessage = ref<string | null>(null)
 const showResetDialog = ref(false)
 const resetConfirmation = ref('')
+const challengeGoalChoice = ref<100 | 250 | 500 | 1000>(250)
+const challengeWagerChoice = ref(game.value.coins >= 1
+  ? 'coins:1'
+  : `item:${BARDWALL_FOOD_ITEMS.find((item) => game.value.inventory[item.id] > 0)?.id ?? ''}`)
+const challengeMessage = ref<string | null>(null)
+const judgingChallenge = ref(false)
 
 const selectedOffering = computed(() => offerings.value.find((item) => item.id === selectedOfferingId.value) ?? null)
 const selectedPassages = computed(() => selectedOffering.value?.passages.filter((_, index) => selectedPassageIndexes.value.includes(index)) ?? [])
@@ -85,11 +102,18 @@ const dailyProgress = computed(() => {
   if (!dailyGoal.value) return 0
   return Math.min(100, (dailyGoal.value.wordsTold / dailyGoal.value.wordCount) * 100)
 })
-const selectedNourishment = computed(() => BARDWALL_MARKET_ITEMS.reduce((total, item) => (
+const selectedNourishment = computed(() => BARDWALL_FOOD_ITEMS.reduce((total, item) => (
   total + item.nourishment * (mealSelection.value[item.id] ?? 0)
 ), 0))
 const nourishmentDeficit = computed(() => Math.max(0, BARDWALL_DAILY_NOURISHMENT - selectedNourishment.value))
-const foodInventory = computed(() => BARDWALL_MARKET_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
+const foodInventory = computed(() => BARDWALL_FOOD_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
+const challengeCards = computed(() => game.value.challenge.cards.map((draftCard) => ({
+  ...draftCard,
+  card: BARDWALL_CHALLENGE_CARDS.find((card) => card.id === draftCard.cardId)!,
+})))
+const heldChallengeCards = computed(() => game.value.challenge.cards.filter((card) => card.held).length)
+const challengeStoryWordCount = computed(() => countBardwallWords(game.value.challenge.playerStory))
+const challengeFoodWagers = computed(() => BARDWALL_FOOD_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
 const heliconiaMessage = computed(() => {
   const messageIndex = Math.max(0, game.value.heliconiaVisits - 2) % HELICONIA_PERSISTENCE_MESSAGES.length
   return HELICONIA_PERSISTENCE_MESSAGES[messageIndex]
@@ -276,6 +300,105 @@ const buyFood = (foodId: BardwallFoodId) => {
   }
 }
 
+const buyCafeFood = (foodId: BardwallFoodId) => {
+  try {
+    game.value = purchaseBardwallFood(game.value, foodId)
+    saveBardwallState(game.value)
+    const item = BARDWALL_CAFE_ITEMS.find((candidate) => candidate.id === foodId)
+    challengeMessage.value = `${item?.name ?? 'Refreshment'} added to your pack.`
+  } catch {
+    challengeMessage.value = 'You do not have enough coin for that.'
+  }
+}
+
+const parseChallengeWager = (): BardwallChallengeWager | null => {
+  const [type, value] = challengeWagerChoice.value.split(':')
+  if (type === 'coins') return { type: 'coins', amount: Number(value) }
+  if (type === 'item' && BARDWALL_FOOD_ITEMS.some((item) => item.id === value)) return { type: 'item', itemId: value as BardwallFoodId }
+  return null
+}
+
+const chooseAffordableChallengeWager = () => {
+  if (game.value.coins >= 1) {
+    challengeWagerChoice.value = 'coins:1'
+    return
+  }
+
+  const item = BARDWALL_FOOD_ITEMS.find((candidate) => game.value.inventory[candidate.id] > 0)
+  challengeWagerChoice.value = item ? `item:${item.id}` : ''
+}
+
+const beginCoffeehouseChallenge = () => {
+  const wager = parseChallengeWager()
+  if (!wager) return
+  try {
+    game.value = startBardwallChallenge(game.value, challengeGoalChoice.value, wager)
+    saveBardwallState(game.value)
+    challengeMessage.value = null
+  } catch (error) {
+    challengeMessage.value = error instanceof Error ? error.message : 'The wager could not be placed.'
+  }
+}
+
+const toggleChallengeCard = (cardId: typeof BARDWALL_CHALLENGE_CARDS[number]['id']) => {
+  game.value = toggleBardwallChallengeCard(game.value, cardId)
+  saveBardwallState(game.value)
+}
+
+const advanceChallengeDraft = () => {
+  try {
+    game.value = advanceBardwallChallengeDraft(game.value)
+    saveBardwallState(game.value)
+    challengeMessage.value = null
+  } catch (error) {
+    challengeMessage.value = error instanceof Error ? error.message : 'The cards refuse to settle.'
+  }
+}
+
+const updateChallengeStory = (event: Event) => {
+  const playerStory = (event.target as HTMLTextAreaElement).value
+  game.value = { ...game.value, challenge: { ...game.value.challenge, playerStory } }
+  saveBardwallState(game.value)
+}
+
+const judgeChallenge = async () => {
+  if (challengeStoryWordCount.value < game.value.challenge.goal) return
+  const apiKey = localStorage.getItem('openai_api_key')
+  if (!apiKey) {
+    challengeMessage.value = 'Add your OpenAI API key in Settings before the other bards can take their seats.'
+    return
+  }
+  judgingChallenge.value = true
+  challengeMessage.value = null
+  try {
+    const result = await runBardwallStoryChallenge(apiKey, {
+      goal: game.value.challenge.goal,
+      cards: challengeCards.value.map(({ card }) => ({ name: card.name, meaning: card.meaning })),
+      playerStory: game.value.challenge.playerStory,
+    })
+    game.value = resolveBardwallChallenge(game.value, result)
+    saveBardwallState(game.value)
+  } catch (error) {
+    challengeMessage.value = error instanceof Error ? error.message : 'The judge could not reach a decision.'
+  } finally {
+    judgingChallenge.value = false
+  }
+}
+
+const beginAnotherChallenge = () => {
+  game.value = resetBardwallChallenge(game.value)
+  saveBardwallState(game.value)
+  chooseAffordableChallengeWager()
+  challengeMessage.value = null
+}
+
+const wagerLabel = (wager: BardwallChallengeWager | null) => {
+  if (!wager) return 'No wager'
+  if (wager.type === 'coins') return `${wager.amount} ${wager.amount === 1 ? 'coin' : 'coins'}`
+  return BARDWALL_FOOD_ITEMS.find((item) => item.id === wager.itemId)?.name ?? 'one item'
+}
+const scoreTotal = (scores: { cards: number; coherence: number; invention: number; language: number; length: number }) => Object.values(scores).reduce((total, score) => total + score, 0)
+
 const buyFlower = () => {
   try {
     game.value = purchaseBardwallFlower(game.value)
@@ -390,6 +513,9 @@ const beginBardwallAgain = async () => {
   heliconiaReturnVisit.value = false
   shrineMessage.value = null
   treatmentMessage.value = null
+  challengeGoalChoice.value = 250
+  challengeWagerChoice.value = 'item:bread'
+  challengeMessage.value = null
   hasEntered.value = false
   screen.value = 'gate'
   closeResetDialog()
@@ -685,9 +811,81 @@ watch(() => [route.params.location, route.params.activity], () => {
 
       <div v-else-if="screen === 'challenge'" class="py-8">
         <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
-        <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-stone-600 bg-stone-900/60 p-10 text-center">
-          <div class="text-6xl">🎭</div><h2 class="mt-5 font-serif text-4xl font-bold">Challenge Hall</h2>
-          <p class="mx-auto mt-4 max-w-xl text-stone-400">The doors are being painted and the judges are still arguing about the rules. Storytelling challenges will be held here soon.</p>
+        <section class="mx-auto mt-5 max-w-5xl overflow-hidden rounded-2xl border border-orange-200/20 bg-[linear-gradient(145deg,#33251c,#151311)] shadow-2xl">
+          <header class="border-b border-orange-200/15 bg-black/20 p-7 sm:p-9">
+            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-orange-300">Coffee, company, and dangerous confidence</p>
+            <h2 class="mt-2 font-serif text-4xl font-bold">Ink & Ember Coffeehouse</h2>
+            <p class="mt-3 max-w-3xl font-serif text-lg leading-8 text-stone-300">Bards crowd the long tables with ink-stained cups and stories they swear are almost finished. Orla Fen waves you over. Tamsin Quill is already shuffling the painted deck.</p>
+          </header>
+
+          <div class="grid gap-6 p-6 lg:grid-cols-[0.7fr_1.3fr] sm:p-8">
+            <aside class="space-y-4">
+              <section class="rounded-xl border border-orange-200/15 bg-black/20 p-5">
+                <h3 class="font-serif text-xl font-semibold">At the counter</h3>
+                <div class="mt-4 space-y-3">
+                  <article v-for="item in BARDWALL_CAFE_ITEMS" :key="item.id" class="rounded-lg border border-stone-700/70 p-3">
+                    <div class="flex items-start gap-3"><span class="text-2xl">{{ item.icon }}</span><div class="min-w-0"><h4 class="font-semibold">{{ item.name }}</h4><p class="mt-1 text-xs leading-5 text-stone-400">{{ item.description }}</p></div></div>
+                    <div class="mt-3 flex items-center justify-between text-xs"><span class="text-stone-500">{{ item.nourishment }} food · {{ game.inventory[item.id] }} owned</span><button :data-testid="`buy-cafe-${item.id}`" class="rounded-md bg-orange-200 px-3 py-1.5 font-semibold text-[#302018] hover:bg-orange-100 disabled:opacity-40" :disabled="game.coins < item.price" @click="buyCafeFood(item.id)">Buy · {{ item.price }}</button></div>
+                  </article>
+                </div>
+              </section>
+              <section class="rounded-xl border border-stone-700/70 bg-black/20 p-5 text-sm text-stone-400">
+                <p><strong class="text-stone-200">House rule:</strong> coins and ordinary food may be wagered. Tents, flowers, maps, and quest items stay safely in your pack.</p>
+                <p class="mt-3">Record: <span class="text-emerald-300">{{ game.challengesWon }} won</span> · <span class="text-rose-300">{{ game.challengesLost }} lost</span></p>
+              </section>
+            </aside>
+
+            <main class="min-w-0 rounded-xl border border-stone-700/70 bg-black/15 p-5 sm:p-6">
+              <p v-if="challengeMessage" class="mb-5 rounded-lg border border-rose-300/25 bg-rose-300/10 p-3 text-sm text-rose-200">{{ challengeMessage }} <button v-if="challengeMessage.includes('OpenAI')" class="ml-1 underline" @click="router.push('/settings')">Open Settings</button></p>
+
+              <template v-if="game.challenge.phase === 'setup'">
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-orange-300">Take a seat</p>
+                <h3 class="mt-2 font-serif text-3xl font-bold">Set the terms.</h3>
+                <p class="mt-3 text-sm leading-6 text-stone-400">Choose your story length and place one safe wager. Orla and Tamsin will each match it.</p>
+                <h4 class="mt-6 text-sm font-semibold">Story goal</h4>
+                <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <button v-for="goal in ([100, 250, 500, 1000] as const)" :key="goal" class="rounded-lg border px-3 py-2.5 text-sm font-semibold" :class="challengeGoalChoice === goal ? 'border-orange-200 bg-orange-200 text-[#302018]' : 'border-stone-600 hover:border-stone-400'" @click="challengeGoalChoice = goal">{{ goal.toLocaleString() }} words</button>
+                </div>
+                <h4 class="mt-6 text-sm font-semibold">Your wager</h4>
+                <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label v-for="amount in [1, 5, 10]" :key="amount" class="flex cursor-pointer items-center gap-3 rounded-lg border border-stone-700 p-3 has-[:checked]:border-orange-300 has-[:checked]:bg-orange-300/10" :class="game.coins < amount ? 'pointer-events-none opacity-40' : ''"><input v-model="challengeWagerChoice" type="radio" :value="`coins:${amount}`" :disabled="game.coins < amount" /><span>🪙 {{ amount }} {{ amount === 1 ? 'coin' : 'coins' }}</span></label>
+                  <label v-for="item in challengeFoodWagers" :key="item.id" class="flex cursor-pointer items-center gap-3 rounded-lg border border-stone-700 p-3 has-[:checked]:border-orange-300 has-[:checked]:bg-orange-300/10"><input v-model="challengeWagerChoice" type="radio" :value="`item:${item.id}`" /><span>{{ item.icon }} {{ item.name }}</span></label>
+                </div>
+                <p class="mt-4 text-xs text-stone-500">The table will hold three matching stakes. Win and take all three; draw and reclaim yours; lose and your stake is gone.</p>
+                <button data-testid="start-coffeehouse-challenge" class="mt-6 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100" @click="beginCoffeehouseChallenge">Place the wager and draw</button>
+              </template>
+
+              <template v-else-if="game.challenge.phase === 'draft'">
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-orange-300">Draw {{ game.challenge.drawNumber }}</p>
+                <h3 class="mt-2 font-serif text-3xl font-bold">Choose what the story must contain.</h3>
+                <p class="mt-3 text-sm text-stone-400">Keep at least one card. Unkept cards return to the deck.</p>
+                <div class="mt-6 grid gap-3 sm:grid-cols-3">
+                  <button v-for="entry in challengeCards" :key="entry.card.id" :data-testid="`challenge-card-${entry.card.id}`" class="rounded-xl border p-4 text-left transition" :class="entry.held ? 'border-orange-200 bg-orange-200/10 ring-1 ring-orange-200' : 'border-stone-600 bg-stone-900/50 hover:border-stone-400'" @click="toggleChallengeCard(entry.card.id)"><span class="text-4xl">{{ entry.card.icon }}</span><strong class="mt-3 block font-serif text-lg">{{ entry.card.name }}</strong><span class="mt-2 block text-xs leading-5 text-stone-400">{{ entry.card.meaning }}</span><span class="mt-3 block text-xs font-semibold" :class="entry.held ? 'text-orange-200' : 'text-stone-500'">{{ entry.held ? 'Kept' : 'Tap to keep' }}</span></button>
+                </div>
+                <button data-testid="advance-challenge-draft" class="mt-6 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100 disabled:opacity-40" :disabled="heldChallengeCards === 0" @click="advanceChallengeDraft">{{ heldChallengeCards === 3 ? 'Use these three cards' : `Redraw ${3 - heldChallengeCards} ${3 - heldChallengeCards === 1 ? 'card' : 'cards'}` }}</button>
+              </template>
+
+              <template v-else-if="game.challenge.phase === 'write'">
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-orange-300">The cards are set · {{ wagerLabel(game.challenge.wager) }} wagered</p>
+                <h3 class="mt-2 font-serif text-3xl font-bold">Tell your story.</h3>
+                <div class="mt-5 grid gap-2 sm:grid-cols-3"><div v-for="entry in challengeCards" :key="entry.card.id" class="rounded-lg border border-orange-200/20 bg-orange-200/5 p-3"><span class="text-xl">{{ entry.card.icon }}</span><strong class="ml-2 text-sm">{{ entry.card.name }}</strong><p class="mt-2 text-xs text-stone-400">{{ entry.card.meaning }}</p></div></div>
+                <div class="mt-5 flex items-center justify-between text-sm"><label for="challenge-story" class="font-semibold">Your telling</label><span :class="challengeStoryWordCount >= game.challenge.goal ? 'text-emerald-300' : 'text-stone-400'">{{ challengeStoryWordCount.toLocaleString() }} / {{ game.challenge.goal.toLocaleString() }} words</span></div>
+                <textarea id="challenge-story" data-testid="challenge-story" :value="game.challenge.playerStory" class="mt-2 min-h-80 w-full rounded-xl border border-stone-600 bg-[#110f0e] p-4 font-serif leading-7 text-stone-100 outline-none focus:border-orange-200" placeholder="Begin the story…" @input="updateChallengeStory"></textarea>
+                <p class="mt-3 text-xs text-stone-500">Your draft is saved locally as you write. The judge considers card use, coherence, invention, language, and whether you substantially met the chosen length.</p>
+                <button data-testid="submit-challenge-story" class="mt-5 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40" :disabled="challengeStoryWordCount < game.challenge.goal || judgingChallenge" @click="judgeChallenge">{{ judgingChallenge ? 'Orla tells her story; Tamsin deliberates…' : 'Tell the story at the table' }}</button>
+              </template>
+
+              <template v-else-if="game.challenge.result">
+                <p class="text-xs font-semibold uppercase tracking-[0.25em]" :class="game.challenge.result.outcome === 'win' ? 'text-emerald-300' : game.challenge.result.outcome === 'lose' ? 'text-rose-300' : 'text-sky-300'">Tamsin Quill’s decision</p>
+                <h3 class="mt-2 font-serif text-4xl font-bold">{{ game.challenge.result.outcome === 'win' ? 'The table is yours.' : game.challenge.result.outcome === 'lose' ? 'Orla takes the stakes.' : 'A draw. Your wager returns.' }}</h3>
+                <p class="mt-4 font-serif text-lg leading-8 text-stone-300">“{{ game.challenge.result.explanation }}”</p>
+                <div class="mt-6 grid gap-3 sm:grid-cols-2"><div class="rounded-xl border border-stone-700 p-4"><p class="text-sm font-semibold">Your story</p><p class="mt-2 text-3xl font-bold text-orange-200">{{ scoreTotal(game.challenge.result.playerScores) }} / 50</p></div><div class="rounded-xl border border-stone-700 p-4"><p class="text-sm font-semibold">Orla Fen</p><p class="mt-2 text-3xl font-bold text-violet-200">{{ scoreTotal(game.challenge.result.rivalScores) }} / 50</p></div></div>
+                <div class="mt-4 grid grid-cols-5 gap-1 text-center text-[10px] text-stone-400"><span v-for="label in ['Cards', 'Coherence', 'Invention', 'Language', 'Length']" :key="label">{{ label }}</span><template v-for="(scores, scoreIndex) in [game.challenge.result.playerScores, game.challenge.result.rivalScores]" :key="scoreIndex"><span>{{ scores.cards }}</span><span>{{ scores.coherence }}</span><span>{{ scores.invention }}</span><span>{{ scores.language }}</span><span>{{ scores.length }}</span></template></div>
+                <details class="mt-6 rounded-xl border border-stone-700 bg-black/20 p-4"><summary class="cursor-pointer font-semibold">Read Orla’s story</summary><p class="mt-4 whitespace-pre-wrap font-serif leading-7 text-stone-300">{{ game.challenge.result.rivalStory }}</p></details>
+                <button data-testid="another-coffeehouse-challenge" class="mt-6 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100" @click="beginAnotherChallenge">Play another round</button>
+              </template>
+            </main>
+          </div>
         </section>
       </div>
 

@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   BARDWALL_STORAGE_KEY,
+  BARDWALL_CHALLENGE_CARDS,
   HELICONIA_PERSISTENCE_MESSAGES,
   calculateBardwallPay,
   createDefaultBardwallState,
@@ -13,9 +14,13 @@ import {
   offerFlowerToHeliconia,
   purchaseBardwallFood,
   purchaseBardwallFlower,
+  advanceBardwallChallengeDraft,
+  resolveBardwallChallenge,
   resetBardwallState,
   resolveBardwallNight,
   saveBardwallState,
+  startBardwallChallenge,
+  toggleBardwallChallengeCard,
 } from '@/lib/bardwall'
 
 afterEach(() => localStorage.clear())
@@ -54,31 +59,7 @@ describe('Bardwall game helpers', () => {
     })
 
     localStorage.setItem(BARDWALL_STORAGE_KEY, 'not-json')
-    expect(loadBardwallState()).toEqual({
-      coins: 0,
-      storiesTold: 0,
-      totalWordsTold: 0,
-      dailyGoal: null,
-      toldPassageIds: [],
-      day: 1,
-      energy: 100,
-      hunger: 0,
-      inventory: {
-        tent: 1,
-        flower: 0,
-        apple: 0,
-        bread: 1,
-        cheese: 1,
-        'smoked-fish': 0,
-        stew: 0,
-      },
-      lastNight: null,
-      heliconiaMet: false,
-      heliconiaVisits: 0,
-      caveUnlocked: false,
-      ailment: null,
-      triedPotionIds: [],
-    })
+    expect(loadBardwallState()).toEqual(createDefaultBardwallState())
   })
 
   it('resets all Bardwall progress to a new game', () => {
@@ -133,6 +114,34 @@ describe('Bardwall game helpers', () => {
   it('has ten distinct words of persistence from Heliconia', () => {
     expect(HELICONIA_PERSISTENCE_MESSAGES).toHaveLength(10)
     expect(new Set(HELICONIA_PERSISTENCE_MESSAGES).size).toBe(10)
+  })
+
+  it('runs the safe wager and three-card drafting rules', () => {
+    let state = { ...createDefaultBardwallState(), coins: 10 }
+    state = startBardwallChallenge(state, 250, { type: 'coins', amount: 5 }, () => 0)
+    expect(state.coins).toBe(5)
+    expect(state.challenge.cards).toHaveLength(3)
+    expect(new Set(state.challenge.cards.map((card) => card.cardId)).size).toBe(3)
+
+    for (const card of state.challenge.cards) state = toggleBardwallChallengeCard(state, card.cardId)
+    state = advanceBardwallChallengeDraft(state, () => 0)
+    expect(state.challenge.phase).toBe('write')
+
+    state = resolveBardwallChallenge(state, {
+      outcome: 'win', rivalStory: 'A rival tale.', explanation: 'A close victory.',
+      playerScores: { cards: 9, coherence: 9, invention: 9, language: 9, length: 10 },
+      rivalScores: { cards: 8, coherence: 8, invention: 8, language: 8, length: 10 },
+    })
+    expect(state.coins).toBe(20)
+    expect(state.challengesWon).toBe(1)
+  })
+
+  it('allows ordinary food wagers but never exposes quest items as challenge cards', () => {
+    const initial = createDefaultBardwallState()
+    const state = startBardwallChallenge(initial, 100, { type: 'item', itemId: 'bread' }, () => 0.5)
+    expect(state.inventory.bread).toBe(0)
+    expect(BARDWALL_CHALLENGE_CARDS).toHaveLength(18)
+    expect(() => startBardwallChallenge(initial, 100, { type: 'coins', amount: 1 }, () => 0)).toThrow('not available')
   })
 
   it('applies every wyrm potion as an illness and lets the apothecary heal it', () => {
