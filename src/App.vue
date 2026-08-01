@@ -41,6 +41,8 @@ const searchService = {
 
 const isSideNavOpen = ref(false)
 const sideNavItems = computed(() => primaryNavItems)
+const standardSideNavItems = computed(() => sideNavItems.value.filter((item) => !item.featured))
+const featuredSideNavItems = computed(() => sideNavItems.value.filter((item) => item.featured))
 
 const toggleSideNav = () => {
   isSideNavOpen.value = !isSideNavOpen.value
@@ -254,13 +256,25 @@ const breadcrumbs = computed(() => {
 
 const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
 const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
+const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
 </script>
 
 <template>
   <div class="h-screen overflow-hidden bg-gray-50 dark:bg-navy-900 flex">
     <div class="flex-1 flex flex-col min-w-0 min-h-0">
+      <button
+        v-if="isBardwallRoute"
+        @click="toggleSideNav"
+        :aria-expanded="isSideNavOpen"
+        aria-controls="side-nav"
+        class="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-30 flex h-11 w-11 items-center justify-center rounded-xl border border-amber-300/40 bg-[#091712]/90 text-amber-200 shadow-lg backdrop-blur transition hover:border-amber-300/70 hover:bg-[#13281f] hover:text-amber-100"
+        aria-label="Open site navigation"
+      >
+        <Bars3Icon class="h-6 w-6" />
+      </button>
+
       <!-- Header -->
-      <header class="bg-navy-900 border-b border-navy-800 shadow-sm safe-area-top">
+      <header v-else class="bg-navy-900 border-b border-navy-800 shadow-sm safe-area-top">
         <div class="px-4 sm:px-6">
         <!-- Desktop layout -->
         <div
@@ -531,7 +545,7 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
 
             <nav class="flex-1 space-y-1 overflow-y-auto">
               <RouterLink
-                v-for="item in sideNavItems"
+                v-for="item in standardSideNavItems"
                 :key="item.to"
                 :to="item.to"
                 custom
@@ -550,6 +564,37 @@ const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
                   <span>{{ item.label }}</span>
                 </a>
               </RouterLink>
+
+              <section v-if="featuredSideNavItems.length" class="mx-1 my-4 border-y border-amber-200/80 py-4 dark:border-amber-700/30">
+                <p class="px-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300">
+                  Storyteller's realm
+                </p>
+                <RouterLink
+                  v-for="item in featuredSideNavItems"
+                  :key="item.to"
+                  :to="item.to"
+                  custom
+                  v-slot="{ href, navigate, isActive }"
+                >
+                  <a
+                    :href="href"
+                    class="mt-2 flex translate-x-1 items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-semibold shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+                    :class="isActive
+                      ? 'border-amber-400 bg-gradient-to-br from-amber-100 to-emerald-50 text-emerald-950 ring-1 ring-amber-300 dark:from-amber-900/50 dark:to-emerald-950 dark:text-amber-100'
+                      : 'border-amber-200 bg-gradient-to-br from-amber-50 to-emerald-50/70 text-emerald-900 hover:border-amber-300 dark:border-amber-700/40 dark:from-amber-950/40 dark:to-emerald-950/60 dark:text-amber-200'"
+                    :aria-current="isActive ? 'page' : undefined"
+                    @click.prevent="navigate(); closeSideNav()"
+                  >
+                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-900 text-amber-200 shadow-inner dark:bg-emerald-950">
+                      <component :is="item.icon" class="h-4 w-4" />
+                    </span>
+                    <span>
+                      <span class="block">{{ item.label }}</span>
+                      <span class="block text-[0.65rem] font-normal text-emerald-700/80 dark:text-amber-200/60">Enter the town</span>
+                    </span>
+                  </a>
+                </RouterLink>
+              </section>
 
               <!-- Books section -->
               <template v-if="sortedBooks.length">

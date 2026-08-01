@@ -5,6 +5,7 @@ export interface NavItem {
   to: string
   label: string
   icon: Component
+  featured?: boolean
   isActive: (path: string) => boolean
 }
 
@@ -25,6 +26,7 @@ export const primaryNavItems: NavItem[] = [
     to: '/bardwall',
     label: 'Bardwall',
     icon: MusicalNoteIcon,
+    featured: true,
     isActive: (path: string) => path.startsWith('/bardwall')
   },
   {

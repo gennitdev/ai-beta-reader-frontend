@@ -11,7 +11,8 @@ const navItems = computed(() => primaryNavItems)
 const currentPath = computed(() => route.path)
 
 const firstNavItem = computed(() => navItems.value[0] ?? null)
-const trailingNavItems = computed(() => navItems.value.slice(1))
+const trailingNavItems = computed(() => navItems.value.slice(1).filter((item) => !item.featured))
+const featuredNavItems = computed(() => navItems.value.filter((item) => item.featured))
 
 const { books, loadBooks } = useDatabase()
 
@@ -95,6 +96,23 @@ const isBookActive = (bookId: string) => currentPath.value.startsWith(`/books/${
         <component :is="item.icon" class="w-4 h-4" />
         <span class="sr-only">{{ item.label }}</span>
       </router-link>
+
+      <div v-if="featuredNavItems.length" class="mx-auto mt-3 w-12 border-y border-amber-200 py-3 dark:border-amber-700/30">
+        <router-link
+          v-for="item in featuredNavItems"
+          :key="item.to"
+          :to="item.to"
+          :aria-label="item.label"
+          :aria-current="item.isActive(currentPath) ? 'page' : undefined"
+          class="group mx-auto flex h-10 w-10 translate-x-1 items-center justify-center rounded-xl border shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          :class="item.isActive(currentPath)
+            ? 'border-amber-400 bg-emerald-900 text-amber-200 ring-1 ring-amber-300'
+            : 'border-amber-300 bg-gradient-to-br from-amber-100 to-emerald-100 text-emerald-900 hover:border-amber-400 dark:border-amber-700/50 dark:from-amber-950 dark:to-emerald-950 dark:text-amber-200'"
+        >
+          <component :is="item.icon" class="h-5 w-5" />
+          <span class="sr-only">{{ item.label }}</span>
+        </router-link>
+      </div>
     </nav>
   </aside>
 </template>

@@ -377,7 +377,7 @@ watch(() => [route.params.location, route.params.activity], () => {
       </div>
     </section>
 
-    <section v-else class="mx-auto min-h-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <section v-else class="mx-auto min-h-full max-w-6xl px-4 pb-8 pt-20 sm:px-6 md:py-8 lg:px-8">
       <header class="flex flex-wrap items-center justify-between gap-4 border-b border-stone-700/60 pb-5">
         <div>
           <p class="text-xs uppercase tracking-[0.28em] text-amber-300">The haunted town</p>
