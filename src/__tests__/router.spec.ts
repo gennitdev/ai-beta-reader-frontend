@@ -57,5 +57,8 @@ describe('router', () => {
     // Invoke each loader so the dynamic-import expression executes, then
     // swallow the result — we're exercising the route config, not mounting.
     await Promise.allSettled(loaders.map((load) => Promise.resolve().then(load)))
-  }, 10_000)
+    // Generous timeout: this transitively imports/compiles every view, which can
+    // exceed a tight budget under full-suite CPU contention (it passes in
+    // isolation). We're validating route wiring, not load performance.
+  }, 30_000)
 })
