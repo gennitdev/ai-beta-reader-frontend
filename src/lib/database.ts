@@ -51,6 +51,7 @@ import * as metadataRepo from '@/lib/db/metadataRepository';
 import * as wikiRepo from '@/lib/db/wikiRepository';
 import * as imageRepo from '@/lib/db/imageRepository';
 import { imageAssetFromSqlRow } from '@/lib/db/imageRepository';
+import * as partRepo from '@/lib/db/partRepository';
 
 export interface Book {
   id: string;
@@ -374,35 +375,7 @@ function countChangedWords(previousText: string, nextText: string): { added: num
   return countRevisionChanges(previousText, nextText);
 }
 
-function toNativePart(row: Record<string, unknown>): BookPart {
-  return {
-    id: String(row.id),
-    book_id: String(row.book_id),
-    name: String(row.name),
-    chapter_order: typeof row.chapter_order === 'string' ? row.chapter_order : '[]',
-    cover_image_id: typeof row.cover_image_id === 'string' ? row.cover_image_id : null,
-    created_at: String(row.created_at),
-    updated_at: String(row.updated_at),
-  };
-}
-
-function toNativePartFromQueryRow(row: QueryRow): BookPart {
-  return Array.isArray(row)
-    ? toWebPart(row)
-    : toNativePart(row);
-}
-
-function toWebPart(row: unknown[]): BookPart {
-  return {
-    id: String(row[0]),
-    book_id: String(row[1]),
-    name: String(row[2]),
-    chapter_order: typeof row[3] === 'string' ? row[3] : '[]',
-    cover_image_id: typeof row[4] === 'string' ? row[4] : null,
-    created_at: String(row[5]),
-    updated_at: String(row[6]),
-  };
-}
+// Part row mappers moved to ./db/partRepository alongside their functions.
 
 // Chapter/part metadata row mappers (summaries, reviews, notes, profiles) moved
 // to ./db/metadataRepository alongside their repository functions.
@@ -1349,164 +1322,30 @@ export class AppDatabase {
   }
 
   // Book Parts methods
+  // --- Book parts (volumes) and chapter/part ordering ----------------------
+  // Delegated to ./db/partRepository. Public signatures are unchanged.
   async createPart(part: { book_id: string; name: string }): Promise<BookPart> {
-    const id = `part-${part.book_id}-${Date.now()}`;
-    const now = new Date().toISOString();
-    const query = `INSERT INTO book_parts (id, book_id, name, chapter_order, created_at, updated_at)
-                   VALUES (?, ?, ?, '[]', ?, ?)`;
-
-    if (this.isNative) {
-      await this.db.run(query, [id, part.book_id, part.name, now, now]);
-    } else {
-      this.db.run(query, [id, part.book_id, part.name, now, now]);
-      this.requestPersistence();
-    }
-
-    const currentOrder = await this.getBookPartOrder(part.book_id);
-    if (!currentOrder.includes(id)) {
-      await this.saveBookPartOrder(part.book_id, [...currentOrder, id]);
-    }
-
-    return {
-      id,
-      book_id: part.book_id,
-      name: part.name,
-      chapter_order: '[]',
-      cover_image_id: null,
-      created_at: now,
-      updated_at: now
-    };
+    return partRepo.createPart(this.context, part);
   }
 
   async getParts(bookId: string): Promise<BookPart[]> {
-    const query = `SELECT id, book_id, name, chapter_order, cover_image_id, created_at, updated_at FROM book_parts WHERE book_id = ? ORDER BY created_at`;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [bookId]);
-      return (result.values || []).map((row) => toNativePartFromQueryRow(row));
-    } else {
-      const result = this.db.exec(query, [bookId]);
-      if (result.length === 0) return [];
-
-      return result[0].values.map((row: unknown[]) => toWebPart(row));
-    }
+    return partRepo.getParts(this.context, bookId);
   }
 
   async setPartCoverImageId(partId: string, imageId: string | null): Promise<void> {
-    const now = new Date().toISOString();
-    const query = `UPDATE book_parts SET cover_image_id = ?, updated_at = ? WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(query, [imageId, now, partId]);
-    } else {
-      this.db.run(query, [imageId, now, partId]);
-      this.requestPersistence();
-      await this.flushPersistence();
-    }
+    return partRepo.setPartCoverImageId(this.context, partId, imageId);
   }
 
   async updatePart(partId: string, name: string) {
-    const now = new Date().toISOString();
-    const query = `UPDATE book_parts SET name = ?, updated_at = ? WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(query, [name, now, partId]);
-    } else {
-      this.db.run(query, [name, now, partId]);
-      this.requestPersistence();
-    }
-  }
-
-  private async getBookPartOrder(bookId: string): Promise<string[]> {
-    const query = `SELECT part_order FROM books WHERE id = ?`;
-    let partOrder: string[] = [];
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [bookId]);
-      if (result.values && result.values[0]) {
-        const orderValue = readQueryRowValue(result.values[0], 0, 'part_order');
-        const orderStr = typeof orderValue === 'string' ? orderValue : '[]';
-        try {
-          const parsed = JSON.parse(orderStr);
-          if (Array.isArray(parsed)) {
-            partOrder = parsed;
-          }
-        } catch (error) {
-          console.warn('Failed to parse part order for book', bookId, error);
-        }
-      }
-    } else {
-      const result = this.db.exec(query, [bookId]);
-      if (result.length > 0 && result[0].values && result[0].values[0]) {
-        const orderStr = (result[0].values[0][0] as string) || '[]';
-        try {
-          const parsed = JSON.parse(orderStr);
-          if (Array.isArray(parsed)) {
-            partOrder = parsed;
-          }
-        } catch (error) {
-          console.warn('Failed to parse part order for book', bookId, error);
-        }
-      }
-    }
-
-    return partOrder;
-  }
-
-  private async saveBookPartOrder(bookId: string, partOrder: string[]) {
-    const uniqueOrder = Array.from(new Set(partOrder));
-    const query = `UPDATE books SET part_order = ? WHERE id = ?`;
-    const serialized = JSON.stringify(uniqueOrder);
-
-    if (this.isNative) {
-      await this.db.run(query, [serialized, bookId]);
-    } else {
-      this.db.run(query, [serialized, bookId]);
-      this.requestPersistence();
-    }
+    return partRepo.updatePart(this.context, partId, name);
   }
 
   async updatePartOrder(bookId: string, partOrder: string[]) {
-    await this.saveBookPartOrder(bookId, partOrder);
+    return partRepo.updatePartOrder(this.context, bookId, partOrder);
   }
 
   async deletePart(partId: string) {
-    let bookId: string | null = null;
-    const getBookIdQuery = `SELECT book_id FROM book_parts WHERE id = ? LIMIT 1`;
-
-    if (this.isNative) {
-      const result = await this.db.query(getBookIdQuery, [partId]);
-      if (result.values && result.values[0]) {
-        bookId = result.values[0].book_id as string;
-      }
-    } else {
-      const result = this.db.exec(getBookIdQuery, [partId]);
-      if (result.length > 0 && result[0].values && result[0].values[0]) {
-        const row = result[0].values[0];
-        bookId = (row[0] as string) || null;
-      }
-    }
-
-    // Remove part reference from chapters
-    const updateChaptersQuery = `UPDATE chapters SET part_id = NULL WHERE part_id = ?`;
-    const deleteQuery = `DELETE FROM book_parts WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(updateChaptersQuery, [partId]);
-      await this.db.run(deleteQuery, [partId]);
-      await this.db.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId]);
-    } else {
-      this.db.run(updateChaptersQuery, [partId]);
-      this.db.run(deleteQuery, [partId]);
-      this.db.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId]);
-      this.requestPersistence();
-    }
-
-    if (bookId) {
-      const currentOrder = await this.getBookPartOrder(bookId);
-      const updatedOrder = currentOrder.filter((id) => id !== partId);
-      await this.saveBookPartOrder(bookId, updatedOrder);
-    }
+    return partRepo.deletePart(this.context, partId);
   }
 
   async updateChapterOrders(
@@ -1515,64 +1354,7 @@ export class AppDatabase {
     partUpdates: Record<string, string[]>,
     partOrder?: string[]
   ) {
-    // Update book's chapter_order
-    const updateBookQuery = `UPDATE books SET chapter_order = ? WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(updateBookQuery, [JSON.stringify(chapterOrder), bookId]);
-
-      // Update each part's chapter_order and chapter part_id assignments
-      for (const [partId, chapterIds] of Object.entries(partUpdates)) {
-        if (partId === 'null') {
-          // Remove part_id from these chapters
-          for (const chapterId of chapterIds) {
-            await this.db.run('UPDATE chapters SET part_id = NULL WHERE id = ?', [chapterId]);
-          }
-        } else {
-          // Update part's chapter_order
-          await this.db.run('UPDATE book_parts SET chapter_order = ? WHERE id = ?', [
-            JSON.stringify(chapterIds),
-            partId
-          ]);
-          // Assign chapters to this part
-          for (const chapterId of chapterIds) {
-            await this.db.run('UPDATE chapters SET part_id = ? WHERE id = ?', [partId, chapterId]);
-          }
-        }
-      }
-
-      if (partOrder) {
-        await this.saveBookPartOrder(bookId, partOrder);
-      }
-    } else {
-      this.db.run(updateBookQuery, [JSON.stringify(chapterOrder), bookId]);
-
-      // Update each part's chapter_order and chapter part_id assignments
-      for (const [partId, chapterIds] of Object.entries(partUpdates)) {
-        if (partId === 'null') {
-          // Remove part_id from these chapters
-          for (const chapterId of chapterIds) {
-            this.db.run('UPDATE chapters SET part_id = NULL WHERE id = ?', [chapterId]);
-          }
-        } else {
-          // Update part's chapter_order
-          this.db.run('UPDATE book_parts SET chapter_order = ? WHERE id = ?', [
-            JSON.stringify(chapterIds),
-            partId
-          ]);
-          // Assign chapters to this part
-          for (const chapterId of chapterIds) {
-            this.db.run('UPDATE chapters SET part_id = ? WHERE id = ?', [partId, chapterId]);
-          }
-        }
-      }
-
-      if (partOrder) {
-        await this.saveBookPartOrder(bookId, partOrder);
-      }
-
-      this.requestPersistence();
-    }
+    return partRepo.updateChapterOrders(this.context, bookId, chapterOrder, partUpdates, partOrder);
   }
 
   async exportDatabase(): Promise<Uint8Array> {
