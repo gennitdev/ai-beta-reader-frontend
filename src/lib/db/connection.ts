@@ -41,9 +41,12 @@ export interface AppDatabaseConnection {
  * - `requestPersistence` — schedules a debounced snapshot write on the web/
  *   desktop backend (a no-op on native and during bulk imports). Repositories
  *   should call this after any mutation on the non-native path.
+ * - `flushPersistence` — forces the pending snapshot to be written immediately.
+ *   Used where a mutation must be durable before returning (e.g. image assets).
  */
 export interface DatabaseContext {
   readonly connection: AppDatabaseConnection
   readonly isNative: boolean
   requestPersistence(): void
+  flushPersistence(): Promise<void>
 }

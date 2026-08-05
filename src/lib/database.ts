@@ -49,6 +49,8 @@ import type {
 import { readQueryRowValue } from '@/lib/db/rowUtils';
 import * as metadataRepo from '@/lib/db/metadataRepository';
 import * as wikiRepo from '@/lib/db/wikiRepository';
+import * as imageRepo from '@/lib/db/imageRepository';
+import { imageAssetFromSqlRow } from '@/lib/db/imageRepository';
 
 export interface Book {
   id: string;
@@ -243,37 +245,8 @@ export interface WikiPageChapterLink {
   updated_at: string | null;
 }
 
-function imageAssetFromSqlRow(row: unknown[]): ImageAsset {
-  return {
-    id: String(row[0]),
-    book_id: String(row[1]),
-    chapter_id: row[2] == null ? null : String(row[2]),
-    asset_type: row[3] as ImageAssetType,
-    file_name: String(row[4]),
-    file_path: String(row[5]),
-    mime_type: row[6] == null ? null : String(row[6]),
-    image_data: row[7] == null ? null : String(row[7]),
-    notes: row[8] == null ? '' : String(row[8]),
-    created_at: String(row[9]),
-    updated_at: String(row[10]),
-  };
-}
-
-function imageAssetFromNativeRow(row: Record<string, unknown>): ImageAsset {
-  return {
-    id: String(row.id),
-    book_id: String(row.book_id),
-    chapter_id: row.chapter_id == null ? null : String(row.chapter_id),
-    asset_type: row.asset_type as ImageAssetType,
-    file_name: String(row.file_name),
-    file_path: String(row.file_path),
-    mime_type: row.mime_type == null ? null : String(row.mime_type),
-    image_data: row.image_data == null ? null : String(row.image_data),
-    notes: row.notes == null ? '' : String(row.notes),
-    created_at: String(row.created_at),
-    updated_at: String(row.updated_at),
-  };
-}
+// Image asset row mappers moved to ./db/imageRepository (imageAssetFromSqlRow is
+// re-imported below for the legacy browser-image migration).
 
 const NATIVE_CAPACITOR_PLATFORMS = new Set(['ios', 'android']);
 
@@ -1912,6 +1885,7 @@ export class AppDatabase {
       connection: this.db,
       isNative: this.isNative ?? false,
       requestPersistence: () => this.requestPersistence(),
+      flushPersistence: () => this.flushPersistence(),
     };
   }
 
@@ -2533,311 +2507,70 @@ export class AppDatabase {
     dispatchChapterWikiLinksChanged({ chapterIds: [], wikiPageIds: [request.targetId] });
   }
 
+  // --- Image assets, wiki tags, and cover images ---------------------------
+  // Delegated to ./db/imageRepository. Public signatures are unchanged.
   async saveImageAsset(asset: ImageAsset) {
-    const query = `INSERT OR REPLACE INTO image_assets
-      (id, book_id, chapter_id, asset_type, file_name, file_path, mime_type, image_data, notes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    const params = [
-      asset.id,
-      asset.book_id,
-      asset.chapter_id ?? null,
-      asset.asset_type,
-      asset.file_name,
-      asset.file_path,
-      asset.mime_type ?? null,
-      asset.image_data ?? null,
-      asset.notes ?? '',
-      asset.created_at,
-      asset.updated_at,
-    ];
-
-    if (this.isNative) {
-      await this.db.run(query, params);
-    } else {
-      this.db.run(query, params);
-      this.requestPersistence();
-      await this.flushPersistence();
-    }
+    return imageRepo.saveImageAsset(this.context, asset);
   }
 
   async deleteImageAsset(imageId: string) {
-    const unlinkCoverQuery = `UPDATE books SET cover_image_id = NULL WHERE cover_image_id = ?`;
-    const unlinkPartCoverQuery = `UPDATE book_parts SET cover_image_id = NULL WHERE cover_image_id = ?`;
-    const unlinkChapterCoverQuery = `UPDATE chapters SET cover_image_id = NULL WHERE cover_image_id = ?`;
-    const deleteTagsQuery = `DELETE FROM image_wiki_tags WHERE image_id = ?`;
-    const deleteQuery = `DELETE FROM image_assets WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(unlinkCoverQuery, [imageId]);
-      await this.db.run(unlinkPartCoverQuery, [imageId]);
-      await this.db.run(unlinkChapterCoverQuery, [imageId]);
-      await this.db.run(deleteTagsQuery, [imageId]);
-      await this.db.run(deleteQuery, [imageId]);
-    } else {
-      this.db.run(unlinkCoverQuery, [imageId]);
-      this.db.run(unlinkPartCoverQuery, [imageId]);
-      this.db.run(unlinkChapterCoverQuery, [imageId]);
-      this.db.run(deleteTagsQuery, [imageId]);
-      this.db.run(deleteQuery, [imageId]);
-      this.requestPersistence();
-      await this.flushPersistence();
-    }
+    return imageRepo.deleteImageAsset(this.context, imageId);
   }
 
   async updateImageAssetNotes(imageId: string, notes: string): Promise<void> {
-    const query = `UPDATE image_assets SET notes = ?, updated_at = ? WHERE id = ?`;
-    const params = [notes, new Date().toISOString(), imageId];
-
-    if (this.isNative) {
-      await this.db.run(query, params);
-    } else {
-      this.db.run(query, params);
-      this.requestPersistence();
-    }
+    return imageRepo.updateImageAssetNotes(this.context, imageId, notes);
   }
 
   async getImageWikiTags(imageId: string): Promise<ImageWikiTag[]> {
-    const query = `
-      SELECT iwt.image_id, iwt.wiki_page_id, wp.page_name, wp.page_type, iwt.created_at
-      FROM image_wiki_tags iwt
-      INNER JOIN wiki_pages wp ON wp.id = iwt.wiki_page_id
-      WHERE iwt.image_id = ?
-      ORDER BY wp.page_name
-    `;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [imageId]);
-      return ((result.values || []) as Record<string, unknown>[]).map((row) => ({
-        image_id: String(row.image_id),
-        wiki_page_id: String(row.wiki_page_id),
-        page_name: String(row.page_name),
-        page_type: String(row.page_type),
-        created_at: String(row.created_at),
-      }));
-    }
-
-    const result = this.db.exec(query, [imageId]);
-    if (result.length === 0) return [];
-
-    return result[0].values.map((row: unknown[]) => ({
-      image_id: String(row[0]),
-      wiki_page_id: String(row[1]),
-      page_name: String(row[2]),
-      page_type: String(row[3]),
-      created_at: String(row[4]),
-    }));
+    return imageRepo.getImageWikiTags(this.context, imageId);
   }
 
   async setImageWikiTags(imageId: string, wikiPageIds: string[]): Promise<void> {
-    const deleteQuery = `DELETE FROM image_wiki_tags WHERE image_id = ?`;
-    const insertQuery = `INSERT OR IGNORE INTO image_wiki_tags (image_id, wiki_page_id, created_at) VALUES (?, ?, ?)`;
-    const now = new Date().toISOString();
-    const uniqueWikiPageIds = [...new Set(wikiPageIds)];
-
-    if (this.isNative) {
-      await this.db.run(deleteQuery, [imageId]);
-      for (const wikiPageId of uniqueWikiPageIds) {
-        await this.db.run(insertQuery, [imageId, wikiPageId, now]);
-      }
-    } else {
-      this.db.run(deleteQuery, [imageId]);
-      for (const wikiPageId of uniqueWikiPageIds) {
-        this.db.run(insertQuery, [imageId, wikiPageId, now]);
-      }
-      this.requestPersistence();
-    }
+    return imageRepo.setImageWikiTags(this.context, imageId, wikiPageIds);
   }
 
   async getWikiPageImages(wikiPageId: string): Promise<ImageAsset[]> {
-    const query = `
-      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
-      FROM image_wiki_tags iwt
-      INNER JOIN image_assets ia ON ia.id = iwt.image_id
-      WHERE iwt.wiki_page_id = ?
-      ORDER BY ia.created_at DESC
-    `;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [wikiPageId]);
-      return (result.values || []).map(imageAssetFromNativeRow);
-    }
-
-    const result = this.db.exec(query, [wikiPageId]);
-    if (result.length === 0) return [];
-    return result[0].values.map(imageAssetFromSqlRow);
+    return imageRepo.getWikiPageImages(this.context, wikiPageId);
   }
 
   async getChapterImages(chapterId: string): Promise<ImageAsset[]> {
-    const query = `SELECT ${IMAGE_ASSET_COLUMNS.join(', ')} FROM image_assets WHERE chapter_id = ? ORDER BY created_at DESC`;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [chapterId]);
-      return (result.values || []).map(imageAssetFromNativeRow);
-    } else {
-      const result = this.db.exec(query, [chapterId]);
-      if (result.length === 0) return [];
-      return result[0].values.map(imageAssetFromSqlRow);
-    }
+    return imageRepo.getChapterImages(this.context, chapterId);
   }
 
   async getPartImages(partId: string): Promise<ImageAsset[]> {
-    const query = `
-      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
-      FROM image_assets ia
-      INNER JOIN chapters c ON c.id = ia.chapter_id
-      WHERE c.part_id = ?
-      ORDER BY ia.created_at DESC
-    `;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [partId]);
-      return (result.values || []).map(imageAssetFromNativeRow);
-    } else {
-      const result = this.db.exec(query, [partId]);
-      if (result.length === 0) return [];
-      return result[0].values.map(imageAssetFromSqlRow);
-    }
+    return imageRepo.getPartImages(this.context, partId);
   }
 
   async getBookImages(bookId: string): Promise<ImageAsset[]> {
-    const query = `SELECT ${IMAGE_ASSET_COLUMNS.join(', ')} FROM image_assets WHERE book_id = ? ORDER BY created_at DESC`;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [bookId]);
-      return (result.values || []).map(imageAssetFromNativeRow);
-    } else {
-      const result = this.db.exec(query, [bookId]);
-      if (result.length === 0) return [];
-      return result[0].values.map(imageAssetFromSqlRow);
-    }
+    return imageRepo.getBookImages(this.context, bookId);
   }
 
   async getBookCoverImage(bookId: string): Promise<ImageAsset | null> {
-    const query = `
-      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
-      FROM books b
-      LEFT JOIN image_assets ia ON ia.id = b.cover_image_id
-      WHERE b.id = ?
-      LIMIT 1
-    `;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [bookId]);
-      const row = result.values && result.values[0];
-      if (!row || !row.id) return null;
-      return imageAssetFromNativeRow(row);
-    } else {
-      const result = this.db.exec(query, [bookId]);
-      if (result.length === 0 || result[0].values.length === 0) return null;
-      const row = result[0].values[0];
-      if (!row[0]) return null;
-      return imageAssetFromSqlRow(row);
-    }
+    return imageRepo.getBookCoverImage(this.context, bookId);
   }
 
   async setBookCoverImage(bookId: string, imageId: string | null) {
-    const query = `UPDATE books SET cover_image_id = ? WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(query, [imageId, bookId]);
-    } else {
-      this.db.run(query, [imageId, bookId]);
-      this.requestPersistence();
-      await this.flushPersistence();
-    }
+    return imageRepo.setBookCoverImage(this.context, bookId, imageId);
   }
 
   async getPartCoverImage(partId: string): Promise<ImageAsset | null> {
-    const query = `
-      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
-      FROM book_parts bp
-      LEFT JOIN image_assets ia ON ia.id = bp.cover_image_id
-      WHERE bp.id = ?
-      LIMIT 1
-    `;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [partId]);
-      const row = result.values && result.values[0];
-      if (!row || !row.id) return null;
-      return imageAssetFromNativeRow(row);
-    } else {
-      const result = this.db.exec(query, [partId]);
-      if (result.length === 0 || result[0].values.length === 0) return null;
-      const row = result[0].values[0];
-      if (!row[0]) return null;
-      return imageAssetFromSqlRow(row);
-    }
+    return imageRepo.getPartCoverImage(this.context, partId);
   }
 
   async setChapterCoverImageId(chapterId: string, imageId: string | null): Promise<void> {
-    const query = `UPDATE chapters SET cover_image_id = ? WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(query, [imageId, chapterId]);
-    } else {
-      this.db.run(query, [imageId, chapterId]);
-      this.requestPersistence();
-      await this.flushPersistence();
-    }
+    return imageRepo.setChapterCoverImageId(this.context, chapterId, imageId);
   }
 
   async getChapterCoverImage(chapterId: string): Promise<ImageAsset | null> {
-    const query = `
-      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
-      FROM chapters c
-      LEFT JOIN image_assets ia ON ia.id = c.cover_image_id
-      WHERE c.id = ?
-      LIMIT 1
-    `;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [chapterId]);
-      const row = result.values && result.values[0];
-      if (!row || !row.id) return null;
-      return imageAssetFromNativeRow(row);
-    } else {
-      const result = this.db.exec(query, [chapterId]);
-      if (result.length === 0 || result[0].values.length === 0) return null;
-      const row = result[0].values[0];
-      if (!row[0]) return null;
-      return imageAssetFromSqlRow(row);
-    }
+    return imageRepo.getChapterCoverImage(this.context, chapterId);
   }
 
   async setWikiPageCoverImageId(wikiPageId: string, imageId: string | null): Promise<void> {
-    const query = `UPDATE wiki_pages SET cover_image_id = ?, updated_at = ? WHERE id = ?`;
-    const updatedAt = new Date().toISOString();
-
-    if (this.isNative) {
-      await this.db.run(query, [imageId, updatedAt, wikiPageId]);
-    } else {
-      this.db.run(query, [imageId, updatedAt, wikiPageId]);
-      this.requestPersistence();
-    }
+    return imageRepo.setWikiPageCoverImageId(this.context, wikiPageId, imageId);
   }
 
   async getWikiPageCoverImage(wikiPageId: string): Promise<ImageAsset | null> {
-    const query = `
-      SELECT ${IMAGE_ASSET_COLUMNS.map((column) => `ia.${column}`).join(', ')}
-      FROM wiki_pages wp
-      LEFT JOIN image_assets ia ON ia.id = wp.cover_image_id
-      WHERE wp.id = ?
-      LIMIT 1
-    `;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [wikiPageId]);
-      const row = result.values && result.values[0];
-      if (!row || !row.id) return null;
-      return imageAssetFromNativeRow(row);
-    } else {
-      const result = this.db.exec(query, [wikiPageId]);
-      if (result.length === 0 || result[0].values.length === 0) return null;
-      const row = result[0].values[0];
-      if (!row[0]) return null;
-      return imageAssetFromSqlRow(row);
-    }
+    return imageRepo.getWikiPageCoverImage(this.context, wikiPageId);
   }
 
   async replaceInChapter(chapterId: string, searchTerm: string, replaceTerm: string): Promise<void> {
