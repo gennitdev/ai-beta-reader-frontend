@@ -138,6 +138,10 @@ const fontSizeClass = computed(() => {
 </template>
 
 <style scoped>
+/* Tailwind v4 compiles each scoped block in isolation, so pull in the
+   project stylesheet (and its @config) to resolve @apply utilities. */
+@reference '../style.css';
+
 /* Custom styles for code blocks */
 :deep(.hljs) {
   @apply rounded-md border border-gray-200 dark:border-gray-700;
