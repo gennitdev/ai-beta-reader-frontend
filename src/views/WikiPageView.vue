@@ -3,65 +3,38 @@ import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import { useWikiImages } from '@/composables/useWikiImages'
+import { useWikiAliases } from '@/composables/useWikiAliases'
+import { useWikiTags } from '@/composables/useWikiTags'
+import { useWikiLinkedChapters } from '@/composables/useWikiLinkedChapters'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import FontSizeControl from '@/components/reading/FontSizeControl.vue'
 import WikiPageHeroSection from '@/components/wiki/WikiPageHeroSection.vue'
 import WikiPageIllustrationsSection from '@/components/wiki/WikiPageIllustrationsSection.vue'
+import WikiPageInfoCard from '@/components/wiki/WikiPageInfoCard.vue'
 import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
-import AutocompleteMultiSelect, {
-  type AutocompleteOption,
-} from '@/components/links/AutocompleteMultiSelect.vue'
+import AutocompleteMultiSelect from '@/components/links/AutocompleteMultiSelect.vue'
 import Modal from '@/components/Modal.vue'
 import { useReadingFontSize } from '@/composables/useReadingFontSize'
-import type { Book, Chapter as DatabaseChapter, WikiPageChapterLink } from '@/lib/database'
+import type { Book } from '@/lib/database'
+import type { WikiPage, WikiUpdate, Character } from '@/types/wikiPageView'
+import {
+  parseStringArray,
+  formatDate,
+  getTypeIcon,
+  getTypeColor,
+} from '@/utils/wikiPageView'
 import {
   CHAPTER_WIKI_LINKS_CHANGED_EVENT,
   type ChapterWikiLinksChangedDetail,
 } from '@/utils/chapterWikiLinkEvents'
-import { normalizeWikiAliases } from '@/lib/wikiAliases'
 import {
   ArrowLeftIcon,
   PencilIcon,
   ClockIcon,
-  UserIcon,
-  MapPinIcon,
-  LightBulbIcon,
   BookOpenIcon,
   TrashIcon,
   BookmarkIcon,
 } from '@heroicons/vue/24/outline'
-
-interface WikiPage {
-  id: string
-  book_id: string
-  page_name: string
-  page_type: 'character' | 'location' | 'concept' | 'other'
-  content: string
-  summary: string | null
-  aliases: string[]
-  tags: string[]
-  is_major: boolean
-  is_pinned: boolean
-  created_by_ai: boolean
-  created_at: string
-  updated_at: string
-}
-
-interface WikiUpdate {
-  id: string
-  update_type: string
-  change_summary: string | null
-  contradiction_notes: string | null
-  created_at: string
-  chapter_title: string | null
-}
-
-interface Character {
-  id: string
-  character_name: string
-  wiki_page_id: string | null
-  has_wiki_page: boolean
-}
 
 const route = useRoute()
 const router = useRouter()
@@ -124,24 +97,10 @@ const { fontSize } = useReadingFontSize()
 const wikiPage = ref<WikiPage | null>(null)
 const wikiHistory = ref<WikiUpdate[]>([])
 const characters = ref<Character[]>([])
-const linkedChapters = ref<WikiPageChapterLink[]>([])
-const loadingLinkedChapters = ref(false)
-const isEditingLinkedChapters = ref(false)
-const selectedLinkedChapterIds = ref<string[]>([])
-const savingLinkedChapters = ref(false)
 const loading = ref(false)
 const loadingHistory = ref(false)
 const showHistory = ref(false)
 const isEditing = ref(false)
-const isEditingTags = ref(false)
-const editedTags = ref<string[]>([])
-const newTag = ref('')
-const savingTags = ref(false)
-const isEditingAliases = ref(false)
-const editedAliases = ref<string[]>([])
-const newAlias = ref('')
-const savingAliases = ref(false)
-const aliasError = ref('')
 
 // Feature flag for wiki history (disabled by default)
 const isHistoryFeatureEnabled = computed(() => import.meta.env.VITE_ENABLE_WIKI_HISTORY === 'true')
@@ -155,24 +114,6 @@ const editedPageName = ref('')
 // Delete state
 const showDeleteModal = ref(false)
 const deleting = ref(false)
-
-const getTypeIcon = (type: string) => {
-  switch (type) {
-    case 'character': return UserIcon
-    case 'location': return MapPinIcon
-    case 'concept': return LightBulbIcon
-    default: return BookOpenIcon
-  }
-}
-
-const getTypeColor = (type: string) => {
-  switch (type) {
-    case 'character': return 'text-gold-600'
-    case 'location': return 'text-green-600'
-    case 'concept': return 'text-purple-600'
-    default: return 'text-gray-600'
-  }
-}
 
 // Computed book title from database
 const bookTitle = computed(() => {
@@ -200,76 +141,54 @@ const originatingChapterId = computed(() =>
 
 const currentBook = computed(() => books.value.find((book: Book) => book.id === bookId.value) || null)
 
-const parseStringArray = (value: unknown): string[] => {
-  if (!value) return []
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
-      .filter((entry): entry is string => entry.length > 0)
-  }
-  if (typeof value !== 'string') return []
+// Alternate-name (alias) editing
+const {
+  isEditingAliases,
+  editedAliases,
+  newAlias,
+  savingAliases,
+  aliasError,
+  resetAliasEditor,
+  startEditingAliases,
+  cancelEditAliases,
+  addAlias,
+  removeAlias,
+  saveAliases,
+} = useWikiAliases({ wikiPage, wikiPageId, updateWikiPage })
 
-  try {
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed)
-      ? parsed
-          .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
-          .filter((entry): entry is string => entry.length > 0)
-      : []
-  } catch {
-    return []
-  }
-}
+// Tag editing
+const {
+  isEditingTags,
+  editedTags,
+  newTag,
+  savingTags,
+  resetTagEditor,
+  startEditingTags,
+  cancelEditTags,
+  addTag,
+  removeTag,
+  saveTags,
+} = useWikiTags({ wikiPage, wikiPageId, updateWikiPage })
 
-const normalizeTags = (tags: string[]): string[] => {
-  const seen = new Set<string>()
-  const normalized: string[] = []
-
-  for (const tag of tags) {
-    const trimmed = tag.trim()
-    if (!trimmed) continue
-    const key = trimmed.toLocaleLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    normalized.push(trimmed)
-  }
-
-  return normalized
-}
-
-const parseIdArray = (value: string | null | undefined): string[] => {
-  if (!value) return []
-  try {
-    const parsed = JSON.parse(value)
-    if (Array.isArray(parsed)) {
-      return parsed.filter((entry): entry is string => typeof entry === 'string')
-    }
-  } catch {
-    // Ignore parse errors and fall back to empty array.
-  }
-  return []
-}
-
-const chapterOptions = computed<AutocompleteOption[]>(() => {
-  const chapterOrder = parseIdArray(currentBook.value?.chapter_order)
-  const chapterMap = new Map(chapters.value.map((chapter: DatabaseChapter) => [chapter.id, chapter]))
-  const orderedIds = [
-    ...chapterOrder.filter((id) => chapterMap.has(id)),
-    ...chapters.value
-      .map((chapter) => chapter.id)
-      .filter((id) => !chapterOrder.includes(id)),
-  ]
-
-  return orderedIds.reduce<AutocompleteOption[]>((options, id, index) => {
-      const chapter = chapterMap.get(id)
-      if (!chapter) return options
-      options.push({
-        id: chapter.id,
-        label: chapter.title || `Chapter ${index + 1}`,
-        detail: `Ch ${index + 1}`,
-      })
-      return options
-    }, [])
+// Linked chapters
+const {
+  linkedChapters,
+  loadingLinkedChapters,
+  isEditingLinkedChapters,
+  selectedLinkedChapterIds,
+  savingLinkedChapters,
+  chapterOptions,
+  loadLinkedChapters,
+  startEditingLinkedChapters,
+  cancelEditingLinkedChapters,
+  saveLinkedChapters,
+} = useWikiLinkedChapters({
+  wikiPage,
+  wikiPageId,
+  getChapters: () => chapters.value,
+  getCurrentBook: () => currentBook.value,
+  getWikiPageChapterLinks,
+  setWikiPageChapterLinks,
 })
 
 const loadWikiPage = async () => {
@@ -298,13 +217,8 @@ const loadWikiPage = async () => {
         updated_at: pageData.updated_at
       }
       editedContent.value = pageData.content || ''
-      editedAliases.value = [...wikiPage.value.aliases]
-      newAlias.value = ''
-      aliasError.value = ''
-      isEditingAliases.value = false
-      editedTags.value = parseStringArray(pageData.tags)
-      newTag.value = ''
-      isEditingTags.value = false
+      resetAliasEditor()
+      resetTagEditor()
       await refreshWikiImages()
     } else {
       console.error('Wiki page not found')
@@ -321,27 +235,6 @@ const loadWikiPage = async () => {
 const loadCharacters = async () => {
   // TODO: Load characters from local database if needed
   characters.value = []
-}
-
-const loadLinkedChapters = async () => {
-  if (!wikiPageId.value) {
-    linkedChapters.value = []
-    selectedLinkedChapterIds.value = []
-    return
-  }
-
-  loadingLinkedChapters.value = true
-  try {
-    const links = await getWikiPageChapterLinks(wikiPageId.value)
-    linkedChapters.value = links
-    selectedLinkedChapterIds.value = links.map((link) => link.chapter_id)
-  } catch (error) {
-    console.error('Failed to load linked chapters:', error)
-    linkedChapters.value = []
-    selectedLinkedChapterIds.value = []
-  } finally {
-    loadingLinkedChapters.value = false
-  }
 }
 
 const loadWikiHistory = async () => {
@@ -410,117 +303,6 @@ const cancelEdit = () => {
   if (!wikiPage.value) return
   editedContent.value = wikiPage.value.content
   isEditing.value = false
-}
-
-const startEditingAliases = () => {
-  if (!wikiPage.value) return
-  editedAliases.value = [...wikiPage.value.aliases]
-  newAlias.value = ''
-  aliasError.value = ''
-  isEditingAliases.value = true
-}
-
-const cancelEditAliases = () => {
-  if (!wikiPage.value) return
-  editedAliases.value = [...wikiPage.value.aliases]
-  newAlias.value = ''
-  aliasError.value = ''
-  isEditingAliases.value = false
-}
-
-const addAlias = () => {
-  if (!wikiPage.value) return
-  const alias = newAlias.value.trim()
-  if (!alias) return
-
-  const nextAliases = normalizeWikiAliases(
-    [...editedAliases.value, alias],
-    wikiPage.value.page_name,
-  )
-  if (nextAliases.length === editedAliases.value.length) {
-    aliasError.value = 'Alternate names must be unique and different from the page name.'
-    return
-  }
-
-  editedAliases.value = nextAliases
-  newAlias.value = ''
-  aliasError.value = ''
-}
-
-const removeAlias = (aliasToRemove: string) => {
-  editedAliases.value = editedAliases.value.filter((alias) => alias !== aliasToRemove)
-  aliasError.value = ''
-}
-
-const saveAliases = async () => {
-  if (!wikiPage.value) return
-
-  const aliases = normalizeWikiAliases(editedAliases.value, wikiPage.value.page_name)
-  savingAliases.value = true
-  aliasError.value = ''
-  try {
-    await updateWikiPage(wikiPageId.value, { aliases })
-    wikiPage.value.aliases = aliases
-    wikiPage.value.updated_at = new Date().toISOString()
-    editedAliases.value = [...aliases]
-    newAlias.value = ''
-    isEditingAliases.value = false
-  } catch (error) {
-    console.error('Failed to save wiki page alternate names:', error)
-    aliasError.value = error instanceof Error
-      ? error.message
-      : 'Failed to save alternate names.'
-  } finally {
-    savingAliases.value = false
-  }
-}
-
-const startEditingTags = () => {
-  if (!wikiPage.value) return
-  editedTags.value = [...wikiPage.value.tags]
-  newTag.value = ''
-  isEditingTags.value = true
-}
-
-const cancelEditTags = () => {
-  if (!wikiPage.value) return
-  editedTags.value = [...wikiPage.value.tags]
-  newTag.value = ''
-  isEditingTags.value = false
-}
-
-const addTag = () => {
-  const nextTag = newTag.value.trim()
-  if (!nextTag) return
-  editedTags.value = normalizeTags([...editedTags.value, nextTag])
-  newTag.value = ''
-}
-
-const removeTag = (tagToRemove: string) => {
-  editedTags.value = editedTags.value.filter((tag) => tag !== tagToRemove)
-}
-
-const saveTags = async () => {
-  if (!wikiPage.value) return
-
-  const normalizedTags = normalizeTags(editedTags.value)
-  savingTags.value = true
-  try {
-    await updateWikiPage(wikiPageId.value, {
-      tags: JSON.stringify(normalizedTags)
-    })
-
-    wikiPage.value.tags = normalizedTags
-    wikiPage.value.updated_at = new Date().toISOString()
-    editedTags.value = [...normalizedTags]
-    newTag.value = ''
-    isEditingTags.value = false
-  } catch (error) {
-    console.error('Failed to save wiki page tags:', error)
-    alert('Failed to save tags')
-  } finally {
-    savingTags.value = false
-  }
 }
 
 const togglePinned = async () => {
@@ -597,47 +379,10 @@ const handleDelete = async () => {
   }
 }
 
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
 const toggleHistory = () => {
   showHistory.value = !showHistory.value
   if (showHistory.value && wikiHistory.value.length === 0) {
     loadWikiHistory()
-  }
-}
-
-const startEditingLinkedChapters = () => {
-  selectedLinkedChapterIds.value = linkedChapters.value.map((link) => link.chapter_id)
-  isEditingLinkedChapters.value = true
-}
-
-const cancelEditingLinkedChapters = () => {
-  selectedLinkedChapterIds.value = linkedChapters.value.map((link) => link.chapter_id)
-  isEditingLinkedChapters.value = false
-}
-
-const saveLinkedChapters = async () => {
-  if (!wikiPage.value) return
-
-  savingLinkedChapters.value = true
-  try {
-    await setWikiPageChapterLinks(wikiPage.value.id, selectedLinkedChapterIds.value, 'manual')
-    await loadLinkedChapters()
-    isEditingLinkedChapters.value = false
-  } catch (error) {
-    console.error('Failed to save linked chapters:', error)
-    alert('Failed to save linked chapters')
-  } finally {
-    savingLinkedChapters.value = false
   }
 }
 
@@ -981,201 +726,33 @@ watch(
         <FontSizeControl v-if="!isEditing && wikiPage.content" v-model="fontSize" />
 
         <!-- Page Info -->
-        <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-          <div class="p-6">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Page Info</h3>
-
-            <div class="space-y-3 text-sm">
-              <div>
-                <span class="font-medium text-gray-300 ">Type:</span>
-                <span class="ml-2 capitalize text-gray-400 dark:text-gray-100">{{ wikiPage.page_type }}</span>
-              </div>
-
-              <div v-if="wikiPage.summary">
-                <span class="font-medium text-gray-700 dark:text-gray-300">Summary:</span>
-                <p class="mt-1 text-gray-600 dark:text-gray-400">{{ wikiPage.summary }}</p>
-              </div>
-
-              <div>
-                <div class="flex items-center justify-between gap-3">
-                  <span class="font-medium text-gray-700 dark:text-gray-300">Alternate names:</span>
-                  <button
-                    v-if="!isEditingAliases"
-                    type="button"
-                    class="text-xs font-medium text-gold-600 transition-colors hover:text-gold-700 dark:text-gold-400 dark:hover:text-gold-300"
-                    @click="startEditingAliases"
-                  >
-                    {{ wikiPage.aliases.length ? 'Edit names' : 'Add names' }}
-                  </button>
-                </div>
-
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Nicknames, titles, and other names that should resolve to this page.
-                </p>
-
-                <div v-if="isEditingAliases" class="mt-3 space-y-3">
-                  <div v-if="editedAliases.length" class="flex flex-wrap gap-2">
-                    <button
-                      v-for="alias in editedAliases"
-                      :key="alias"
-                      type="button"
-                      class="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-1 text-xs text-purple-800 transition-colors hover:bg-purple-200 dark:bg-purple-900 dark:text-purple-200 dark:hover:bg-purple-800"
-                      @click="removeAlias(alias)"
-                    >
-                      <span>{{ alias }}</span>
-                      <span class="ml-1.5 text-[11px]" aria-hidden="true">x</span>
-                      <span class="sr-only">Remove {{ alias }}</span>
-                    </button>
-                  </div>
-
-                  <div class="flex gap-2">
-                    <input
-                      v-model="newAlias"
-                      type="text"
-                      class="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                      placeholder="Add an alternate name"
-                      @keyup.enter="addAlias"
-                    />
-                    <button
-                      type="button"
-                      class="rounded-md bg-gold-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700"
-                      @click="addAlias"
-                    >
-                      Add
-                    </button>
-                  </div>
-
-                  <p v-if="aliasError" class="text-xs text-red-600 dark:text-red-400" role="alert">
-                    {{ aliasError }}
-                  </p>
-
-                  <div class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      class="rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      :disabled="savingAliases"
-                      @click="saveAliases"
-                    >
-                      {{ savingAliases ? 'Saving...' : 'Save names' }}
-                    </button>
-                    <button
-                      type="button"
-                      class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
-                      :disabled="savingAliases"
-                      @click="cancelEditAliases"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-
-                <div v-else-if="wikiPage.aliases.length" class="mt-2 flex flex-wrap gap-1">
-                  <span
-                    v-for="alias in wikiPage.aliases"
-                    :key="alias"
-                    class="rounded bg-purple-100 px-2 py-1 text-xs text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-                  >
-                    {{ alias }}
-                  </span>
-                </div>
-                <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  No alternate names yet.
-                </p>
-              </div>
-
-              <div>
-                <div class="flex items-center justify-between">
-                  <span class="font-medium text-gray-700 dark:text-gray-300">Tags:</span>
-                  <button
-                    v-if="!isEditingTags"
-                    type="button"
-                    class="text-xs font-medium text-gold-600 transition-colors hover:text-gold-700 dark:text-gold-400 dark:hover:text-gold-300"
-                    @click="startEditingTags"
-                  >
-                    {{ wikiPage.tags.length ? 'Edit tags' : 'Add tags' }}
-                  </button>
-                </div>
-
-                <div v-if="isEditingTags" class="mt-2 space-y-3">
-                  <div v-if="editedTags.length" class="flex flex-wrap gap-2">
-                    <button
-                      v-for="tag in editedTags"
-                      :key="tag"
-                      type="button"
-                      class="inline-flex items-center rounded-full bg-gold-100 px-2.5 py-1 text-xs text-gold-800 transition-colors hover:bg-gold-200 dark:bg-gold-900 dark:text-gold-200 dark:hover:bg-gold-800"
-                      @click="removeTag(tag)"
-                    >
-                      <span>{{ tag }}</span>
-                      <span class="ml-1.5 text-[11px]">x</span>
-                    </button>
-                  </div>
-                  <p v-else class="text-xs text-gray-500 dark:text-gray-400">
-                    No tags yet. Add a few to improve organization.
-                  </p>
-
-                  <div class="flex gap-2">
-                    <input
-                      v-model="newTag"
-                      type="text"
-                      class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                      placeholder="Add a tag"
-                      @keyup.enter="addTag"
-                    />
-                    <button
-                      type="button"
-                      class="rounded-md bg-gold-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700"
-                      @click="addTag"
-                    >
-                      Add
-                    </button>
-                  </div>
-
-                  <div class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      class="rounded-md bg-gold-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      :disabled="savingTags"
-                      @click="saveTags"
-                    >
-                      {{ savingTags ? 'Saving...' : 'Save tags' }}
-                    </button>
-                    <button
-                      type="button"
-                      class="text-sm font-medium text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
-                      :disabled="savingTags"
-                      @click="cancelEditTags"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-
-                <div v-else-if="wikiPage.tags.length" class="mt-1 flex flex-wrap gap-1">
-                  <span
-                    v-for="tag in wikiPage.tags"
-                    :key="tag"
-                    class="px-2 py-1 text-xs bg-gold-100 dark:bg-gold-900 text-gold-800 dark:text-gold-200 rounded"
-                  >
-                    {{ tag }}
-                  </span>
-                </div>
-                <p v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  No tags yet.
-                </p>
-              </div>
-
-              <div>
-                <span class="font-medium text-gray-300 dark:text-gray-300">Created:</span>
-                <span class="ml-2 text-gray-400 dark:text-gray-100">{{ formatDate(wikiPage.created_at) }}</span>
-              </div>
-
-              <div>
-                <span class="font-medium text-gray-300 dark:text-gray-300">Updated:</span>
-                <span class="ml-2 text-gray-400 dark:text-gray-100">{{ formatDate(wikiPage.updated_at) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <WikiPageInfoCard
+          :page-type="wikiPage.page_type"
+          :summary="wikiPage.summary"
+          :aliases="wikiPage.aliases"
+          :tags="wikiPage.tags"
+          :created-at="wikiPage.created_at"
+          :updated-at="wikiPage.updated_at"
+          :is-editing-aliases="isEditingAliases"
+          :edited-aliases="editedAliases"
+          :saving-aliases="savingAliases"
+          :alias-error="aliasError"
+          :is-editing-tags="isEditingTags"
+          :edited-tags="editedTags"
+          :saving-tags="savingTags"
+          v-model:new-alias="newAlias"
+          v-model:new-tag="newTag"
+          @start-editing-aliases="startEditingAliases"
+          @cancel-edit-aliases="cancelEditAliases"
+          @add-alias="addAlias"
+          @remove-alias="removeAlias"
+          @save-aliases="saveAliases"
+          @start-editing-tags="startEditingTags"
+          @cancel-edit-tags="cancelEditTags"
+          @add-tag="addTag"
+          @remove-tag="removeTag"
+          @save-tags="saveTags"
+        />
 
         <!-- Illustrations -->
         <WikiPageIllustrationsSection
