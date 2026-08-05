@@ -828,7 +828,7 @@ watch(() => [route.params.location, route.params.activity], () => {
             <p class="text-sm font-medium text-amber-300">Dusk settles over the crooked roofs.</p>
             <h2 class="mt-3 font-serif text-4xl font-bold">The story must go on.</h2>
             <p class="mt-5 max-w-2xl font-serif text-lg leading-8 text-stone-300">
-              Beyond the last wall, ghosts gather in a stone amphitheater. They once fed on human life. Now they accept a stranger nourishment: stories, honestly made and freely told.
+              Beyond the last wall, ghosts gather in a stone amphitheater. They once fed on human life. Now they accept a stranger nourishment: stories, preferably those that don’t end anytime soon.
             </p>
             <div v-if="dailyGoal" class="mt-6 rounded-xl border border-stone-700 bg-black/20 p-4">
               <div class="flex items-center justify-between gap-4 text-sm">
@@ -977,7 +977,7 @@ watch(() => [route.params.location, route.params.activity], () => {
               <template v-else>
                 <p class="font-serif text-lg leading-8 text-stone-200">“You are currently suffering only from ordinary ambition. I have no cure for that.”</p>
                 <p v-if="treatmentMessage" class="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-200">{{ treatmentMessage }}</p>
-                <p class="mt-4 text-sm leading-6 text-stone-400">Iona keeps a shelf reserved for the cave. Every bottle on it has been opened more than once.</p>
+                <p class="mt-4 text-sm leading-6 text-stone-400">There are a lot of cures for magical ailments here. It’s almost as if they happen all the time.</p>
               </template>
             </div>
           </div>
@@ -989,7 +989,7 @@ watch(() => [route.params.location, route.params.activity], () => {
         <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-emerald-300/20 bg-[radial-gradient(circle_at_top,#243c2f,#101a15_65%)] p-8 text-center shadow-2xl">
           <img :src="getBardwallPlaceImage('camp')" alt="A lantern-lit tent at the forest camp beyond the town wall" class="mx-auto block w-full max-w-2xl rounded-xl border border-emerald-300/20 shadow-xl" />
           <h2 class="mt-5 font-serif text-4xl font-bold">Forest Camp</h2>
-          <p class="mx-auto mt-4 max-w-xl font-serif text-lg leading-8 text-stone-300">Your bedroll waits beneath the town wall. Beyond the firelight, the woods listen with the patience of something that has nowhere else to be.</p>
+          <p class="mx-auto mt-4 max-w-xl font-serif text-lg leading-8 text-stone-300">Your bedroll waits beneath the town wall. Beyond the firelight, the woods hold still and listen, and you hear the hoot of an owl.</p>
           <button data-testid="end-day" class="mt-7 inline-flex items-center gap-2 rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#181329] hover:bg-violet-200" @click="openNight"><MoonIcon class="h-5 w-5" /> End the day</button>
         </section>
       </div>
