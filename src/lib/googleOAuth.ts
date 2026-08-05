@@ -1,4 +1,5 @@
 import { App } from '@capacitor/app';
+import { logger } from '@/lib/logger'
 import { AppLauncher } from '@capacitor/app-launcher';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
@@ -274,7 +275,7 @@ async function exchangeAuthCodeForTokens(args: {
     params.append('client_secret', clientSecret);
   }
 
-  console.log('[GoogleOAuth] exchanging authorization code', {
+  logger.log('[GoogleOAuth] exchanging authorization code', {
     clientId: args.clientId,
     redirectUri: args.redirectUri,
     hasClientSecret: Boolean(clientSecret),

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { logger } from '@/lib/logger'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
 
@@ -23,7 +24,7 @@ export function createAuthenticatedApiClient(getToken: () => Promise<string | un
       const token = await getToken()
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
-        console.log('Request with token:', {
+        logger.log('Request with token:', {
           url: config.url,
           method: config.method,
           hasToken: !!token,

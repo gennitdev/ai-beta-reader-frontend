@@ -1,4 +1,5 @@
 import { ref, onMounted } from 'vue'
+import { logger } from '@/lib/logger'
 import {
   db,
   type Book,
@@ -47,16 +48,16 @@ export async function initializeDatabase() {
       })
       cloudSync.value = new CloudSync(provider)
       cloudSyncReady.value = cloudSync.value.isWebSdkReady()
-      console.log('[useDatabase] Initial cloudSyncReady:', cloudSyncReady.value)
+      logger.log('[useDatabase] Initial cloudSyncReady:', cloudSyncReady.value)
 
       // On Electron/web, preload the GIS SDK so cloud sync is ready
       if (!cloudSyncReady.value && cloudSync.value.ensureWebSdkReady) {
-        console.log('[useDatabase] Starting GIS preload...')
+        logger.log('[useDatabase] Starting GIS preload...')
         cloudSync.value.ensureWebSdkReady().then(() => {
           const ready = cloudSync.value?.isWebSdkReady() ?? false
-          console.log('[useDatabase] GIS preload complete, isWebSdkReady:', ready)
+          logger.log('[useDatabase] GIS preload complete, isWebSdkReady:', ready)
           cloudSyncReady.value = ready
-          console.log('[useDatabase] cloudSyncReady updated to:', cloudSyncReady.value)
+          logger.log('[useDatabase] cloudSyncReady updated to:', cloudSyncReady.value)
         }).catch((err) => {
           console.warn('[useDatabase] Failed to preload GIS SDK:', err)
         })
@@ -229,9 +230,9 @@ export function useDatabase() {
     try {
       loading.value = true
       error.value = null
-      console.log('[CloudSync] backupToCloud invoked')
+      logger.log('[CloudSync] backupToCloud invoked')
       await cloudSync.value.backup(password)
-      console.log('[CloudSync] backupToCloud completed')
+      logger.log('[CloudSync] backupToCloud completed')
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Backup failed'
       console.error('Backup error:', e)
@@ -249,9 +250,9 @@ export function useDatabase() {
     try {
       loading.value = true
       error.value = null
-      console.log('[CloudSync] restoreFromCloud invoked')
+      logger.log('[CloudSync] restoreFromCloud invoked')
       await cloudSync.value.restore(password)
-      console.log('[CloudSync] restoreFromCloud finished successfully')
+      logger.log('[CloudSync] restoreFromCloud finished successfully')
       await loadBooks() // Refresh after restore
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Restore failed'

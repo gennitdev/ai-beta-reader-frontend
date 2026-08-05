@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- this suite verifies the logger delegates to console.* */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { logger } from '@/lib/logger'
 

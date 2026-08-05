@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { logger } from '@/lib/logger'
 import { useRouter } from 'vue-router'
 import { useBooks, type Book } from '@/composables/useBooks'
 import { useImageLibrary } from '@/composables/useImageLibrary'
@@ -31,13 +32,13 @@ const createBookHandler = async () => {
 }
 
 const refreshCoverSources = async () => {
-  console.log('[BooksView] refreshCoverSources called for', books.value.length, 'books')
+  logger.log('[BooksView] refreshCoverSources called for', books.value.length, 'books')
   coverRefreshError.value = null
   const nextSources: Record<string, string> = {}
   for (const book of books.value) {
     try {
       const asset = await fetchBookCover(book.id)
-      console.log('[BooksView] Book', book.id, 'cover asset:', asset ? { id: asset.id, hasImageData: !!asset.image_data } : null)
+      logger.log('[BooksView] Book', book.id, 'cover asset:', asset ? { id: asset.id, hasImageData: !!asset.image_data } : null)
       if (asset) {
         nextSources[book.id] = await getImageSource(asset)
       }
@@ -46,7 +47,7 @@ const refreshCoverSources = async () => {
       coverRefreshError.value = 'Some covers could not be loaded.'
     }
   }
-  console.log('[BooksView] Loaded', Object.keys(nextSources).length, 'cover sources')
+  logger.log('[BooksView] Loaded', Object.keys(nextSources).length, 'cover sources')
   bookCoverSources.value = nextSources
 }
 

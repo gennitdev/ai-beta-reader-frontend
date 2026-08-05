@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from "vue";
+import { logger } from '@/lib/logger'
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useImageLibrary } from "@/composables/useImageLibrary";
@@ -689,7 +690,7 @@ const saveSidebarChapterOrder = async () => {
     // Send array-based reorder to backend
     await updateChapterOrders(bookId.value, chapterOrder, partUpdates, partOrder.value);
 
-    console.log("Saved sidebar chapter order with arrays:", { chapterOrder, partUpdates });
+    logger.log("Saved sidebar chapter order with arrays:", { chapterOrder, partUpdates });
 
     // Reload to ensure UI reflects the saved state
     await loadBook();
