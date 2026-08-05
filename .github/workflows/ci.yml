@@ -19,10 +19,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -36,12 +36,23 @@ jobs:
       - name: Type check
         run: npm run type-check
 
+      - name: Build
+        run: npm run build-only
+
       - name: Run unit tests
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      # Informational for now: the production tree currently carries advisories
+      # via @capacitor/cli's transitive `tar` dependency that have no clean fix.
+      # Kept non-blocking so it surfaces *new* regressions without failing CI.
+      # Tighten to a blocking `--audit-level=high` once those are resolved.
+      - name: Security audit (production dependencies)
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high

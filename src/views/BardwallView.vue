@@ -50,6 +50,7 @@ import {
   type BardwallChallengeScores,
 } from '@/lib/bardwall'
 import { continueBardwallLastWordStory, runBardwallStoryChallenge } from '@/lib/openai'
+import { getBardwallCardImage, getBardwallPlaceImage, getBardwallPotionImage } from '@/lib/bardwallAssets'
 
 interface RewardPassage extends BardwallPassage {
   id: string
@@ -106,7 +107,7 @@ const challengeJudgeRubricDraft = ref(game.value.challengeRules.judgeRubric)
 const challengeOrlaPromptDraft = ref(game.value.challengeRules.orlaPrompt)
 const selectedLastWordStoryId = ref<string | null>(null)
 const lastWordMessage = ref<string | null>(null)
-const caveSpeaking = ref(false)
+const vesperSpeaking = ref(false)
 
 const selectedOffering = computed(() => offerings.value.find((item) => item.id === selectedOfferingId.value) ?? null)
 const selectedPassages = computed(() => selectedOffering.value?.passages.filter((_, index) => selectedPassageIndexes.value.includes(index)) ?? [])
@@ -536,17 +537,17 @@ const updateLastWordDraft = (event: Event) => {
   saveBardwallState(game.value)
 }
 
-const askCaveToContinue = async () => {
+const askVesperToContinue = async () => {
   const story = selectedLastWordStory.value
   if (!story || lastWordDraftCount.value < 1 || lastWordDraftCount.value > 2000) return
   const apiKey = localStorage.getItem('openai_api_key') ?? ''
   if (!apiKey) {
-    lastWordMessage.value = 'Add your OpenAI API key in Settings before the speaking stones can answer.'
+    lastWordMessage.value = 'Add your OpenAI API key in Settings before Vesper can answer.'
     return
   }
 
   const bardText = story.draft
-  caveSpeaking.value = true
+  vesperSpeaking.value = true
   lastWordMessage.value = null
   try {
     const continuation = await continueBardwallLastWordStory(apiKey, {
@@ -557,11 +558,11 @@ const askCaveToContinue = async () => {
     })
     game.value = appendBardwallLastWordExchange(game.value, story.id, bardText, continuation)
     saveBardwallState(game.value)
-    lastWordMessage.value = `You offered ${countBardwallWords(bardText).toLocaleString()} words. The cave answered with ${countBardwallWords(continuation).toLocaleString()}. It still has the last word.`
+    lastWordMessage.value = `You offered ${countBardwallWords(bardText).toLocaleString()} words. Vesper answered with ${countBardwallWords(continuation).toLocaleString()}. He still has the last word.`
   } catch (error) {
-    lastWordMessage.value = error instanceof Error ? error.message : 'The speaking stones fell unexpectedly silent.'
+    lastWordMessage.value = error instanceof Error ? error.message : 'Vesper fell unexpectedly silent.'
   } finally {
-    caveSpeaking.value = false
+    vesperSpeaking.value = false
   }
 }
 
@@ -703,7 +704,7 @@ const beginBardwallAgain = async () => {
   showChallengeRulesEditor.value = false
   selectedLastWordStoryId.value = null
   lastWordMessage.value = null
-  caveSpeaking.value = false
+  vesperSpeaking.value = false
   hasEntered.value = false
   screen.value = 'gate'
   closeResetDialog()
@@ -822,14 +823,16 @@ watch(() => [route.params.location, route.params.activity], () => {
       </div>
 
       <div v-else-if="screen === 'town'" class="py-10">
-        <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <article class="min-w-0 rounded-2xl border border-stone-700/70 bg-stone-900/40 p-7 shadow-xl">
-            <p class="text-sm font-medium text-amber-300">Dusk settles over the crooked roofs.</p>
-            <h2 class="mt-3 font-serif text-4xl font-bold">The story must go on.</h2>
-            <p class="mt-5 max-w-2xl font-serif text-lg leading-8 text-stone-300">
-              Beyond the last wall, ghosts gather in a stone amphitheater. They once fed on human life. Now they accept a stranger nourishment: stories, honestly made and freely told.
-            </p>
-            <div v-if="dailyGoal" class="mt-6 rounded-xl border border-stone-700 bg-black/20 p-4">
+        <article class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-7 shadow-xl">
+          <div class="flex flex-col gap-6 lg:flex-row lg:items-center">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-amber-300">Dusk settles over the crooked roofs.</p>
+              <h2 class="mt-3 font-serif text-4xl font-bold">The story must go on.</h2>
+              <p class="mt-5 max-w-2xl font-serif text-lg leading-8 text-stone-300">
+                Beyond the last wall, ghosts gather in a stone amphitheater. They once fed on human life. Now they accept a stranger nourishment: stories, preferably those that don’t end anytime soon.
+              </p>
+            </div>
+            <div v-if="dailyGoal" class="rounded-xl border border-stone-700 bg-black/20 p-4 lg:w-80 lg:flex-none">
               <div class="flex items-center justify-between gap-4 text-sm">
                 <span>Today’s measure: {{ dailyGoal.wordsTold.toLocaleString() }} / {{ dailyGoal.wordCount.toLocaleString() }} words</span>
                 <span class="text-amber-300">{{ dailyGoal.coinsEarned }} / {{ BARDWALL_INN_PRICE }} inn coins</span>
@@ -838,76 +841,74 @@ watch(() => [route.params.location, route.params.activity], () => {
                 <div class="h-full rounded-full bg-amber-300 transition-all" :style="{ width: `${dailyProgress}%` }"></div>
               </div>
             </div>
-            <BardwallTownMap class="mt-7" :cave-unlocked="game.caveUnlocked" @select="selectMapLocation" />
-          </article>
-          <aside class="space-y-4">
-            <div v-if="game.ailment" class="rounded-2xl border border-lime-300/40 bg-lime-300/10 p-5">
-              <h3 class="font-serif text-xl font-semibold text-lime-200">{{ game.ailment.icon }} {{ game.ailment.name }}</h3>
-              <p class="mt-2 text-sm leading-6 text-stone-300">{{ game.ailment.description }}</p>
-              <button data-testid="go-to-apothecary" class="mt-4 text-sm font-semibold text-lime-200 underline underline-offset-4" @click="goToLocation('apothecary')">Seek treatment at Moth & Mortar</button>
-            </div>
-            <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
-              <h3 class="font-serif text-xl font-semibold">How you feel</h3>
-              <div class="mt-4 space-y-4">
-                <div>
-                  <div class="flex justify-between text-sm"><span>⚡ Energy</span><span>{{ game.energy }} / 100</span></div>
-                  <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-700"><div class="h-full rounded-full bg-sky-300" :style="{ width: `${game.energy}%` }"></div></div>
-                </div>
-                <div>
-                  <div class="flex justify-between text-sm"><span>🍽️ Hunger</span><span>{{ game.hunger }} / 100</span></div>
-                  <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-700"><div class="h-full rounded-full bg-orange-400" :style="{ width: `${game.hunger}%` }"></div></div>
-                </div>
+          </div>
+        </article>
+
+        <div v-if="game.ailment" class="mt-4 rounded-2xl border border-lime-300/40 bg-lime-300/10 p-5">
+          <h3 class="font-serif text-xl font-semibold text-lime-200">{{ game.ailment.icon }} {{ game.ailment.name }}</h3>
+          <p class="mt-2 text-sm leading-6 text-stone-300">{{ game.ailment.description }}</p>
+          <button data-testid="go-to-apothecary" class="mt-4 text-sm font-semibold text-lime-200 underline underline-offset-4" @click="goToLocation('apothecary')">Seek treatment at Moth & Mortar</button>
+        </div>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4 xl:items-start">
+          <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
+            <h3 class="font-serif text-xl font-semibold">How you feel</h3>
+            <div class="mt-4 space-y-4">
+              <div>
+                <div class="flex justify-between text-sm"><span>⚡ Energy</span><span>{{ game.energy }} / 100</span></div>
+                <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-700"><div class="h-full rounded-full bg-sky-300" :style="{ width: `${game.energy}%` }"></div></div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm"><span>🍽️ Hunger</span><span>{{ game.hunger }} / 100</span></div>
+                <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-700"><div class="h-full rounded-full bg-orange-400" :style="{ width: `${game.hunger}%` }"></div></div>
               </div>
             </div>
-            <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
-              <h3 class="font-serif text-xl font-semibold">Your purse</h3>
-              <p class="mt-2 text-3xl font-bold text-amber-300">{{ game.coins }}</p>
-              <p class="mt-1 text-sm text-stone-400">Coin buys food at the market and a warm bed at the inn.</p>
-            </div>
-            <div class="rounded-2xl border border-dashed border-stone-700 p-5 text-stone-500">
-              <h3 class="font-semibold">The Crooked Lantern Inn</h3>
-              <p class="mt-1 text-sm">One night costs {{ BARDWALL_INN_PRICE }} coins. Until then, your tent waits beyond the wall.</p>
-            </div>
-            <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
-              <h3 class="font-serif text-xl font-semibold">Your inventory</h3>
-              <p v-if="inventoryMessage" data-testid="inventory-message" class="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-2.5 text-xs leading-5 text-emerald-200">{{ inventoryMessage }}</p>
-              <ul class="mt-3 space-y-2 text-sm text-stone-300">
-                <li v-if="game.inventory.tent" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
-                  <span class="text-xl">⛺</span><span class="min-w-0 flex-1">Tent</span><span class="text-xs text-stone-500">×1</span>
-                </li>
-                <li v-for="item in foodInventory" :key="item.id" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
-                  <span class="text-xl">{{ item.icon }}</span><span class="min-w-0 flex-1">{{ item.name }}</span><span class="text-xs text-stone-500">×{{ game.inventory[item.id] }}</span><button :data-testid="`eat-${item.id}`" type="button" class="rounded-md border border-stone-600 px-2.5 py-1 text-xs font-semibold text-stone-200 hover:border-emerald-300 hover:text-emerald-200" @click="eatFood(item.id)">Eat</button>
-                </li>
-                <li v-if="game.inventory.flower" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
-                  <span class="text-xl">🌺</span><span class="min-w-0 flex-1">Red shrine flower</span><span class="text-xs text-stone-500">×{{ game.inventory.flower }}</span>
-                </li>
-              </ul>
-              <p v-if="!foodInventory.length" class="mt-3 text-sm text-stone-500">Your food pouch is empty. Visit the market before nightfall.</p>
-            </div>
-          </aside>
+          </div>
+          <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
+            <h3 class="font-serif text-xl font-semibold">Your purse</h3>
+            <p class="mt-2 text-3xl font-bold text-amber-300">{{ game.coins }}</p>
+            <p class="mt-1 text-sm text-stone-400">Coin buys food at the market and a warm bed at the inn.</p>
+          </div>
+          <div class="rounded-2xl border border-dashed border-stone-700 p-5 text-stone-500">
+            <h3 class="font-semibold">The Crooked Lantern Inn</h3>
+            <p class="mt-1 text-sm">One night costs {{ BARDWALL_INN_PRICE }} coins. Until then, your tent waits beyond the wall.</p>
+          </div>
+          <div class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
+            <h3 class="font-serif text-xl font-semibold">Your inventory</h3>
+            <p v-if="inventoryMessage" data-testid="inventory-message" class="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-2.5 text-xs leading-5 text-emerald-200">{{ inventoryMessage }}</p>
+            <ul class="mt-3 space-y-2 text-sm text-stone-300">
+              <li v-if="game.inventory.tent" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
+                <span class="text-xl">⛺</span><span class="min-w-0 flex-1">Tent</span><span class="text-xs text-stone-500">×1</span>
+              </li>
+              <li v-for="item in foodInventory" :key="item.id" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
+                <span class="text-xl">{{ item.icon }}</span><span class="min-w-0 flex-1">{{ item.name }}</span><span class="text-xs text-stone-500">×{{ game.inventory[item.id] }}</span><button :data-testid="`eat-${item.id}`" type="button" class="rounded-md border border-stone-600 px-2.5 py-1 text-xs font-semibold text-stone-200 hover:border-emerald-300 hover:text-emerald-200" @click="eatFood(item.id)">Eat</button>
+              </li>
+              <li v-if="game.inventory.flower" class="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2.5">
+                <span class="text-xl">🌺</span><span class="min-w-0 flex-1">Red shrine flower</span><span class="text-xs text-stone-500">×{{ game.inventory.flower }}</span>
+              </li>
+            </ul>
+            <p v-if="!foodInventory.length" class="mt-3 text-sm text-stone-500">Your food pouch is empty. Visit the market before nightfall.</p>
+          </div>
         </div>
+        <BardwallTownMap class="mt-6" :cave-unlocked="game.caveUnlocked" @select="selectMapLocation" />
       </div>
 
       <div v-else-if="screen === 'inn'" class="py-8">
         <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl overflow-hidden rounded-2xl border border-amber-300/30 bg-[linear-gradient(145deg,#332516,#17130e)] shadow-2xl">
+          <img :src="getBardwallPlaceImage('inn')" alt="A warm, lantern-lit room at the Crooked Lantern Inn" class="block w-full" />
           <div class="border-b border-amber-200/15 bg-black/20 p-6 sm:p-8">
             <p class="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">A fire, a ledger, seven crooked lanterns</p>
             <h2 class="mt-2 font-serif text-4xl font-bold">The Crooked Lantern Inn</h2>
             <p class="mt-3 font-serif text-lg leading-8 text-stone-300">The innkeeper polishes a glass that has probably never been clean. Behind him, every chair faces the fire except one.</p>
           </div>
-          <div class="grid gap-5 p-6 sm:grid-cols-[0.35fr_0.65fr] sm:p-8">
-            <div class="flex min-h-44 items-center justify-center rounded-xl border border-amber-200/15 bg-amber-100/5 text-center">
-              <div><span class="text-5xl">🧔</span><p class="mt-2 text-sm font-semibold text-amber-200">Merrick, innkeeper</p></div>
-            </div>
-            <div>
-              <p class="font-serif text-lg leading-8 text-stone-200">“A room is {{ BARDWALL_INN_PRICE }} coins when the bells ring. Until then, you’re welcome to warm your hands.”</p>
-              <button v-if="!innAdviceShown" data-testid="ask-innkeeper-advice" type="button" class="mt-5 rounded-lg border border-amber-300/50 px-4 py-2.5 font-semibold text-amber-200 hover:bg-amber-300/10" @click="innAdviceShown = true">Ask the innkeeper for advice</button>
-              <blockquote v-else class="mt-5 rounded-xl border-l-4 border-rose-300 bg-black/20 p-5 font-serif text-lg leading-8 text-stone-200">
-                “Writing a book is precisely the sort of noble, unreasonable undertaking that the goddess of lost causes would take seriously. Go to Heliconia’s shrine in the square. Take a flower.”
-              </blockquote>
-              <button data-testid="end-day-from-inn" type="button" class="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-300 px-4 py-2.5 font-semibold text-[#302313] hover:bg-amber-200" @click="openNight"><MoonIcon class="h-5 w-5" /> Wait for the final bell</button>
-            </div>
+          <div class="p-6 sm:p-8">
+            <p class="font-serif text-lg leading-8 text-stone-200">“A room is {{ BARDWALL_INN_PRICE }} coins when the bells ring. Until then, you’re welcome to warm your hands.”</p>
+            <button v-if="!innAdviceShown" data-testid="ask-innkeeper-advice" type="button" class="mt-5 rounded-lg border border-amber-300/50 px-4 py-2.5 font-semibold text-amber-200 hover:bg-amber-300/10" @click="innAdviceShown = true">Ask the innkeeper for advice</button>
+            <blockquote v-else class="mt-5 rounded-xl border-l-4 border-rose-300 bg-black/20 p-5 font-serif text-lg leading-8 text-stone-200">
+              “Writing a book is precisely the sort of noble, unreasonable undertaking that the goddess of lost causes would take seriously. Go to Heliconia’s shrine in the square. Take a flower.”
+            </blockquote>
+            <button data-testid="end-day-from-inn" type="button" class="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-300 px-4 py-2.5 font-semibold text-[#302313] hover:bg-amber-200" @click="openNight"><MoonIcon class="h-5 w-5" /> Wait for the final bell</button>
           </div>
         </section>
       </div>
@@ -916,7 +917,7 @@ watch(() => [route.params.location, route.params.activity], () => {
         <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-rose-300/30 bg-[radial-gradient(circle_at_top,#4a2538,#171218_62%)] p-7 text-center shadow-2xl sm:p-10">
           <p class="text-xs font-semibold uppercase tracking-[0.3em] text-rose-300">Town Square</p>
-          <div class="mx-auto mt-6 flex h-40 w-40 items-center justify-center rounded-full border border-rose-200/30 bg-black/20 text-7xl shadow-[0_0_50px_rgba(251,113,133,0.12)]">🌺</div>
+          <img :src="getBardwallPlaceImage('shrine')" alt="The rose-lit shrine of Heliconia in the town square" class="mx-auto mt-6 block w-full max-w-2xl rounded-2xl border border-rose-200/30 shadow-[0_0_50px_rgba(251,113,133,0.15)]" />
 
           <template v-if="heliconiaEncounterActive">
             <p class="mt-7 text-xs font-semibold uppercase tracking-[0.3em] text-rose-300">{{ heliconiaReturnVisit ? 'The goddess returns' : 'The goddess appears in person' }}</p>
@@ -929,6 +930,7 @@ watch(() => [route.params.location, route.params.activity], () => {
             <template v-else>
               <p class="mx-auto mt-5 max-w-2xl font-serif text-xl leading-9 text-stone-200">“I keep faith with lost causes, impossible books, and games whose endings were decided before their beginnings.”</p>
               <div class="mx-auto mt-6 max-w-xl rounded-xl border border-violet-300/25 bg-violet-300/10 p-5 text-left">
+                <img :src="getBardwallPlaceImage('shrine-map')" alt="Heliconia offering a hand-drawn map at the shrine" class="mb-4 w-full rounded-lg border border-violet-300/20 object-cover" />
                 <p class="font-semibold text-violet-200">Heliconia gives you a map.</p>
                 <p class="mt-2 text-sm leading-6 text-stone-300">A cave and a narrow forest path appear in violet ink. “Some games can be played in the cave,” she warns. “None of them can be won.”</p>
               </div>
@@ -959,15 +961,13 @@ watch(() => [route.params.location, route.params.activity], () => {
       <div v-else-if="screen === 'apothecary'" class="py-8">
         <button data-testid="back-to-map" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl overflow-hidden rounded-2xl border border-lime-200/25 bg-[linear-gradient(150deg,#273324,#111810)] shadow-2xl">
+          <img :src="getBardwallPlaceImage('apothecary')" alt="The interior of Moth & Mortar, an apothecary of bottles and moths" class="block w-full" />
           <div class="border-b border-lime-200/10 p-7 sm:p-9">
             <p class="text-xs font-semibold uppercase tracking-[0.3em] text-lime-300">Bottles in the windows, moths in the rafters</p>
             <h2 class="mt-2 font-serif text-4xl font-bold">Moth & Mortar</h2>
             <p class="mt-3 font-serif text-lg leading-8 text-stone-300">The apothecary smells of rosemary, rainwater, and remedies invented for ailments no sensible person would acquire.</p>
           </div>
-          <div class="grid gap-6 p-7 sm:grid-cols-[0.35fr_0.65fr] sm:p-9">
-            <div class="flex min-h-44 items-center justify-center rounded-xl border border-lime-200/15 bg-black/20 text-center">
-              <div><span class="text-5xl">🧑‍⚕️</span><p class="mt-2 text-sm font-semibold text-lime-200">Iona, apothecary</p></div>
-            </div>
+          <div class="p-7 sm:p-9">
             <div>
               <template v-if="game.ailment">
                 <p class="font-serif text-lg leading-8 text-stone-200">“{{ game.ailment.name }}. Cave work, obviously. Sit down before your symptoms become interesting.”</p>
@@ -981,7 +981,7 @@ watch(() => [route.params.location, route.params.activity], () => {
               <template v-else>
                 <p class="font-serif text-lg leading-8 text-stone-200">“You are currently suffering only from ordinary ambition. I have no cure for that.”</p>
                 <p v-if="treatmentMessage" class="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-200">{{ treatmentMessage }}</p>
-                <p class="mt-4 text-sm leading-6 text-stone-400">Iona keeps a shelf reserved for the cave. Every bottle on it has been opened more than once.</p>
+                <p class="mt-4 text-sm leading-6 text-stone-400">There are a lot of cures for magical ailments here. It’s almost as if they happen all the time.</p>
               </template>
             </div>
           </div>
@@ -991,15 +991,16 @@ watch(() => [route.params.location, route.params.activity], () => {
       <div v-else-if="screen === 'camp'" class="py-8">
         <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-3xl rounded-2xl border border-emerald-300/20 bg-[radial-gradient(circle_at_top,#243c2f,#101a15_65%)] p-8 text-center shadow-2xl">
-          <div class="text-7xl">⛺</div>
+          <img :src="getBardwallPlaceImage('camp')" alt="A lantern-lit tent at the forest camp beyond the town wall" class="mx-auto block w-full max-w-2xl rounded-xl border border-emerald-300/20 shadow-xl" />
           <h2 class="mt-5 font-serif text-4xl font-bold">Forest Camp</h2>
-          <p class="mx-auto mt-4 max-w-xl font-serif text-lg leading-8 text-stone-300">Your bedroll waits beneath the town wall. Beyond the firelight, the woods listen with the patience of something that has nowhere else to be.</p>
+          <p class="mx-auto mt-4 max-w-xl font-serif text-lg leading-8 text-stone-300">Your bedroll waits beneath the town wall. Beyond the firelight, the woods hold still and listen, and you hear the hoot of an owl.</p>
           <button data-testid="end-day" class="mt-7 inline-flex items-center gap-2 rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#181329] hover:bg-violet-200" @click="openNight"><MoonIcon class="h-5 w-5" /> End the day</button>
         </section>
       </div>
 
       <div v-else-if="screen === 'challenge'" class="py-8">
         <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
+        <img :src="getBardwallPlaceImage('challenge')" alt="The Ink &amp; Ember coffeehouse, crowded with bards and painted cards" class="mx-auto mt-5 block w-full max-w-3xl rounded-2xl border border-orange-200/20 shadow-xl" />
         <section class="mx-auto mt-5 max-w-6xl overflow-hidden rounded-2xl border border-orange-200/20 bg-[linear-gradient(145deg,#33251c,#151311)] shadow-2xl">
           <header class="border-b border-orange-200/15 bg-black/20 p-7 sm:p-9">
             <p class="text-xs font-semibold uppercase tracking-[0.3em] text-orange-300">Coffee, company, and dangerous confidence</p>
@@ -1072,7 +1073,7 @@ watch(() => [route.params.location, route.params.activity], () => {
                 <h3 class="mt-2 font-serif text-3xl font-bold">Choose what the story must contain.</h3>
                 <p class="mt-3 text-sm text-stone-400">Keep at least one card. Unkept cards return to the deck.</p>
                 <div class="mt-6 grid gap-3 sm:grid-cols-3">
-                  <button v-for="entry in challengeCards" :key="entry.card.id" :data-testid="`challenge-card-${entry.card.id}`" class="rounded-xl border p-4 text-left transition" :class="entry.held ? 'border-orange-200 bg-orange-200/10 ring-1 ring-orange-200' : 'border-stone-600 bg-stone-900/50 hover:border-stone-400'" @click="toggleChallengeCard(entry.card.id)"><span class="text-4xl">{{ entry.card.icon }}</span><strong class="mt-3 block font-serif text-lg">{{ entry.card.name }}</strong><span class="mt-2 block text-xs leading-5 text-stone-400">{{ entry.card.meaning }}</span><span class="mt-3 block text-xs font-semibold" :class="entry.held ? 'text-orange-200' : 'text-stone-500'">{{ entry.held ? 'Kept' : 'Tap to keep' }}</span></button>
+                  <button v-for="entry in challengeCards" :key="entry.card.id" :data-testid="`challenge-card-${entry.card.id}`" class="rounded-xl border p-3 text-center transition" :class="entry.held ? 'border-orange-200 bg-orange-200/10 ring-1 ring-orange-200' : 'border-stone-600 bg-stone-900/50 hover:border-stone-400'" @click="toggleChallengeCard(entry.card.id)"><span class="relative mx-auto block w-full max-w-[13rem] overflow-hidden rounded-lg border border-black/40 shadow-md [container-type:inline-size]"><img :src="getBardwallCardImage(entry.card.id)" :alt="entry.card.name" class="block w-full" /><span class="pointer-events-none absolute inset-x-0 bottom-[9.5%] px-[7%] text-center font-serif text-[6.8cqw] font-semibold leading-[1.05] text-[#3a2b15] [text-shadow:0_1px_1px_rgba(250,240,214,0.55)]">{{ entry.card.name }}</span></span><span class="mt-3 block text-xs leading-5 text-stone-400">{{ entry.card.meaning }}</span><span class="mt-2 block text-xs font-semibold" :class="entry.held ? 'text-orange-200' : 'text-stone-500'">{{ entry.held ? 'Kept' : 'Tap to keep' }}</span></button>
                 </div>
                 <button data-testid="advance-challenge-draft" class="mt-6 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100 disabled:opacity-40" :disabled="heldChallengeCards === 0" @click="advanceChallengeDraft">{{ heldChallengeCards === 3 ? 'Use these three cards' : `Redraw ${3 - heldChallengeCards} ${3 - heldChallengeCards === 1 ? 'card' : 'cards'}` }}</button>
               </template>
@@ -1080,7 +1081,7 @@ watch(() => [route.params.location, route.params.activity], () => {
               <template v-else-if="game.challenge.phase === 'write'">
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-orange-300">The cards are set · {{ wagerLabel(game.challenge.wager) }} wagered</p>
                 <h3 class="mt-2 font-serif text-3xl font-bold">Tell your story.</h3>
-                <div class="mt-5 grid gap-2 sm:grid-cols-3"><div v-for="entry in challengeCards" :key="entry.card.id" class="rounded-lg border border-orange-200/20 bg-orange-200/5 p-3"><span class="text-xl">{{ entry.card.icon }}</span><strong class="ml-2 text-sm">{{ entry.card.name }}</strong><p class="mt-2 text-xs text-stone-400">{{ entry.card.meaning }}</p></div></div>
+                <div class="mt-5 grid gap-2 sm:grid-cols-3"><div v-for="entry in challengeCards" :key="entry.card.id" class="flex gap-3 rounded-lg border border-orange-200/20 bg-orange-200/5 p-3"><img :src="getBardwallCardImage(entry.card.id)" alt="" class="h-16 w-auto shrink-0 rounded border border-black/30 shadow-sm" /><div class="min-w-0"><strong class="block text-sm">{{ entry.card.name }}</strong><p class="mt-1 text-xs leading-5 text-stone-400">{{ entry.card.meaning }}</p></div></div></div>
                 <section data-testid="challenge-rubric" class="mt-5 rounded-xl border border-orange-200/20 bg-orange-200/5 p-4">
                   <div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-serif text-lg font-semibold text-orange-100">How Tamsin judges</h4><button class="text-xs font-semibold text-orange-200 underline" @click="openChallengeRulesEditor">Change the table rules</button></div>
                   <p class="mt-1 text-xs leading-5 text-stone-400">Each category is worth 10 points. Both stories must meet the same word-count range before Tamsin will judge them.</p>
@@ -1136,16 +1137,16 @@ watch(() => [route.params.location, route.params.activity], () => {
         <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to the map</button>
         <section class="mx-auto mt-5 max-w-4xl overflow-hidden rounded-2xl border border-violet-300/25 bg-[radial-gradient(circle_at_50%_0%,#34284d,#09080d_65%)] p-8 text-center shadow-2xl sm:p-12">
           <p class="text-xs font-semibold uppercase tracking-[0.35em] text-violet-300">Deep in the haunted wood</p>
-          <div class="mx-auto mt-7 flex h-52 max-w-md items-end justify-center rounded-t-[50%] border-x border-t border-stone-500/30 bg-black/70 pb-7 text-6xl">🕯️</div>
+          <img :src="getBardwallPlaceImage('cave')" alt="The mouth of the unwinnable cave, deep in the haunted wood" class="mx-auto mt-7 block w-full max-w-2xl rounded-xl border border-stone-500/30 shadow-2xl" />
           <h2 class="mt-7 font-serif text-4xl font-bold">The Unwinnable Cave</h2>
           <blockquote class="mx-auto mt-5 max-w-2xl font-serif text-xl italic leading-9 text-violet-100">“Some games can be played in the cave. None of them can be won.”</blockquote>
           <p v-if="game.ailment" class="mx-auto mt-5 max-w-xl rounded-xl border border-lime-300/30 bg-lime-300/10 p-4 text-sm text-lime-100">You are still suffering from {{ game.ailment.name }}. The cave will wait while you seek treatment at Moth & Mortar.</p>
           <div class="mt-8 grid gap-4 text-left sm:grid-cols-2">
             <article class="rounded-xl border border-violet-300/30 bg-violet-300/5 p-5">
-              <p class="text-xs font-semibold uppercase tracking-wider text-violet-300">The stones are listening</p>
+              <p class="text-xs font-semibold uppercase tracking-wider text-violet-300">A voice in the dark is listening</p>
               <h3 class="mt-2 font-serif text-2xl font-semibold">The Game of the Last Word</h3>
-              <p class="mt-3 text-sm leading-6 text-stone-300">Offer the cave any number of words. It will add roughly as many—and ensure that you can never finish the story.</p>
-              <button data-testid="play-last-word" class="mt-5 rounded-lg bg-violet-300 px-4 py-2.5 font-semibold text-[#21182d] hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="Boolean(game.ailment)" @click="goToLastWordGame">Speak to the stones</button>
+              <p class="mt-3 text-sm leading-6 text-stone-300">Somewhere in the lightless deep, an old chiropteran named Vesper waits. Offer him any number of words. He will add roughly as many—and ensure that you can never finish the story.</p>
+              <button data-testid="play-last-word" class="mt-5 rounded-lg bg-violet-300 px-4 py-2.5 font-semibold text-[#21182d] hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="Boolean(game.ailment)" @click="goToLastWordGame">Speak with Vesper</button>
             </article>
             <article class="rounded-xl border border-amber-300/30 bg-amber-300/5 p-5">
               <p class="text-xs font-semibold uppercase tracking-wider text-amber-300">A table set for one</p>
@@ -1158,15 +1159,15 @@ watch(() => [route.params.location, route.params.activity], () => {
       </div>
 
       <div v-else-if="screen === 'last-word'" class="py-8">
-        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToLocation('cave')"><ArrowLeftIcon class="h-4 w-4" /> Leave the speaking chamber</button>
+        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToLocation('cave')"><ArrowLeftIcon class="h-4 w-4" /> Leave Vesper’s chamber</button>
         <section class="mx-auto mt-5 max-w-5xl overflow-hidden rounded-2xl border border-violet-300/25 bg-[radial-gradient(circle_at_top,#302546,#0d0b12_62%)] p-6 shadow-2xl sm:p-10">
           <template v-if="!selectedLastWordStory">
             <div class="text-center">
-              <p class="text-xs font-semibold uppercase tracking-[0.35em] text-violet-300">The speaking chamber</p>
-              <div class="mt-5 text-6xl">🪨</div>
-              <h2 class="mt-4 font-serif text-4xl font-bold">The Game of the Last Word</h2>
+              <p class="text-xs font-semibold uppercase tracking-[0.35em] text-violet-300">Vesper, the old chiropteran</p>
+              <img :src="getBardwallPlaceImage('vesper')" alt="Vesper, an elderly chiropteran, waiting by lantern-light on a ledge deep in the cavern" class="mx-auto mt-5 block w-full max-w-2xl rounded-xl border border-violet-300/20 shadow-2xl" />
+              <h2 class="mt-6 font-serif text-4xl font-bold">The Game of the Last Word</h2>
               <p class="mx-auto mt-5 max-w-2xl font-serif text-xl leading-9 text-violet-100">“Give me a word. Or several. I shall give you as many in return.”</p>
-              <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-stone-400">Begin another story or return to one already echoing in the dark. Every draft waits exactly where you left it. None can ever be finished.</p>
+              <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-stone-400">Only his lantern lights this deep part of the cave. Begin another story or return to one already echoing in the dark. Every draft waits exactly where you left it. None can ever be finished.</p>
               <button data-testid="new-last-word-story" class="mt-7 rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#21182d] hover:bg-violet-200" @click="beginLastWordStory">Begin a new story</button>
             </div>
 
@@ -1191,20 +1192,20 @@ watch(() => [route.params.location, route.params.activity], () => {
 
             <div data-testid="last-word-transcript" class="mx-auto mt-8 max-w-3xl space-y-4">
               <div v-if="!selectedLastWordStory.turns.length" class="rounded-xl border border-dashed border-violet-300/30 bg-black/20 p-6 text-center font-serif text-lg italic text-stone-400">The story is waiting for its first word.</div>
-              <article v-for="(turn, index) in selectedLastWordStory.turns" :key="`${turn.createdAt}-${index}`" class="rounded-xl border p-5" :class="turn.speaker === 'cave' ? 'ml-0 border-violet-300/25 bg-violet-300/10 sm:ml-10' : 'mr-0 border-stone-600 bg-black/25 sm:mr-10'">
-                <div class="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wider" :class="turn.speaker === 'cave' ? 'text-violet-300' : 'text-stone-400'"><span>{{ turn.speaker === 'cave' ? 'The cave' : 'You' }}</span><span>{{ turn.wordCount.toLocaleString() }} {{ turn.wordCount === 1 ? 'word' : 'words' }}</span></div>
+              <article v-for="(turn, index) in selectedLastWordStory.turns" :key="`${turn.createdAt}-${index}`" class="rounded-xl border p-5" :class="turn.speaker === 'vesper' ? 'ml-0 border-violet-300/25 bg-violet-300/10 sm:ml-10' : 'mr-0 border-stone-600 bg-black/25 sm:mr-10'">
+                <div class="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wider" :class="turn.speaker === 'vesper' ? 'text-violet-300' : 'text-stone-400'"><span>{{ turn.speaker === 'vesper' ? 'Vesper' : 'You' }}</span><span>{{ turn.wordCount.toLocaleString() }} {{ turn.wordCount === 1 ? 'word' : 'words' }}</span></div>
                 <p class="mt-3 whitespace-pre-wrap font-serif text-lg leading-8 text-stone-200">{{ turn.text }}</p>
               </article>
             </div>
 
             <div class="mx-auto mt-8 max-w-3xl rounded-xl border border-violet-200/20 bg-black/30 p-5">
               <div class="flex items-center justify-between gap-4 text-sm"><label for="last-word-draft" class="font-semibold">Your next words</label><span :class="lastWordDraftCount > 2000 ? 'text-rose-300' : 'text-stone-400'">{{ lastWordDraftCount.toLocaleString() }} / 2,000 words</span></div>
-              <textarea id="last-word-draft" data-testid="last-word-draft" :value="selectedLastWordStory.draft" class="mt-3 min-h-56 w-full rounded-xl border border-stone-600 bg-[#0b0910] p-4 font-serif text-lg leading-8 text-stone-100 outline-none focus:border-violet-300 disabled:opacity-60" placeholder="Write one word or a thousand…" :disabled="caveSpeaking" @input="updateLastWordDraft"></textarea>
-              <p class="mt-3 text-xs leading-5 text-stone-400">Your draft is saved locally as you write. The cave will answer with approximately the same number of words, then save both turns.</p>
+              <textarea id="last-word-draft" data-testid="last-word-draft" :value="selectedLastWordStory.draft" class="mt-3 min-h-56 w-full rounded-xl border border-stone-600 bg-[#0b0910] p-4 font-serif text-lg leading-8 text-stone-100 outline-none focus:border-violet-300 disabled:opacity-60" placeholder="Write one word or a thousand…" :disabled="vesperSpeaking" @input="updateLastWordDraft"></textarea>
+              <p class="mt-3 text-xs leading-5 text-stone-400">Your draft is saved locally as you write. Vesper will answer with approximately the same number of words, then save both turns.</p>
               <p v-if="lastWordMessage" class="mt-4 rounded-lg border p-3 text-sm" :class="lastWordMessage.includes('last word') ? 'border-violet-300/25 bg-violet-300/10 text-violet-100' : 'border-rose-300/25 bg-rose-300/10 text-rose-200'">{{ lastWordMessage }} <button v-if="lastWordMessage.includes('OpenAI')" class="ml-1 underline" @click="router.push('/settings')">Open Settings</button></p>
-              <button data-testid="submit-last-word-turn" class="mt-5 w-full rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#21182d] hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="lastWordDraftCount < 1 || lastWordDraftCount > 2000 || caveSpeaking" @click="askCaveToContinue">{{ caveSpeaking ? 'The stones are finding their words…' : 'Give the cave your words' }}</button>
+              <button data-testid="submit-last-word-turn" class="mt-5 w-full rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#21182d] hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="lastWordDraftCount < 1 || lastWordDraftCount > 2000 || vesperSpeaking" @click="askVesperToContinue">{{ vesperSpeaking ? 'Vesper is finding his words…' : 'Give Vesper your words' }}</button>
             </div>
-            <p class="mt-6 text-center font-serif italic text-stone-400">You may leave whenever you wish. The cave will remember what comes next.</p>
+            <p class="mt-6 text-center font-serif italic text-stone-400">You may leave whenever you wish. Vesper will remember what comes next.</p>
           </template>
         </section>
       </div>
@@ -1214,7 +1215,7 @@ watch(() => [route.params.location, route.params.activity], () => {
         <section class="mx-auto mt-5 max-w-5xl overflow-hidden rounded-2xl border border-amber-300/25 bg-[radial-gradient(circle_at_top,#49351c,#15100b_62%)] p-7 shadow-2xl sm:p-10">
           <div class="text-center">
             <p class="text-xs font-semibold uppercase tracking-[0.35em] text-amber-300">The game is always set</p>
-            <div class="mt-5 text-7xl">🐉</div>
+            <img :src="getBardwallPlaceImage('wyrm')" alt="The wyrm brooding over five cordials arranged on a golden table before its hoard" class="mx-auto mt-5 block w-full max-w-2xl rounded-xl border border-amber-300/20 shadow-2xl" />
             <h2 class="mt-4 font-serif text-4xl font-bold">The Wyrm’s Courtesy</h2>
           </div>
 
@@ -1230,7 +1231,7 @@ watch(() => [route.params.location, route.params.activity], () => {
                 class="group rounded-xl border border-stone-600 bg-black/25 p-4 text-center transition hover:-translate-y-1 hover:border-amber-300"
                 @click="drinkPotion(potion.id)"
               >
-                <span class="mx-auto flex h-14 w-10 items-center justify-center rounded-b-xl rounded-t-sm border border-white/30 text-2xl shadow-[0_0_20px_rgba(255,255,255,0.08)]" :style="{ backgroundColor: potion.color }">{{ potion.icon }}</span>
+                <img :src="getBardwallPotionImage(potion.id)" :alt="potion.name" class="mx-auto block h-28 w-28 rounded-lg object-cover shadow-[0_0_20px_rgba(255,255,255,0.08)]" />
                 <strong class="mt-3 block font-serif text-sm">{{ potion.name }}</strong>
                 <span v-if="game.triedPotionIds.includes(potion.id)" class="mt-2 block text-[10px] uppercase tracking-wider text-stone-500">Tried before</span>
               </button>
@@ -1253,6 +1254,7 @@ watch(() => [route.params.location, route.params.activity], () => {
 
       <div v-else-if="screen === 'market'" class="py-8">
         <button data-testid="leave-market" class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to town</button>
+        <img :src="getBardwallPlaceImage('market')" alt="The lantern-lit stalls of the Bardwall night market" class="mx-auto mt-5 block w-full max-w-3xl rounded-2xl border border-stone-700/70 shadow-xl" />
         <div class="mt-5 rounded-2xl border border-stone-700/70 bg-stone-900/40 p-6">
           <p class="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">Lantern Row</p>
           <div class="mt-2 flex flex-wrap items-end justify-between gap-4">
@@ -1358,6 +1360,7 @@ watch(() => [route.params.location, route.params.activity], () => {
 
       <div v-else-if="screen === 'amphitheater'" class="py-8">
         <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to town</button>
+        <img :src="getBardwallPlaceImage('amphitheater')" alt="The moonlit stone amphitheater where the ghosts gather to listen" class="mx-auto mt-5 block w-full max-w-3xl rounded-2xl border border-stone-700/70 shadow-xl" />
         <div class="mt-5 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
           <section class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
             <h2 class="font-serif text-2xl font-bold">Choose a recent telling</h2>

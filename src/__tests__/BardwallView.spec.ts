@@ -220,12 +220,12 @@ describe('BardwallView', () => {
       bardText: 'Once beneath the roots',
       targetWords: 4,
     }))
-    expect(wrapper.text()).toContain('It still has the last word.')
+    expect(wrapper.text()).toContain('He still has the last word.')
     expect(wrapper.text()).toContain('and something answered from below')
     expect(JSON.parse(localStorage.getItem('bardwall-game-state') ?? '{}').lastWordStories[0]).toMatchObject({
       title: 'Once beneath the roots',
       draft: '',
-      turns: [{ speaker: 'bard' }, { speaker: 'cave' }],
+      turns: [{ speaker: 'bard' }, { speaker: 'vesper' }],
     })
 
     await wrapper.get('[data-testid="last-word-story-shelf"]').trigger('click')

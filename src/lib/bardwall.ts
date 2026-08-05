@@ -53,14 +53,14 @@ export const BARDWALL_CHALLENGE_CARDS = [
   { id: 'long-dusk', name: 'The Long Dusk', icon: '🌆', meaning: 'Endings that refuse to end.' },
   { id: 'ferryman', name: 'The Ferryman', icon: '⛵', meaning: 'Death, passage, an irreversible choice.' },
   { id: 'root-stone', name: 'The Root Beneath Stone', icon: '🌱', meaning: 'Persistence, hidden strength, patient change.' },
-  { id: 'unfinished-crown', name: 'The Unfinished Crown', icon: '👑', meaning: 'Ambition, inheritance, glorious failure.' },
+  { id: 'unfinished-banner', name: 'The Unfinished Banner', icon: '🚩', meaning: 'A cause half-raised, allegiance declared before it is earned.' },
   { id: 'winter-wolf', name: 'The Winter Wolf', icon: '🐺', meaning: 'Hunger, loyalty, survival at a price.' },
   { id: 'broken-bell', name: 'The Broken Bell', icon: '🔔', meaning: 'A warning unheard, silence after catastrophe.' },
   { id: 'garden-wall', name: 'The Garden Wall', icon: '🌹', meaning: 'Beauty protected, love constrained, cultivated illusion.' },
   { id: 'falling-star', name: 'The Falling Star', icon: '🌠', meaning: 'A wish granted too late or too literally.' },
   { id: 'mirror-road', name: 'The Mirror Road', icon: '🪞', meaning: 'Identity, doubles, the path not taken.' },
-  { id: 'open-hand', name: 'The Open Hand', icon: '🤲', meaning: 'Mercy, surrender, a gift without guarantee.' },
-  { id: 'black-lantern', name: 'The Black Lantern', icon: '🏮', meaning: 'Guidance through fear, truth found in darkness.' },
+  { id: 'lantern-given-away', name: 'The Lantern Given Away', icon: '🪔', meaning: 'Light surrendered to another; generosity that leaves you in the dark.' },
+  { id: 'cave-of-eyes', name: 'The Cave of Eyes', icon: '👁️', meaning: 'Hidden watchers, secrets that stare back, being seen in the dark.' },
   { id: 'turning-wheel', name: 'The Turning Wheel', icon: '☸️', meaning: 'Fortune, repetition, a pattern finally broken.' },
 ] as const
 
@@ -115,7 +115,7 @@ export interface BardwallChallengeRules {
 }
 
 export interface BardwallLastWordTurn {
-  speaker: 'bard' | 'cave'
+  speaker: 'bard' | 'vesper'
   text: string
   wordCount: number
   createdAt: string
@@ -309,9 +309,12 @@ function loadLastWordStories(value: unknown): BardwallLastWordStory[] {
       ? stored.turns.flatMap((turn) => {
           if (!turn || typeof turn !== 'object') return []
           const candidate = turn as Partial<BardwallLastWordTurn>
-          if ((candidate.speaker !== 'bard' && candidate.speaker !== 'cave') || typeof candidate.text !== 'string' || !candidate.text.trim()) return []
+          // 'cave' is the legacy speaker id from before this voice became Vesper.
+          const rawSpeaker = (turn as { speaker?: unknown }).speaker
+          const speaker: BardwallLastWordTurn['speaker'] | null = rawSpeaker === 'bard' ? 'bard' : rawSpeaker === 'vesper' || rawSpeaker === 'cave' ? 'vesper' : null
+          if (!speaker || typeof candidate.text !== 'string' || !candidate.text.trim()) return []
           return [{
-            speaker: candidate.speaker,
+            speaker,
             text: candidate.text,
             wordCount: countBardwallWords(candidate.text),
             createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
@@ -455,10 +458,10 @@ export function appendBardwallLastWordExchange(
   state: BardwallState,
   storyId: string,
   bardText: string,
-  caveText: string,
+  vesperText: string,
   now = new Date().toISOString(),
 ): BardwallState {
-  if (!bardText.trim() || !caveText.trim()) throw new Error('Both voices must add words to the story.')
+  if (!bardText.trim() || !vesperText.trim()) throw new Error('Both voices must add words to the story.')
   return {
     ...state,
     lastWordStories: state.lastWordStories.map((story) => {
@@ -472,7 +475,7 @@ export function appendBardwallLastWordExchange(
         turns: [
           ...story.turns,
           { speaker: 'bard', text: bardText.trim(), wordCount: countBardwallWords(bardText), createdAt: now },
-          { speaker: 'cave', text: caveText.trim(), wordCount: countBardwallWords(caveText), createdAt: now },
+          { speaker: 'vesper', text: vesperText.trim(), wordCount: countBardwallWords(vesperText), createdAt: now },
         ],
       }
     }),

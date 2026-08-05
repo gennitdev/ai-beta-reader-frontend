@@ -17,6 +17,10 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.{ts,vue}'],
+      // Ratchet policy: keep these just below the current measured coverage so
+      // they act as a regression floor. When a change raises coverage, nudge the
+      // matching threshold up to lock in the gain — never lower them to make a
+      // change pass. Current actuals: stmts 49.6 / branch 34.3 / funcs 44.4 / lines 50.6.
       thresholds: {
         statements: 53,
         branches: 35,

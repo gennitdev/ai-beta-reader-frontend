@@ -96,6 +96,19 @@ The browser, desktop, and Android targets share the same application and portabl
 - **Lightbox viewer**: View images full-screen with download option
 - **Storage and backup**: Drive backup embeds image data in the encrypted snapshot so browser and Electron restores preserve the image library.
 
+### Bardwall — a game that rewards writing
+
+Bardwall is an optional, illustrated mini-game woven into the app: a haunted town whose economy runs entirely on stories. The walls keep out many things; they have never managed to keep out a story.
+
+![Map of Bardwall](./src/assets/screenshots/bardwall-map.webp)
+
+- **Tell the ghosts your pages**: at the Stone Amphitheater, passages you actually added in your saved chapter revisions can be "told" for coins — the game only pays out for words you really wrote.
+- **A town to explore**: a painted map of clickable destinations — the Crooked Lantern Inn, the Shrine of Heliconia (goddess of lost causes and unwinnable games), the Moth & Mortar apothecary, the Night Market, and the Ink & Ember coffeehouse.
+- **Story wagers**: at Ink & Ember, draw painted tarot-style cards and wager coins or food on a story contest judged against a rival bard.
+- **Unwinnable games**: beyond the wall lies a cave where Vesper, an elderly chiropteran, plays The Game of the Last Word — you can never get the last word — and a courteous wyrm offers its hoard for the one cordial that won't make you ill.
+- **Daily measure & upkeep**: set a daily word goal, earn coins, buy food, and sleep at the inn or in a tent beyond the wall; hunger and energy carry into the next day.
+- **Purely additive**: Bardwall keeps its own local state — your books, chapters, and revisions are never changed by playing.
+
 ## Screenshots
 
 ### AI Summary Generation
