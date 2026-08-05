@@ -106,6 +106,26 @@ function base64UrlEncode(data: Uint8Array | ArrayBuffer): string {
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+/**
+ * Whether an incoming deep-link URL is the OAuth redirect we are waiting for.
+ * Compares the parsed scheme/host/path instead of a raw string prefix, so a URL
+ * that merely *starts with* the redirect string (but has a different structure)
+ * cannot be mistaken for the real redirect.
+ */
+export function isMatchingRedirect(incomingUrl: string, redirectUri: string): boolean {
+  try {
+    const incoming = new URL(incomingUrl);
+    const expected = new URL(redirectUri);
+    return (
+      incoming.protocol === expected.protocol &&
+      incoming.host === expected.host &&
+      incoming.pathname === expected.pathname
+    );
+  } catch {
+    return false;
+  }
+}
+
 function buildAuthUrl(args: {
   clientId: string;
   redirectUri: string;
@@ -194,7 +214,7 @@ async function launchAuthBrowser(authUrl: string, redirectUri: string, expectedS
             return;
           }
 
-          if (!incomingUrl.startsWith(redirectUri)) {
+          if (!isMatchingRedirect(incomingUrl, redirectUri)) {
             return;
           }
 
@@ -255,6 +275,10 @@ async function exchangeAuthCodeForTokens(args: {
   redirectUri: string;
   codeVerifier: string;
 }): Promise<GoogleOAuthTokens> {
+  // Native/mobile OAuth clients are public clients: the authorization-code flow
+  // is protected by PKCE (code_verifier) and MUST NOT carry a client secret
+  // (RFC 8252). A secret here would only be shippable inside the app bundle,
+  // where it is not actually secret.
   const params = new URLSearchParams({
     client_id: args.clientId,
     code: args.authorizationCode,
@@ -263,16 +287,9 @@ async function exchangeAuthCodeForTokens(args: {
     grant_type: 'authorization_code',
   });
 
-  const clientSecret =
-    typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? undefined : undefined;
-  if (clientSecret && clientSecret.length > 0) {
-    params.append('client_secret', clientSecret);
-  }
-
   logger.log('[GoogleOAuth] exchanging authorization code', {
     clientId: args.clientId,
     redirectUri: args.redirectUri,
-    hasClientSecret: Boolean(clientSecret),
   });
 
   const response = await CapacitorHttp.post({
