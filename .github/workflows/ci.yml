@@ -36,6 +36,9 @@ jobs:
       - name: Type check
         run: npm run type-check
 
+      - name: Build
+        run: npm run build-only
+
       - name: Run unit tests
         run: npm run test:coverage
 
@@ -45,3 +48,11 @@ jobs:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      # Informational for now: the production tree currently carries advisories
+      # via @capacitor/cli's transitive `tar` dependency that have no clean fix.
+      # Kept non-blocking so it surfaces *new* regressions without failing CI.
+      # Tighten to a blocking `--audit-level=high` once those are resolved.
+      - name: Security audit (production dependencies)
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high

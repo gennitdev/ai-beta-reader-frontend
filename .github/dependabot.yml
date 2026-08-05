@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Frontend application dependencies
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # Batch low-risk updates into a single PR to reduce noise
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Electron desktop wrapper dependencies
+  - package-ecosystem: npm
+    directory: "/electron"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions used by our CI/CD workflows
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

@@ -24,4 +24,24 @@ export default defineConfigWithVueTs(
 
   pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
+
+  {
+    name: 'app/rules',
+    rules: {
+      // Nudge stray debug output toward the `logger` abstraction (src/lib/logger.ts).
+      // `warn`/`error` are still allowed directly since they surface real problems.
+      // Kept as a warning (not error) so CI stays green while console.log usage is
+      // migrated over incrementally.
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+    },
+  },
+
+  {
+    // The logger is the one place raw console access is intentional.
+    name: 'app/logger-console-allowed',
+    files: ['src/lib/logger.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
 )
