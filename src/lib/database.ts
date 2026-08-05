@@ -47,6 +47,13 @@ import {
   resolveWikiPageByName,
 } from '@/lib/wikiAliases';
 import { countRevisionChanges } from '@/lib/revisionDiff';
+import type {
+  AppDatabaseConnection,
+  QueryRow,
+  DatabaseContext,
+} from '@/lib/db/connection';
+import { readQueryRowValue } from '@/lib/db/rowUtils';
+import * as metadataRepo from '@/lib/db/metadataRepository';
 
 export interface Book {
   id: string;
@@ -275,26 +282,8 @@ function imageAssetFromNativeRow(row: Record<string, unknown>): ImageAsset {
 
 const NATIVE_CAPACITOR_PLATFORMS = new Set(['ios', 'android']);
 
-type QueryRow = Record<string, unknown>;
-
-interface QueryResultRowStatement {
-  bind(values?: unknown[]): void;
-  step(): boolean;
-  getAsObject(): Record<string, unknown>;
-  free(): void;
-}
-
-interface AppDatabaseConnection {
-  open(): Promise<void>;
-  close(): Promise<void> | void;
-  execute(sql: string): Promise<unknown>;
-  run(sql: string, params?: unknown[]): Promise<unknown> | void;
-  query(sql: string, params?: unknown[]): Promise<{ values?: QueryRow[] }>;
-  exec(sql: string, params?: unknown[]): Array<{ columns: string[]; values: unknown[][] }>;
-  export(): Uint8Array;
-  exportToJson(mode?: string): Promise<unknown>;
-  prepare(sql: string): QueryResultRowStatement;
-}
+// Connection contracts (QueryRow, QueryResultRowStatement, AppDatabaseConnection)
+// live in ./db/connection and are imported at the top of this file.
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -447,65 +436,8 @@ function toWebPart(row: unknown[]): BookPart {
   };
 }
 
-function toWebReview(row: unknown[]): ChapterReview {
-  return {
-    id: String(row[0]),
-    chapter_id: String(row[1]),
-    review_text: String(row[2]),
-    prompt_used: typeof row[3] === 'string' ? row[3] : null,
-    profile_id: typeof row[4] === 'number' ? row[4] : null,
-    profile_name: typeof row[5] === 'string' ? row[5] : null,
-    tone_key: typeof row[6] === 'string' ? row[6] : null,
-    created_at: String(row[7]),
-    updated_at: String(row[8]),
-  };
-}
-
-function toWebSummary(row: unknown[]): ChapterSummary {
-  return {
-    id: String(row[0]),
-    chapter_id: String(row[1]),
-    summary: typeof row[2] === 'string' ? row[2] : null,
-    pov: typeof row[3] === 'string' ? row[3] : null,
-    characters: typeof row[4] === 'string' ? row[4] : null,
-    beats: typeof row[5] === 'string' ? row[5] : null,
-    spoilers_ok: typeof row[6] === 'boolean' ? row[6] : typeof row[6] === 'number' ? Boolean(row[6]) : null,
-    created_at: String(row[7]),
-    updated_at: String(row[8]),
-  };
-}
-
-function toWebPartSummary(row: unknown[]): PartSummary {
-  return {
-    id: String(row[0]),
-    part_id: String(row[1]),
-    summary: typeof row[2] === 'string' ? row[2] : null,
-    characters: typeof row[3] === 'string' ? row[3] : null,
-    beats: typeof row[4] === 'string' ? row[4] : null,
-    created_at: String(row[5]),
-    updated_at: String(row[6]),
-  };
-}
-
-function toWebNote(row: unknown[]): ChapterNote {
-  return {
-    id: String(row[0]),
-    chapter_id: String(row[1]),
-    notes: String(row[2] ?? ''),
-    created_at: String(row[3]),
-    updated_at: String(row[4]),
-  };
-}
-
-function toWebCustomProfile(row: unknown[]): CustomReviewerProfile {
-  return {
-    id: Number(row[0]),
-    name: String(row[1]),
-    description: String(row[2]),
-    created_at: String(row[3]),
-    updated_at: String(row[4]),
-  };
-}
+// Chapter/part metadata row mappers (summaries, reviews, notes, profiles) moved
+// to ./db/metadataRepository alongside their repository functions.
 
 function toWebWikiPage(row: unknown[]): WikiPage {
   const rawPageType = typeof row[3] === 'string' ? row[3] : 'character';
@@ -530,10 +462,6 @@ function toWebWikiPage(row: unknown[]): WikiPage {
   };
 }
 
-function readQueryRowValue(row: QueryRow, index: number, key: string): unknown {
-  return Array.isArray(row) ? row[index] : row[key];
-}
-
 function toNativeChapter(row: QueryRow): Chapter {
   return {
     id: String(readQueryRowValue(row, 0, 'id')),
@@ -543,70 +471,6 @@ function toNativeChapter(row: QueryRow): Chapter {
     text: String(readQueryRowValue(row, 4, 'text') ?? ''),
     word_count: Number(readQueryRowValue(row, 5, 'word_count') ?? 0),
     created_at: String(readQueryRowValue(row, 6, 'created_at')),
-  };
-}
-
-function toNativeSummary(row: QueryRow): ChapterSummary {
-  return {
-    id: String(readQueryRowValue(row, 0, 'id')),
-    chapter_id: String(readQueryRowValue(row, 1, 'chapter_id')),
-    summary: typeof readQueryRowValue(row, 2, 'summary') === 'string' ? readQueryRowValue(row, 2, 'summary') as string : null,
-    pov: typeof readQueryRowValue(row, 3, 'pov') === 'string' ? readQueryRowValue(row, 3, 'pov') as string : null,
-    characters: typeof readQueryRowValue(row, 4, 'characters') === 'string' ? readQueryRowValue(row, 4, 'characters') as string : null,
-    beats: typeof readQueryRowValue(row, 5, 'beats') === 'string' ? readQueryRowValue(row, 5, 'beats') as string : null,
-    spoilers_ok: typeof readQueryRowValue(row, 6, 'spoilers_ok') === 'boolean'
-      ? readQueryRowValue(row, 6, 'spoilers_ok') as boolean
-      : typeof readQueryRowValue(row, 6, 'spoilers_ok') === 'number'
-        ? Boolean(readQueryRowValue(row, 6, 'spoilers_ok'))
-        : null,
-    created_at: String(readQueryRowValue(row, 7, 'created_at')),
-    updated_at: String(readQueryRowValue(row, 8, 'updated_at')),
-  };
-}
-
-function toNativePartSummary(row: QueryRow): PartSummary {
-  return {
-    id: String(readQueryRowValue(row, 0, 'id')),
-    part_id: String(readQueryRowValue(row, 1, 'part_id')),
-    summary: typeof readQueryRowValue(row, 2, 'summary') === 'string' ? readQueryRowValue(row, 2, 'summary') as string : null,
-    characters: typeof readQueryRowValue(row, 3, 'characters') === 'string' ? readQueryRowValue(row, 3, 'characters') as string : null,
-    beats: typeof readQueryRowValue(row, 4, 'beats') === 'string' ? readQueryRowValue(row, 4, 'beats') as string : null,
-    created_at: String(readQueryRowValue(row, 5, 'created_at')),
-    updated_at: String(readQueryRowValue(row, 6, 'updated_at')),
-  };
-}
-
-function toNativeReview(row: QueryRow): ChapterReview {
-  return {
-    id: String(readQueryRowValue(row, 0, 'id')),
-    chapter_id: String(readQueryRowValue(row, 1, 'chapter_id')),
-    review_text: String(readQueryRowValue(row, 2, 'review_text') ?? ''),
-    prompt_used: typeof readQueryRowValue(row, 3, 'prompt_used') === 'string' ? readQueryRowValue(row, 3, 'prompt_used') as string : null,
-    profile_id: typeof readQueryRowValue(row, 4, 'profile_id') === 'number' ? readQueryRowValue(row, 4, 'profile_id') as number : null,
-    profile_name: typeof readQueryRowValue(row, 5, 'profile_name') === 'string' ? readQueryRowValue(row, 5, 'profile_name') as string : null,
-    tone_key: typeof readQueryRowValue(row, 6, 'tone_key') === 'string' ? readQueryRowValue(row, 6, 'tone_key') as string : null,
-    created_at: String(readQueryRowValue(row, 7, 'created_at')),
-    updated_at: String(readQueryRowValue(row, 8, 'updated_at')),
-  };
-}
-
-function toNativeNote(row: QueryRow): ChapterNote {
-  return {
-    id: String(readQueryRowValue(row, 0, 'id')),
-    chapter_id: String(readQueryRowValue(row, 1, 'chapter_id')),
-    notes: String(readQueryRowValue(row, 2, 'notes') ?? ''),
-    created_at: String(readQueryRowValue(row, 3, 'created_at')),
-    updated_at: String(readQueryRowValue(row, 4, 'updated_at')),
-  };
-}
-
-function toNativeCustomProfile(row: QueryRow): CustomReviewerProfile {
-  return {
-    id: Number(readQueryRowValue(row, 0, 'id')),
-    name: String(readQueryRowValue(row, 1, 'name')),
-    description: String(readQueryRowValue(row, 2, 'description') ?? ''),
-    created_at: String(readQueryRowValue(row, 3, 'created_at')),
-    updated_at: String(readQueryRowValue(row, 4, 'updated_at')),
   };
 }
 
@@ -2239,6 +2103,20 @@ export class AppDatabase {
     return columns;
   }
 
+  // --- Chapter/part metadata (summaries, reviews, notes, profiles) ---------
+  // These methods delegate to ./db/metadataRepository. The class keeps the same
+  // public surface; the data-access logic now lives in a focused, independently
+  // testable module. See DatabaseContext for the shared dependency it receives.
+
+  /** Dependencies handed to repository modules for data access. */
+  private get context(): DatabaseContext {
+    return {
+      connection: this.db,
+      isNative: this.isNative ?? false,
+      requestPersistence: () => this.requestPersistence(),
+    };
+  }
+
   // Chapter Summary methods
   async saveSummary(summary: {
     chapter_id: string;
@@ -2248,43 +2126,11 @@ export class AppDatabase {
     beats: string[];
     spoilers_ok: boolean;
   }) {
-    const id = `summary-${summary.chapter_id}-${Date.now()}`;
-    const now = new Date().toISOString();
-    const query = `INSERT OR REPLACE INTO chapter_summaries (id, chapter_id, summary, pov, characters, beats, spoilers_ok, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-
-    const params = [
-      id,
-      summary.chapter_id,
-      summary.summary,
-      summary.pov,
-      JSON.stringify(summary.characters),
-      JSON.stringify(summary.beats),
-      summary.spoilers_ok ? 1 : 0,
-      now,
-      now
-    ];
-
-    if (this.isNative) {
-      await this.db.run(query, params);
-    } else {
-      this.db.run(query, params);
-      this.requestPersistence();
-    }
+    return metadataRepo.saveSummary(this.context, summary);
   }
 
   async getSummary(chapterId: string): Promise<ChapterSummary | null> {
-    const query = `SELECT * FROM chapter_summaries WHERE chapter_id = ? LIMIT 1`;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [chapterId]);
-      return result.values?.[0] ? toNativeSummary(result.values[0]) : null;
-    } else {
-      const result = this.db.exec(query, [chapterId]);
-      if (result.length === 0 || result[0].values.length === 0) return null;
-
-      return toWebSummary(result[0].values[0]);
-    }
+    return metadataRepo.getSummary(this.context, chapterId);
   }
 
   async savePartSummary(summary: {
@@ -2293,54 +2139,15 @@ export class AppDatabase {
     characters: string[];
     beats: string[];
   }) {
-    const id = `part-summary-${summary.part_id}`;
-    const now = new Date().toISOString();
-    const existing = await this.getPartSummary(summary.part_id);
-    const createdAt = existing?.created_at ?? now;
-    const query = `INSERT OR REPLACE INTO part_summaries (id, part_id, summary, characters, beats, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)`;
-
-    const params = [
-      id,
-      summary.part_id,
-      summary.summary,
-      JSON.stringify(summary.characters),
-      JSON.stringify(summary.beats),
-      createdAt,
-      now
-    ];
-
-    if (this.isNative) {
-      await this.db.run(query, params);
-    } else {
-      this.db.run(query, params);
-      this.requestPersistence();
-    }
+    return metadataRepo.savePartSummary(this.context, summary);
   }
 
   async getPartSummary(partId: string): Promise<PartSummary | null> {
-    const query = `SELECT * FROM part_summaries WHERE part_id = ? LIMIT 1`;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [partId]);
-      return result.values?.[0] ? toNativePartSummary(result.values[0]) : null;
-    } else {
-      const result = this.db.exec(query, [partId]);
-      if (result.length === 0 || result[0].values.length === 0) return null;
-
-      return toWebPartSummary(result[0].values[0]);
-    }
+    return metadataRepo.getPartSummary(this.context, partId);
   }
 
   async deletePartSummary(partId: string) {
-    const query = `DELETE FROM part_summaries WHERE part_id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(query, [partId]);
-    } else {
-      this.db.run(query, [partId]);
-      this.requestPersistence();
-    }
+    return metadataRepo.deletePartSummary(this.context, partId);
   }
 
   // Chapter Review methods
@@ -2352,183 +2159,51 @@ export class AppDatabase {
     profile_name: string | null;
     tone_key: string | null;
   }) {
-    const id = `review-${review.chapter_id}-${Date.now()}`;
-    const now = new Date().toISOString();
-    const query = `INSERT INTO chapter_reviews (id, chapter_id, review_text, prompt_used, profile_id, profile_name, tone_key, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-
-    const params = [
-      id,
-      review.chapter_id,
-      review.review_text,
-      review.prompt_used,
-      review.profile_id,
-      review.profile_name,
-      review.tone_key,
-      now,
-      now
-    ];
-
-    if (this.isNative) {
-      await this.db.run(query, params);
-    } else {
-      this.db.run(query, params);
-      this.requestPersistence();
-    }
+    return metadataRepo.saveReview(this.context, review);
   }
 
   async getReviews(chapterId: string): Promise<ChapterReview[]> {
-    const query = `SELECT * FROM chapter_reviews WHERE chapter_id = ? ORDER BY created_at DESC`;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [chapterId]);
-      return (result.values || []).map((row) => toNativeReview(row));
-    } else {
-      const result = this.db.exec(query, [chapterId]);
-      if (result.length === 0) return [];
-
-      return result[0].values.map((row: unknown[]) => toWebReview(row));
-    }
+    return metadataRepo.getReviews(this.context, chapterId);
   }
 
   async deleteReview(reviewId: string) {
-    const query = `DELETE FROM chapter_reviews WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(query, [reviewId]);
-    } else {
-      this.db.run(query, [reviewId]);
-      this.requestPersistence();
-    }
+    return metadataRepo.deleteReview(this.context, reviewId);
   }
 
   // Chapter Notes methods
   async saveNotes(chapterId: string, notes: string): Promise<void> {
-    const id = `notes-${chapterId}`;
-    const now = new Date().toISOString();
-
-    // Check if notes already exist for this chapter
-    const existing = await this.getNotes(chapterId);
-    const createdAt = existing?.created_at ?? now;
-
-    const query = `INSERT OR REPLACE INTO chapter_notes (id, chapter_id, notes, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?)`;
-
-    const params = [id, chapterId, notes, createdAt, now];
-
-    if (this.isNative) {
-      await this.db.run(query, params);
-    } else {
-      this.db.run(query, params);
-      this.requestPersistence();
-    }
+    return metadataRepo.saveNotes(this.context, chapterId, notes);
   }
 
   async getNotes(chapterId: string): Promise<ChapterNote | null> {
-    const query = `SELECT * FROM chapter_notes WHERE chapter_id = ? LIMIT 1`;
-
-    if (this.isNative) {
-      const result = await this.db.query(query, [chapterId]);
-      return result.values?.[0] ? toNativeNote(result.values[0]) : null;
-    } else {
-      const result = this.db.exec(query, [chapterId]);
-      if (result.length === 0 || result[0].values.length === 0) return null;
-
-      return toWebNote(result[0].values[0]);
-    }
+    return metadataRepo.getNotes(this.context, chapterId);
   }
 
   async deleteNotes(chapterId: string): Promise<void> {
-    const query = `DELETE FROM chapter_notes WHERE chapter_id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(query, [chapterId]);
-    } else {
-      this.db.run(query, [chapterId]);
-      this.requestPersistence();
-    }
+    return metadataRepo.deleteNotes(this.context, chapterId);
   }
 
   // Custom Reviewer Profile methods
   async getCustomProfiles(): Promise<CustomReviewerProfile[]> {
-    const query = `SELECT * FROM custom_reviewer_profiles ORDER BY created_at DESC`;
-
-    if (this.isNative) {
-      const result = await this.db.query(query);
-      return (result.values || []).map((row) => toNativeCustomProfile(row));
-    } else {
-      const result = this.db.exec(query);
-      if (result.length === 0) return [];
-
-      return result[0].values.map((row: unknown[]) => toWebCustomProfile(row));
-    }
+    return metadataRepo.getCustomProfiles(this.context);
   }
 
   async createCustomProfile(profile: {
     name: string;
     description: string;
   }) {
-    const id = Date.now();
-    const now = new Date().toISOString();
-    const query = `INSERT INTO custom_reviewer_profiles (id, name, description, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?)`;
-
-    const params = [id, profile.name, profile.description, now, now];
-
-    if (this.isNative) {
-      await this.db.run(query, params);
-    } else {
-      this.db.run(query, params);
-      this.requestPersistence();
-    }
-
-    return id;
+    return metadataRepo.createCustomProfile(this.context, profile);
   }
 
   async updateCustomProfile(profileId: number, updates: {
     name?: string;
     description?: string;
   }) {
-    const now = new Date().toISOString();
-    const sets: string[] = [];
-    const params: unknown[] = [];
-
-    if (updates.name !== undefined) {
-      sets.push('name = ?');
-      params.push(updates.name);
-    }
-    if (updates.description !== undefined) {
-      sets.push('description = ?');
-      params.push(updates.description);
-    }
-
-    sets.push('updated_at = ?');
-    params.push(now);
-    params.push(profileId);
-
-    const query = `UPDATE custom_reviewer_profiles SET ${sets.join(', ')} WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(query, params);
-    } else {
-      this.db.run(query, params);
-      this.requestPersistence();
-    }
+    return metadataRepo.updateCustomProfile(this.context, profileId, updates);
   }
 
   async deleteCustomProfile(profileId: number) {
-    // First delete any reviews using this profile
-    const deleteReviewsQuery = `DELETE FROM chapter_reviews WHERE profile_id = ?`;
-    const deleteProfileQuery = `DELETE FROM custom_reviewer_profiles WHERE id = ?`;
-
-    if (this.isNative) {
-      await this.db.run(deleteReviewsQuery, [profileId]);
-      await this.db.run(deleteProfileQuery, [profileId]);
-    } else {
-      this.db.run(deleteReviewsQuery, [profileId]);
-      this.db.run(deleteProfileQuery, [profileId]);
-      this.requestPersistence();
-    }
+    return metadataRepo.deleteCustomProfile(this.context, profileId);
   }
 
   // Wiki Page methods
