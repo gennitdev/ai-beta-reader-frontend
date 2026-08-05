@@ -250,7 +250,7 @@ describe('Bardwall game helpers', () => {
       updatedAt: '2026-08-01T12:00:00.000Z',
       turns: [
         { speaker: 'bard', wordCount: 4 },
-        { speaker: 'cave', wordCount: 5 },
+        { speaker: 'vesper', wordCount: 5 },
       ],
     })
   })
