@@ -40,7 +40,7 @@
     "@tailwindcss/typography": "^0.5.20",
     "@tanstack/vue-query": "^5.101.4",
     "@types/crypto-js": "^4.2.2",
-    "@types/jszip": "^3.4.0",
+    "@types/jszip": "^3.4.1",
     "axios": "^1.12.2",
     "crypto-js": "^4.2.0",
     "fflate": "^0.8.3",
