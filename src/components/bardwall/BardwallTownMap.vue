@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { bardwallMapImage } from '@/lib/bardwallAssets'
 
 export type BardwallLocation = 'amphitheater' | 'market' | 'inn' | 'shrine' | 'apothecary' | 'camp' | 'challenge' | 'cave'
 
 const props = defineProps<{ caveUnlocked: boolean }>()
 const emit = defineEmits<{ select: [location: BardwallLocation] }>()
 
+// x/y are percentages of the map image, chosen to sit over the matching landmark
+// in bardwall_map.png while preserving the destinations' relative arrangement.
 const locations = computed(() => [
-  { id: 'inn' as const, name: 'Crooked Lantern Inn', detail: 'Rooms, rumors, and advice', icon: '🏠', x: 22, y: 19, tone: 'amber' },
-  { id: 'shrine' as const, name: 'Shrine of Heliconia', detail: 'Town Square', icon: '🌺', x: 43, y: 38, tone: 'rose' },
-  { id: 'apothecary' as const, name: 'Moth & Mortar', detail: 'Apothecary and physic', icon: '⚗️', x: 17, y: 51, tone: 'emerald' },
-  { id: 'market' as const, name: 'Night Market', detail: 'Food, flowers, and provisions', icon: '🏮', x: 60, y: 56, tone: 'amber' },
-  { id: 'challenge' as const, name: 'Ink & Ember', detail: 'Coffee, company, and story wagers', icon: '☕', x: 27, y: 76, tone: 'stone' },
-  { id: 'amphitheater' as const, name: 'Stone Amphitheater', detail: 'Tell the ghosts a story', icon: '👻', x: 78, y: 17, tone: 'sky' },
-  { id: 'camp' as const, name: 'Forest Camp', detail: 'Your tent beyond the wall', icon: '⛺', x: 70, y: 68, tone: 'emerald' },
+  { id: 'inn' as const, name: 'Crooked Lantern Inn', detail: 'Rooms, rumors, and advice', icon: '🏠', x: 25, y: 18 },
+  { id: 'shrine' as const, name: 'Shrine of Heliconia', detail: 'Town Square', icon: '🌺', x: 49, y: 31 },
+  { id: 'apothecary' as const, name: 'Moth & Mortar', detail: 'Apothecary and physic', icon: '⚗️', x: 14, y: 47 },
+  { id: 'market' as const, name: 'Night Market', detail: 'Food, flowers, and provisions', icon: '🏮', x: 44, y: 53 },
+  { id: 'challenge' as const, name: 'Ink & Ember', detail: 'Coffee, company, and story wagers', icon: '☕', x: 21, y: 80 },
+  { id: 'amphitheater' as const, name: 'Stone Amphitheater', detail: 'Tell the ghosts a story', icon: '👻', x: 77, y: 20 },
+  { id: 'camp' as const, name: 'Forest Camp', detail: 'Your tent beyond the wall', icon: '⛺', x: 57, y: 76 },
   ...(props.caveUnlocked
-    ? [{ id: 'cave' as const, name: 'The Unwinnable Cave', detail: 'Some games can be played here', icon: '🕯️', x: 96, y: 89, tone: 'violet' }]
+    ? [{ id: 'cave' as const, name: 'The Unwinnable Cave', detail: 'Some games can be played here', icon: '🕯️', x: 91, y: 84 }]
     : []),
 ])
 </script>
@@ -30,19 +33,28 @@ const locations = computed(() => [
       <p class="max-w-sm text-sm text-[#65583f]">The walls keep out many things. They have never managed to keep out a story.</p>
     </div>
 
-    <div class="bardwall-map relative grid w-full min-w-0 gap-3 overflow-hidden rounded-xl border-2 border-[#796946]/60 p-4 sm:block sm:aspect-[16/10] sm:min-h-[34rem]">
-      <div class="pointer-events-none absolute inset-0 hidden sm:block">
-        <div class="absolute left-[4%] top-[7%] h-[78%] w-[61%] rounded-[45%_38%_42%_48%] border-[10px] border-double border-[#635c49]/70 bg-[#a9b27a]/35"></div>
-        <div class="absolute bottom-[8%] right-[5%] top-[6%] w-[34%] rounded-[45%] bg-[#314533]/35"></div>
-        <div class="absolute left-[64%] top-[45%] h-2 w-[32%] rotate-[18deg] rounded-full bg-[#b59b6d]/70"></div>
-      </div>
+    <!-- On mobile the painted map is a banner and destinations stack beneath it; on
+         larger screens the destinations are pinned onto the map itself. -->
+    <img
+      :src="bardwallMapImage"
+      alt="A painted map of Bardwall—its walled town, shrine, amphitheater, forest camp, and the cave beyond the wood."
+      class="mb-4 block w-full rounded-xl border-2 border-[#796946]/60 object-cover sm:hidden"
+    />
+
+    <div class="bardwall-map relative grid w-full min-w-0 gap-3 overflow-hidden rounded-xl border-2 border-[#796946]/60 p-4 sm:block sm:aspect-[16/10] sm:p-0">
+      <img
+        :src="bardwallMapImage"
+        alt=""
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 hidden h-full w-full object-cover sm:block"
+      />
 
       <button
         v-for="location in locations"
         :key="location.id"
         type="button"
         :data-testid="`map-${location.id}`"
-        class="map-location group z-10 flex items-center gap-3 rounded-xl border border-[#6f6248]/60 bg-[#efe2bd]/95 p-3 text-left shadow-md transition hover:border-[#3d3525] hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#5f4927] sm:w-44"
+        class="map-location group z-10 flex items-center gap-3 rounded-xl border border-[#6f6248]/70 bg-[#efe2bd]/95 p-3 text-left shadow-md backdrop-blur-[1px] transition hover:border-[#3d3525] hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#5f4927] sm:w-44"
         :class="{ 'map-location--right': location.id === 'cave' }"
         :style="{ '--map-x': `${location.x}%`, '--map-y': `${location.y}%` }"
         @click="emit('select', location.id)"
@@ -54,7 +66,7 @@ const locations = computed(() => [
         </span>
       </button>
 
-      <div v-if="!caveUnlocked" class="pointer-events-none z-10 hidden rounded-xl border border-dashed border-[#d6c7a0]/30 bg-[#1e3025]/70 p-3 text-center text-xs text-[#c8c0a7] sm:absolute sm:bottom-[7%] sm:right-[3%] sm:block sm:w-40">
+      <div v-if="!caveUnlocked" class="pointer-events-none z-10 hidden rounded-xl border border-dashed border-[#d6c7a0]/40 bg-[#1e3025]/80 p-3 text-center text-xs text-[#d8d0b7] backdrop-blur-[1px] sm:absolute sm:bottom-[6%] sm:right-[3%] sm:block sm:w-40">
         The oldest part of the wood is not marked.
       </div>
     </div>
