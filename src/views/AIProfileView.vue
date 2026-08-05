@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { logger } from '@/lib/logger'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
 import { BUILT_IN_PROFILES } from '@/lib/openai'
@@ -75,7 +76,7 @@ const loadProfile = async () => {
   loading.value = true
   error.value = null
   try {
-    console.log('Loading AI profile with ID:', profileId.value)
+    logger.log('Loading AI profile with ID:', profileId.value)
 
     let profile: AIProfile | null = null
 
@@ -159,7 +160,7 @@ const loadProfile = async () => {
       reviews: allReviews
     }
 
-    console.log('Loaded profile data:', profileData.value)
+    logger.log('Loaded profile data:', profileData.value)
   } catch (err: unknown) {
     console.error('Failed to load AI profile:', err)
     error.value = err instanceof Error ? err.message : 'Failed to load AI profile'

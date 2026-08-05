@@ -8,6 +8,7 @@
  * happens at the end.
  */
 
+import { logger } from '@/lib/logger'
 import {
   DATABASE_EXPORT_VERSION,
   IMAGE_ASSET_COLUMNS,
@@ -157,12 +158,12 @@ export async function exportDatabase(ctx: DatabaseContext): Promise<Uint8Array> 
 export async function importDatabase(ctx: DatabaseContext, data: Uint8Array): Promise<void> {
   const jsonString = new TextDecoder().decode(data)
   const importData = normalizeDatabaseImportData(JSON.parse(jsonString))
-  console.log('[Database] importDatabase: image_assets count:', importData.image_assets?.length || 0)
+  logger.log('[Database] importDatabase: image_assets count:', importData.image_assets?.length || 0)
   if (importData.image_assets?.length > 0) {
-    console.log('[Database] importDatabase: First image_asset:', importData.image_assets[0])
+    logger.log('[Database] importDatabase: First image_asset:', importData.image_assets[0])
     // image_data is at index 9 for arrays (added via ALTER TABLE)
     const hasImageData = importData.image_assets.some((row) => Array.isArray(row) ? row[9] : row.image_data)
-    console.log('[Database] importDatabase: Any have image_data?', hasImageData)
+    logger.log('[Database] importDatabase: Any have image_data?', hasImageData)
   }
 
   const run = async (sql: string, params: unknown[] = []) => {
@@ -279,10 +280,10 @@ export async function importDatabase(ctx: DatabaseContext, data: Uint8Array): Pr
 
   // Save once at the end after all imports are complete
   if (!ctx.isNative) {
-    console.log('[Database] importDatabase: Saving to IndexedDB...')
+    logger.log('[Database] importDatabase: Saving to IndexedDB...')
     ctx.requestPersistence()
     await ctx.flushPersistence()
-    console.log('[Database] importDatabase: Save complete')
+    logger.log('[Database] importDatabase: Save complete')
   }
 }
 

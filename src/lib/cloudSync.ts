@@ -1,4 +1,5 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { logger } from '@/lib/logger'
 import { gzipSync, gunzipSync } from 'fflate';
 import { Encryption } from './encryption';
 import { db, type ImageAsset } from './database';
@@ -140,7 +141,7 @@ export class GoogleDriveProvider implements CloudProvider {
 
   private debug(message: string, extra?: unknown) {
     const entry = extra !== undefined ? `${message} ${JSON.stringify(extra)}` : message;
-    console.log(`[CloudSync] ${entry}`);
+    logger.log(`[CloudSync] ${entry}`);
     this.debugLog = [...this.debugLog, entry].slice(-200);
     const cloudSyncWindow = getCloudSyncWindow();
     if (cloudSyncWindow) {
@@ -302,7 +303,7 @@ export class GoogleDriveProvider implements CloudProvider {
       }
 
       this.debug('upload() completed successfully');
-      console.log('File uploaded to Google Drive successfully');
+      logger.log('File uploaded to Google Drive successfully');
     } catch (error) {
       this.debug(`upload() error: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
@@ -819,7 +820,7 @@ export class CloudSync {
       await this.provider.authenticate();
     }
 
-    console.log('Exporting database...');
+    logger.log('Exporting database...');
     const dbData = await db.exportDatabase();
 
     // Enrich temporary export rows from the active image content store. Live
@@ -827,10 +828,10 @@ export class CloudSync {
     let enrichedData = dbData;
     const imageContentStore = createRuntimeImageContentStore();
     if (imageContentStore) {
-      console.log('[CloudSync] Reading image content for backup...');
+      logger.log('[CloudSync] Reading image content for backup...');
       try {
         const exportJson = JSON.parse(new TextDecoder().decode(dbData)) as BackupPayload;
-        console.log('[CloudSync] Export has image_assets:', exportJson.image_assets?.length || 0, 'items');
+        logger.log('[CloudSync] Export has image_assets:', exportJson.image_assets?.length || 0, 'items');
         if (Array.isArray(exportJson.image_assets) && exportJson.image_assets.length > 0) {
           const result = await enrichImageRowsForBackup(
             exportJson.image_assets,
@@ -845,7 +846,7 @@ export class CloudSync {
           }
         }
 
-        console.log(`Enriched backup with ${exportJson.image_assets?.length || 0} images`);
+        logger.log(`Enriched backup with ${exportJson.image_assets?.length || 0} images`);
 
         // Stringify and encode, then immediately clear the object
         const jsonString = JSON.stringify(exportJson);
@@ -862,11 +863,11 @@ export class CloudSync {
     }
 
     // Compress data before encryption to reduce memory usage and upload size
-    console.log(`Compressing ${(enrichedData.length / 1024 / 1024).toFixed(2)} MB of data...`);
+    logger.log(`Compressing ${(enrichedData.length / 1024 / 1024).toFixed(2)} MB of data...`);
 
     // Use lower compression level for speed and less memory
     const compressed = gzipSync(enrichedData, { level: 4 });
-    console.log(`Compressed to ${(compressed.length / 1024 / 1024).toFixed(2)} MB (${((1 - compressed.length / enrichedData.length) * 100).toFixed(1)}% reduction)`);
+    logger.log(`Compressed to ${(compressed.length / 1024 / 1024).toFixed(2)} MB (${((1 - compressed.length / enrichedData.length) * 100).toFixed(1)}% reduction)`);
 
     // Free the uncompressed data immediately
     enrichedData = new Uint8Array(0);
@@ -874,16 +875,16 @@ export class CloudSync {
     // Small delay to encourage garbage collection
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    console.log('Encrypting database...');
+    logger.log('Encrypting database...');
     const encrypted = await Encryption.encrypt(compressed, password);
 
     // Prefix with compression marker so restore knows to decompress
     const finalData = COMPRESSED_PREFIX + encrypted;
 
-    console.log(`Uploading to ${this.provider.name}...`);
+    logger.log(`Uploading to ${this.provider.name}...`);
     try {
       await this.provider.upload(this.backupFileName, finalData);
-      console.log('✅ Backup complete!');
+      logger.log('✅ Backup complete!');
     } catch (error) {
       console.error('Upload failed:', error);
       throw new Error(`Failed to upload backup: ${error instanceof Error ? error.message : String(error)}`);
@@ -899,27 +900,27 @@ export class CloudSync {
       await this.provider.authenticate();
     }
 
-    console.log('[CloudSync] Starting restore workflow');
-    console.log(`Downloading from ${this.provider.name}...`);
+    logger.log('[CloudSync] Starting restore workflow');
+    logger.log(`Downloading from ${this.provider.name}...`);
     let downloaded = await this.provider.download(this.backupFileName);
 
     if (!downloaded) {
-      console.log('No backup found in cloud storage');
+      logger.log('No backup found in cloud storage');
       throw new Error('No backup found in your Google Drive. Please create a backup first.');
     }
 
     // Check if the backup is compressed (has GZ1: prefix)
     const isCompressed = downloaded.startsWith(COMPRESSED_PREFIX);
     if (isCompressed) {
-      console.log('Detected compressed backup format');
+      logger.log('Detected compressed backup format');
       downloaded = downloaded.slice(COMPRESSED_PREFIX.length);
     }
 
-    console.log('Decrypting database...');
+    logger.log('Decrypting database...');
     let decrypted: Uint8Array;
     try {
       decrypted = await Encryption.decrypt(downloaded, password);
-      console.log('Decryption successful,', decrypted.length, 'bytes');
+      logger.log('Decryption successful,', decrypted.length, 'bytes');
     } catch (error) {
       console.error('Failed to decrypt - wrong password?', error);
       throw new Error('Incorrect password. Please check your encryption password and try again.');
@@ -928,7 +929,7 @@ export class CloudSync {
     // Decompress if needed
     if (isCompressed) {
       const compressedSizeMB = decrypted.length / 1024 / 1024;
-      console.log(`Decompressing data (${compressedSizeMB.toFixed(1)} MB compressed)...`);
+      logger.log(`Decompressing data (${compressedSizeMB.toFixed(1)} MB compressed)...`);
 
       // On mobile, warn if backup is very large (may crash)
       const isMobile = Capacitor.isNativePlatform() &&
@@ -939,7 +940,7 @@ export class CloudSync {
 
       try {
         decrypted = gunzipSync(decrypted);
-        console.log('Decompressed to', (decrypted.length / 1024 / 1024).toFixed(1), 'MB');
+        logger.log('Decompressed to', (decrypted.length / 1024 / 1024).toFixed(1), 'MB');
       } catch (error) {
         console.error('Failed to decompress backup:', error);
         if (isMobile) {
@@ -956,13 +957,13 @@ export class CloudSync {
       // Free the decrypted buffer now that we've parsed it
       decrypted = new Uint8Array(0);
 
-      console.log('[CloudSync] Restore: image_assets in backup:', importJson.image_assets?.length || 0, 'items');
+      logger.log('[CloudSync] Restore: image_assets in backup:', importJson.image_assets?.length || 0, 'items');
 
       const restoreStore = createRuntimeImageContentStore();
       let restoredAssets: ImageAsset[] = [];
       if (Array.isArray(importJson.image_assets) && importJson.image_assets.length > 0) {
         if (restoreStore) {
-          console.log('[CloudSync] Writing image content from backup...');
+          logger.log('[CloudSync] Writing image content from backup...');
           const result = await restoreImageRows(importJson.image_assets, restoreStore);
           importJson.image_assets = result.rows;
           restoredAssets = result.assets;
@@ -973,7 +974,7 @@ export class CloudSync {
             );
           }
         } else {
-          console.log('[CloudSync] Native platform without image storage - stripping image data');
+          logger.log('[CloudSync] Native platform without image storage - stripping image data');
           const result = stripImageDataFromRows(importJson.image_assets);
           importJson.image_assets = result.rows;
           restoredAssets = result.assets;
@@ -997,7 +998,7 @@ export class CloudSync {
         }
       }
 
-      console.log('✅ Database restored successfully!');
+      logger.log('✅ Database restored successfully!');
       return true;
     } catch (error) {
       console.error('Failed to import database after decryption:', error);
@@ -1012,7 +1013,7 @@ export class CloudSync {
     return window.setInterval(async () => {
       try {
         await this.backup(password);
-        console.log('Auto-backup completed');
+        logger.log('Auto-backup completed');
       } catch (error) {
         console.error('Auto-backup failed:', error);
       }
