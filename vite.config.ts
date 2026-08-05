@@ -22,10 +22,10 @@ export default defineConfig({
       // matching threshold up to lock in the gain — never lower them to make a
       // change pass. Current actuals: stmts 49.6 / branch 34.3 / funcs 44.4 / lines 50.6.
       thresholds: {
-        statements: 49.5,
-        branches: 34,
-        functions: 44,
-        lines: 50.5,
+        statements: 53,
+        branches: 35,
+        functions: 48,
+        lines: 54,
       },
     },
   },
