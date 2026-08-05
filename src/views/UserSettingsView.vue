@@ -1,29 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { initializeDatabase, useDatabase } from '@/composables/useDatabase'
 import { useImageLibrary } from '@/composables/useImageLibrary'
-import type { ImageAsset } from '@/lib/database'
-import JSZip from 'jszip'
+import { useApiKey } from '@/composables/useApiKey'
+import { useCloudSync } from '@/composables/useCloudSync'
+import { useBrowserStorage } from '@/composables/useBrowserStorage'
+import { useDataExport } from '@/composables/useDataExport'
+import { formatStorageBytes } from '@/lib/browserStorage'
 import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon, CircleStackIcon } from '@heroicons/vue/24/outline'
-import {
-  buildMarkdownExportFiles,
-  orderChaptersForBook,
-  orderChaptersForPart,
-  orderParts,
-  sanitizeFileName,
-} from '@/lib/exportHelpers'
-import {
-  formatStorageBytes,
-  getBrowserStorageSnapshot,
-  requestPersistentBrowserStorage,
-  type BrowserStorageSnapshot,
-} from '@/lib/browserStorage'
-import { isDesktopAppRuntime } from '@/utils/platform'
 
 const router = useRouter()
 
-// Use local database
+// Local database + image library provide the primitives the settings composables build on.
 const {
   books,
   chapters,
@@ -38,7 +27,6 @@ const {
   cloudSyncReady,
 } = useDatabase()
 
-// Image library for exporting images
 const {
   canStoreImages,
   fetchBookCover,
@@ -47,492 +35,67 @@ const {
   getImageBlob,
 } = useImageLibrary()
 
-const browserStorage = ref<BrowserStorageSnapshot | null>(null)
-const loadingBrowserStorage = ref(false)
-const browserStorageMessage = ref('')
-const showBrowserStorage = computed(
-  () => canStoreImages.value && !isDesktopAppRuntime(),
-)
-const browserStoragePercent = computed(() => {
-  const usage = browserStorage.value?.usage
-  const quota = browserStorage.value?.quota
-  if (usage == null || quota == null || quota <= 0) return null
-  return Math.min(100, (usage / quota) * 100)
-})
-
-const refreshBrowserStorage = async () => {
-  if (!showBrowserStorage.value) return
-  loadingBrowserStorage.value = true
-  browserStorage.value = await getBrowserStorageSnapshot()
-  loadingBrowserStorage.value = false
-}
-
-const makeBrowserStoragePersistent = async () => {
-  const persisted = await requestPersistentBrowserStorage()
-  browserStorageMessage.value = persisted
-    ? 'This browser granted persistent storage.'
-    : 'Persistent storage was not granted. Keep encrypted backups in case browser data is cleared.'
-  await refreshBrowserStorage()
-}
-
-// OpenAI API Key state
-const openaiApiKey = ref('')
-const showApiKey = ref(false)
-const apiKeyMessage = ref('')
-const apiKeyMessageType = ref<'success' | 'error' | ''>('')
-
-// Load API key from localStorage
-const loadApiKey = () => {
-  const stored = localStorage.getItem('openai_api_key')
-  if (stored) {
-    openaiApiKey.value = stored
-  }
-}
-
-// Save API key to localStorage
-const saveApiKey = () => {
-  if (!openaiApiKey.value.trim()) {
-    apiKeyMessage.value = 'Please enter an API key'
-    apiKeyMessageType.value = 'error'
-    return
-  }
-
-  if (!openaiApiKey.value.startsWith('sk-')) {
-    apiKeyMessage.value = 'API key should start with "sk-"'
-    apiKeyMessageType.value = 'error'
-    return
-  }
-
-  localStorage.setItem('openai_api_key', openaiApiKey.value)
-  apiKeyMessage.value = 'API key saved successfully!'
-  apiKeyMessageType.value = 'success'
-
-  setTimeout(() => {
-    apiKeyMessage.value = ''
-    apiKeyMessageType.value = ''
-  }, 3000)
-}
-
-// Remove API key from localStorage
-const removeApiKey = () => {
-  if (!confirm('Are you sure you want to remove your OpenAI API key?')) return
-
-  localStorage.removeItem('openai_api_key')
-  openaiApiKey.value = ''
-  apiKeyMessage.value = 'API key removed'
-  apiKeyMessageType.value = 'success'
-
-  setTimeout(() => {
-    apiKeyMessage.value = ''
-    apiKeyMessageType.value = ''
-  }, 3000)
-}
-
-// Export state
-const isExporting = ref(false)
-const exportProgress = ref('')
-const exportError = ref('')
-const exportFormat = ref<'zip' | 'markdown'>('zip')
-const markdownGranularity = ref<'book' | 'part'>('book')
-const includeNotes = ref(true)
-
-// Cloud backup state
-const cloudPassword = ref('')
-const showCloudPassword = ref(false)
-const isBackingUp = ref(false)
-const isRestoring = ref(false)
-const cloudMessage = ref('')
-const cloudMessageType = ref<'success' | 'error' | ''>('')
-const cloudSyncAvailable = computed(() => hasCloudSync())
-
 const goBack = () => {
   router.back()
 }
 
-const stripFileExtension = (fileName: string): string => {
-  const lastDot = fileName.lastIndexOf('.')
-  return lastDot > 0 ? fileName.slice(0, lastDot) : fileName
-}
+// OpenAI API key management
+const {
+  openaiApiKey,
+  showApiKey,
+  apiKeyMessage,
+  apiKeyMessageType,
+  loadApiKey,
+  saveApiKey,
+  removeApiKey,
+} = useApiKey()
 
-const exportImageWithNotes = async (
-  folder: JSZip,
-  image: ImageAsset,
-  fallbackBaseName: string
-) => {
-  const blob = await getImageBlob(image)
-  const data = new Uint8Array(await blob.arrayBuffer())
-  const mimeType = blob.type || image.mime_type || 'image/png'
-  const ext = mimeType.split('/')[1] || 'png'
-  const imageFileName = image.file_name || `${fallbackBaseName}.${ext}`
-  folder.file(imageFileName, data)
+// Browser storage usage + persistence
+const {
+  browserStorage,
+  loadingBrowserStorage,
+  browserStorageMessage,
+  showBrowserStorage,
+  browserStoragePercent,
+  refreshBrowserStorage,
+  makeBrowserStoragePersistent,
+} = useBrowserStorage({ canStoreImages })
 
-  if (image.notes?.trim()) {
-    folder.file(`${stripFileExtension(imageFileName)}.notes.md`, image.notes)
-  }
-}
+// Encrypted Google Drive backup/restore
+const {
+  cloudPassword,
+  showCloudPassword,
+  isBackingUp,
+  isRestoring,
+  cloudMessage,
+  cloudMessageType,
+  cloudSyncAvailable,
+  handleCloudBackup,
+  handleCloudRestore,
+} = useCloudSync({ backupToCloud, restoreFromCloud, hasCloudSync, cloudSyncReady })
 
-const exportUserData = async () => {
-  if (isExporting.value) return
-
-  exportError.value = ''
-
-  try {
-    isExporting.value = true
-    exportProgress.value = 'Fetching your books...'
-
-    // Create zip file
-    const zip = new JSZip()
-
-    // Get all books from local database
-    await loadBooks()
-    const booksData = books.value
-    exportProgress.value = `Found ${booksData.length} books. Processing...`
-
-    for (let i = 0; i < booksData.length; i++) {
-      const book = booksData[i]
-      exportProgress.value = `Processing book ${i + 1}/${booksData.length}: ${book.title}`
-
-      const bookFolder = zip.folder(sanitizeFileName(book.title))
-      if (!bookFolder) continue
-
-      // Create book info file
-      bookFolder.file('book-info.txt', `Title: ${book.title}\nID: ${book.id}\nCreated: ${book.created_at || 'Unknown'}\n`)
-
-      // Export book cover image if available
-      if (canStoreImages.value) {
-        try {
-          const bookCover = await fetchBookCover(book.id)
-          if (bookCover) {
-            exportProgress.value = `Exporting book cover for: ${book.title}`
-            await exportImageWithNotes(bookFolder, bookCover, 'cover')
-          }
-        } catch (err) {
-          console.warn('Failed to export book cover:', err)
-        }
-      }
-
-      // Get chapters for this book from local database
-      await loadChapters(book.id)
-      const chaptersData = chapters.value
-      const partsData = await getParts(book.id)
-      const chaptersFolder = bookFolder.folder('chapters')
-      const allParts = orderParts(book, partsData)
-      const hasParts = allParts.length > 0
-
-      // Track which chapters have been exported (to handle uncategorized)
-      const exportedChapterIds = new Set<string>()
-
-      // Helper to export a chapter to a folder with a given number
-      const exportChapter = async (chapter: typeof chaptersData[0], chapterNumber: string, parentFolder: JSZip) => {
-        exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
-        const chapterFolderName = `${chapterNumber} - ${sanitizeFileName(chapter.title || chapter.id)}`
-        const chapterFolder = parentFolder.folder(chapterFolderName)
-
-        if (chapterFolder) {
-          // Add chapter content
-          chapterFolder.file('content.md', chapter.text || '')
-
-          // Add chapter info
-          const chapterInfo = `Title: ${chapter.title || 'Untitled'}\nID: ${chapter.id}\nWord Count: ${chapter.word_count || 0}\nCreated: ${chapter.created_at || 'Unknown'}\n`
-          chapterFolder.file('chapter-info.txt', chapterInfo)
-
-          const chapterNotes = await getNotes(chapter.id)
-          if (chapterNotes?.notes?.trim()) {
-            chapterFolder.file('notes.md', chapterNotes.notes)
-          }
-
-          // Export chapter images if available
-          if (canStoreImages.value) {
-            try {
-              const chapterImages = await fetchChapterImages(chapter.id)
-              if (chapterImages.length > 0) {
-                const imagesFolder = chapterFolder.folder('images')
-                if (imagesFolder) {
-                  for (let imgIndex = 0; imgIndex < chapterImages.length; imgIndex++) {
-                    const image = chapterImages[imgIndex]
-                    try {
-                      const imgNumber = (imgIndex + 1).toString().padStart(2, '0')
-                      await exportImageWithNotes(imagesFolder, image, `image-${imgNumber}`)
-                    } catch (imgErr) {
-                      console.warn(`Failed to export image ${image.id}:`, imgErr)
-                    }
-                  }
-                }
-              }
-            } catch (err) {
-              console.warn('Failed to fetch chapter images:', err)
-            }
-          }
-        }
-        exportedChapterIds.add(chapter.id)
-      }
-
-      if (hasParts && chaptersFolder) {
-        const partPaddingLength = allParts.length.toString().length
-
-        for (let partIndex = 0; partIndex < allParts.length; partIndex++) {
-          const part = allParts[partIndex]
-          const partNumber = (partIndex + 1).toString().padStart(partPaddingLength, '0')
-          const partName = part.name || `Part ${partIndex + 1}`
-          const partFolderName = `${partNumber} - ${sanitizeFileName(partName)}`
-          const partFolder = chaptersFolder.folder(partFolderName)
-          if (!partFolder) continue
-
-          // Get ordered chapter IDs for this part
-          const partChapters = orderChaptersForPart(
-            part,
-            chaptersData.filter(ch => ch.part_id === part.id),
-          )
-
-          // Part info
-          const partInfoLines = [
-            `Name: ${partName}`,
-            `ID: ${part.id}`,
-            `Chapters: ${partChapters.length}`,
-            `Created: ${part.created_at || 'Unknown'}`,
-            `Updated: ${part.updated_at || 'Unknown'}`,
-          ]
-          partFolder.file('part-info.txt', `${partInfoLines.join('\n')}\n`)
-
-          // Export part cover image if available
-          if (canStoreImages.value) {
-            try {
-              const partCover = await fetchPartCover(part.id)
-              if (partCover) {
-                exportProgress.value = `Exporting cover for part: ${partName}`
-                await exportImageWithNotes(partFolder, partCover, 'cover')
-              }
-            } catch (err) {
-              console.warn('Failed to export part cover:', err)
-            }
-          }
-
-          // Export chapters in part order
-          const chapterPaddingLength = partChapters.length.toString().length
-          for (let chapterIndex = 0; chapterIndex < partChapters.length; chapterIndex++) {
-            const chapter = partChapters[chapterIndex]
-            const chapterNumber = (chapterIndex + 1).toString().padStart(chapterPaddingLength, '0')
-            await exportChapter(chapter, chapterNumber, partFolder)
-          }
-        }
-
-        // Handle uncategorized chapters (chapters not in any part's chapter_order)
-        const uncategorizedChapters = chaptersData.filter(ch => !exportedChapterIds.has(ch.id))
-        if (uncategorizedChapters.length > 0) {
-          const uncategorizedFolder = chaptersFolder.folder('uncategorized')
-          if (uncategorizedFolder) {
-            uncategorizedFolder.file('readme.txt', 'Chapters without a part assignment\n')
-            const uncatPaddingLength = uncategorizedChapters.length.toString().length
-            for (let chapterIndex = 0; chapterIndex < uncategorizedChapters.length; chapterIndex++) {
-              const chapter = uncategorizedChapters[chapterIndex]
-              const chapterNumber = (chapterIndex + 1).toString().padStart(uncatPaddingLength, '0')
-              await exportChapter(chapter, chapterNumber, uncategorizedFolder)
-            }
-          }
-        }
-      } else if (chaptersFolder) {
-        // No parts - export chapters in book's chapter_order
-        const allChapters = orderChaptersForBook(book, chaptersData)
-
-        const paddingLength = allChapters.length.toString().length
-        for (let chapterIndex = 0; chapterIndex < allChapters.length; chapterIndex++) {
-          const chapter = allChapters[chapterIndex]
-          const chapterNumber = (chapterIndex + 1).toString().padStart(paddingLength, '0')
-          await exportChapter(chapter, chapterNumber, chaptersFolder)
-        }
-      }
-    }
-
-    exportProgress.value = 'Creating zip file...'
-
-    // Generate and download zip
-    const content = await zip.generateAsync({ type: 'blob' })
-    const url = URL.createObjectURL(content)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `beta-bot-export-${new Date().toISOString().split('T')[0]}.zip`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    exportProgress.value = 'Export completed!'
-    setTimeout(() => {
-      exportProgress.value = ''
-    }, 3000)
-
-  } catch (err) {
-    console.error('Export failed:', err)
-    exportError.value = 'Export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
-    exportProgress.value = ''
-  } finally {
-    isExporting.value = false
-  }
-}
-
-const exportAsMarkdown = async () => {
-  if (isExporting.value) return
-
-  exportError.value = ''
-
-  try {
-    isExporting.value = true
-    exportProgress.value = 'Fetching your books...'
-
-    const zip = new JSZip()
-
-    // Get all books from local database
-    await loadBooks()
-    const booksData = books.value
-    exportProgress.value = `Found ${booksData.length} books. Processing...`
-
-    for (let i = 0; i < booksData.length; i++) {
-      const book = booksData[i]
-      exportProgress.value = `Processing book ${i + 1}/${booksData.length}: ${book.title}`
-
-      // Get chapters for this book
-      await loadChapters(book.id)
-      const chaptersData = chapters.value
-      const partsData = await getParts(book.id)
-      const chapterNotesById: Record<string, string> = {}
-      if (includeNotes.value) {
-        for (const chapter of chaptersData) {
-          exportProgress.value = `Processing chapter: ${chapter.title || chapter.id}`
-          const chapterNotes = await getNotes(chapter.id)
-          if (chapterNotes?.notes?.trim()) {
-            chapterNotesById[chapter.id] = chapterNotes.notes
-          }
-        }
-      }
-
-      const files = buildMarkdownExportFiles({
-        book,
-        chapters: chaptersData,
-        parts: partsData,
-        chapterNotesById,
-        granularity: markdownGranularity.value,
-        includeNotes: includeNotes.value,
-      })
-
-      for (const file of files) {
-        zip.file(file.path, file.content)
-      }
-    }
-
-    exportProgress.value = 'Creating zip file...'
-
-    // Generate and download zip
-    const content = await zip.generateAsync({ type: 'blob' })
-    const url = URL.createObjectURL(content)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `beta-bot-markdown-export-${new Date().toISOString().split('T')[0]}.zip`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    exportProgress.value = 'Export completed!'
-    setTimeout(() => {
-      exportProgress.value = ''
-    }, 3000)
-
-  } catch (err) {
-    console.error('Export failed:', err)
-    exportError.value = 'Export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
-    exportProgress.value = ''
-  } finally {
-    isExporting.value = false
-  }
-}
-
-const handleExport = () => {
-  if (exportFormat.value === 'markdown') {
-    exportAsMarkdown()
-  } else {
-    exportUserData()
-  }
-}
-
-const showCloudMessage = (message: string, type: 'success' | 'error') => {
-  console.log(`[CloudSync] showCloudMessage: ${type} - ${message}`)
-  cloudMessage.value = message
-  cloudMessageType.value = type
-
-  if (type === 'success') {
-    setTimeout(() => {
-      cloudMessage.value = ''
-      cloudMessageType.value = ''
-    }, 10000) // Keep success visible for 10 seconds
-  }
-}
-
-const handleCloudBackup = async () => {
-  if (!cloudPassword.value.trim()) {
-    showCloudMessage('Enter an encryption password before backing up.', 'error')
-    return
-  }
-
-  if (!cloudSyncAvailable.value) {
-    showCloudMessage('Cloud sync is not configured. Add VITE_GOOGLE_CLIENT_ID to use Google Drive backups.', 'error')
-    return
-  }
-  if (!cloudSyncReady.value) {
-    showCloudMessage('Still preparing Google Drive services. Please wait a moment.', 'error')
-    return
-  }
-
-  try {
-    isBackingUp.value = true
-    cloudMessage.value = ''
-    console.log('[CloudSync] handleCloudBackup starting...')
-    await backupToCloud(cloudPassword.value)
-    console.log('[CloudSync] handleCloudBackup succeeded')
-    showCloudMessage('Backup saved to Google Drive.', 'success')
-  } catch (error) {
-    console.error('[CloudSync] handleCloudBackup failed:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    showCloudMessage(`Backup failed: ${message}`, 'error')
-  } finally {
-    console.log('[CloudSync] handleCloudBackup finished, setting isBackingUp=false')
-    isBackingUp.value = false
-  }
-}
-
-const handleCloudRestore = async () => {
-  if (!cloudPassword.value.trim()) {
-    showCloudMessage('Enter your encryption password before restoring.', 'error')
-    return
-  }
-
-  if (!cloudSyncAvailable.value) {
-    showCloudMessage('Cloud sync is not configured. Add VITE_GOOGLE_CLIENT_ID to use Google Drive backups.', 'error')
-    return
-  }
-  if (!cloudSyncReady.value) {
-    showCloudMessage('Still preparing Google Drive services. Please wait a moment.', 'error')
-    return
-  }
-
-  if (!confirm('Restoring from backup will replace your local data. Continue?')) {
-    return
-  }
-
-  try {
-    isRestoring.value = true
-    cloudMessage.value = ''
-    console.log('[CloudSync] handleCloudRestore triggered')
-    await restoreFromCloud(cloudPassword.value)
-    console.log('[CloudSync] handleCloudRestore succeeded')
-    showCloudMessage('Backup restored from Google Drive.', 'success')
-  } catch (error) {
-    console.error('[CloudSync] handleCloudRestore error:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    showCloudMessage(message, 'error')
-  } finally {
-    isRestoring.value = false
-  }
-}
+// Library export (structured ZIP or Markdown)
+const {
+  isExporting,
+  exportProgress,
+  exportError,
+  exportFormat,
+  markdownGranularity,
+  includeNotes,
+  handleExport,
+} = useDataExport({
+  books,
+  chapters,
+  loadBooks,
+  loadChapters,
+  getParts,
+  getNotes,
+  canStoreImages,
+  fetchBookCover,
+  fetchPartCover,
+  fetchChapterImages,
+  getImageBlob,
+})
 
 onMounted(async () => {
   await initializeDatabase()
