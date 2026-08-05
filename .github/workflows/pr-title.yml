@@ -35,5 +35,6 @@ jobs:
             perf
             refactor
             revert
+            security
             style
             test
