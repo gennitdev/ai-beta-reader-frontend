@@ -7,9 +7,8 @@ import { Browser } from '@capacitor/browser';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const CODE_VERIFIER_LENGTH = 64;
+const CODE_VERIFIER_BYTES = 64;
 const AUTH_TIMEOUT_MS = 2 * 60 * 1000; // Give users two minutes to finish consent
-const PKCE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
 
 export interface GoogleOAuthTokens {
   access_token: string;
@@ -63,15 +62,10 @@ function ensureCrypto(): Crypto {
 }
 
 function generateCodeVerifier(): string {
-  const cryptoImpl = ensureCrypto();
-  const random = new Uint8Array(CODE_VERIFIER_LENGTH);
-  cryptoImpl.getRandomValues(random);
-
-  let verifier = '';
-  for (let i = 0; i < random.length; i++) {
-    verifier += PKCE_CHARSET[random[i] % PKCE_CHARSET.length];
-  }
-  return verifier;
+  // Base64url of 64 random bytes yields an 86-char verifier drawn from the PKCE
+  // unreserved set (A-Z a-z 0-9 - _), within the 43-128 range, with no modulo
+  // bias in the character distribution.
+  return base64UrlEncode(ensureRandomBytes(CODE_VERIFIER_BYTES));
 }
 
 async function generateCodeChallenge(codeVerifier: string): Promise<string> {
