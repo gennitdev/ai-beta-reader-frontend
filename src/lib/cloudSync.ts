@@ -143,10 +143,15 @@ export class GoogleDriveProvider implements CloudProvider {
     const entry = extra !== undefined ? `${message} ${JSON.stringify(extra)}` : message;
     logger.log(`[CloudSync] ${entry}`);
     this.debugLog = [...this.debugLog, entry].slice(-200);
-    const cloudSyncWindow = getCloudSyncWindow();
-    if (cloudSyncWindow) {
-      cloudSyncWindow.CloudSyncDebug = this.debugLog;
-      window.dispatchEvent(new CustomEvent('cloud-sync-debug', { detail: entry }));
+    // Only mirror the debug log onto `window` in development. In production this
+    // internal log has no consumer and would just be an extra surface exposed to
+    // any script on the page.
+    if (import.meta.env.DEV) {
+      const cloudSyncWindow = getCloudSyncWindow();
+      if (cloudSyncWindow) {
+        cloudSyncWindow.CloudSyncDebug = this.debugLog;
+        window.dispatchEvent(new CustomEvent('cloud-sync-debug', { detail: entry }));
+      }
     }
   }
 
@@ -467,9 +472,6 @@ export class GoogleDriveProvider implements CloudProvider {
       this.debug('authenticateNative() using OAuth config', {
         clientId,
         redirectUri,
-        hasClientSecret: Boolean(
-          typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_SECRET : undefined
-        ),
       });
       const tokens = await performNativeGoogleOAuth({
         clientId,
