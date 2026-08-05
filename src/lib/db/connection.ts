@@ -43,10 +43,14 @@ export interface AppDatabaseConnection {
  *   should call this after any mutation on the non-native path.
  * - `flushPersistence` — forces the pending snapshot to be written immediately.
  *   Used where a mutation must be durable before returning (e.g. image assets).
+ * - `setImporting` — toggles bulk-import mode, during which `requestPersistence`
+ *   is suppressed so a large database isn't re-serialized on every row. The
+ *   import/export repository brackets its work with `setImporting(true/false)`.
  */
 export interface DatabaseContext {
   readonly connection: AppDatabaseConnection
   readonly isNative: boolean
   requestPersistence(): void
   flushPersistence(): Promise<void>
+  setImporting(value: boolean): void
 }
