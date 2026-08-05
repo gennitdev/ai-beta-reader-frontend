@@ -4,10 +4,20 @@ import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useChapterImages } from "@/composables/useChapterImages";
 import { useChapterSummaryContext } from "@/composables/useChapterSummaryContext";
-import {
-  useChapterMutationFlow,
-} from "@/composables/useChapterMutationFlow";
+import { useChapterMutationFlow } from "@/composables/useChapterMutationFlow";
+import { useChapterReviews } from "@/composables/useChapterReviews";
+import { useChapterCharacters } from "@/composables/useChapterCharacters";
+import { useChapterWikiLinks } from "@/composables/useChapterWikiLinks";
+import { useChapterPanels } from "@/composables/useChapterPanels";
+import { useReadingFontSize } from "@/composables/useReadingFontSize";
 import type { Book, BookPart, Chapter as DatabaseChapter, ChapterRevision } from "@/lib/database";
+import type { Chapter } from "@/types/chapterView";
+import {
+  normalizeCharacterList,
+  parseIdArray,
+  formatDate,
+  getTruncatedText,
+} from "@/utils/chapterView";
 import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterNotesPanel from "@/components/chapter/ChapterNotesPanel.vue";
@@ -19,59 +29,13 @@ import ChapterStatusBar from "@/components/chapter/ChapterStatusBar.vue";
 import ChapterVersionHistory from "@/components/chapter/ChapterVersionHistory.vue";
 import FontSizeControl from "@/components/reading/FontSizeControl.vue";
 import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
-import { useReadingFontSize } from "@/composables/useReadingFontSize";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
-import { type AutocompleteOption } from "@/components/links/AutocompleteMultiSelect.vue";
 import ChapterWikiLinksCard from "@/components/links/ChapterWikiLinksCard.vue";
 import Modal from "@/components/Modal.vue";
-import type { ChapterWikiLink } from "@/lib/database";
 import {
   CHAPTER_WIKI_LINKS_CHANGED_EVENT,
   type ChapterWikiLinksChangedDetail,
 } from "@/utils/chapterWikiLinkEvents";
-import { parseWikiAliases, resolveWikiPageByName } from "@/lib/wikiAliases";
-
-interface Chapter {
-  id: string;
-  book_id: string;
-  title: string | null;
-  text: string;
-  word_count: number;
-  part_id: string | null;
-  summary: string | null;
-  pov: string | null;
-  characters: string[] | null;
-  beats: string[] | null;
-  spoilers_ok: boolean | null;
-  notes: string | null;
-}
-
-interface Review {
-  id: string;
-  review_text: string;
-  prompt_used?: string | null;
-  created_at: string;
-  updated_at: string;
-  profile_id: number | null;
-  profile_name: string | null;
-  tone_key: string | null;
-}
-
-interface Character {
-  id: string;
-  character_name: string;
-  wiki_page_id: string | null;
-  has_wiki_page: boolean;
-  aliases?: string[];
-}
-
-interface CustomReviewerProfile {
-  id: number;
-  name: string;
-  description: string;
-  created_at: string;
-  updated_at: string;
-}
 
 const route = useRoute();
 const router = useRouter();
@@ -161,20 +125,6 @@ const loadingChapterRevisions = ref(false);
 const isEditing = ref(false);
 const editedText = ref("");
 const editedTitle = ref("");
-const CHAPTER_SUMMARY_WIKI_UPDATES_KEY = "chapter_summary_update_wiki_enabled";
-const reviewTone = ref<string>("fanficnet");
-const customProfiles = ref<CustomReviewerProfile[]>([]);
-const savedReviews = ref<Review[]>([]);
-const loadingReviews = ref(false);
-const deletingReviewId = ref<string | null>(null);
-const characters = ref<Character[]>([]);
-const linkedWikiPages = ref<ChapterWikiLink[]>([]);
-const loadingLinkedWikiPages = ref(false);
-const isEditingLinkedWikiPages = ref(false);
-const savingLinkedWikiPages = ref(false);
-const selectedLinkedWikiPageIds = ref<string[]>([]);
-const showDeleteModal = ref(false);
-const deletingChapter = ref(false);
 const parts = ref<BookPart[]>([]);
 
 const currentBook = computed(
@@ -203,64 +153,39 @@ const {
 
 const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ?? null));
 
-// Summary editing state
-const isEditingSummary = ref(false);
-const editedSummary = ref("");
-const showSummaryPanel = ref(false);
-const updateWikiOnSummary = ref(true);
-
-// Notes editing state
-const isEditingNotes = ref(false);
-const editedNotes = ref("");
-const showNotesPanel = ref(false);
-
-// Illustrations panel state
-const showIllustrationsPanel = ref(false);
+// Side-panel UI state (summary/notes/illustrations visibility + edit buffers)
+const {
+  showSummaryPanel,
+  showNotesPanel,
+  showIllustrationsPanel,
+  showFullChapterText,
+  isEditingSummary,
+  editedSummary,
+  updateWikiOnSummary,
+  isEditingNotes,
+  editedNotes,
+  startEditingSummary,
+  cancelEditingSummary,
+  startEditingNotes,
+  cancelEditingNotes,
+} = useChapterPanels({ chapter });
 
 // Reading font-size preference (shared with wiki pages, persisted)
 const { fontSize } = useReadingFontSize();
 
-// Text truncation state
-const showFullChapterText = ref(false);
-const expandedReviews = ref<Set<string>>(new Set());
-const expandedPrompts = ref<Set<string>>(new Set());
-
-function normalizeCharacterList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => {
-      if (typeof entry === "string") {
-        return entry.trim();
-      }
-      if (
-        entry &&
-        typeof entry === "object" &&
-        "name" in entry &&
-        typeof (entry as Record<string, unknown>).name === "string"
-      ) {
-        return String((entry as Record<string, unknown>).name).trim();
-      }
-      return "";
-    })
-    .filter((name): name is string => name.length > 0);
-}
-
-function parseIdArray(value: string | null | undefined): string[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed.filter((entry): entry is string => typeof entry === "string");
-    }
-  } catch {
-    // Ignore parse errors and fall back to empty array
-  }
-  return [];
-}
+// Chapter delete state
+const showDeleteModal = ref(false);
+const deletingChapter = ref(false);
 
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true);
 const routePrefix = computed(() => (isMobileRoute.value ? "/m/books" : "/books"));
+
+// Computed navigation URLs
+// Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
+// BookView handles mobile display via CSS media queries
+const bookUrl = computed(() => `/books/${bookId.value}`);
+const backButtonUrl = computed(() => bookUrl.value);
 
 const hasUnsavedChanges = computed(() => {
   if (!chapter.value) return false;
@@ -276,19 +201,56 @@ const chapterTruncation = computed(() => {
   return getTruncatedText(chapter.value.text);
 });
 
-const linkedWikiPageOptions = computed<AutocompleteOption[]>(() =>
-  bookWikiPages.value.map((page) => ({
-    id: page.id,
-    label: page.page_name,
-    detail: page.page_type ?? undefined,
-  }))
-);
+// Character resolution + wiki navigation
+const { loadCharacters, getCharacterWikiInfo, navigateToWiki } = useChapterCharacters({
+  chapter,
+  bookId,
+  chapterId,
+  routePrefix,
+  getWikiPages,
+});
 
-// Computed navigation URLs
-// Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
-// BookView handles mobile display via CSS media queries
-const bookUrl = computed(() => `/books/${bookId.value}`);
-const backButtonUrl = computed(() => bookUrl.value);
+// Linked wiki pages (manual chapter <-> wiki links)
+const {
+  linkedWikiPages,
+  loadingLinkedWikiPages,
+  isEditingLinkedWikiPages,
+  savingLinkedWikiPages,
+  selectedLinkedWikiPageIds,
+  linkedWikiPageOptions,
+  loadLinkedWikiPages,
+  startEditingLinkedWikiPages,
+  cancelEditingLinkedWikiPages,
+  saveLinkedWikiPages,
+} = useChapterWikiLinks({
+  chapter,
+  chapterId,
+  bookWikiPages,
+  getChapterWikiLinks,
+  setChapterWikiLinks,
+  reloadCharacters: loadCharacters,
+});
+
+// Saved AI reviews + reviewer profiles
+const {
+  savedReviews,
+  loadingReviews,
+  deletingReviewId,
+  customProfiles,
+  reviewTone,
+  expandedReviews,
+  expandedPrompts,
+  loadSavedReviews,
+  deleteReview,
+  loadCustomProfiles,
+  toggleReviewExpansion,
+  togglePromptExpansion,
+} = useChapterReviews({
+  chapter,
+  getReviews,
+  deleteReviewFromDb: dbDeleteReview,
+  getCustomProfiles,
+});
 
 const {
   generatingReview,
@@ -454,17 +416,6 @@ const saveChapter = async () => {
   }
 };
 
-const startEditingSummary = () => {
-  if (!chapter.value?.summary) return;
-  editedSummary.value = chapter.value.summary;
-  isEditingSummary.value = true;
-};
-
-const cancelEditingSummary = () => {
-  isEditingSummary.value = false;
-  editedSummary.value = "";
-};
-
 const handleSaveSummary = async () => {
   const didSave = await saveSummary();
   if (didSave) {
@@ -472,205 +423,11 @@ const handleSaveSummary = async () => {
   }
 };
 
-// Notes editing methods
-const startEditingNotes = () => {
-  editedNotes.value = chapter.value?.notes || "";
-  isEditingNotes.value = true;
-};
-
-const cancelEditingNotes = () => {
-  isEditingNotes.value = false;
-  editedNotes.value = chapter.value?.notes || "";
-};
-
 const handleSaveNotes = async () => {
   const didSave = await saveNotes();
   if (didSave) {
     isEditingNotes.value = false;
   }
-};
-
-const loadSavedReviews = async () => {
-  if (!chapter.value) {
-    savedReviews.value = [];
-    return;
-  }
-
-  try {
-    loadingReviews.value = true;
-    const reviews = await getReviews(chapter.value.id);
-    savedReviews.value = reviews.map((review) => ({
-      ...review,
-      profile_id: review.profile_id ?? null,
-      profile_name: review.profile_name ?? null,
-      tone_key: review.tone_key ?? null,
-    }));
-  } catch (error) {
-    console.error("Failed to load reviews:", error);
-    savedReviews.value = [];
-  } finally {
-    loadingReviews.value = false;
-  }
-};
-
-const deleteReview = async (reviewId: string) => {
-  if (!confirm("Are you sure you want to delete this review?")) return;
-
-  try {
-    deletingReviewId.value = reviewId;
-    await dbDeleteReview(reviewId);
-    await loadSavedReviews();
-  } catch (error) {
-    console.error("Failed to delete review:", error);
-    alert("Failed to delete review");
-  } finally {
-    deletingReviewId.value = null;
-  }
-};
-
-const loadCharacters = async () => {
-  if (!chapter.value?.characters || !bookId.value) {
-    characters.value = [];
-    return;
-  }
-
-  try {
-    // Get all wiki pages for this book
-    const wikiPages = await getWikiPages(bookId.value);
-
-    // Map chapter characters to include wiki page info
-    characters.value = chapter.value.characters.map((character) => {
-      const characterName = character;
-      const wikiPage = resolveWikiPageByName(wikiPages, characterName, "character");
-      return {
-        id: wikiPage?.id || `char-${characterName}`,
-        character_name: wikiPage?.page_name || characterName,
-        wiki_page_id: wikiPage?.id || null,
-        has_wiki_page: !!wikiPage,
-        aliases: parseWikiAliases(wikiPage?.aliases),
-      };
-    });
-  } catch (error) {
-    console.error("Failed to load character wiki info:", error);
-    // Fallback to just character names without wiki info
-    characters.value = chapter.value.characters.map((character) => ({
-      id: `char-${character}`,
-      character_name: character,
-      wiki_page_id: null,
-      has_wiki_page: false,
-    }));
-  }
-};
-
-const loadLinkedWikiPages = async () => {
-  if (!chapterId.value) {
-    linkedWikiPages.value = [];
-    selectedLinkedWikiPageIds.value = [];
-    return;
-  }
-
-  loadingLinkedWikiPages.value = true;
-  try {
-    const links = await getChapterWikiLinks(chapterId.value);
-    linkedWikiPages.value = links;
-    selectedLinkedWikiPageIds.value = links.map((link) => link.wiki_page_id);
-  } catch (error) {
-    console.error("Failed to load chapter wiki links:", error);
-    linkedWikiPages.value = [];
-    selectedLinkedWikiPageIds.value = [];
-  } finally {
-    loadingLinkedWikiPages.value = false;
-  }
-};
-
-const loadCustomProfiles = async () => {
-  try {
-    const profiles = await getCustomProfiles();
-    customProfiles.value = profiles;
-  } catch (error) {
-    console.error("Failed to load custom profiles:", error);
-    customProfiles.value = [];
-  }
-};
-
-// Character lookup helper - now more functional
-const getCharacterWikiInfo = (characterName: string) => {
-  return characters.value.find((char) => char.character_name === characterName);
-};
-
-const navigateToWiki = (characterName: string) => {
-  const character = getCharacterWikiInfo(characterName);
-  if (character?.has_wiki_page && character.wiki_page_id) {
-    router.push({
-      path: `${routePrefix.value}/${bookId.value}/wiki/${character.wiki_page_id}`,
-      query: { fromChapterId: chapterId.value },
-    });
-  }
-};
-
-const startEditingLinkedWikiPages = () => {
-  selectedLinkedWikiPageIds.value = linkedWikiPages.value.map((link) => link.wiki_page_id);
-  isEditingLinkedWikiPages.value = true;
-};
-
-const cancelEditingLinkedWikiPages = () => {
-  selectedLinkedWikiPageIds.value = linkedWikiPages.value.map((link) => link.wiki_page_id);
-  isEditingLinkedWikiPages.value = false;
-};
-
-const saveLinkedWikiPages = async () => {
-  if (!chapter.value) return;
-
-  savingLinkedWikiPages.value = true;
-  try {
-    await setChapterWikiLinks(chapter.value.id, selectedLinkedWikiPageIds.value, "manual");
-    await loadLinkedWikiPages();
-    await loadCharacters();
-    isEditingLinkedWikiPages.value = false;
-  } catch (error) {
-    console.error("Failed to save chapter wiki links:", error);
-    alert("Failed to save linked wiki pages");
-  } finally {
-    savingLinkedWikiPages.value = false;
-  }
-};
-
-const handleChapterWikiLinksChanged = async (event: Event) => {
-  const customEvent = event as CustomEvent<ChapterWikiLinksChangedDetail>;
-  const detail = customEvent.detail;
-  if (!detail || !detail.chapterIds.includes(chapterId.value)) return;
-
-  // Find-and-replace (and its undo) writes new chapter text straight to the
-  // database, so pull the current row back in — otherwise the reader preview
-  // and the edit buffer keep showing the pre-replace text. Any in-progress
-  // unsaved edits are preserved (the edit buffer is only re-synced when clean).
-  const wasClean = !hasUnsavedChanges.value;
-  await loadChapters(bookId.value);
-  const updated = chapters.value.find(
-    (ch: DatabaseChapter) => ch.id === chapterId.value
-  );
-  if (updated && chapter.value) {
-    chapter.value.text = String(updated.text || "");
-    chapter.value.title = updated.title || null;
-    chapter.value.word_count = updated.word_count;
-    if (wasClean) {
-      editedText.value = String(updated.text || "");
-      editedTitle.value = updated.title || "";
-    }
-  }
-
-  await Promise.all([loadLinkedWikiPages(), loadCharacters()]);
-};
-
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 };
 
 const cancelEdit = () => {
@@ -714,53 +471,34 @@ const goBack = () => {
   router.push(backButtonUrl.value);
 };
 
-// Text truncation helpers - more functional approach
-const getTruncatedText = (
-  text: string,
-  wordLimit: number = 120
-): { truncated: string; needsTruncation: boolean } => {
-  if (!text || typeof text !== "string") return { truncated: "", needsTruncation: false };
+const handleChapterWikiLinksChanged = async (event: Event) => {
+  const customEvent = event as CustomEvent<ChapterWikiLinksChangedDetail>;
+  const detail = customEvent.detail;
+  if (!detail || !detail.chapterIds.includes(chapterId.value)) return;
 
-  const words = text.split(/(\s+)/);
-  let wordCount = 0;
-
-  const truncatedParts = words.filter((part) => {
-    if (/\S/.test(part)) {
-      // If part contains non-whitespace characters
-      wordCount++;
-      return wordCount <= wordLimit;
+  // Find-and-replace (and its undo) writes new chapter text straight to the
+  // database, so pull the current row back in — otherwise the reader preview
+  // and the edit buffer keep showing the pre-replace text. Any in-progress
+  // unsaved edits are preserved (the edit buffer is only re-synced when clean).
+  const wasClean = !hasUnsavedChanges.value;
+  await loadChapters(bookId.value);
+  const updated = chapters.value.find(
+    (ch: DatabaseChapter) => ch.id === chapterId.value
+  );
+  if (updated && chapter.value) {
+    chapter.value.text = String(updated.text || "");
+    chapter.value.title = updated.title || null;
+    chapter.value.word_count = updated.word_count;
+    if (wasClean) {
+      editedText.value = String(updated.text || "");
+      editedTitle.value = updated.title || "";
     }
-    return wordCount <= wordLimit; // Include whitespace if we haven't exceeded limit
-  });
-
-  const needsTruncation = wordCount > wordLimit;
-  return {
-    truncated: needsTruncation ? truncatedParts.join("") : text,
-    needsTruncation,
-  };
-};
-
-const toggleReviewExpansion = (reviewId: string) => {
-  if (expandedReviews.value.has(reviewId)) {
-    expandedReviews.value.delete(reviewId);
-  } else {
-    expandedReviews.value.add(reviewId);
   }
-};
 
-const togglePromptExpansion = (reviewId: string) => {
-  if (expandedPrompts.value.has(reviewId)) {
-    expandedPrompts.value.delete(reviewId);
-  } else {
-    expandedPrompts.value.add(reviewId);
-  }
+  await Promise.all([loadLinkedWikiPages(), loadCharacters()]);
 };
 
 onMounted(async () => {
-  const storedUpdateWikiPreference = localStorage.getItem(CHAPTER_SUMMARY_WIKI_UPDATES_KEY);
-  if (storedUpdateWikiPreference !== null) {
-    updateWikiOnSummary.value = storedUpdateWikiPreference === "true";
-  }
   await loadChapter();
   await loadSavedReviews();
   await loadCharacters();
@@ -778,18 +516,6 @@ onBeforeUnmount(() => {
     handleChapterWikiLinksChanged as EventListener,
   );
 });
-
-watch(updateWikiOnSummary, (value) => {
-  localStorage.setItem(CHAPTER_SUMMARY_WIKI_UPDATES_KEY, String(value));
-});
-
-watch(
-  () => chapterId.value,
-  () => {
-    isEditingLinkedWikiPages.value = false;
-    loadLinkedWikiPages();
-  }
-);
 </script>
 
 <template>
