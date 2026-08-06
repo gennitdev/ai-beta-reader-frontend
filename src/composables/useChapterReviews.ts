@@ -20,7 +20,7 @@ export function useChapterReviews(deps: UseChapterReviewsDeps) {
   const loadingReviews = ref(false);
   const deletingReviewId = ref<string | null>(null);
   const customProfiles = ref<CustomReviewerProfile[]>([]);
-  const reviewTone = ref<string>("fanficnet");
+  const reviewTone = ref<string>("editorial");
   const expandedReviews = ref<Set<string>>(new Set());
   const expandedPrompts = ref<Set<string>>(new Set());
 

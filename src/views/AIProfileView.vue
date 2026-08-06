@@ -91,7 +91,7 @@ const loadProfile = async () => {
         system_prompt: builtInProfile.system_prompt,
         created_at: new Date().toISOString(),
         is_system: true,
-        is_default: builtInProfile.tone_key === 'fanficnet'
+        is_default: builtInProfile.tone_key === 'editorial'
       }
     } else if (!isNaN(Number(profileId.value))) {
       // Custom profile (numeric ID)
