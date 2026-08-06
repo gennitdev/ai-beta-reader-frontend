@@ -36,8 +36,10 @@ test('backup → wipe → restore preserves book and chapter data', async ({ pag
   // plaintext marker. This is what makes "encrypted backup" a verified claim.
   const blob = drive.getBackup()
   expect(blob, 'a backup file should have been uploaded').toBeTruthy()
-  expect(blob!.startsWith('GZ1:'), 'backup should carry the compression prefix').toBe(true)
-  expect(blob).toContain('WC1:') // Web Crypto ciphertext marker
+  // Compressed (GZ1:) then Web Crypto encrypted. The format version is
+  // deliberately matched loosely (WC1:, WC2:, …) so the test tracks the app's
+  // real ciphertext prefix rather than pinning one crypto revision.
+  expect(blob).toMatch(/^GZ1:WC\d+:/)
   expect(blob, 'plaintext must not leak into the backup').not.toContain(MARKER)
 
   // --- Wipe all local data so any restored content must come from the backup ---
