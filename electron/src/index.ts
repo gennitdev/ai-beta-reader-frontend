@@ -9,6 +9,7 @@ import { autoUpdater } from 'electron-updater';
 import { ElectronCapacitorApp, setupContentSecurityPolicy, setupReloadWatcher } from './setup';
 import { registerDesktopImageBridge } from './image-bridge';
 import { registerOAuthLoopbackHandlers } from './oauth-loopback';
+import { registerSecureStorageBridge } from './secure-storage-bridge';
 
 // Increase memory limit for renderer process (needed for large backups with images)
 // 8GB should handle backups with many large images
@@ -353,6 +354,7 @@ if (electronIsDev) {
   await app.whenReady();
   registerDesktopImageBridge();
   registerOAuthLoopbackHandlers();
+  registerSecureStorageBridge();
 
   // Register find-in-page IPC handlers
   ipcMain.handle('find-in-page', (_event, text: string, forward: boolean, findNext: boolean) => {
