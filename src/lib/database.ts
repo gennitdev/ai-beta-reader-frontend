@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { logger } from '@/lib/logger'
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import initSqlJs from 'sql.js';
 import type { WikiPageType } from '@/types/bookView';
@@ -265,7 +266,7 @@ export class AppDatabase {
     this.isElectron = isElectron;
     this.isNative = NATIVE_CAPACITOR_PLATFORMS.has(platform) && !isElectron;
 
-    console.log(`[AppDatabase] Platform: ${platform}, isElectron: ${isElectron}, isNative: ${this.isNative}`);
+    logger.log(`[AppDatabase] Platform: ${platform}, isElectron: ${isElectron}, isNative: ${this.isNative}`);
 
     if (this.isNative) {
       // Mobile: Use native SQLite
@@ -297,7 +298,7 @@ export class AppDatabase {
       if (!savedDb) {
         const localStorageDb = localStorage.getItem('sqliteDb');
         if (localStorageDb) {
-          console.log('[AppDatabase] Migrating database from localStorage to IndexedDB...');
+          logger.log('[AppDatabase] Migrating database from localStorage to IndexedDB...');
           try {
             savedDb = decodeLegacyDatabaseSnapshot(localStorageDb);
             migratedFromLocalStorage = true;
@@ -338,7 +339,7 @@ export class AppDatabase {
             } catch (error) {
               console.warn('[AppDatabase] Could not save the migration marker:', error);
             }
-            console.log('[AppDatabase] Migration verified. Legacy localStorage copy retained for recovery.');
+            logger.log('[AppDatabase] Migration verified. Legacy localStorage copy retained for recovery.');
           } catch (error) {
             console.error('[AppDatabase] Failed to verify IndexedDB migration.', error);
             throw new Error(
@@ -843,7 +844,7 @@ export class AppDatabase {
         status.failedImageIds,
       );
     } else if (status.migratedCount > 0) {
-      console.log(`[AppDatabase] Migrated ${status.migratedCount} browser images to Blob storage.`);
+      logger.log(`[AppDatabase] Migrated ${status.migratedCount} browser images to Blob storage.`);
     }
   }
 

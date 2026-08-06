@@ -1,4 +1,5 @@
 import { App } from '@capacitor/app';
+import { logger } from '@/lib/logger'
 import { AppLauncher } from '@capacitor/app-launcher';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
@@ -6,9 +7,8 @@ import { Browser } from '@capacitor/browser';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const CODE_VERIFIER_LENGTH = 64;
+const CODE_VERIFIER_BYTES = 64;
 const AUTH_TIMEOUT_MS = 2 * 60 * 1000; // Give users two minutes to finish consent
-const PKCE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
 
 export interface GoogleOAuthTokens {
   access_token: string;
@@ -62,15 +62,10 @@ function ensureCrypto(): Crypto {
 }
 
 function generateCodeVerifier(): string {
-  const cryptoImpl = ensureCrypto();
-  const random = new Uint8Array(CODE_VERIFIER_LENGTH);
-  cryptoImpl.getRandomValues(random);
-
-  let verifier = '';
-  for (let i = 0; i < random.length; i++) {
-    verifier += PKCE_CHARSET[random[i] % PKCE_CHARSET.length];
-  }
-  return verifier;
+  // Base64url of 64 random bytes yields an 86-char verifier drawn from the PKCE
+  // unreserved set (A-Z a-z 0-9 - _), within the 43-128 range, with no modulo
+  // bias in the character distribution.
+  return base64UrlEncode(ensureRandomBytes(CODE_VERIFIER_BYTES));
 }
 
 async function generateCodeChallenge(codeVerifier: string): Promise<string> {
@@ -109,6 +104,26 @@ function base64UrlEncode(data: Uint8Array | ArrayBuffer): string {
   }
 
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Whether an incoming deep-link URL is the OAuth redirect we are waiting for.
+ * Compares the parsed scheme/host/path instead of a raw string prefix, so a URL
+ * that merely *starts with* the redirect string (but has a different structure)
+ * cannot be mistaken for the real redirect.
+ */
+export function isMatchingRedirect(incomingUrl: string, redirectUri: string): boolean {
+  try {
+    const incoming = new URL(incomingUrl);
+    const expected = new URL(redirectUri);
+    return (
+      incoming.protocol === expected.protocol &&
+      incoming.host === expected.host &&
+      incoming.pathname === expected.pathname
+    );
+  } catch {
+    return false;
+  }
 }
 
 function buildAuthUrl(args: {
@@ -199,7 +214,7 @@ async function launchAuthBrowser(authUrl: string, redirectUri: string, expectedS
             return;
           }
 
-          if (!incomingUrl.startsWith(redirectUri)) {
+          if (!isMatchingRedirect(incomingUrl, redirectUri)) {
             return;
           }
 
@@ -260,6 +275,10 @@ async function exchangeAuthCodeForTokens(args: {
   redirectUri: string;
   codeVerifier: string;
 }): Promise<GoogleOAuthTokens> {
+  // Native/mobile OAuth clients are public clients: the authorization-code flow
+  // is protected by PKCE (code_verifier) and MUST NOT carry a client secret
+  // (RFC 8252). A secret here would only be shippable inside the app bundle,
+  // where it is not actually secret.
   const params = new URLSearchParams({
     client_id: args.clientId,
     code: args.authorizationCode,
@@ -268,16 +287,9 @@ async function exchangeAuthCodeForTokens(args: {
     grant_type: 'authorization_code',
   });
 
-  const clientSecret =
-    typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? undefined : undefined;
-  if (clientSecret && clientSecret.length > 0) {
-    params.append('client_secret', clientSecret);
-  }
-
-  console.log('[GoogleOAuth] exchanging authorization code', {
+  logger.log('[GoogleOAuth] exchanging authorization code', {
     clientId: args.clientId,
     redirectUri: args.redirectUri,
-    hasClientSecret: Boolean(clientSecret),
   });
 
   const response = await CapacitorHttp.post({

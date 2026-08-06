@@ -3,7 +3,16 @@ import { saveTokens, loadTokens, clearTokens, type StoredTokenSet } from '@/lib/
 
 const STORAGE_KEY = 'googleOAuthTokens'
 
-const { store } = vi.hoisted(() => ({ store: new Map<string, string>() }))
+const { store, platform } = vi.hoisted(() => ({
+  store: new Map<string, string>(),
+  platform: { value: 'ios' as string },
+}))
+
+vi.mock('@capacitor/core', () => ({
+  Capacitor: {
+    getPlatform: () => platform.value,
+  },
+}))
 
 vi.mock('@capacitor/preferences', () => ({
   Preferences: {
@@ -21,6 +30,7 @@ vi.mock('@capacitor/preferences', () => ({
 
 beforeEach(() => {
   store.clear()
+  platform.value = 'ios'
 })
 
 function tokens(): StoredTokenSet {
@@ -60,5 +70,25 @@ describe('tokenStorage', () => {
     await saveTokens(tokens())
     await clearTokens()
     expect(await loadTokens()).toBeNull()
+  })
+
+  describe('on the web platform', () => {
+    beforeEach(() => {
+      platform.value = 'web'
+    })
+
+    it('never persists a refresh token when saving', async () => {
+      await saveTokens(tokens())
+      const raw = JSON.parse(store.get(STORAGE_KEY)!)
+      expect(raw.refreshToken).toBeNull()
+      expect(raw.accessToken).toBe('access-123')
+    })
+
+    it('drops a refresh token that an earlier build persisted', async () => {
+      store.set(STORAGE_KEY, JSON.stringify(tokens()))
+      const loaded = await loadTokens()
+      expect(loaded?.refreshToken).toBeNull()
+      expect(loaded?.accessToken).toBe('access-123')
+    })
   })
 })

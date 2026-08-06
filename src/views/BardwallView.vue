@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftIcon, BookOpenIcon, CurrencyDollarIcon, MoonIcon, SparklesIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, CurrencyDollarIcon, MoonIcon } from '@heroicons/vue/24/outline'
 import { useDatabase } from '@/composables/useDatabase'
 import BardwallTownMap, { type BardwallLocation } from '@/components/bardwall/BardwallTownMap.vue'
+import BardwallAmphitheater from '@/components/bardwall/BardwallAmphitheater.vue'
+import BardwallMorning from '@/components/bardwall/BardwallMorning.vue'
+import BardwallReward from '@/components/bardwall/BardwallReward.vue'
 import type { ChapterRevision } from '@/lib/database'
+import type { RevisionOffering, BardwallScreen } from '@/types/bardwallView'
 import {
   BARDWALL_INN_PRICE,
   BARDWALL_DAILY_NOURISHMENT,
@@ -45,27 +49,11 @@ import {
   type BardwallFoodId,
   type BardwallLodging,
   type BardwallPotionId,
-  type BardwallPassage,
   type BardwallChallengeWager,
   type BardwallChallengeScores,
 } from '@/lib/bardwall'
 import { continueBardwallLastWordStory, runBardwallStoryChallenge } from '@/lib/openai'
 import { getBardwallCardImage, getBardwallPlaceImage, getBardwallPotionImage } from '@/lib/bardwallAssets'
-
-interface RewardPassage extends BardwallPassage {
-  id: string
-}
-
-interface RevisionOffering {
-  id: string
-  bookTitle: string
-  chapterTitle: string
-  createdAt: string
-  passages: RewardPassage[]
-  wordCount: number
-}
-
-type BardwallScreen = 'gate' | 'goal' | 'town' | 'amphitheater' | 'reward' | 'market' | 'night' | 'morning' | 'inn' | 'shrine' | 'apothecary' | 'camp' | 'challenge' | 'cave' | 'last-word' | 'wyrm'
 
 const routeLocations = new Set<BardwallLocation>(['amphitheater', 'market', 'inn', 'shrine', 'apothecary', 'camp', 'challenge', 'cave'])
 
@@ -1344,89 +1332,36 @@ watch(() => [route.params.location, route.params.activity], () => {
         </div>
       </div>
 
-      <div v-else-if="screen === 'morning'" class="flex min-h-[34rem] items-center justify-center py-10">
-        <section v-if="game.lastNight" class="w-full max-w-2xl rounded-2xl border border-sky-300/30 bg-stone-900/60 p-8 text-center shadow-2xl">
-          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-sky-300">Morning in Bardwall</p>
-          <h2 class="mt-3 font-serif text-4xl font-bold">Day {{ game.day }} begins.</h2>
-          <p class="mt-4 font-serif text-lg text-stone-300">You slept {{ game.lastNight.lodging === 'inn' ? 'at the Crooked Lantern Inn' : 'in your tent beyond the wall' }} and ate {{ game.lastNight.nourishment }} nourishment.</p>
-          <div class="mx-auto mt-7 grid max-w-md grid-cols-2 gap-4">
-            <div class="rounded-xl bg-black/20 p-4"><span class="block text-sm text-stone-400">Energy</span><strong class="mt-1 block text-3xl text-sky-300">{{ game.energy }}</strong></div>
-            <div class="rounded-xl bg-black/20 p-4"><span class="block text-sm text-stone-400">Hunger</span><strong class="mt-1 block text-3xl" :class="game.hunger ? 'text-orange-300' : 'text-emerald-300'">{{ game.hunger }}</strong></div>
-          </div>
-          <p class="mt-5 text-sm text-stone-400">{{ game.hunger ? 'An empty stomach follows you into the new day, and your energy suffers.' : 'You wake fed and ready to tell another story.' }}</p>
-          <button data-testid="begin-next-day" class="mt-7 rounded-lg bg-sky-300 px-5 py-3 font-semibold text-[#10212a] hover:bg-sky-200" @click="beginNextDay">Set Day {{ game.day }}’s word goal</button>
-        </section>
-      </div>
+      <BardwallMorning
+        v-else-if="screen === 'morning'"
+        :game="game"
+        :begin-next-day="beginNextDay"
+      />
 
-      <div v-else-if="screen === 'amphitheater'" class="py-8">
-        <button class="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-white" @click="goToTown"><ArrowLeftIcon class="h-4 w-4" /> Back to town</button>
-        <img :src="getBardwallPlaceImage('amphitheater')" alt="The moonlit stone amphitheater where the ghosts gather to listen" class="mx-auto mt-5 block w-full max-w-3xl rounded-2xl border border-stone-700/70 shadow-xl" />
-        <div class="mt-5 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-          <section class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
-            <h2 class="font-serif text-2xl font-bold">Choose a recent telling</h2>
-            <p class="mt-2 text-sm text-stone-400">The ghosts accept passages newly added in one of your saved revisions. Each passage can satisfy them only once.</p>
-            <p v-if="loadingOfferings" class="mt-6 text-sm text-stone-400">The town crier is gathering your pages…</p>
-            <p v-else-if="offeringError" class="mt-6 text-sm text-rose-300">{{ offeringError }}</p>
-            <p v-else-if="!offerings.length" class="mt-6 text-sm text-stone-400">Save a chapter revision, then return when you have a new story to tell.</p>
-            <div v-else class="mt-5 max-h-[32rem] space-y-2 overflow-y-auto pr-1">
-              <button
-                v-for="offering in offerings"
-                :key="offering.id"
-                type="button"
-                :data-testid="`revision-offering-${offering.id}`"
-                class="w-full rounded-xl border p-4 text-left transition"
-                :class="selectedOfferingId === offering.id ? 'border-amber-300 bg-amber-300/10' : 'border-stone-700 bg-black/10 hover:border-stone-500'"
-                @click="selectOffering(offering)"
-              >
-                <span class="block font-semibold text-stone-100">{{ offering.chapterTitle }}</span>
-                <span class="mt-1 block text-xs text-stone-400">{{ offering.bookTitle }} · {{ formatDate(offering.createdAt) }}</span>
-                <span class="mt-2 block text-xs text-emerald-300">{{ offering.wordCount.toLocaleString() }} new words</span>
-              </button>
-            </div>
-          </section>
+      <BardwallAmphitheater
+        v-else-if="screen === 'amphitheater'"
+        :offerings="offerings"
+        :loading-offerings="loadingOfferings"
+        :offering-error="offeringError"
+        :selected-offering-id="selectedOfferingId"
+        :selected-offering="selectedOffering"
+        :selected-word-count="selectedWordCount"
+        :selected-passage-indexes="selectedPassageIndexes"
+        :expected-pay="expectedPay"
+        :go-to-town="goToTown"
+        :select-offering="selectOffering"
+        :toggle-passage="togglePassage"
+        :tell-story="tellStory"
+        :format-date="formatDate"
+        :coin-label="coinLabel"
+      />
 
-          <section class="rounded-2xl border border-stone-700/70 bg-stone-900/40 p-5">
-            <template v-if="selectedOffering">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p class="text-xs uppercase tracking-wider text-amber-300">At the speaking stone</p>
-                  <h2 class="mt-1 font-serif text-2xl font-bold">{{ selectedOffering.chapterTitle }}</h2>
-                </div>
-                <span class="text-sm text-stone-400">{{ selectedWordCount.toLocaleString() }} words selected</span>
-              </div>
-              <div class="mt-5 max-h-[28rem] space-y-3 overflow-y-auto pr-1">
-                <label v-for="(passage, index) in selectedOffering.passages" :key="index" class="flex cursor-pointer gap-3 rounded-xl border border-stone-700 bg-black/15 p-4 hover:border-stone-500">
-                  <input type="checkbox" class="mt-1 rounded border-stone-500 bg-transparent text-amber-400 focus:ring-amber-300" :checked="selectedPassageIndexes.includes(index)" @change="togglePassage(index)" />
-                  <span>
-                    <span class="block whitespace-pre-wrap font-serif leading-7 text-stone-200">{{ passage.text }}</span>
-                    <span class="mt-2 block text-xs text-stone-500">{{ passage.wordCount }} words</span>
-                  </span>
-                </label>
-              </div>
-              <div class="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-stone-700 pt-5">
-                <p class="text-sm text-stone-300">If the spirits seem satisfied, the attendant will pay <strong class="text-amber-300">{{ coinLabel(expectedPay) }}</strong>.</p>
-                <button data-testid="tell-story" class="inline-flex items-center gap-2 rounded-lg bg-amber-300 px-5 py-3 font-semibold text-[#13241d] hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="selectedWordCount === 0" @click="tellStory">
-                  <BookOpenIcon class="h-5 w-5" /> Tell this story
-                </button>
-              </div>
-            </template>
-            <div v-else class="flex min-h-80 flex-col items-center justify-center text-center text-stone-500">
-              <SparklesIcon class="h-10 w-10" />
-              <p class="mt-3 max-w-sm font-serif text-lg">Choose a revision. The ghosts are patient, but the story must go on.</p>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      <div v-else-if="screen === 'reward'" class="flex min-h-[32rem] items-center justify-center py-10 text-center">
-        <div class="max-w-xl rounded-2xl border border-amber-300/40 bg-amber-300/10 p-8">
-          <SparklesIcon class="mx-auto h-12 w-12 text-amber-300" />
-          <p class="mt-4 text-xs uppercase tracking-[0.3em] text-amber-300">The ghosts are fed</p>
-          <h2 class="mt-3 font-serif text-4xl font-bold">Your story carried through the wood.</h2>
-          <p class="mt-4 text-stone-300">The attendant studies the listening dark, then nods. You told {{ lastReward.words.toLocaleString() }} words and earned <strong class="text-amber-300">{{ coinLabel(lastReward.coins) }}</strong>.</p>
-          <button data-testid="return-to-town" class="mt-7 rounded-lg bg-amber-300 px-5 py-3 font-semibold text-[#13241d] hover:bg-amber-200" @click="returnToTown">Return to Bardwall</button>
-        </div>
-      </div>
+      <BardwallReward
+        v-else-if="screen === 'reward'"
+        :last-reward="lastReward"
+        :coin-label="coinLabel"
+        :return-to-town="returnToTown"
+      />
     </section>
 
     <Teleport to="body">

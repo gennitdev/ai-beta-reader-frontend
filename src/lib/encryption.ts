@@ -5,8 +5,17 @@ const ALGORITHM = 'AES-GCM';
 const KEY_LENGTH = 256;
 const IV_LENGTH = 12; // 96 bits for GCM
 const SALT_LENGTH = 16;
-const PBKDF2_ITERATIONS = 100000;
-const WEB_CRYPTO_PREFIX = 'WC1:'; // Prefix to identify Web Crypto format
+const ITERATIONS_FIELD_LENGTH = 4; // uint32 big-endian, stored in the WC2 format
+
+// PBKDF2-HMAC-SHA256 work factor for *new* backups. Raised to meet current OWASP
+// guidance. The WC2 format stores the iteration count so this can be raised again
+// later without breaking backups written at an earlier setting.
+const PBKDF2_ITERATIONS = 600000;
+// Fixed work factor of the original WC1 format (which did not store the count).
+const WC1_ITERATIONS = 100000;
+
+const WC1_PREFIX = 'WC1:'; // Legacy Web Crypto format (salt + iv + ciphertext, 100k iterations)
+const WC2_PREFIX = 'WC2:'; // Web Crypto format that also stores the iteration count
 
 /**
  * Convert Uint8Array to base64 string in chunks to avoid memory issues
@@ -50,7 +59,8 @@ export class Encryption {
    */
   private static async deriveKeyFromPassword(
     password: string,
-    salt: Uint8Array
+    salt: Uint8Array,
+    iterations: number
   ): Promise<CryptoKey> {
     const encoder = new TextEncoder();
     const passwordBuffer = encoder.encode(password);
@@ -69,7 +79,7 @@ export class Encryption {
       {
         name: 'PBKDF2',
         salt,
-        iterations: PBKDF2_ITERATIONS,
+        iterations,
         hash: 'SHA-256',
       },
       baseKey,
@@ -86,9 +96,10 @@ export class Encryption {
     // Generate random salt and IV
     const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
     const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+    const iterations = PBKDF2_ITERATIONS;
 
     // Derive key from password
-    const key = await Encryption.deriveKeyFromPassword(password, salt);
+    const key = await Encryption.deriveKeyFromPassword(password, salt, iterations);
 
     // Encrypt the data
     const ciphertext = await crypto.subtle.encrypt(
@@ -97,17 +108,24 @@ export class Encryption {
       data
     );
 
-    // Combine salt + iv + ciphertext into a single buffer
+    // Store the iteration count (big-endian uint32) so the work factor can be
+    // raised in future without breaking backups written now.
+    const iterationsField = new Uint8Array(ITERATIONS_FIELD_LENGTH);
+    new DataView(iterationsField.buffer).setUint32(0, iterations, false);
+
+    // Combine salt + iterations + iv + ciphertext into a single buffer
     const combined = new Uint8Array(
-      salt.length + iv.length + ciphertext.byteLength
+      salt.length + iterationsField.length + iv.length + ciphertext.byteLength
     );
-    combined.set(salt, 0);
-    combined.set(iv, salt.length);
-    combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
+    let offset = 0;
+    combined.set(salt, offset); offset += salt.length;
+    combined.set(iterationsField, offset); offset += iterationsField.length;
+    combined.set(iv, offset); offset += iv.length;
+    combined.set(new Uint8Array(ciphertext), offset);
 
     // Return as base64 with prefix to identify format
     // Use chunked encoding to avoid memory issues with large arrays
-    return WEB_CRYPTO_PREFIX + uint8ArrayToBase64(combined);
+    return WC2_PREFIX + uint8ArrayToBase64(combined);
   }
 
   /**
@@ -115,9 +133,11 @@ export class Encryption {
    * Also supports legacy CryptoJS format for backward compatibility
    */
   static async decrypt(encryptedData: string, password: string): Promise<Uint8Array> {
-    // Check if this is the new Web Crypto format
-    if (encryptedData.startsWith(WEB_CRYPTO_PREFIX)) {
-      return Encryption.decryptWebCrypto(encryptedData, password);
+    if (encryptedData.startsWith(WC2_PREFIX)) {
+      return Encryption.decryptWebCrypto(encryptedData, password, 'wc2');
+    }
+    if (encryptedData.startsWith(WC1_PREFIX)) {
+      return Encryption.decryptWebCrypto(encryptedData, password, 'wc1');
     }
 
     // Fall back to legacy CryptoJS decryption for old backups
@@ -125,23 +145,38 @@ export class Encryption {
   }
 
   /**
-   * Decrypt using Web Crypto API
+   * Decrypt a Web Crypto backup. WC2 stores the iteration count in the payload;
+   * WC1 predates that and always used a fixed count.
    */
   private static async decryptWebCrypto(
     encryptedData: string,
-    password: string
+    password: string,
+    format: 'wc1' | 'wc2'
   ): Promise<Uint8Array> {
-    // Remove prefix and decode base64 using chunked approach
-    const base64Data = encryptedData.slice(WEB_CRYPTO_PREFIX.length);
-    const combined = base64ToUint8Array(base64Data);
+    const prefix = format === 'wc2' ? WC2_PREFIX : WC1_PREFIX;
+    const combined = base64ToUint8Array(encryptedData.slice(prefix.length));
 
-    // Extract salt, iv, and ciphertext
     const salt = combined.slice(0, SALT_LENGTH);
-    const iv = combined.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-    const ciphertext = combined.slice(SALT_LENGTH + IV_LENGTH);
+
+    let iterations: number;
+    let ivStart: number;
+    if (format === 'wc2') {
+      iterations = new DataView(
+        combined.buffer,
+        combined.byteOffset + SALT_LENGTH,
+        ITERATIONS_FIELD_LENGTH
+      ).getUint32(0, false);
+      ivStart = SALT_LENGTH + ITERATIONS_FIELD_LENGTH;
+    } else {
+      iterations = WC1_ITERATIONS;
+      ivStart = SALT_LENGTH;
+    }
+
+    const iv = combined.slice(ivStart, ivStart + IV_LENGTH);
+    const ciphertext = combined.slice(ivStart + IV_LENGTH);
 
     // Derive key from password
-    const key = await Encryption.deriveKeyFromPassword(password, salt);
+    const key = await Encryption.deriveKeyFromPassword(password, salt, iterations);
 
     // Decrypt
     try {

@@ -1,35 +1,28 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from "vue";
+import { logger } from '@/lib/logger'
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useImageLibrary } from "@/composables/useImageLibrary";
-import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ChapterRevisionActivity, ImageAsset, ImageWikiTag } from "@/lib/database";
+import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ChapterRevisionActivity } from "@/lib/database";
 import type { FindReplaceScope } from "@/lib/findReplace";
 import type {
   BookChapter,
   BookOrganizedPart,
   BookChaptersByPart,
-  BookWikiPage,
 } from "@/types/bookView";
+import { useBookCover } from "@/composables/useBookCover";
+import { useBookWiki } from "@/composables/useBookWiki";
+import { useBookImages } from "@/composables/useBookImages";
+import {
+  formatWordCount,
+  wordCountForChapters,
+  getTypeIcon,
+  getTypeColor,
+  getSummaryPreview,
+} from "@/utils/bookView";
 
 type Chapter = BookChapter;
-type WikiPage = BookWikiPage;
-type DatabaseWikiPage = {
-  id: string;
-  page_name: string;
-  page_type?: string | null;
-  summary?: string | null;
-  aliases?: string | null;
-  tags?: string | null;
-  is_major?: boolean | number | null;
-  is_pinned?: boolean | number | null;
-  created_by_ai?: boolean | number | null;
-  created_at: string;
-  updated_at: string;
-  content?: string | null;
-  cover_image_id?: string | null;
-};
-import { BookOpenIcon, UserIcon, MapPinIcon, LightBulbIcon } from "@heroicons/vue/24/outline";
 import SearchModal from "@/components/SearchModal.vue";
 import BookMobileSection from "@/components/book/BookMobileSection.vue";
 import BookDesktopLayout from "@/components/book/BookDesktopLayout.vue";
@@ -78,29 +71,87 @@ const {
 } = useImageLibrary();
 
 const book = ref<DatabaseBook | null>(null);
+
+// Book cover image
+const {
+  bookCoverSrc,
+  coverLoading,
+  coverError,
+  loadBookCoverImage,
+  handleSelectBookCover,
+  handleDeleteBookCover,
+} = useBookCover({
+  book,
+  fetchBookCover,
+  getImageSource: getCoverImageSource,
+  pickNewBookCover,
+  deleteImage,
+  setBookCoverImageId,
+});
+
+// Wiki pages (list, grouping, create modal, pinning)
+const {
+  wikiPages,
+  loadingWiki,
+  wikiPageThumbnails,
+  hasWikiPages,
+  wikiPagesByType,
+  showCreateWikiModal,
+  newWikiPageName,
+  newWikiPageType,
+  creatingWikiPage,
+  createWikiPageError,
+  loadWiki,
+  openCreateWikiModal,
+  closeCreateWikiModal,
+  handleCreateWikiPage,
+  toggleWikiPagePinned,
+  handleWikiPagePinChanged,
+} = useBookWiki({
+  bookId,
+  getWikiPages,
+  getWikiPage,
+  createWikiPage,
+  updateWikiPage,
+  getWikiPageCoverImageAsset,
+  getImageSource: getCoverImageSource,
+});
+
+// Book illustration gallery (Images tab)
+const {
+  bookImages,
+  bookImageSources,
+  loadingImages,
+  savingSelectedImageNotes,
+  savingSelectedImageTags,
+  selectedImageId,
+  selectedImageSrc,
+  selectedImage,
+  selectedImageTags,
+  loadBookImages,
+  saveSelectedImageNotes,
+  saveSelectedImageTags,
+  downloadSelectedImage,
+} = useBookImages({
+  bookId,
+  wikiPages,
+  loadWiki,
+  getBookImageAssets,
+  getImageSource: getCoverImageSource,
+  getImageWikiTags,
+  updateImageAssetNotes,
+  setImageWikiTags,
+});
+
 const chapters = ref<BookChapter[]>([]);
 const parts = ref<BookPart[]>([]);
 const partOrder = ref<string[]>([]);
-const wikiPages = ref<BookWikiPage[]>([]);
-const hasWikiPages = computed(() => wikiPages.value.length > 0);
 const loading = ref(false);
-const loadingWiki = ref(false);
 const expandedSummaries = ref<Set<string>>(new Set());
 const routerViewKey = ref(0);
 let suppressDbChapterSync = false;
-const bookCoverImage = ref<ImageAsset | null>(null);
-const bookCoverSrc = ref<string | null>(null);
-const coverLoading = ref(false);
-const coverError = ref<string | null>(null);
 const chapterThumbnails = ref<Record<string, string>>({});
 const partThumbnails = ref<Record<string, string>>({});
-const wikiPageThumbnails = ref<Record<string, string>>({});
-const bookImages = ref<ImageAsset[]>([]);
-const bookImageSources = ref<Record<string, string>>({});
-const bookImageTags = ref<Record<string, ImageWikiTag[]>>({});
-const loadingImages = ref(false);
-const savingSelectedImageNotes = ref(false);
-const savingSelectedImageTags = ref(false);
 const revisionActivity = ref<ChapterRevisionActivity[]>([]);
 
 // Book editing state
@@ -132,12 +183,6 @@ const contextualSearchTargetId = computed(() => {
 });
 
 // Create wiki page state
-const showCreateWikiModal = ref(false);
-const newWikiPageName = ref("");
-const newWikiPageType = ref<"character" | "location" | "concept" | "other">("character");
-const creatingWikiPage = ref(false);
-const createWikiPageError = ref<string | null>(null);
-
 const currentTab = computed(() => {
   // Check if we're on a wiki page child route
   if (route.path.includes("/wiki/")) {
@@ -148,25 +193,6 @@ const currentTab = computed(() => {
   if (tab === "wiki") return "wiki";
   if (tab === "images") return "images";
   return "chapters";
-});
-
-const selectedImageId = computed(() => {
-  return (route.query.imageId as string) || null;
-});
-
-const selectedImageSrc = computed(() => {
-  if (!selectedImageId.value) return null;
-  return bookImageSources.value[selectedImageId.value] || null;
-});
-
-const selectedImage = computed(() => {
-  if (!selectedImageId.value) return null;
-  return bookImages.value.find(img => img.id === selectedImageId.value) || null;
-});
-
-const selectedImageTags = computed(() => {
-  if (!selectedImageId.value) return [];
-  return bookImageTags.value[selectedImageId.value] ?? [];
 });
 
 const isOnBookOnly = computed(() => {
@@ -449,15 +475,6 @@ const buildChapterOrder = (partUpdates: Record<string, string[]>) => {
   return chapterOrder;
 };
 
-const formatWordCount = (count: number) => {
-  if (count < 1000) return count.toString();
-  return (count / 1000).toFixed(1) + "k";
-};
-
-const wordCountForChapters = (chapterList: Chapter[]) => {
-  return chapterList.reduce((total, chapter) => total + (chapter.word_count || 0), 0);
-};
-
 const startEditingBookTitle = () => {
   if (!book.value) return;
   editingBookTitle.value = book.value.title;
@@ -551,57 +568,6 @@ const loadChapterThumbnailsForBook = async () => {
   }
 };
 
-const loadBookCoverImage = async (targetBookId: string) => {
-  coverLoading.value = true;
-  coverError.value = null;
-  try {
-    const asset = await fetchBookCover(targetBookId);
-    bookCoverImage.value = asset;
-    bookCoverSrc.value = asset ? await getCoverImageSource(asset) : null;
-  } catch (error) {
-    coverError.value = error instanceof Error ? error.message : "Failed to load book cover";
-  } finally {
-    coverLoading.value = false;
-  }
-};
-
-const handleSelectBookCover = async () => {
-  if (!book.value) return;
-
-  coverLoading.value = true;
-  coverError.value = null;
-  try {
-    const asset = await pickNewBookCover(book.value.id);
-    if (asset) {
-      bookCoverImage.value = asset;
-      bookCoverSrc.value = await getCoverImageSource(asset);
-      book.value.cover_image_id = asset.id;
-    }
-  } catch (error) {
-    coverError.value = error instanceof Error ? error.message : "Failed to update book cover";
-  } finally {
-    coverLoading.value = false;
-  }
-};
-
-const handleDeleteBookCover = async () => {
-  if (!book.value || !bookCoverImage.value) return;
-
-  coverLoading.value = true;
-  coverError.value = null;
-  try {
-    await deleteImage(bookCoverImage.value);
-    await setBookCoverImageId(book.value.id, null);
-    bookCoverImage.value = null;
-    bookCoverSrc.value = null;
-    book.value.cover_image_id = null;
-  } catch (error) {
-    coverError.value = error instanceof Error ? error.message : "Failed to delete book cover";
-  } finally {
-    coverLoading.value = false;
-  }
-};
-
 const refreshData = async () => {
   await loadBook();
   await loadWiki();
@@ -617,63 +583,6 @@ const goToOrganizeChapters = () => {
 
 const openSearchModal = () => {
   showSearchModal.value = true;
-};
-
-const openCreateWikiModal = () => {
-  newWikiPageName.value = "";
-  newWikiPageType.value = "character";
-  createWikiPageError.value = null;
-  showCreateWikiModal.value = true;
-};
-
-const closeCreateWikiModal = () => {
-  if (creatingWikiPage.value) return;
-  showCreateWikiModal.value = false;
-  newWikiPageName.value = "";
-  createWikiPageError.value = null;
-};
-
-const handleCreateWikiPage = async () => {
-  const pageName = newWikiPageName.value.trim();
-  if (!pageName) {
-    createWikiPageError.value = "Please enter a page name.";
-    return;
-  }
-
-  creatingWikiPage.value = true;
-  createWikiPageError.value = null;
-
-  try {
-    // Check for duplicate name
-    const existingPage = await getWikiPage(bookId.value, pageName);
-    if (existingPage) {
-      createWikiPageError.value = `A wiki page named "${pageName}" already exists.`;
-      creatingWikiPage.value = false;
-      return;
-    }
-
-    // Create the new wiki page
-    const newPageId = await createWikiPage({
-      book_id: bookId.value,
-      page_name: pageName,
-      page_type: newWikiPageType.value,
-      content: "",
-      summary: "",
-      created_by_ai: false,
-    });
-
-    // Refresh wiki pages list
-    await loadWiki();
-
-    // Close modal and navigate to new page
-    showCreateWikiModal.value = false;
-    newWikiPageName.value = "";
-    router.push(`/books/${bookId.value}/wiki/${newPageId}`);
-  } catch (error) {
-    createWikiPageError.value = error instanceof Error ? error.message : "Failed to create wiki page.";
-  } finally {
-    creatingWikiPage.value = false;
-  }
 };
 
 const createNewChapterInPart = (partId: string) => {
@@ -781,7 +690,7 @@ const saveSidebarChapterOrder = async () => {
     // Send array-based reorder to backend
     await updateChapterOrders(bookId.value, chapterOrder, partUpdates, partOrder.value);
 
-    console.log("Saved sidebar chapter order with arrays:", { chapterOrder, partUpdates });
+    logger.log("Saved sidebar chapter order with arrays:", { chapterOrder, partUpdates });
 
     // Reload to ensure UI reflects the saved state
     await loadBook();
@@ -792,247 +701,12 @@ const saveSidebarChapterOrder = async () => {
   }
 };
 
-const loadWiki = async () => {
-  if (!bookId.value) return;
-
-  try {
-    loadingWiki.value = true;
-    const safeParseArray = (value: string | null | undefined) => {
-      if (!value) return [];
-      try {
-        const parsed = JSON.parse(value);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    };
-
-    const pages = await getWikiPages(bookId.value) as DatabaseWikiPage[];
-    wikiPages.value = pages.map((page) => ({
-      id: page.id,
-      page_name: page.page_name,
-      page_type: (page.page_type || "character") as WikiPage["page_type"],
-      summary: page.summary ?? null,
-      aliases: safeParseArray(page.aliases),
-      tags: safeParseArray(page.tags),
-      is_major: Boolean(page.is_major),
-      is_pinned: Boolean(page.is_pinned),
-      created_by_ai: Boolean(page.created_by_ai),
-      created_at: page.created_at,
-      updated_at: page.updated_at,
-      content_length: typeof page.content === "string" ? page.content.length : 0,
-      cover_image_id: page.cover_image_id ?? null,
-    }));
-
-    // Load cover thumbnails for wiki pages that have cover images
-    const thumbnails: Record<string, string> = {};
-    for (const page of wikiPages.value) {
-      if (page.cover_image_id) {
-        try {
-          const coverImage = await getWikiPageCoverImageAsset(page.id);
-          if (coverImage) {
-            thumbnails[page.id] = await getCoverImageSource(coverImage);
-          }
-        } catch (error) {
-          console.warn(`Failed to load cover thumbnail for wiki page ${page.id}:`, error);
-        }
-      }
-    }
-    wikiPageThumbnails.value = thumbnails;
-  } catch (error) {
-    console.error("Failed to load wiki pages:", error);
-    wikiPages.value = [];
-    wikiPageThumbnails.value = {};
-  } finally {
-    loadingWiki.value = false;
-  }
-};
-
-const loadBookImages = async () => {
-  if (!bookId.value) return;
-
-  try {
-    loadingImages.value = true;
-    if (!wikiPages.value.length) {
-      await loadWiki();
-    }
-    const images = await getBookImageAssets(bookId.value);
-    bookImages.value = images;
-
-    // Load image sources for gallery display
-    const sources: Record<string, string> = {};
-    const tags: Record<string, ImageWikiTag[]> = {};
-    for (const image of images) {
-      try {
-        sources[image.id] = await getCoverImageSource(image);
-      } catch (err) {
-        console.warn("Failed to load image source for", image.id, err);
-      }
-      try {
-        tags[image.id] = await getImageWikiTags(image.id);
-      } catch (err) {
-        console.warn("Failed to load image tags for", image.id, err);
-      }
-    }
-    bookImageSources.value = sources;
-    bookImageTags.value = tags;
-  } catch (error) {
-    console.error("Failed to load book images:", error);
-    bookImages.value = [];
-    bookImageSources.value = {};
-    bookImageTags.value = {};
-  } finally {
-    loadingImages.value = false;
-  }
-};
-
-const saveSelectedImageNotes = async (notes: string) => {
-  const image = selectedImage.value;
-  if (!image) return;
-
-  savingSelectedImageNotes.value = true;
-  try {
-    await updateImageAssetNotes(image.id, notes);
-    const updatedImage = {
-      ...image,
-      notes,
-      updated_at: new Date().toISOString(),
-    };
-    bookImages.value = bookImages.value.map((item) =>
-      item.id === image.id ? updatedImage : item
-    );
-  } catch (error) {
-    console.error("Failed to save image notes:", error);
-  } finally {
-    savingSelectedImageNotes.value = false;
-  }
-};
-
-const saveSelectedImageTags = async (wikiPageIds: string[]) => {
-  const image = selectedImage.value;
-  if (!image) return;
-
-  savingSelectedImageTags.value = true;
-  try {
-    await setImageWikiTags(image.id, wikiPageIds);
-    bookImageTags.value = {
-      ...bookImageTags.value,
-      [image.id]: await getImageWikiTags(image.id),
-    };
-  } catch (error) {
-    console.error("Failed to save image tags:", error);
-  } finally {
-    savingSelectedImageTags.value = false;
-  }
-};
-
-const downloadSelectedImage = (imageId: string) => {
-  const imageSrc = bookImageSources.value[imageId];
-  if (!imageSrc) return;
-
-  const image = bookImages.value.find((item) => item.id === imageId);
-  const link = document.createElement("a");
-  link.href = imageSrc;
-  link.download = image?.file_name || `illustration-${imageId}.jpg`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
-const wikiPagesByType = computed(() => {
-  const grouped = wikiPages.value.reduce((acc, page) => {
-    if (!acc[page.page_type]) {
-      acc[page.page_type] = [];
-    }
-    acc[page.page_type].push(page);
-    return acc;
-  }, {} as Record<string, WikiPage[]>);
-
-  // Sort each group: pinned pages first, then alphabetical
-  Object.keys(grouped).forEach((type) => {
-    grouped[type].sort((a, b) => {
-      if (a.is_pinned !== b.is_pinned) {
-        return b.is_pinned ? 1 : -1;
-      }
-      return a.page_name.localeCompare(b.page_name);
-    });
-  });
-
-  return grouped;
-});
-
-const getTypeIcon = (type: string) => {
-  switch (type) {
-    case "character":
-      return UserIcon;
-    case "location":
-      return MapPinIcon;
-    case "concept":
-      return LightBulbIcon;
-    default:
-      return BookOpenIcon;
-  }
-};
-
-const getTypeColor = (type: string) => {
-  switch (type) {
-    case "character":
-      return "text-gold-600";
-    case "location":
-      return "text-green-600";
-    case "concept":
-      return "text-purple-600";
-    default:
-      return "text-gray-600";
-  }
-};
-
-const toggleWikiPagePinned = async (page: WikiPage) => {
-  const previousPinned = page.is_pinned;
-  const nextPinned = !page.is_pinned;
-  page.is_pinned = nextPinned;
-  page.updated_at = new Date().toISOString();
-
-  try {
-    await updateWikiPage(page.id, { is_pinned: nextPinned });
-  } catch (error) {
-    page.is_pinned = previousPinned;
-    page.updated_at = new Date().toISOString();
-    console.error("Failed to update wiki page pin:", error);
-  }
-};
-
-const handleWikiPagePinChanged = (payload: { id: string; isPinned: boolean; updatedAt: string }) => {
-  const page = wikiPages.value.find((item) => item.id === payload.id);
-  if (!page) return;
-
-  page.is_pinned = payload.isPinned;
-  page.updated_at = payload.updatedAt;
-};
-
 const toggleSummary = (chapterId: string) => {
   if (expandedSummaries.value.has(chapterId)) {
     expandedSummaries.value.delete(chapterId);
   } else {
     expandedSummaries.value.add(chapterId);
   }
-};
-
-const getSummaryPreview = (summary: string, maxLength: number = 100) => {
-  if (!summary) return "";
-  if (summary.length <= maxLength) return summary;
-
-  // Find the last complete sentence within the limit
-  const truncated = summary.substring(0, maxLength);
-  const lastSentence = truncated.lastIndexOf(".");
-
-  if (lastSentence > 0 && lastSentence > maxLength * 0.6) {
-    return truncated.substring(0, lastSentence + 1);
-  }
-
-  // If no good sentence break, just truncate at word boundary
-  const lastSpace = truncated.lastIndexOf(" ");
-  return lastSpace > 0 ? truncated.substring(0, lastSpace) + "..." : truncated + "...";
 };
 
 // Watch for route changes to trigger router-view rerender
