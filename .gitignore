@@ -157,7 +157,16 @@ android/app/betabot-release.keystore
 ai-beta-reader-backup.enc
 inspect-backup.mjs
 fixtures/
+# ...but Playwright test fixtures under e2e/ must stay tracked (the rule above
+# is unanchored and would otherwise match e2e/fixtures/).
+!e2e/fixtures/
 
 # sql.js WebAssembly file (copied from node_modules during setup)
 public/sql-wasm.wasm
+
+# Playwright
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
 

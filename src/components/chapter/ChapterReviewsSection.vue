@@ -34,7 +34,7 @@ type CustomProfile = {
 defineProps({
   reviewTone: {
     type: String,
-    default: 'fanficnet',
+    default: 'editorial',
   },
   customProfiles: {
     type: Array as PropType<CustomProfile[]>,

@@ -1,6 +1,6 @@
 import type { CapacitorElectronConfig } from '@capacitor-community/electron';
 import { getCapacitorElectronConfig, setupElectronDeepLinking } from '@capacitor-community/electron';
-import type { MenuItemConstructorOptions } from 'electron';
+import type { BrowserWindow, MenuItemConstructorOptions } from 'electron';
 import { app, MenuItem, ipcMain, Menu } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
@@ -39,7 +39,7 @@ const editMenuTemplate: MenuItemConstructorOptions = {
       accelerator: 'CmdOrCtrl+F',
       click: (_menuItem, browserWindow) => {
         if (browserWindow) {
-          browserWindow.webContents.executeJavaScript(`
+          (browserWindow as BrowserWindow).webContents.executeJavaScript(`
             (function() {
               // Check if find bar host already exists
               let findBarHost = document.getElementById('electron-find-bar-host');

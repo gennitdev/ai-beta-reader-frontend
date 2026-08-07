@@ -20,6 +20,12 @@ export default defineConfigWithVueTs(
     'android/app/build/**',
     'android/app/src/main/assets/**',
     'electron/**',
+    // Local-only artifacts: Playwright reports and Claude Code git worktrees
+    // (full repo copies) must not be linted — the latter also crashes the
+    // directory walk and never exists in CI.
+    '**/playwright-report/**',
+    '**/test-results/**',
+    '.claude/**',
   ]),
 
   pluginVue.configs['flat/essential'],
