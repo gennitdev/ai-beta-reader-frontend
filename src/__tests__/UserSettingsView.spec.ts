@@ -196,6 +196,15 @@ describe('UserSettingsView', () => {
   })
 
   describe('cloud backup and restore', () => {
+    it('discloses the limited Google Drive access before authorization', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('only the backup file it creates')
+      expect(wrapper.text()).toContain('It cannot access unrelated Drive files')
+      expect(wrapper.text()).toContain('Privacy Policy')
+    })
+
     it('disables backup and restore until an encryption password is entered', async () => {
       const wrapper = mountView()
       await flushPromises()

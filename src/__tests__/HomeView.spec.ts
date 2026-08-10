@@ -22,7 +22,14 @@ vi.mock('@/composables/useDatabase', async () => {
 
 function mountHome() {
   return mount(HomeView, {
-    global: { stubs: { RouterLink: true } },
+    global: {
+      stubs: {
+        RouterLink: {
+          props: ['to'],
+          template: '<a :href="to"><slot /></a>',
+        },
+      },
+    },
   })
 }
 
@@ -41,6 +48,10 @@ describe('HomeView', () => {
     expect(wrapper.text()).toContain('Start Writing Now')
     // The brand wordmark is rendered as the logo image, not body text.
     expect(wrapper.find('img[alt="beta bot"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Privacy Policy')
+    expect(wrapper.text()).toContain('Terms of Use')
+    expect(wrapper.text()).toContain('gennitdev@gmail.com')
+    expect(wrapper.text()).toContain('optional Google Drive backup')
   })
 
   it('redirects to /books when the user already has books', async () => {

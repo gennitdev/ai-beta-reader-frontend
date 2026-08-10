@@ -8,12 +8,25 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: () => import('../views/HomeView.vue')
+      component: () => import('../views/HomeView.vue'),
+      meta: { title: 'beta bot — privacy-first AI beta reader' }
     },
     {
       path: '/docs',
       name: 'docs',
       component: () => import('../views/DocsView.vue')
+    },
+    {
+      path: '/privacy',
+      name: 'privacy',
+      component: () => import('../views/PrivacyPolicyView.vue'),
+      meta: { title: 'Privacy Policy | beta bot' }
+    },
+    {
+      path: '/terms',
+      name: 'terms',
+      component: () => import('../views/TermsOfUseView.vue'),
+      meta: { title: 'Terms of Use | beta bot' }
     },
     {
       path: '/books',
@@ -141,6 +154,10 @@ const router = createRouter({
       component: bardwallView
     }
   ]
+})
+
+router.afterEach((to) => {
+  document.title = typeof to.meta.title === 'string' ? to.meta.title : 'beta bot'
 })
 
 export default router

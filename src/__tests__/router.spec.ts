@@ -7,6 +7,8 @@ describe('router', () => {
     const byName = new Map(router.getRoutes().map((r) => [r.name, r.path]))
     expect(byName.get('home')).toBe('/')
     expect(byName.get('docs')).toBe('/docs')
+    expect(byName.get('privacy')).toBe('/privacy')
+    expect(byName.get('terms')).toBe('/terms')
     expect(byName.get('books')).toBe('/books')
     expect(byName.get('book')).toBe('/books/:id')
     expect(byName.get('settings')).toBe('/settings')
@@ -17,6 +19,12 @@ describe('router', () => {
 
   it('resolves the home path to the home route', () => {
     expect(router.resolve('/').name).toBe('home')
+  })
+
+  it('provides descriptive titles for public review pages', () => {
+    expect(router.resolve('/').meta.title).toBe('beta bot — privacy-first AI beta reader')
+    expect(router.resolve('/privacy').meta.title).toBe('Privacy Policy | beta bot')
+    expect(router.resolve('/terms').meta.title).toBe('Terms of Use | beta bot')
   })
 
   it('keeps Bardwall locations and cave activities inside Bardwall routes', () => {

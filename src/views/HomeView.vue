@@ -121,7 +121,7 @@ const detailedSteps = [
               Privacy-First Writing
             </p>
             <p class="text-sm text-gray-700 dark:text-gray-300">
-              All your data is stored <strong>locally</strong> on your device. You bring your own OpenAI API key. Your work is <strong>yours</strong> and stays private.
+              Your writing is stored <strong>locally</strong> on your device. You bring your own OpenAI API key, and an optional Google Drive backup is encrypted on your device before upload. Your work remains <strong>yours</strong>.
             </p>
           </div>
 
@@ -206,6 +206,15 @@ const detailedSteps = [
               </div>
             </div>
           </div>
+
+          <footer class="mt-10 border-t border-gray-300 pt-6 text-sm text-gray-600 dark:border-navy-700 dark:text-gray-400">
+            <div class="flex flex-wrap justify-center gap-x-5 gap-y-2">
+              <router-link to="/privacy" class="font-medium text-gold-700 hover:underline dark:text-gold-300">Privacy Policy</router-link>
+              <router-link to="/terms" class="font-medium text-gold-700 hover:underline dark:text-gold-300">Terms of Use</router-link>
+              <a href="mailto:gennitdev@gmail.com" class="font-medium text-gold-700 hover:underline dark:text-gold-300">gennitdev@gmail.com</a>
+            </div>
+            <p class="mt-3">Google Drive access is optional and used only for encrypted backup and restore.</p>
+          </footer>
         </div>
       </div>
     </div>

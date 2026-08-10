@@ -333,6 +333,9 @@ onMounted(async () => {
           <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Encrypt your data with a password and sync it to your Google Drive. Only the password holder can decrypt the backup.
           </p>
+          <p class="mt-3 rounded-lg bg-gold-50 p-3 text-sm text-gold-900 dark:bg-gold-900/20 dark:text-gold-100">
+            When you choose backup or restore, beta bot asks Google for permission to create, find, update, and read only the backup file it creates in your Drive (<code>drive.file</code>). It cannot access unrelated Drive files. Your backup is encrypted on this device before upload. See the <RouterLink to="/privacy" class="font-medium underline">Privacy Policy</RouterLink>.
+          </p>
           <p
             v-if="!cloudSyncAvailable"
             class="mt-3 text-sm text-amber-600 dark:text-amber-400"
