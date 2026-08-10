@@ -96,6 +96,7 @@ const challengeOrlaPromptDraft = ref(game.value.challengeRules.orlaPrompt)
 const selectedLastWordStoryId = ref<string | null>(null)
 const lastWordMessage = ref<string | null>(null)
 const vesperSpeaking = ref(false)
+const previewChallengeCardId = ref<typeof BARDWALL_CHALLENGE_CARDS[number]['id'] | null>(null)
 
 const selectedOffering = computed(() => offerings.value.find((item) => item.id === selectedOfferingId.value) ?? null)
 const selectedPassages = computed(() => selectedOffering.value?.passages.filter((_, index) => selectedPassageIndexes.value.includes(index)) ?? [])
@@ -118,6 +119,27 @@ const challengeCards = computed(() => game.value.challenge.cards.map((draftCard)
   ...draftCard,
   card: BARDWALL_CHALLENGE_CARDS.find((card) => card.id === draftCard.cardId)!,
 })))
+const previewChallengeCard = computed(() => BARDWALL_CHALLENGE_CARDS.find((card) => card.id === previewChallengeCardId.value) ?? null)
+const challengeStakes = computed(() => {
+  const wager = game.value.challenge.wager
+  if (!wager) return null
+  if (wager.type === 'coins') {
+    const stake = `${wager.amount.toLocaleString()} ${wager.amount === 1 ? 'coin' : 'coins'}`
+    const payout = `${(wager.amount * 2).toLocaleString()} coins`
+    return {
+      win: `Gain ${stake} (${payout} returned from the table).`,
+      lose: `Lose ${stake}.`,
+      draw: `Get your ${stake} back.`,
+    }
+  }
+  const item = BARDWALL_FOOD_ITEMS.find((candidate) => candidate.id === wager.itemId)
+  const label = item ? `${item.icon} ${item.name}` : 'wagered item'
+  return {
+    win: `Gain another ${label} (two returned from the table).`,
+    lose: `Lose your ${label}.`,
+    draw: `Get your ${label} back.`,
+  }
+})
 const heldChallengeCards = computed(() => game.value.challenge.cards.filter((card) => card.held).length)
 const challengeStoryWordCount = computed(() => countBardwallWords(game.value.challenge.playerStory))
 const challengeWordRange = computed(() => getBardwallChallengeWordRange(game.value.challenge.goal))
@@ -427,6 +449,14 @@ const beginCoffeehouseChallenge = () => {
 const toggleChallengeCard = (cardId: typeof BARDWALL_CHALLENGE_CARDS[number]['id']) => {
   game.value = toggleBardwallChallengeCard(game.value, cardId)
   saveBardwallState(game.value)
+}
+
+const openChallengeCardPreview = (cardId: typeof BARDWALL_CHALLENGE_CARDS[number]['id']) => {
+  previewChallengeCardId.value = cardId
+}
+
+const closeChallengeCardPreview = () => {
+  previewChallengeCardId.value = null
 }
 
 const advanceChallengeDraft = () => {
@@ -1009,8 +1039,8 @@ watch(() => [route.params.location, route.params.activity], () => {
             <p class="mt-3 max-w-3xl font-serif text-lg leading-8 text-stone-300">Bards crowd the long tables with ink-stained cups and stories they swear are almost finished. Orla Fen waves you over. Tamsin Quill is already shuffling the painted deck.</p>
           </header>
 
-          <div class="grid gap-6 p-6 sm:p-8" :class="game.challenge.phase === 'result' ? 'lg:grid-cols-1' : 'lg:grid-cols-[0.7fr_1.3fr]'">
-            <aside v-if="game.challenge.phase !== 'result'" class="space-y-4">
+          <div class="grid gap-6 p-6 sm:p-8" :class="game.challenge.phase === 'setup' ? 'lg:grid-cols-[0.55fr_1.45fr]' : 'lg:grid-cols-1'">
+            <aside v-if="game.challenge.phase === 'setup'" class="space-y-4">
               <section class="rounded-xl border border-orange-200/15 bg-black/20 p-5">
                 <h3 class="font-serif text-xl font-semibold">At the counter</h3>
                 <div class="mt-4 space-y-3">
@@ -1073,8 +1103,15 @@ watch(() => [route.params.location, route.params.activity], () => {
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-orange-300">Draw {{ game.challenge.drawNumber }}</p>
                 <h3 class="mt-2 font-serif text-3xl font-bold">Choose what the story must contain.</h3>
                 <p class="mt-3 text-sm text-stone-400">Keep at least one card. Unkept cards return to the deck.</p>
-                <div class="mt-6 grid gap-3 sm:grid-cols-3">
-                  <button v-for="entry in challengeCards" :key="entry.card.id" :data-testid="`challenge-card-${entry.card.id}`" class="rounded-xl border p-3 text-center transition" :class="entry.held ? 'border-orange-200 bg-orange-200/10 ring-1 ring-orange-200' : 'border-stone-600 bg-stone-900/50 hover:border-stone-400'" @click="toggleChallengeCard(entry.card.id)"><span class="relative mx-auto block w-full max-w-[13rem] overflow-hidden rounded-lg border border-black/40 shadow-md [container-type:inline-size]"><img :src="getBardwallCardImage(entry.card.id)" :alt="entry.card.name" class="block w-full" /><span class="pointer-events-none absolute inset-x-0 bottom-[9.5%] px-[7%] text-center font-serif text-[6.8cqw] font-semibold leading-[1.05] text-[#3a2b15] [text-shadow:0_1px_1px_rgba(250,240,214,0.55)]">{{ entry.card.name }}</span></span><span class="mt-3 block text-xs leading-5 text-stone-400">{{ entry.card.meaning }}</span><span class="mt-2 block text-xs font-semibold" :class="entry.held ? 'text-orange-200' : 'text-stone-500'">{{ entry.held ? 'Kept' : 'Tap to keep' }}</span></button>
+                <div class="mt-6 grid items-start gap-5 sm:grid-cols-3">
+                  <article v-for="entry in challengeCards" :key="entry.card.id" class="rounded-xl border p-4 text-center transition" :class="entry.held ? 'border-orange-200 bg-orange-200/10 ring-1 ring-orange-200' : 'border-stone-600 bg-stone-900/50'">
+                    <button type="button" :data-testid="`preview-challenge-card-${entry.card.id}`" class="relative mx-auto block w-full max-w-[17rem] overflow-hidden rounded-lg border border-black/40 shadow-lg [container-type:inline-size] transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-orange-200" :aria-label="`Enlarge ${entry.card.name}`" @click="openChallengeCardPreview(entry.card.id)">
+                      <img :src="getBardwallCardImage(entry.card.id)" :alt="entry.card.name" class="block w-full" />
+                      <span class="pointer-events-none absolute inset-x-0 bottom-[9.5%] px-[7%] text-center font-serif text-[5.4cqw] font-semibold leading-none text-[#3a2b15] [text-shadow:0_1px_1px_rgba(250,240,214,0.55)]">{{ entry.card.name }}</span>
+                    </button>
+                    <span class="mt-4 block text-sm leading-6 text-stone-400">{{ entry.card.meaning }}</span>
+                    <button type="button" :data-testid="`challenge-card-${entry.card.id}`" class="mt-3 w-full rounded-lg border px-3 py-2 text-xs font-semibold transition" :class="entry.held ? 'border-orange-200 bg-orange-200 text-[#302018]' : 'border-stone-600 text-stone-300 hover:border-orange-200 hover:text-orange-100'" @click="toggleChallengeCard(entry.card.id)">{{ entry.held ? 'Kept · tap to release' : 'Keep this card' }}</button>
+                  </article>
                 </div>
                 <button data-testid="advance-challenge-draft" class="mt-6 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100 disabled:opacity-40" :disabled="heldChallengeCards === 0" @click="advanceChallengeDraft">{{ heldChallengeCards === 3 ? 'Use these three cards' : `Redraw ${3 - heldChallengeCards} ${3 - heldChallengeCards === 1 ? 'card' : 'cards'}` }}</button>
               </template>
@@ -1082,7 +1119,20 @@ watch(() => [route.params.location, route.params.activity], () => {
               <template v-else-if="game.challenge.phase === 'write'">
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-orange-300">The cards are set · {{ wagerLabel(game.challenge.wager) }} wagered</p>
                 <h3 class="mt-2 font-serif text-3xl font-bold">Tell your story.</h3>
-                <div class="mt-5 grid gap-2 sm:grid-cols-3"><div v-for="entry in challengeCards" :key="entry.card.id" class="flex gap-3 rounded-lg border border-orange-200/20 bg-orange-200/5 p-3"><img :src="getBardwallCardImage(entry.card.id)" alt="" class="h-16 w-auto shrink-0 rounded border border-black/30 shadow-sm" /><div class="min-w-0"><strong class="block text-sm">{{ entry.card.name }}</strong><p class="mt-1 text-xs leading-5 text-stone-400">{{ entry.card.meaning }}</p></div></div></div>
+                <section v-if="challengeStakes" data-testid="challenge-stakes" class="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/5 p-4">
+                  <h4 class="text-sm font-semibold text-amber-100">What is at stake</h4>
+                  <div class="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                    <p class="rounded-lg bg-emerald-300/10 p-3 text-emerald-200"><strong class="block text-xs uppercase tracking-wide">If you win</strong><span class="mt-1 block">{{ challengeStakes.win }}</span></p>
+                    <p class="rounded-lg bg-rose-300/10 p-3 text-rose-200"><strong class="block text-xs uppercase tracking-wide">If you lose</strong><span class="mt-1 block">{{ challengeStakes.lose }}</span></p>
+                    <p class="rounded-lg bg-sky-300/10 p-3 text-sky-200"><strong class="block text-xs uppercase tracking-wide">If you draw</strong><span class="mt-1 block">{{ challengeStakes.draw }}</span></p>
+                  </div>
+                </section>
+                <div class="mt-5 grid gap-3 sm:grid-cols-3">
+                  <button v-for="entry in challengeCards" :key="entry.card.id" type="button" class="flex items-start gap-3 rounded-lg border border-orange-200/20 bg-orange-200/5 p-3 text-left transition hover:border-orange-200/50" :aria-label="`Enlarge ${entry.card.name}`" @click="openChallengeCardPreview(entry.card.id)">
+                    <img :src="getBardwallCardImage(entry.card.id)" alt="" class="h-24 w-auto shrink-0 rounded border border-black/30 shadow-sm" />
+                    <span class="min-w-0"><strong class="block text-sm">{{ entry.card.name }}</strong><span class="mt-1 block text-xs leading-5 text-stone-400">{{ entry.card.meaning }}</span></span>
+                  </button>
+                </div>
                 <section data-testid="challenge-rubric" class="mt-5 rounded-xl border border-orange-200/20 bg-orange-200/5 p-4">
                   <div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-serif text-lg font-semibold text-orange-100">How Tamsin judges</h4><button class="text-xs font-semibold text-orange-200 underline" @click="openChallengeRulesEditor">Change the table rules</button></div>
                   <p class="mt-1 text-xs leading-5 text-stone-400">Each category is worth 10 points. Both stories must meet the same word-count range before Tamsin will judge them.</p>
@@ -1378,6 +1428,23 @@ watch(() => [route.params.location, route.params.activity], () => {
     </section>
 
     <Teleport to="body">
+      <div
+        v-if="previewChallengeCard"
+        data-testid="challenge-card-preview"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+        @click.self="closeChallengeCardPreview"
+        @keydown.esc="closeChallengeCardPreview"
+      >
+        <section role="dialog" aria-modal="true" :aria-label="previewChallengeCard.name" class="w-full max-w-md rounded-2xl border border-orange-200/30 bg-[#1b1714] p-5 text-center text-stone-100 shadow-2xl sm:p-6">
+          <div class="relative mx-auto w-full max-w-sm overflow-hidden rounded-xl border border-black/40 shadow-2xl [container-type:inline-size]">
+            <img :src="getBardwallCardImage(previewChallengeCard.id)" :alt="previewChallengeCard.name" class="block w-full" />
+            <span class="pointer-events-none absolute inset-x-0 bottom-[9.5%] px-[7%] text-center font-serif text-[5.4cqw] font-semibold leading-none text-[#3a2b15] [text-shadow:0_1px_1px_rgba(250,240,214,0.55)]">{{ previewChallengeCard.name }}</span>
+          </div>
+          <p class="mx-auto mt-4 max-w-sm font-serif text-lg leading-7 text-stone-300">{{ previewChallengeCard.meaning }}</p>
+          <button type="button" data-testid="close-challenge-card-preview" class="mt-5 rounded-lg border border-stone-600 px-5 py-2.5 text-sm font-semibold text-stone-200 transition hover:border-orange-200 hover:text-orange-100" @click="closeChallengeCardPreview">Close</button>
+        </section>
+      </div>
+
       <div
         v-if="showResetDialog"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"

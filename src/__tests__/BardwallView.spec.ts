@@ -106,11 +106,19 @@ describe('BardwallView', () => {
     await wrapper.get('[data-testid="start-coffeehouse-challenge"]').trigger('click')
     const cards = wrapper.findAll('[data-testid^="challenge-card-"]')
     expect(cards).toHaveLength(3)
+    const firstCardId = cards[0].attributes('data-testid').replace('challenge-card-', '')
+    const firstCard = BARDWALL_CHALLENGE_CARDS.find((card) => card.id === firstCardId)!
+    await wrapper.get(`[data-testid="preview-challenge-card-${firstCardId}"]`).trigger('click')
+    expect(document.body.querySelector('[data-testid="challenge-card-preview"]')?.textContent).toContain(firstCard.name)
+    ;(document.body.querySelector('[data-testid="close-challenge-card-preview"]') as HTMLButtonElement).click()
+    await flushPromises()
     for (const card of cards) await card.trigger('click')
     await wrapper.get('[data-testid="advance-challenge-draft"]').trigger('click')
 
     expect(wrapper.get('[data-testid="challenge-rubric"]').text()).toContain('Scene & specificity')
     expect(wrapper.get('[data-testid="challenge-rubric"]').text()).toContain('Character & agency')
+    expect(wrapper.get('[data-testid="challenge-stakes"]').text()).toContain('Gain 1 coin (2 coins returned from the table).')
+    expect(wrapper.get('[data-testid="challenge-stakes"]').text()).toContain('Lose 1 coin.')
     expect(wrapper.text()).toContain('required 90–110')
 
     const oversizedStory = Array.from({ length: 111 }, (_, index) => `word${index}`).join(' ')
@@ -170,6 +178,11 @@ describe('BardwallView', () => {
         orlaPrompt: 'Write a solemn tale about a turnip.',
       },
     })
+
+    for (const card of wrapper.findAll('[data-testid^="challenge-card-"]')) await card.trigger('click')
+    await wrapper.get('[data-testid="advance-challenge-draft"]').trigger('click')
+    expect(wrapper.get('[data-testid="challenge-stakes"]').text()).toContain('Gain 13 coins (26 coins returned from the table).')
+    expect(wrapper.get('[data-testid="challenge-stakes"]').text()).toContain('Lose 13 coins.')
   })
 
   it('offers a table-rules escape hatch after Orla wins', async () => {
