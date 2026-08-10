@@ -74,6 +74,15 @@ afterEach(() => {
 })
 
 describe('BardwallView', () => {
+  it('provides a direct route back to books', async () => {
+    const wrapper = mount(BardwallView)
+
+    await wrapper.get('[data-testid="enter-bardwall"]').trigger('click')
+    await wrapper.get('[data-testid="back-to-books"]').trigger('click')
+
+    expect(routerPush).toHaveBeenCalledWith({ name: 'books' })
+  })
+
   it('plays a complete coffeehouse challenge and awards the matched stakes', async () => {
     saveBardwallState({
       ...createDefaultBardwallState(),

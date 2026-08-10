@@ -253,6 +253,10 @@ const goToTown = async () => {
   await router.push({ name: 'bardwall' })
 }
 
+const goToBooks = async () => {
+  await router.push({ name: 'books' })
+}
+
 const goToLocation = async (location: BardwallLocation) => {
   screen.value = location
   await router.push({ name: 'bardwall-location', params: { location } })
@@ -732,6 +736,15 @@ watch(() => [route.params.location, route.params.activity], () => {
           <h1 class="mt-1 font-serif text-3xl font-bold">Bardwall</h1>
         </div>
         <div class="flex flex-wrap items-center gap-4 text-sm text-stone-300">
+          <button
+            data-testid="back-to-books"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-300/60 hover:text-amber-200"
+            @click="goToBooks"
+          >
+            <ArrowLeftIcon class="h-3.5 w-3.5" />
+            Back to books
+          </button>
           <span class="font-semibold text-stone-100">Day {{ game.day }}</span>
           <span class="inline-flex items-center gap-1.5"><CurrencyDollarIcon class="h-4 w-4 text-amber-300" /> {{ coinLabel(game.coins) }}</span>
           <span>⚡ {{ game.energy }} energy</span>
