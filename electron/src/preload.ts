@@ -18,6 +18,13 @@ contextBridge.exposeInMainWorld('electronOAuth', {
     ipcRenderer.invoke('oauth-loopback:authenticate', config),
 });
 
+// OS-keychain-backed secure storage for small secrets (e.g. OAuth tokens)
+contextBridge.exposeInMainWorld('electronSecureStorage', {
+  get: (key: string) => ipcRenderer.invoke('secure-storage:get', key),
+  set: (key: string, value: string) => ipcRenderer.invoke('secure-storage:set', key, value),
+  remove: (key: string) => ipcRenderer.invoke('secure-storage:remove', key),
+});
+
 // Find in page functionality
 contextBridge.exposeInMainWorld('electronFindInPage', (text: string, forward: boolean, findNext: boolean = false) => {
   ipcRenderer.invoke('find-in-page', text, forward, findNext);
