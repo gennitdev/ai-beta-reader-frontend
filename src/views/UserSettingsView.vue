@@ -7,8 +7,9 @@ import { useApiKey } from '@/composables/useApiKey'
 import { useCloudSync } from '@/composables/useCloudSync'
 import { useBrowserStorage } from '@/composables/useBrowserStorage'
 import { useDataExport } from '@/composables/useDataExport'
+import { useBardwallSettings } from '@/composables/useBardwallSettings'
 import { formatStorageBytes } from '@/lib/browserStorage'
-import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon, CircleStackIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon, CircleStackIcon, MusicalNoteIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 
@@ -38,6 +39,8 @@ const {
 const goBack = () => {
   router.back()
 }
+
+const { bardwallEnabled } = useBardwallSettings()
 
 // OpenAI API key management
 const {
@@ -131,6 +134,33 @@ onMounted(async () => {
 
     <!-- Main Content -->
     <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800">
+        <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+          <div class="flex items-center space-x-2">
+            <MusicalNoteIcon class="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Features</h2>
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-6 px-6 py-4">
+          <div>
+            <label for="bardwall-enabled" class="text-sm font-medium text-gray-900 dark:text-white">
+              Show Bardwall
+            </label>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Show the Bardwall game link in the navigation menu. Hiding it does not remove game progress or prevent direct access.
+            </p>
+          </div>
+          <input
+            id="bardwall-enabled"
+            v-model="bardwallEnabled"
+            data-testid="bardwall-enabled"
+            type="checkbox"
+            role="switch"
+            class="h-5 w-5 shrink-0 rounded border-gray-300 text-gold-600 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700"
+          />
+        </div>
+      </div>
+
       <!-- OpenAI API Key Section -->
       <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">

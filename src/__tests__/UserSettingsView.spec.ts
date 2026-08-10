@@ -71,6 +71,7 @@ vi.mock('@/utils/platform', () => ({
 }))
 
 import UserSettingsView from '@/views/UserSettingsView.vue'
+import { BARDWALL_ENABLED_STORAGE_KEY } from '@/composables/useBardwallSettings'
 
 const wrappers: VueWrapper[] = []
 
@@ -116,6 +117,28 @@ afterEach(() => {
 })
 
 describe('UserSettingsView', () => {
+  describe('Bardwall feature setting', () => {
+    it('shows Bardwall by default', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+
+      const toggle = wrapper.get('[data-testid="bardwall-enabled"]')
+      expect((toggle.element as HTMLInputElement).checked).toBe(true)
+    })
+
+    it('persists hiding Bardwall without changing game data', async () => {
+      localStorage.setItem('bardwall-game-state', '{"coins":42}')
+      const wrapper = mountView()
+      await flushPromises()
+
+      await wrapper.get('[data-testid="bardwall-enabled"]').setValue(false)
+      await flushPromises()
+
+      expect(localStorage.getItem(BARDWALL_ENABLED_STORAGE_KEY)).toBe('false')
+      expect(localStorage.getItem('bardwall-game-state')).toBe('{"coins":42}')
+    })
+  })
+
   it('initializes the database and loads an existing API key on mount', async () => {
     localStorage.setItem('openai_api_key', 'sk-existing')
     const wrapper = mountView()

@@ -42,3 +42,7 @@ export const primaryNavItems: NavItem[] = [
     isActive: (path: string) => path.startsWith('/settings')
   }
 ]
+
+export function getPrimaryNavItems(bardwallEnabled = true): NavItem[] {
+  return primaryNavItems.filter((item) => bardwallEnabled || item.to !== '/bardwall')
+}

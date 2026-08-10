@@ -7,7 +7,8 @@ import SearchModal from '@/components/SearchModal.vue'
 import BrowserStorageNotice from '@/components/BrowserStorageNotice.vue'
 import logoHorizontal from '@/assets/logo-horizontal.png'
 import logoStacked from '@/assets/logo-stacked.png'
-import { primaryNavItems } from '@/config/navigation'
+import { getPrimaryNavItems } from '@/config/navigation'
+import { useBardwallSettings } from '@/composables/useBardwallSettings'
 import type { Book, Chapter, ChapterRevision } from '@/lib/database'
 import type { FindReplaceScope } from '@/lib/findReplace'
 
@@ -40,7 +41,8 @@ const searchService = {
 }
 
 const isSideNavOpen = ref(false)
-const sideNavItems = computed(() => primaryNavItems)
+const { bardwallEnabled } = useBardwallSettings()
+const sideNavItems = computed(() => getPrimaryNavItems(bardwallEnabled.value))
 const standardSideNavItems = computed(() => sideNavItems.value.filter((item) => !item.featured))
 const featuredSideNavItems = computed(() => sideNavItems.value.filter((item) => item.featured))
 
