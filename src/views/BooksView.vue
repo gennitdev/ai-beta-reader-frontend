@@ -95,8 +95,8 @@ watch(
 </script>
 
 <template>
-  <div class="max-w-6xl mx-auto p-6">
-    <div class="flex justify-between items-center mb-8">
+  <div class="mx-auto max-w-7xl p-4 sm:p-6">
+    <div class="mb-6 flex items-center justify-between sm:mb-8">
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white">My Books</h1>
       <button
         @click="showCreateModal = true"
@@ -120,17 +120,22 @@ watch(
     </p>
 
     <!-- Books grid -->
-    <div v-else-if="books.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+    <div
+      v-else-if="books.length > 0"
+      data-testid="books-grid"
+      class="grid grid-cols-2 items-start gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5"
+    >
       <div
         v-for="book in books"
         :key="book.id"
-        class="relative overflow-hidden rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+        data-testid="book-card"
+        class="relative cursor-pointer overflow-hidden rounded-lg shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
         @click="viewBook(book.id)"
       >
         <!-- Cover image or gradient fallback -->
         <div
           v-if="bookCoverSources[book.id]"
-          class="aspect-[9/16] w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
+          class="aspect-[2/3] w-full overflow-hidden bg-gray-100 dark:bg-gray-700"
         >
           <img
             :src="bookCoverSources[book.id]"
@@ -140,17 +145,17 @@ watch(
         </div>
         <div
           v-else
-          class="aspect-[9/16] w-full bg-gradient-to-br from-gold-100 via-indigo-50 to-purple-100 dark:from-gold-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
+          class="flex aspect-[2/3] w-full items-center justify-center bg-gradient-to-br from-gold-100 via-indigo-50 to-purple-100 dark:from-gold-900/40 dark:via-indigo-900/30 dark:to-purple-900/40"
         >
-          <BookOpenIcon class="w-16 h-16 text-gold-300 dark:text-gold-600 opacity-60" />
+          <BookOpenIcon class="h-10 w-10 text-gold-300 opacity-60 dark:text-gold-600 sm:h-12 sm:w-12" />
         </div>
 
         <!-- Overlaid metadata with gradient background -->
-        <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-4 py-4 pt-12">
-          <h3 class="text-lg font-semibold text-white drop-shadow-md truncate">
+        <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-3 py-3 pt-10">
+          <h3 class="truncate text-sm font-semibold text-white drop-shadow-md sm:text-base">
             {{ book.title }}
           </h3>
-          <p class="mt-1 text-sm text-gray-200">
+          <p class="mt-0.5 text-xs text-gray-200 sm:text-sm">
             {{ getChapterCount(book) }} chapter{{ getChapterCount(book) !== 1 ? 's' : '' }}
           </p>
         </div>

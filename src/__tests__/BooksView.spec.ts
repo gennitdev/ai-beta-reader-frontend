@@ -70,6 +70,26 @@ describe('BooksView', () => {
     expect(wrapper.text()).not.toContain('No books yet')
   })
 
+  it('uses a compact responsive grid for book cards', async () => {
+    h.books = Array.from({ length: 5 }, (_, index) => ({
+      id: `b${index + 1}`,
+      title: `Book ${index + 1}`,
+      cover_image_id: null,
+    }))
+    const wrapper = mountView()
+    await flushPromises()
+
+    const gridClasses = wrapper.get('[data-testid="books-grid"]').classes()
+    expect(gridClasses).toEqual(expect.arrayContaining([
+      'grid-cols-2',
+      'sm:grid-cols-3',
+      'lg:grid-cols-4',
+      'xl:grid-cols-5',
+    ]))
+    expect(wrapper.findAll('[data-testid="book-card"]')).toHaveLength(5)
+    expect(wrapper.get('.aspect-\\[2\\/3\\]')).toBeTruthy()
+  })
+
   it('navigates to a book when its card is clicked', async () => {
     h.books = [{ id: 'b1', title: 'The First Book', cover_image_id: null }]
     const wrapper = mountView()
