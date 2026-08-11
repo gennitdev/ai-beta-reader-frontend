@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
+import { computed, ref } from 'vue'
+import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
 
 // Import all screenshots
 import summaryBeingGenerated from '@/assets/screenshots/summary-being-generated.png'
@@ -134,156 +134,180 @@ const sections = ref<Section[]>([
 ])
 
 const currentSectionIndex = ref(0)
-const currentSection = ref(sections.value[0])
+const currentSection = computed(() => sections.value[currentSectionIndex.value])
+
+const scrollToGuide = () => {
+  document.getElementById('guide-content')?.scrollIntoView({ behavior: 'smooth' })
+}
 
 const nextSection = () => {
   if (currentSectionIndex.value < sections.value.length - 1) {
     currentSectionIndex.value++
-    currentSection.value = sections.value[currentSectionIndex.value]
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    scrollToGuide()
   }
 }
 
 const prevSection = () => {
   if (currentSectionIndex.value > 0) {
     currentSectionIndex.value--
-    currentSection.value = sections.value[currentSectionIndex.value]
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    scrollToGuide()
   }
 }
 
 const goToSection = (index: number) => {
   currentSectionIndex.value = index
-  currentSection.value = sections.value[index]
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  scrollToGuide()
 }
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-navy-900">
+  <div class="min-h-screen bg-slate-50 text-slate-900 dark:bg-navy-950 dark:text-white">
     <!-- Header -->
-    <div class="bg-white dark:bg-navy-800 border-b border-gray-200 dark:border-gray-700">
-      <div class="container mx-auto px-4 py-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">How beta bot Works</h1>
-            <p class="mt-2 text-gray-600 dark:text-gray-300">
+    <header class="border-b border-slate-200 bg-white dark:border-white/10 dark:bg-navy-900">
+      <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div class="max-w-3xl">
+            <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-700 dark:text-gold-300">
+              Product guide
+            </p>
+            <h1 class="text-3xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
+              See beta bot in action
+            </h1>
+            <p class="mt-3 max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300 sm:text-lg">
               A visual guide to using AI-powered feedback for your creative writing
             </p>
           </div>
           <router-link
             to="/"
-            class="px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
+            class="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-gold-400 hover:text-gold-700 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:ring-offset-2 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:border-gold-400 dark:hover:text-gold-300"
           >
+            <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
             Back to Home
           </router-link>
         </div>
       </div>
-    </div>
+    </header>
 
-    <!-- Progress Bar -->
-    <div class="bg-white dark:bg-navy-800 border-b border-gray-200 dark:border-gray-700">
-      <div class="container mx-auto px-4 py-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-gray-600 dark:text-gray-400">
-            Section {{ currentSectionIndex + 1 }} of {{ sections.length }}
-          </span>
-          <span class="text-sm font-medium text-gray-900 dark:text-white">
-            {{ currentSection.title }}
-          </span>
-        </div>
-        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div
-            class="bg-gold-600 h-2 rounded-full transition-all duration-300"
-            :style="{ width: `${((currentSectionIndex + 1) / sections.length) * 100}%` }"
-          ></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Navigation Tabs -->
-    <div class="bg-white dark:bg-navy-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
-      <div class="container mx-auto px-4">
-        <div class="flex overflow-x-auto py-3 space-x-4">
+    <!-- Section navigation -->
+    <nav
+      aria-label="Tutorial sections"
+      class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur dark:border-white/10 dark:bg-navy-900/95"
+    >
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="flex gap-2 overflow-x-auto py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             v-for="(section, index) in sections"
             :key="section.id"
             @click="goToSection(index)"
+            :aria-current="currentSectionIndex === index ? 'step' : undefined"
             :class="[
-              'px-4 py-2 rounded-lg whitespace-nowrap transition-colors',
+              'inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-gold-500 focus:ring-offset-2',
               currentSectionIndex === index
-                ? 'bg-gold-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                ? 'bg-navy-900 text-white shadow-sm dark:bg-gold-300 dark:text-navy-950'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
             ]"
           >
+            <span
+              :class="[
+                'flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold',
+                currentSectionIndex === index
+                  ? 'bg-white/15 dark:bg-navy-900/15'
+                  : 'bg-white text-slate-500 shadow-sm dark:bg-white/10 dark:text-slate-300'
+              ]"
+            >
+              {{ index + 1 }}
+            </span>
             {{ section.title }}
           </button>
         </div>
       </div>
-    </div>
+    </nav>
 
     <!-- Main Content -->
-    <div class="container mx-auto px-4 py-8">
-      <div class="max-w-6xl mx-auto">
+    <main id="guide-content" class="scroll-mt-24">
+      <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
         <!-- Section Header -->
-        <div class="mb-8">
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+        <div class="mx-auto mb-8 max-w-3xl text-center sm:mb-10">
+          <div class="mb-4 flex items-center justify-center gap-3" aria-hidden="true">
+            <span class="h-px w-10 bg-gold-400"></span>
+            <span class="text-xs font-bold uppercase tracking-[0.18em] text-gold-700 dark:text-gold-300">
+              Step {{ currentSectionIndex + 1 }} of {{ sections.length }}
+            </span>
+            <span class="h-px w-10 bg-gold-400"></span>
+          </div>
+          <h2 class="text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
             {{ currentSection.title }}
           </h2>
-          <p class="text-lg text-gray-600 dark:text-gray-300">
+          <p class="mt-4 text-base leading-7 text-slate-600 dark:text-slate-300 sm:text-lg">
             {{ currentSection.description }}
           </p>
         </div>
 
         <!-- Screenshots -->
-        <div class="space-y-8">
-          <div
+        <div
+          :class="[
+            'grid gap-6',
+            currentSection.screenshots.length > 1 ? 'lg:grid-cols-2' : 'grid-cols-1'
+          ]"
+        >
+          <figure
             v-for="(screenshot, index) in currentSection.screenshots"
-            :key="index"
-            class="bg-white dark:bg-navy-800 rounded-lg shadow-lg overflow-hidden"
+            :key="screenshot.src"
+            class="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_50px_-28px_rgba(15,23,42,0.45)] dark:border-white/10 dark:bg-navy-900 dark:shadow-black/30"
           >
-            <div class="p-4">
-              <p class="text-gray-700 dark:text-gray-300 mb-4">
-                {{ screenshot.caption }}
-              </p>
+            <div class="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]" aria-hidden="true">
+              <span class="h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+              <span class="h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+              <span class="h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+              <span class="ml-auto text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                {{ currentSection.screenshots.length > 1 ? `View ${index + 1}` : 'Product view' }}
+              </span>
             </div>
-            <div class="relative">
+
+            <div class="flex min-h-56 flex-1 items-center justify-center bg-slate-100/80 p-3 sm:min-h-72 sm:p-5 dark:bg-navy-950/70">
               <img
                 :src="screenshot.src"
                 :alt="screenshot.alt"
-                class="w-full h-auto"
+                class="mx-auto h-auto max-h-[36rem] w-auto max-w-full rounded-md object-contain shadow-[0_8px_30px_-16px_rgba(15,23,42,0.5)] ring-1 ring-black/5 transition duration-300 group-hover:shadow-[0_14px_38px_-18px_rgba(15,23,42,0.65)] dark:ring-white/10"
                 loading="lazy"
               />
             </div>
-          </div>
+
+            <figcaption class="border-t border-slate-200 px-5 py-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:text-slate-300 sm:px-6 sm:py-5 sm:text-base">
+              {{ screenshot.caption }}
+            </figcaption>
+          </figure>
         </div>
 
         <!-- Navigation Buttons -->
-        <div class="flex justify-between items-center mt-12 pb-8">
+        <div class="mt-10 flex items-center justify-between border-t border-slate-200 pt-8 dark:border-white/10 sm:mt-12">
           <button
             @click="prevSection"
             :disabled="currentSectionIndex === 0"
+            aria-label="Previous section"
             :class="[
-              'flex items-center px-6 py-3 rounded-lg transition-colors',
+              'inline-flex items-center rounded-full px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-gold-500 focus:ring-offset-2 sm:px-5',
               currentSectionIndex === 0
-                ? 'bg-gray-100 dark:bg-navy-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                : 'bg-white dark:bg-navy-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600'
+                ? 'cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-white/5 dark:text-slate-600'
+                : 'border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-gold-400 hover:text-gold-700 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:border-gold-400 dark:hover:text-gold-300'
             ]"
           >
-            <ChevronLeftIcon class="w-5 h-5 mr-2" />
-            Previous
+            <ChevronLeftIcon class="mr-1 h-5 w-5" aria-hidden="true" />
+            <span class="hidden sm:inline">Previous</span>
           </button>
 
-          <div class="flex space-x-2">
+          <div class="flex items-center gap-2" aria-label="Tutorial progress">
             <button
-              v-for="(_, index) in sections"
-              :key="index"
+              v-for="(section, index) in sections"
+              :key="section.id"
               @click="goToSection(index)"
+              :aria-label="`Go to ${section.title}`"
+              :aria-current="currentSectionIndex === index ? 'step' : undefined"
               :class="[
-                'w-2 h-2 rounded-full transition-colors',
+                'h-2 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-gold-500 focus:ring-offset-2',
                 currentSectionIndex === index
-                  ? 'bg-gold-600'
-                  : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
+                  ? 'w-7 bg-gold-500'
+                  : 'w-2 bg-slate-300 hover:bg-slate-400 dark:bg-slate-600 dark:hover:bg-slate-500'
               ]"
             ></button>
           </div>
@@ -291,18 +315,19 @@ const goToSection = (index: number) => {
           <button
             @click="nextSection"
             :disabled="currentSectionIndex === sections.length - 1"
+            aria-label="Next section"
             :class="[
-              'flex items-center px-6 py-3 rounded-lg transition-colors',
+              'inline-flex items-center rounded-full px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-gold-500 focus:ring-offset-2 sm:px-5',
               currentSectionIndex === sections.length - 1
-                ? 'bg-gray-100 dark:bg-navy-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                : 'bg-gold-600 text-white hover:bg-gold-700'
+                ? 'cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-white/5 dark:text-slate-600'
+                : 'bg-gold-600 text-white shadow-sm hover:bg-gold-700 dark:bg-gold-300 dark:text-navy-950 dark:hover:bg-gold-200'
             ]"
           >
-            Next
-            <ChevronRightIcon class="w-5 h-5 ml-2" />
+            <span class="hidden sm:inline">Next</span>
+            <ChevronRightIcon class="ml-1 h-5 w-5" aria-hidden="true" />
           </button>
         </div>
       </div>
-    </div>
+    </main>
   </div>
 </template>
