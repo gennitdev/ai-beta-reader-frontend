@@ -116,6 +116,7 @@ build/
 # IDE files
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
@@ -169,4 +170,3 @@ public/sql-wasm.wasm
 /test-results/
 /blob-report/
 /playwright/.cache/
-
