@@ -194,7 +194,27 @@ export const test = base.extend<NetFixtures>({
         return route.abort()
       })
 
+      // Google Fonts is a real external dependency of the app shell. Stub it with
+      // empty CSS (registered after the guard so it wins) so tests stay hermetic
+      // and offline — the actual typeface is irrelevant to behaviour, and an
+      // empty stylesheet means no follow-on gstatic font-file requests.
+      await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, (route) =>
+        route.fulfill({ status: 200, contentType: 'text/css', body: '' }),
+      )
+
       await use({ disallowed })
+
+      // Teardown: fail loudly if the app reached for any external host that
+      // wasn't explicitly stubbed. Aborting alone isn't enough — a silently
+      // dropped request could mask a real leak (telemetry, a CDN font, an
+      // un-mocked API call). Every external boundary must be intentional.
+      if (disallowed.length > 0) {
+        const unique = [...new Set(disallowed)]
+        throw new Error(
+          `Un-mocked external request(s) were blocked during this test:\n  ${unique.join('\n  ')}\n` +
+            'Add a stub for these hosts (see e2e/fixtures/network.ts) or remove the call.',
+        )
+      }
     },
     { auto: true },
   ],
