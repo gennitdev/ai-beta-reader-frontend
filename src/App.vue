@@ -5,6 +5,7 @@ import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
 import BrowserStorageNotice from '@/components/BrowserStorageNotice.vue'
+import PersistenceErrorNotice from '@/components/PersistenceErrorNotice.vue'
 import logoHorizontal from '@/assets/logo-horizontal.png'
 import logoStacked from '@/assets/logo-stacked.png'
 import { getPrimaryNavItems } from '@/config/navigation'
@@ -24,6 +25,9 @@ const {
   findReplaceMatches,
   replaceFindReplaceMatches,
   restoreFindReplaceFields,
+  persistenceError,
+  isRetryingPersistence,
+  retryPersistence,
 } = useDatabase()
 
 // Parts data for breadcrumbs
@@ -512,6 +516,12 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
       </header>
 
       <!-- Main content -->
+      <PersistenceErrorNotice
+        v-if="persistenceError"
+        :message="persistenceError"
+        :retrying="isRetryingPersistence"
+        @retry="retryPersistence"
+      />
       <BrowserStorageNotice />
       <main class="flex-1 min-h-0 overflow-y-auto">
         <RouterView />

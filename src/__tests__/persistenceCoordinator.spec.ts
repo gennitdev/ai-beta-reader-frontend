@@ -49,6 +49,7 @@ describe('PersistenceCoordinator', () => {
   it('keeps changes pending after a failed write and retries on flush', async () => {
     let shouldFail = true
     const onBackgroundError = vi.fn()
+    const onPersisted = vi.fn()
     const writeSnapshot = vi.fn(async () => {
       if (shouldFail) throw new Error('quota exceeded')
     })
@@ -56,6 +57,7 @@ describe('PersistenceCoordinator', () => {
       exportSnapshot: () => new Uint8Array([42]),
       writeSnapshot,
       onBackgroundError,
+      onPersisted,
     })
 
     coordinator.request()
@@ -67,6 +69,8 @@ describe('PersistenceCoordinator', () => {
 
     expect(writeSnapshot).toHaveBeenCalledTimes(2)
     expect(coordinator.hasPendingChanges()).toBe(false)
+    expect(onBackgroundError).toHaveBeenCalledOnce()
+    expect(onPersisted).toHaveBeenCalledOnce()
   })
 
   it('resolves flush immediately when no changes are pending', async () => {

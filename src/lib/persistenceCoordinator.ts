@@ -2,6 +2,7 @@ export interface PersistenceCoordinatorOptions {
   exportSnapshot: () => Uint8Array
   writeSnapshot: (snapshot: Uint8Array) => Promise<void>
   onBackgroundError?: (error: unknown) => void
+  onPersisted?: () => void
 }
 
 export function decodeLegacyDatabaseSnapshot(serialized: string): Uint8Array {
@@ -40,9 +41,9 @@ export class PersistenceCoordinator {
     this.requestedRevision += 1
 
     if (!this.activeWrite) {
-      this.startWrite().catch((error: unknown) => {
-        this.options.onBackgroundError?.(error)
-      })
+      // request() is intentionally fire-and-forget. drainWrites reports the
+      // error while leaving the revision pending for a later retry.
+      this.startWrite().catch(() => undefined)
     }
   }
 
@@ -69,9 +70,7 @@ export class PersistenceCoordinator {
       // A request can arrive after drainWrites observes a clean state but
       // before its promise settles. Start that newly requested write here.
       if (!this.lastWriteFailed && this.persistedRevision < this.requestedRevision) {
-        this.startWrite().catch((error: unknown) => {
-          this.options.onBackgroundError?.(error)
-        })
+        this.startWrite().catch(() => undefined)
       }
     })
 
@@ -86,9 +85,11 @@ export class PersistenceCoordinator {
         const snapshot = this.options.exportSnapshot()
         await this.options.writeSnapshot(snapshot)
         this.persistedRevision = targetRevision
+        this.options.onPersisted?.()
       }
     } catch (error) {
       this.lastWriteFailed = true
+      this.options.onBackgroundError?.(error)
       throw error
     }
   }

@@ -21,6 +21,12 @@ import type {
   ReplaceFindReplaceMatchesRequest,
   RestoreFindReplaceFieldsRequest,
 } from '@/lib/findReplace'
+import {
+  isRetryingPersistence,
+  persistenceError,
+  reportPersistenceFailure,
+  reportPersistenceSuccess,
+} from '@/lib/persistenceStatus'
 
 const isInitialized = ref(false)
 const cloudSync = ref<CloudSync | null>(null)
@@ -77,6 +83,21 @@ export function useDatabase() {
   onMounted(async () => {
     await initializeDatabase()
   })
+
+  async function retryPersistence(): Promise<void> {
+    if (isRetryingPersistence.value) return
+
+    isRetryingPersistence.value = true
+    try {
+      await db.flushPersistence()
+      reportPersistenceSuccess()
+    } catch (retryError) {
+      console.error('Retry persistence error:', retryError)
+      reportPersistenceFailure()
+    } finally {
+      isRetryingPersistence.value = false
+    }
+  }
 
   // Book operations
   async function loadBooks() {
@@ -971,10 +992,13 @@ export function useDatabase() {
     loading,
     error,
     isInitialized,
+    persistenceError,
+    isRetryingPersistence,
 
     // Book operations
     loadBooks,
     saveBook,
+    retryPersistence,
 
     // Chapter operations
     loadChapters,
