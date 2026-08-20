@@ -50,6 +50,8 @@ const {
   showApiKey,
   apiKeyMessage,
   apiKeyMessageType,
+  hasStoredApiKey,
+  usesSecureStorage,
   loadApiKey,
   saveApiKey,
   removeApiKey,
@@ -104,7 +106,7 @@ const {
 
 onMounted(async () => {
   await initializeDatabase()
-  loadApiKey()
+  await loadApiKey()
   await refreshBrowserStorage()
   if (!cloudSyncReady.value) {
     try {
@@ -216,7 +218,7 @@ onMounted(async () => {
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">OpenAI API Key</h2>
           </div>
           <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Your OpenAI API key is stored locally and used for AI-powered features like chapter summaries and reviews.
+            Your OpenAI API key is used for AI-powered features like chapter summaries and reviews.
           </p>
         </div>
 
@@ -252,13 +254,16 @@ onMounted(async () => {
                 Save
               </button>
               <button
-                v-if="openaiApiKey"
+                v-if="hasStoredApiKey"
                 @click="removeApiKey"
                 class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
               >
                 Remove
               </button>
             </div>
+            <p v-if="hasStoredApiKey" class="mt-2 text-xs text-green-700 dark:text-green-300">
+              An API key is saved. Enter a new key and save to replace it.
+            </p>
           </div>
 
           <!-- Success/Error Message -->
@@ -299,7 +304,12 @@ onMounted(async () => {
               <li>Copy the key and paste it above</li>
             </ol>
             <p class="text-xs text-gold-700 dark:text-gold-300 mt-3">
-              <strong>Privacy:</strong> Your API key never leaves your device. All AI requests are made directly from your browser to OpenAI.
+              <strong>Storage:</strong>
+              <template v-if="usesSecureStorage">Your API key is encrypted at rest using this device's secure storage.</template>
+              <template v-else>Your browser does not provide an OS-backed secret store, so a remembered key is stored in this site's browser storage.</template>
+            </p>
+            <p class="text-xs text-gold-700 dark:text-gold-300 mt-1">
+              <strong>Privacy:</strong> AI requests and your API key are sent directly to OpenAI, without passing through a beta bot server.
             </p>
             <p class="text-xs text-gold-700 dark:text-gold-300 mt-1">
               <strong>Cost:</strong> You'll be billed by OpenAI based on your usage. GPT-4o-mini is approximately $0.15 per 1M input tokens and $0.60 per 1M output tokens.

@@ -23,7 +23,7 @@ This local data is under your control. The app operator does not receive it and 
 
 If you add your own OpenAI API key and invoke an AI feature, the content needed for that feature is sent directly from your device to OpenAI. This may include manuscript excerpts, summaries, wiki content, prompts, or Bardwall story text. beta bot does not route these requests through an operator-controlled server and does not retain a copy of the transmission.
 
-OpenAI processes that information under the terms and privacy choices associated with your OpenAI account and API use. Your OpenAI API key is stored locally and is not included in your Google Drive backup.
+OpenAI processes that information under the terms and privacy choices associated with your OpenAI account and API use. On supported desktop and native platforms, your OpenAI API key is encrypted at rest using the operating system's secure storage. Browsers do not expose an equivalent OS-backed secret store, so a key remembered in the browser is kept in this site's browser storage. Your key is not included in your Google Drive backup.
 
 ## 4. Optional Google Drive backup and restore
 

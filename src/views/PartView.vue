@@ -21,6 +21,7 @@ import {
 import {
   generatePartSummary as generatePartSummaryAi,
 } from "@/lib/openai";
+import { loadOpenAIApiKey } from "@/lib/apiKeyStorage";
 import type { Book, BookPart, ImageAsset } from "@/lib/database";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
 import Modal from "@/components/Modal.vue";
@@ -331,7 +332,7 @@ const handleGeneratePartSummary = async () => {
       return;
     }
 
-    const apiKey = localStorage.getItem("openai_api_key");
+    const apiKey = await loadOpenAIApiKey();
     if (!apiKey) {
       alert("Please add your OpenAI API key in Settings first.");
       router.push("/settings");

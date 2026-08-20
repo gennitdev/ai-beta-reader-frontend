@@ -56,6 +56,8 @@ flowchart TB
 
 The browser, desktop, and Android targets share the same application and portable backup format. Platform adapters only change how the local SQLite database and image binaries are stored. OpenAI and Google Drive are contacted directly from the running client; there is no application server between them.
 
+OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron and Android builds. Browser builds cannot access an OS keychain, so a key remembered there is kept in the site's browser storage. Keys are never included in application backups.
+
 ## Features
 
 ### Core Writing Tools
