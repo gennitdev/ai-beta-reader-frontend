@@ -23,9 +23,9 @@
     "electron:make": "npm run build && electron-builder build -c ./electron-builder.config.json"
   },
   "dependencies": {
-    "@capacitor-community/electron": "^5.0.0",
-    "@capacitor-community/sqlite": "^7.0.1",
-    "better-sqlite3-multiple-ciphers": "^12.11.1",
+    "@capacitor-community/electron": "^5.0.1",
+    "@capacitor-community/sqlite": "^8.1.1",
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
     "chokidar": "~5.0.0",
     "electron-is-dev": "~3.0.1",
     "electron-json-storage": "^4.6.0",
@@ -36,14 +36,14 @@
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
-    "electron": "^43.2.0",
+    "@electron/rebuild": "^4.2.0",
+    "electron": "^43.4.1",
     "electron-builder": "~26.15.3",
-    "electron-rebuild": "^3.2.9",
-    "node-gyp": "^10.2.0",
+    "node-gyp": "^13.0.1",
     "typescript": "^7.0.2"
   },
   "overrides": {
-    "node-gyp": "^10.2.0"
+    "node-gyp": "^13.0.1"
   },
   "keywords": [
     "capacitor",
