@@ -2,13 +2,12 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon, CurrencyDollarIcon, MoonIcon } from '@heroicons/vue/24/outline'
-import { useDatabase } from '@/composables/useDatabase'
+import { useBardwallOfferings } from '@/composables/useBardwallOfferings'
 import BardwallTownMap, { type BardwallLocation } from '@/components/bardwall/BardwallTownMap.vue'
 import BardwallAmphitheater from '@/components/bardwall/BardwallAmphitheater.vue'
 import BardwallMorning from '@/components/bardwall/BardwallMorning.vue'
 import BardwallReward from '@/components/bardwall/BardwallReward.vue'
-import type { ChapterRevision } from '@/lib/database'
-import type { RevisionOffering, BardwallScreen } from '@/types/bardwallView'
+import type { BardwallScreen } from '@/types/bardwallView'
 import {
   BARDWALL_INN_PRICE,
   BARDWALL_DAILY_NOURISHMENT,
@@ -29,7 +28,6 @@ import {
   eatBardwallFood,
   getBardwallDateKey,
   getBardwallChallengeWordRange,
-  getBardwallPassages,
   healBardAtApothecary,
   loadBardwallState,
   offerFlowerToHeliconia,
@@ -58,17 +56,11 @@ import { getBardwallCardImage, getBardwallPlaceImage, getBardwallPotionImage } f
 
 const routeLocations = new Set<BardwallLocation>(['amphitheater', 'market', 'inn', 'shrine', 'apothecary', 'camp', 'challenge', 'cave'])
 
-const { books, loadBooks, getBookRevisionActivity, getChapterRevisions } = useDatabase()
 const route = useRoute()
 const router = useRouter()
 const screen = ref<BardwallScreen>('gate')
 const hasEntered = ref(false)
 const game = ref(loadBardwallState())
-const offerings = ref<RevisionOffering[]>([])
-const loadingOfferings = ref(false)
-const offeringError = ref<string | null>(null)
-const selectedOfferingId = ref<string | null>(null)
-const selectedPassageIndexes = ref<number[]>([])
 const lastReward = ref({ coins: 0, words: 0 })
 const goalChoice = ref<number | 'custom'>(500)
 const customGoal = ref('')
@@ -99,9 +91,23 @@ const lastWordMessage = ref<string | null>(null)
 const vesperSpeaking = ref(false)
 const previewChallengeCardId = ref<typeof BARDWALL_CHALLENGE_CARDS[number]['id'] | null>(null)
 
-const selectedOffering = computed(() => offerings.value.find((item) => item.id === selectedOfferingId.value) ?? null)
-const selectedPassages = computed(() => selectedOffering.value?.passages.filter((_, index) => selectedPassageIndexes.value.includes(index)) ?? [])
-const selectedWordCount = computed(() => selectedPassages.value.reduce((total, passage) => total + passage.wordCount, 0))
+const toldPassageIds = computed(() => game.value.toldPassageIds)
+const {
+  offerings,
+  loadingOfferings,
+  offeringError,
+  selectedOfferingId,
+  selectedPassageIndexes,
+  selectedOffering,
+  selectedPassages,
+  selectedWordCount,
+  loadOfferings,
+  selectOffering,
+  togglePassage,
+  clearSelection,
+  removeToldPassages,
+  resetOfferings,
+} = useBardwallOfferings(toldPassageIds)
 const todayKey = computed(() => getBardwallDateKey())
 const dailyGoal = computed(() => game.value.dailyGoal?.date === todayKey.value ? game.value.dailyGoal : null)
 const chosenGoal = computed(() => goalChoice.value === 'custom' ? Number(customGoal.value) : goalChoice.value)
@@ -194,54 +200,6 @@ const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, {
 }).format(new Date(value))
 const coinLabel = (value: number) => `${value} ${value === 1 ? 'coin' : 'coins'}`
 
-const loadOfferings = async () => {
-  loadingOfferings.value = true
-  offeringError.value = null
-  try {
-    await loadBooks()
-    const allOfferings: RevisionOffering[] = []
-    for (const book of books.value) {
-      const activity = (await getBookRevisionActivity(book.id))
-        .filter((item) => item.activity_type === 'save' && item.revision_available)
-        .reverse()
-        .slice(0, 5)
-
-      const revisionsByChapter = new Map<string, ChapterRevision[]>()
-      for (const event of activity) {
-        if (!revisionsByChapter.has(event.chapter_id)) {
-          revisionsByChapter.set(event.chapter_id, await getChapterRevisions(event.chapter_id))
-        }
-        const revisions = revisionsByChapter.get(event.chapter_id) ?? []
-        const index = revisions.findIndex((revision) => revision.id === event.id)
-        const revision = revisions[index]
-        if (!revision) continue
-        const previous = revisions[index + 1]
-        if (revision.discarded_at || previous?.discarded_at) continue
-        const passages = getBardwallPassages(previous?.text ?? '', revision.text)
-          .map((passage, passageIndex) => ({ ...passage, id: `${revision.id}:${passageIndex}` }))
-          .filter((passage) => !game.value.toldPassageIds.includes(passage.id))
-        if (!passages.length) continue
-        allOfferings.push({
-          id: revision.id,
-          bookTitle: book.title,
-          chapterTitle: event.chapter_title || revision.title || 'Untitled chapter',
-          createdAt: event.created_at,
-          passages,
-          wordCount: passages.reduce((total, passage) => total + passage.wordCount, 0),
-        })
-      }
-    }
-    offerings.value = allOfferings
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 12)
-  } catch (error) {
-    console.error('Failed to gather Bardwall stories:', error)
-    offeringError.value = 'The town crier could not find your recent stories.'
-  } finally {
-    loadingOfferings.value = false
-  }
-}
-
 const routeLocation = () => typeof route.params.location === 'string' ? route.params.location : null
 
 const syncScreenFromRoute = async () => {
@@ -324,22 +282,11 @@ const setDailyGoal = async () => {
   if (!offerings.value.length) await loadOfferings()
 }
 
-const selectOffering = (offering: RevisionOffering) => {
-  selectedOfferingId.value = offering.id
-  selectedPassageIndexes.value = offering.passages.map((_, index) => index)
-}
-
-const togglePassage = (index: number) => {
-  selectedPassageIndexes.value = selectedPassageIndexes.value.includes(index)
-    ? selectedPassageIndexes.value.filter((item) => item !== index)
-    : [...selectedPassageIndexes.value, index]
-}
-
 const tellStory = () => {
   if (!selectedOffering.value || selectedWordCount.value === 0) return
   const words = selectedWordCount.value
   const coins = expectedPay.value
-  const toldPassageIds = selectedPassages.value.map((passage) => passage.id)
+  const newlyToldPassageIds = selectedPassages.value.map((passage) => passage.id)
   const goal = dailyGoal.value
   if (!goal) return
   game.value = {
@@ -353,23 +300,16 @@ const tellStory = () => {
       coinsEarned: goal.coinsEarned + coins,
       locked: true,
     },
-    toldPassageIds: [...new Set([...game.value.toldPassageIds, ...toldPassageIds])],
+    toldPassageIds: [...new Set([...game.value.toldPassageIds, ...newlyToldPassageIds])],
   }
   saveBardwallState(game.value)
-  offerings.value = offerings.value
-    .map((offering) => {
-      if (offering.id !== selectedOffering.value?.id) return offering
-      const passages = offering.passages.filter((passage) => !toldPassageIds.includes(passage.id))
-      return { ...offering, passages, wordCount: passages.reduce((total, passage) => total + passage.wordCount, 0) }
-    })
-    .filter((offering) => offering.passages.length > 0)
+  removeToldPassages(newlyToldPassageIds)
   lastReward.value = { coins, words }
   screen.value = 'reward'
 }
 
 const returnToTown = async () => {
-  selectedOfferingId.value = null
-  selectedPassageIndexes.value = []
+  clearSelection()
   await goToTown()
 }
 
@@ -713,10 +653,7 @@ const beginBardwallAgain = async () => {
   if (!canResetBardwall.value) return
 
   game.value = resetBardwallState()
-  offerings.value = []
-  offeringError.value = null
-  selectedOfferingId.value = null
-  selectedPassageIndexes.value = []
+  resetOfferings()
   lastReward.value = { coins: 0, words: 0 }
   goalChoice.value = 500
   customGoal.value = ''
