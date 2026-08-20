@@ -41,6 +41,10 @@ import * as chapterRepo from '@/lib/db/chapterRepository';
 import * as searchRepo from '@/lib/db/searchRepository';
 import * as importExportRepo from '@/lib/db/importExportRepository';
 import * as schemaSetup from '@/lib/db/schemaSetup';
+import {
+  reportPersistenceFailure,
+  reportPersistenceSuccess,
+} from '@/lib/persistenceStatus';
 
 export interface Book {
   id: string;
@@ -356,7 +360,9 @@ export class AppDatabase {
         writeSnapshot: (snapshot) => this.writeSnapshotToIndexedDB(snapshot),
         onBackgroundError: (error) => {
           console.error('[AppDatabase] Failed to persist DB to IndexedDB:', error);
+          reportPersistenceFailure();
         },
+        onPersisted: reportPersistenceSuccess,
       });
     }
 

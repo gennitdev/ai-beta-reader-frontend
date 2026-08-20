@@ -33,11 +33,27 @@ vi.mock('@/lib/cloudSync', () => ({
 }))
 
 import { useDatabase } from '@/composables/useDatabase'
+import {
+  isRetryingPersistence,
+  persistenceError,
+  reportPersistenceFailure,
+  reportPersistenceSuccess,
+} from '@/lib/persistenceStatus'
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
 
 beforeEach(() => {
   vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '')
   vi.stubEnv('VITE_GOOGLE_CLIENT_ID_WEB', '')
   for (const fn of Object.values(dbFns)) fn.mockClear()
+  reportPersistenceSuccess()
+  isRetryingPersistence.value = false
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -118,6 +134,50 @@ describe('useDatabase — cloud sync guards', () => {
   it('prepareCloudSync is a no-op when there is no provider', async () => {
     const api = useDatabase()
     await expect(api.prepareCloudSync()).resolves.toBeUndefined()
+  })
+})
+
+describe('useDatabase — persistence recovery', () => {
+  it('clears the visible failure after pending changes persist successfully', async () => {
+    const api = useDatabase()
+    reportPersistenceFailure()
+    dbProxy.flushPersistence.mockResolvedValueOnce(undefined)
+
+    await api.retryPersistence()
+
+    expect(dbProxy.flushPersistence).toHaveBeenCalledOnce()
+    expect(persistenceError.value).toBeNull()
+    expect(isRetryingPersistence.value).toBe(false)
+  })
+
+  it('keeps the failure visible when a retry also fails', async () => {
+    const api = useDatabase()
+    dbProxy.flushPersistence.mockRejectedValueOnce(new Error('quota still exceeded'))
+
+    await api.retryPersistence()
+
+    expect(persistenceError.value).toContain('could not be saved')
+    expect(isRetryingPersistence.value).toBe(false)
+    expect(console.error).toHaveBeenCalledWith(
+      'Retry persistence error:',
+      expect.objectContaining({ message: 'quota still exceeded' }),
+    )
+  })
+
+  it('ignores repeated retry requests while a persistence flush is active', async () => {
+    const api = useDatabase()
+    const flush = deferred<void>()
+    dbProxy.flushPersistence.mockImplementationOnce(() => flush.promise)
+
+    const firstRetry = api.retryPersistence()
+    expect(isRetryingPersistence.value).toBe(true)
+
+    await api.retryPersistence()
+    expect(dbProxy.flushPersistence).toHaveBeenCalledOnce()
+
+    flush.resolve()
+    await firstRetry
+    expect(isRetryingPersistence.value).toBe(false)
   })
 })
 
