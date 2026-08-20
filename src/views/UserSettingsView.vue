@@ -27,6 +27,7 @@ const {
   hasCloudSync,
   prepareCloudSync,
   cloudSyncReady,
+  exportDatabase,
 } = useDatabase()
 
 const {
@@ -102,6 +103,7 @@ const {
   fetchPartCover,
   fetchChapterImages,
   getImageBlob,
+  exportDatabase,
 })
 
 onMounted(async () => {
@@ -521,7 +523,7 @@ onMounted(async () => {
               class="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap w-full sm:w-auto"
             >
               <DocumentArrowDownIcon class="w-5 h-5 mr-2" />
-              {{ isExporting ? 'Exporting...' : 'Export Data' }}
+              {{ isExporting ? 'Exporting...' : exportFormat === 'bundle' ? 'Export full library backup' : 'Export Data' }}
             </button>
           </div>
         </div>
@@ -537,11 +539,25 @@ onMounted(async () => {
                 <input
                   type="radio"
                   v-model="exportFormat"
+                  value="bundle"
+                  class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
+                />
+                <span class="ml-2">
+                  <span class="block text-sm text-gray-900 dark:text-white">Full library backup (recommended)</span>
+                  <span class="block text-xs text-gray-500 dark:text-gray-400">
+                    Creates a complete canonical Beta Bot bundle with images, history, profiles, and audit records
+                  </span>
+                </span>
+              </label>
+              <label class="flex items-start cursor-pointer">
+                <input
+                  type="radio"
+                  v-model="exportFormat"
                   value="zip"
                   class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
                 />
                 <span class="ml-2">
-                  <span class="block text-sm text-gray-900 dark:text-white">Structured ZIP (folders)</span>
+                  <span class="block text-sm text-gray-900 dark:text-white">Legacy structured ZIP (reading copy)</span>
                   <span class="block text-xs text-gray-500 dark:text-gray-400">
                     Creates folders for each book with separate files for chapters, images, and metadata
                   </span>
@@ -641,6 +657,9 @@ onMounted(async () => {
             <ul class="list-disc pl-5 space-y-1">
               <li>All your books with metadata</li>
               <li>Chapter content and summaries</li>
+              <li v-if="exportFormat === 'bundle'">Complete restorable library data and image bytes</li>
+              <li v-if="exportFormat === 'bundle'">Revision history, activity, profiles, and wiki audit state</li>
+              <li v-if="exportFormat === 'bundle'">Deterministic human-readable Markdown and YAML files</li>
               <li v-if="exportFormat === 'zip'">Character wiki pages with all details</li>
               <li v-if="exportFormat === 'zip'">Organized folder structure for easy navigation</li>
               <li v-if="exportFormat === 'markdown' && markdownGranularity === 'book'">Combined chapters in reading order (one file per book)</li>
@@ -648,7 +667,10 @@ onMounted(async () => {
               <li v-if="exportFormat === 'markdown' && includeNotes">Your personal chapter notes</li>
             </ul>
             <p class="mt-4 text-xs text-gray-500 dark:text-gray-500">
-              <template v-if="exportFormat === 'zip'">
+              <template v-if="exportFormat === 'bundle'">
+                This full backup is the canonical portable format. Import and restore support will be added in a later phase.
+              </template>
+              <template v-else-if="exportFormat === 'zip'">
                 Your data will be downloaded as a ZIP file containing folders for each book, with subfolders for chapters and characters.
               </template>
               <template v-else-if="markdownGranularity === 'book'">

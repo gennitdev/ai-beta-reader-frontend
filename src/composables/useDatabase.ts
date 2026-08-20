@@ -99,6 +99,11 @@ export function useDatabase() {
     }
   }
 
+  async function exportDatabase(): Promise<Uint8Array> {
+    await initializeDatabase()
+    return db.exportDatabase()
+  }
+
   // Book operations
   async function loadBooks() {
     try {
@@ -1004,6 +1009,7 @@ export function useDatabase() {
     loadBooks,
     saveBook,
     retryPersistence,
+    exportDatabase,
 
     // Chapter operations
     loadChapters,

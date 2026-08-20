@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   prepareCloudSync: vi.fn(async () => {}),
   cloudSyncReady: true,
   initializeDatabase: vi.fn(async () => {}),
+  exportDatabase: vi.fn(async () => new Uint8Array()),
   canStoreImages: false,
 }))
 
@@ -43,6 +44,7 @@ vi.mock('@/composables/useDatabase', async () => {
       hasCloudSync: h.hasCloudSync,
       prepareCloudSync: h.prepareCloudSync,
       cloudSyncReady: ref(h.cloudSyncReady),
+      exportDatabase: h.exportDatabase,
     }),
   }
 })
@@ -64,6 +66,10 @@ vi.mock('@/lib/browserStorage', () => ({
   formatStorageBytes: (n: number) => `${n} B`,
   getBrowserStorageSnapshot: vi.fn(async () => ({ usage: 0, quota: 0, persisted: false })),
   requestPersistentBrowserStorage: vi.fn(async () => true),
+}))
+
+vi.mock('@/lib/libraryBundle/export', () => ({
+  createFullLibraryBundleExport: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]) })),
 }))
 
 vi.mock('@/utils/platform', () => ({
@@ -305,9 +311,7 @@ describe('UserSettingsView', () => {
     })
   })
 
-  it('starts an export from the local database', async () => {
-    // Export generates a zip + triggers a browser download; stub the URL bits so
-    // the flow runs headlessly. Both format paths begin by loading books.
+  it('starts a canonical full backup from the local database', async () => {
     vi.stubGlobal('URL', {
       createObjectURL: vi.fn(() => 'blob:mock'),
       revokeObjectURL: vi.fn(),
@@ -315,9 +319,10 @@ describe('UserSettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await button(wrapper, 'Export Data').trigger('click')
+    await button(wrapper, 'Export full library backup').trigger('click')
     await flushPromises()
 
-    expect(h.loadBooks).toHaveBeenCalled()
+    expect(h.exportDatabase).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Full library backup (recommended)')
   })
 })

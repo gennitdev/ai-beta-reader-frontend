@@ -9,6 +9,14 @@ const zipState = vi.hoisted(() => ({
   generateAsync: vi.fn(async () => new Blob(['zip'])),
 }))
 
+const bundleState = vi.hoisted(() => ({
+  create: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]) })),
+}))
+
+vi.mock('@/lib/libraryBundle/export', () => ({
+  createFullLibraryBundleExport: bundleState.create,
+}))
+
 vi.mock('jszip', () => {
   class FakeFolder {
     constructor(private readonly prefix = '') {}
@@ -80,6 +88,7 @@ function createDeps() {
       image({ id: 'chapter-image', chapter_id: 'chapter-1', asset_type: 'chapter', file_name: '' }),
     ]),
     getImageBlob: vi.fn(async () => new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })),
+    exportDatabase: vi.fn(async () => new TextEncoder().encode('{"version":6,"books":[],"chapters":[]}')),
   }
 }
 
@@ -103,6 +112,7 @@ describe('useDataExport', () => {
   it('exports structured books, parts, uncategorized chapters, notes, and images', async () => {
     const deps = createDeps()
     const state = useDataExport(deps)
+    state.exportFormat.value = 'zip'
 
     state.handleExport()
     await finishExport(state)
@@ -131,6 +141,7 @@ describe('useDataExport', () => {
     ])
     deps.getImageBlob.mockRejectedValue(new Error('blob unavailable'))
     const state = useDataExport(deps)
+    state.exportFormat.value = 'zip'
 
     state.handleExport()
     await finishExport(state)
@@ -162,10 +173,43 @@ describe('useDataExport', () => {
     expect(state.exportProgress.value).toBe('Export completed!')
   })
 
+  it('exports a canonical full library backup by default', async () => {
+    const deps = createDeps()
+    const state = useDataExport(deps)
+
+    expect(state.exportFormat.value).toBe('bundle')
+    state.handleExport()
+    await finishExport(state)
+
+    expect(deps.exportDatabase).toHaveBeenCalledOnce()
+    expect(bundleState.create).toHaveBeenCalledOnce()
+    const [backup, options] = bundleState.create.mock.calls[0]
+    expect(ArrayBuffer.isView(backup)).toBe(true)
+    expect(options).toEqual(expect.objectContaining({
+      appVersion: expect.any(String), readAssetBytes: expect.any(Function),
+    }))
+    expect(URL.createObjectURL).toHaveBeenCalledOnce()
+    expect(state.exportProgress.value).toBe('Full library backup exported!')
+  })
+
+  it('surfaces full-backup integrity failures without downloading a partial archive', async () => {
+    const deps = createDeps()
+    bundleState.create.mockRejectedValueOnce(new Error('Image image-1 is missing required bytes.'))
+    const state = useDataExport(deps)
+
+    state.handleExport()
+    await finishExport(state)
+
+    expect(state.exportError.value).toBe('Export failed: Image image-1 is missing required bytes.')
+    expect(state.exportProgress.value).toBe('')
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
   it('reports load and archive-generation failures and resets busy state', async () => {
     const loadDeps = createDeps()
     loadDeps.loadBooks.mockRejectedValue(new Error('database unavailable'))
     const loadState = useDataExport(loadDeps)
+    loadState.exportFormat.value = 'zip'
     loadState.handleExport()
     await finishExport(loadState)
     expect(loadState.exportError.value).toBe('Export failed: database unavailable')
