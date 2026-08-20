@@ -38,7 +38,7 @@ const httpMock = vi.hoisted(() => {
     }
 
     address() {
-      return { port: 43123 }
+      return httpMock.nextAddress
     }
 
     close(callback?: () => void) {
@@ -65,6 +65,7 @@ const httpMock = vi.hoisted(() => {
 
   const servers: MockServer[] = []
   return {
+    nextAddress: { port: 43123 } as { port: number } | string | null,
     createServer: vi.fn((handler?: ConstructorParameters<typeof MockServer>[0]) => {
       const server = new MockServer(handler)
       servers.push(server)
@@ -75,7 +76,10 @@ const httpMock = vi.hoisted(() => {
       if (!server) throw new Error('No HTTP server created')
       return server
     },
-    reset: () => { servers.length = 0 },
+    reset: () => {
+      servers.length = 0
+      httpMock.nextAddress = { port: 43123 }
+    },
   }
 })
 
@@ -104,6 +108,7 @@ describe('Electron OAuth loopback runtime', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
@@ -239,6 +244,92 @@ describe('Electron OAuth loopback runtime', () => {
     await expect(authenticate()).resolves.toEqual({
       success: false,
       error: 'No browser available',
+    })
+  })
+
+  it('returns 404 for unrelated loopback requests and continues authentication', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      access_token: 'access-token',
+      expires_in: 3600,
+      token_type: 'Bearer',
+    }), { status: 200 })))
+    const resultPromise = authenticate()
+    const authUrl = await waitForAuthUrl()
+
+    const unrelated = await httpMock.latestServer().request('/favicon.ico')
+    expect(unrelated.status).toBe(404)
+    expect(unrelated.body).toBe('Not Found')
+
+    await requestCallback(
+      `${authUrl.searchParams.get('redirect_uri')}?code=valid&state=${authUrl.searchParams.get('state')}`,
+    )
+    await expect(resultPromise).resolves.toMatchObject({ success: true })
+  })
+
+  it('rejects token responses without an access token', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      expires_in: 3600,
+      token_type: 'Bearer',
+    }), { status: 200 })))
+    const resultPromise = authenticate()
+    const authUrl = await waitForAuthUrl()
+
+    await requestCallback(
+      `${authUrl.searchParams.get('redirect_uri')}?code=incomplete&state=${authUrl.searchParams.get('state')}`,
+    )
+
+    await expect(resultPromise).resolves.toEqual({
+      success: false,
+      error: 'No access token in response',
+    })
+  })
+
+  it('preserves non-JSON token-provider errors', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('temporarily unavailable', { status: 503 })))
+    const resultPromise = authenticate()
+    const authUrl = await waitForAuthUrl()
+
+    await requestCallback(
+      `${authUrl.searchParams.get('redirect_uri')}?code=failed&state=${authUrl.searchParams.get('state')}`,
+    )
+
+    await expect(resultPromise).resolves.toEqual({
+      success: false,
+      error: 'Token exchange failed: 503 temporarily unavailable',
+    })
+  })
+
+  it('reports loopback server failures', async () => {
+    const resultPromise = authenticate()
+    await waitForAuthUrl()
+
+    httpMock.latestServer().fail(new Error('Loopback server failed'))
+
+    await expect(resultPromise).resolves.toEqual({
+      success: false,
+      error: 'Loopback server failed',
+    })
+  })
+
+  it('reports failure when the operating system does not provide a listening address', async () => {
+    httpMock.nextAddress = null
+
+    await expect(authenticate()).resolves.toEqual({
+      success: false,
+      error: 'Failed to get server address',
+    })
+  })
+
+  it('times out an abandoned authorization attempt', async () => {
+    vi.useFakeTimers()
+    const resultPromise = authenticate()
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(3 * 60 * 1000)
+
+    await expect(resultPromise).resolves.toEqual({
+      success: false,
+      error: 'OAuth timed out',
     })
   })
 })

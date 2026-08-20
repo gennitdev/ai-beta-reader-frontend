@@ -62,34 +62,74 @@ export class Menu {
   items: MenuItem[] = []
   append = vi.fn((item: MenuItem) => this.items.push(item))
   popup = vi.fn()
+
+  constructor() {
+    menuInstances.push(this)
+  }
 }
 
 export class Tray {
-  on = vi.fn()
+  private readonly listeners = new Map<string, EventHandler>()
+  on = vi.fn((event: string, listener: EventHandler) => {
+    this.listeners.set(event, listener)
+  })
   setToolTip = vi.fn()
   setContextMenu = vi.fn()
+
+  constructor(public readonly icon: unknown) {
+    trayInstances.push(this)
+  }
+
+  emit(event: string, ...args: unknown[]) {
+    return this.listeners.get(event)?.(...args)
+  }
 }
 
-const createWebContents = () => ({
-  setWindowOpenHandler: vi.fn(),
-  on: vi.fn(),
-  reload: vi.fn(),
-  openDevTools: vi.fn(),
-  findInPage: vi.fn(),
-  stopFindInPage: vi.fn(),
-  send: vi.fn(),
-})
+const createWebContents = () => {
+  const listeners = new Map<string, EventHandler>()
+  return {
+    setWindowOpenHandler: vi.fn(),
+    on: vi.fn((event: string, listener: EventHandler) => {
+      listeners.set(event, listener)
+    }),
+    emit: (event: string, ...args: unknown[]) => listeners.get(event)?.(...args),
+    reload: vi.fn(),
+    openDevTools: vi.fn(),
+    findInPage: vi.fn(),
+    stopFindInPage: vi.fn(),
+    send: vi.fn(),
+  }
+}
 
 export class BrowserWindow {
+  private readonly listeners = new Map<string, EventHandler>()
   webContents = createWebContents()
-  on = vi.fn()
+  on = vi.fn((event: string, listener: EventHandler) => {
+    this.listeners.set(event, listener)
+  })
   setBackgroundColor = vi.fn()
   isVisible = vi.fn(() => false)
   hide = vi.fn()
   show = vi.fn()
   focus = vi.fn()
   isDestroyed = vi.fn(() => false)
+
+  constructor(public readonly options: unknown) {
+    browserWindowInstances.push(this)
+  }
+
+  emit(event: string, ...args: unknown[]) {
+    return this.listeners.get(event)?.(...args)
+  }
 }
+
+const menuInstances: Menu[] = []
+const trayInstances: Tray[] = []
+const browserWindowInstances: BrowserWindow[] = []
+
+export const getLastMenu = () => menuInstances.at(-1)
+export const getLastTray = () => trayInstances.at(-1)
+export const getLastBrowserWindow = () => browserWindowInstances.at(-1)
 
 export const nativeImage = {
   createFromPath: vi.fn(() => ({ image: 'app-icon' })),
@@ -161,6 +201,9 @@ export const resetElectronMock = () => {
   exposedApis.clear()
   appListeners.clear()
   headersReceivedHandler = undefined
+  menuInstances.length = 0
+  trayInstances.length = 0
+  browserWindowInstances.length = 0
   vi.clearAllMocks()
   app.getPath.mockReturnValue('/tmp/beta-bot-user-data')
   safeStorage.isEncryptionAvailable.mockReturnValue(true)
