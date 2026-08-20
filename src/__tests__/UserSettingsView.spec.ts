@@ -160,14 +160,15 @@ describe('UserSettingsView', () => {
     })
   })
 
-  it('initializes the database and loads an existing API key on mount', async () => {
+  it('initializes the database without exposing an existing API key in the form', async () => {
     localStorage.setItem('openai_api_key', 'sk-existing')
     const wrapper = mountView()
     await flushPromises()
 
     expect(h.initializeDatabase).toHaveBeenCalled()
     const input = wrapper.get('input[placeholder="sk-..."]')
-    expect((input.element as HTMLInputElement).value).toBe('sk-existing')
+    expect((input.element as HTMLInputElement).value).toBe('')
+    expect(wrapper.text()).toContain('An API key is saved')
   })
 
   describe('OpenAI API key', () => {
@@ -198,9 +199,11 @@ describe('UserSettingsView', () => {
 
       await wrapper.get('input[placeholder="sk-..."]').setValue('sk-valid-key')
       await button(wrapper, 'Save').trigger('click')
+      await flushPromises()
 
       expect(localStorage.getItem('openai_api_key')).toBe('sk-valid-key')
       expect(wrapper.text()).toContain('API key saved successfully')
+      expect((wrapper.get('input[placeholder="sk-..."]').element as HTMLInputElement).value).toBe('')
     })
 
     it('removes the stored key after confirmation', async () => {
@@ -209,6 +212,7 @@ describe('UserSettingsView', () => {
       await flushPromises()
 
       await button(wrapper, 'Remove').trigger('click')
+      await flushPromises()
 
       expect(confirm).toHaveBeenCalled()
       expect(localStorage.getItem('openai_api_key')).toBeNull()

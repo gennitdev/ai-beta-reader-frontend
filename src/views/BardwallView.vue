@@ -53,6 +53,7 @@ import {
   type BardwallChallengeScores,
 } from '@/lib/bardwall'
 import { continueBardwallLastWordStory, runBardwallStoryChallenge } from '@/lib/openai'
+import { loadOpenAIApiKey } from '@/lib/apiKeyStorage'
 import { getBardwallCardImage, getBardwallPlaceImage, getBardwallPotionImage } from '@/lib/bardwallAssets'
 
 const routeLocations = new Set<BardwallLocation>(['amphitheater', 'market', 'inn', 'shrine', 'apothecary', 'camp', 'challenge', 'cave'])
@@ -477,7 +478,13 @@ const updateChallengeStory = (event: Event) => {
 
 const judgeChallenge = async () => {
   if (!challengeStoryInRange.value) return
-  const apiKey = localStorage.getItem('openai_api_key')
+  let apiKey: string | null
+  try {
+    apiKey = await loadOpenAIApiKey()
+  } catch (error) {
+    challengeMessage.value = error instanceof Error ? error.message : 'The saved OpenAI API key could not be loaded.'
+    return
+  }
   if (!apiKey) {
     challengeMessage.value = 'Add your OpenAI API key in Settings before the other bards can take their seats.'
     return
@@ -562,7 +569,13 @@ const updateLastWordDraft = (event: Event) => {
 const askVesperToContinue = async () => {
   const story = selectedLastWordStory.value
   if (!story || lastWordDraftCount.value < 1 || lastWordDraftCount.value > 2000) return
-  const apiKey = localStorage.getItem('openai_api_key') ?? ''
+  let apiKey: string | null
+  try {
+    apiKey = await loadOpenAIApiKey()
+  } catch (error) {
+    lastWordMessage.value = error instanceof Error ? error.message : 'The saved OpenAI API key could not be loaded.'
+    return
+  }
   if (!apiKey) {
     lastWordMessage.value = 'Add your OpenAI API key in Settings before Vesper can answer.'
     return

@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
-import { SecureStorage } from '@aparajita/capacitor-secure-storage';
+import { getSecureValue, removeSecureValue, setSecureValue } from '@/lib/secureStorage';
 
 const STORAGE_KEY = 'googleOAuthTokens';
 
@@ -11,23 +11,6 @@ export interface StoredTokenSet {
    * Absolute Unix epoch (ms) when the access token expires.
    */
   expiresAt: number;
-}
-
-/**
- * Bridge exposed by the Electron preload script. Backed by the main-process
- * `safeStorage` API, which encrypts with the OS keychain (macOS Keychain,
- * Windows DPAPI, Linux libsecret).
- */
-interface ElectronSecureStorage {
-  get(key: string): Promise<string | null>;
-  set(key: string, value: string): Promise<void>;
-  remove(key: string): Promise<void>;
-}
-
-function getElectronSecureStorage(): ElectronSecureStorage | null {
-  const bridge = (globalThis as { electronSecureStorage?: ElectronSecureStorage })
-    .electronSecureStorage;
-  return bridge ?? null;
 }
 
 function isElectron(): boolean {
@@ -66,29 +49,15 @@ function deserialize(value: string | null | undefined): StoredTokenSet | null {
 // --- Secure backend (native Keychain/Keystore or Electron safeStorage) -------
 
 async function secureGet(): Promise<string | null> {
-  const electron = getElectronSecureStorage();
-  if (electron) {
-    return electron.get(STORAGE_KEY);
-  }
-  return SecureStorage.getItem(STORAGE_KEY);
+  return getSecureValue(STORAGE_KEY);
 }
 
 async function secureSet(value: string): Promise<void> {
-  const electron = getElectronSecureStorage();
-  if (electron) {
-    await electron.set(STORAGE_KEY, value);
-    return;
-  }
-  await SecureStorage.setItem(STORAGE_KEY, value);
+  await setSecureValue(STORAGE_KEY, value);
 }
 
 async function secureRemove(): Promise<void> {
-  const electron = getElectronSecureStorage();
-  if (electron) {
-    await electron.remove(STORAGE_KEY);
-    return;
-  }
-  await SecureStorage.removeItem(STORAGE_KEY);
+  await removeSecureValue(STORAGE_KEY);
 }
 
 // --- Public API --------------------------------------------------------------

@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { BUILT_IN_PROFILES, generateChapterSummary, generateReview as generateAIReview, type AIProfile, type PartSummaryChapterInput, type PartSummaryOverview } from '@/lib/openai'
+import { loadOpenAIApiKey } from '@/lib/apiKeyStorage'
 import type { BookPart } from '@/lib/database'
 import { normalizeWikiEntityName } from '@/lib/wikiAliases'
 
@@ -301,7 +302,7 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
     try {
       generatingSummary.value = true
 
-      const apiKey = localStorage.getItem('openai_api_key')
+      const apiKey = await loadOpenAIApiKey()
       if (!apiKey) {
         alert('Please add your OpenAI API key in Settings first')
         options.openSettings()
@@ -403,7 +404,7 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
     try {
       generatingReview.value = true
 
-      const apiKey = localStorage.getItem('openai_api_key')
+      const apiKey = await loadOpenAIApiKey()
       if (!apiKey) {
         alert('Please add your OpenAI API key in Settings first')
         options.openSettings()
