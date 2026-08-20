@@ -83,23 +83,24 @@ export async function saveImageAsset(ctx: DatabaseContext, asset: ImageAsset): P
 }
 
 export async function deleteImageAsset(ctx: DatabaseContext, imageId: string): Promise<void> {
-  const unlinkCoverQuery = `UPDATE books SET cover_image_id = NULL WHERE cover_image_id = ?`
-  const unlinkPartCoverQuery = `UPDATE book_parts SET cover_image_id = NULL WHERE cover_image_id = ?`
-  const unlinkChapterCoverQuery = `UPDATE chapters SET cover_image_id = NULL WHERE cover_image_id = ?`
+  const unlinkCoverQuery = `UPDATE books SET cover_image_id = NULL, updated_at = ? WHERE cover_image_id = ?`
+  const unlinkPartCoverQuery = `UPDATE book_parts SET cover_image_id = NULL, updated_at = ? WHERE cover_image_id = ?`
+  const unlinkChapterCoverQuery = `UPDATE chapters SET cover_image_id = NULL, updated_at = ? WHERE cover_image_id = ?`
   const deleteTagsQuery = `DELETE FROM image_wiki_tags WHERE image_id = ?`
   const deleteQuery = `DELETE FROM image_assets WHERE id = ?`
+  const updatedAt = new Date().toISOString()
 
   await runInTransaction(ctx, async (txCtx) => {
     if (txCtx.isNative) {
-      await txCtx.connection.run(unlinkCoverQuery, [imageId])
-      await txCtx.connection.run(unlinkPartCoverQuery, [imageId])
-      await txCtx.connection.run(unlinkChapterCoverQuery, [imageId])
+      await txCtx.connection.run(unlinkCoverQuery, [updatedAt, imageId])
+      await txCtx.connection.run(unlinkPartCoverQuery, [updatedAt, imageId])
+      await txCtx.connection.run(unlinkChapterCoverQuery, [updatedAt, imageId])
       await txCtx.connection.run(deleteTagsQuery, [imageId])
       await txCtx.connection.run(deleteQuery, [imageId])
     } else {
-      txCtx.connection.run(unlinkCoverQuery, [imageId])
-      txCtx.connection.run(unlinkPartCoverQuery, [imageId])
-      txCtx.connection.run(unlinkChapterCoverQuery, [imageId])
+      txCtx.connection.run(unlinkCoverQuery, [updatedAt, imageId])
+      txCtx.connection.run(unlinkPartCoverQuery, [updatedAt, imageId])
+      txCtx.connection.run(unlinkChapterCoverQuery, [updatedAt, imageId])
       txCtx.connection.run(deleteTagsQuery, [imageId])
       txCtx.connection.run(deleteQuery, [imageId])
     }
@@ -268,12 +269,13 @@ export async function getBookCoverImage(ctx: DatabaseContext, bookId: string): P
 }
 
 export async function setBookCoverImage(ctx: DatabaseContext, bookId: string, imageId: string | null): Promise<void> {
-  const query = `UPDATE books SET cover_image_id = ? WHERE id = ?`
+  const query = `UPDATE books SET cover_image_id = ?, updated_at = ? WHERE id = ?`
+  const updatedAt = new Date().toISOString()
 
   if (ctx.isNative) {
-    await ctx.connection.run(query, [imageId, bookId])
+    await ctx.connection.run(query, [imageId, updatedAt, bookId])
   } else {
-    ctx.connection.run(query, [imageId, bookId])
+    ctx.connection.run(query, [imageId, updatedAt, bookId])
     ctx.requestPersistence()
     await ctx.flushPersistence()
   }
@@ -303,12 +305,13 @@ export async function getPartCoverImage(ctx: DatabaseContext, partId: string): P
 }
 
 export async function setChapterCoverImageId(ctx: DatabaseContext, chapterId: string, imageId: string | null): Promise<void> {
-  const query = `UPDATE chapters SET cover_image_id = ? WHERE id = ?`
+  const query = `UPDATE chapters SET cover_image_id = ?, updated_at = ? WHERE id = ?`
+  const updatedAt = new Date().toISOString()
 
   if (ctx.isNative) {
-    await ctx.connection.run(query, [imageId, chapterId])
+    await ctx.connection.run(query, [imageId, updatedAt, chapterId])
   } else {
-    ctx.connection.run(query, [imageId, chapterId])
+    ctx.connection.run(query, [imageId, updatedAt, chapterId])
     ctx.requestPersistence()
     await ctx.flushPersistence()
   }

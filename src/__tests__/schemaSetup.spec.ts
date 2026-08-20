@@ -31,6 +31,7 @@ function nativeContext(database: Database) {
   const rollbackTransaction = vi.fn(async () => { database.run('ROLLBACK') })
   const connection = {
     execute: vi.fn(async (sql: string) => { database.run(sql) }),
+    run: vi.fn(async (sql: string, params?: unknown[]) => { database.run(sql, params) }),
     query: vi.fn(async (sql: string) => {
       const result = database.exec(sql)
       if (result.length === 0) return { values: [] }
@@ -148,6 +149,67 @@ function createLegacyDatabase(): Database {
       word_count_deleted INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE chapter_summaries (
+      id TEXT PRIMARY KEY,
+      chapter_id TEXT NOT NULL,
+      summary TEXT,
+      pov TEXT,
+      characters TEXT,
+      beats TEXT,
+      spoilers_ok BOOLEAN,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE part_summaries (
+      id TEXT PRIMARY KEY,
+      part_id TEXT NOT NULL,
+      summary TEXT,
+      characters TEXT,
+      beats TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE chapter_notes (
+      id TEXT PRIMARY KEY,
+      chapter_id TEXT NOT NULL,
+      notes TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE book_characters (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL,
+      character_name TEXT NOT NULL,
+      wiki_page_id TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE chapter_reviews (
+      id TEXT PRIMARY KEY,
+      chapter_id TEXT NOT NULL,
+      review_text TEXT NOT NULL,
+      prompt_used TEXT,
+      profile_id INTEGER,
+      profile_name TEXT,
+      tone_key TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE custom_reviewer_profiles (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE ai_profiles (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      tone_key TEXT NOT NULL,
+      system_prompt TEXT NOT NULL,
+      is_system BOOLEAN,
+      is_default BOOLEAN,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
 
     INSERT INTO books (id, title, created_at)
       VALUES ('book-1', 'Legacy Book', '2025-01-01T00:00:00.000Z');
@@ -169,6 +231,26 @@ function createLegacyDatabase(): Database {
       'revision-1', 'chapter-1', 'book-1', 'Opening', 'Legacy prose', 2, 2,
       0, 'save', '2025-01-05T00:00:00.000Z'
     );
+    INSERT INTO chapter_summaries
+      (id, chapter_id, summary, created_at, updated_at)
+      VALUES ('summary-1', 'chapter-1', 'Summary',
+        '2025-01-06T00:00:00.000Z', '2025-01-06T00:00:00.000Z');
+    INSERT INTO chapter_notes (id, chapter_id, notes, created_at, updated_at)
+      VALUES ('note-1', 'chapter-1', 'Note',
+        '2025-01-07T00:00:00.000Z', '2025-01-07T00:00:00.000Z');
+    INSERT INTO custom_reviewer_profiles (id, name, description, created_at, updated_at)
+      VALUES (7, 'Editor', 'Careful',
+        '2025-01-01T00:00:00.000Z', '2025-01-01T00:00:00.000Z');
+    INSERT INTO ai_profiles
+      (id, name, tone_key, system_prompt, is_system, is_default, created_at)
+      VALUES (1, 'Editorial', 'editorial', 'Prompt', 1, 1,
+        '2025-01-01T00:00:00.000Z');
+    INSERT INTO chapter_reviews
+      (id, chapter_id, review_text, profile_id, profile_name, tone_key, created_at, updated_at)
+      VALUES ('review-1', 'chapter-1', 'Review', 7, 'Editor', 'custom-7',
+        '2025-01-08T00:00:00.000Z', '2025-01-08T00:00:00.000Z');
+    INSERT INTO book_characters (id, book_id, character_name, wiki_page_id, created_at)
+      VALUES ('character-1', 'book-1', 'Alice', 'wiki-1', '2025-01-03T00:00:00.000Z');
   `)
   return database
 }
@@ -187,7 +269,7 @@ describe('schema migrations', () => {
       'chapter_order', 'part_order', 'cover_image_id',
     ]))
     expect(columns(database, 'chapters')).toEqual(expect.arrayContaining([
-      'part_id', 'cover_image_id',
+      'part_id', 'cover_image_id', 'updated_at',
     ]))
     expect(columns(database, 'image_assets')).toEqual(expect.arrayContaining([
       'image_data', 'notes',
@@ -197,6 +279,19 @@ describe('schema migrations', () => {
     ]))
     expect(columns(database, 'chapter_revisions')).toContain('discarded_at')
     expect(columns(database, 'chapter_activity')).toContain('revision_discarded')
+    expect(columns(database, 'books')).toContain('updated_at')
+    expect(columns(database, 'book_characters')).toContain('updated_at')
+    expect(columns(database, 'chapter_summaries')).toEqual(expect.arrayContaining([
+      'generated_by', 'model',
+    ]))
+    expect(columns(database, 'custom_reviewer_profiles')).toContain('stable_id')
+    expect(columns(database, 'ai_profiles')).toEqual(expect.arrayContaining([
+      'stable_id', 'updated_at',
+    ]))
+    expect(columns(database, 'chapter_reviews')).toContain('profile_stable_id')
+    expect(columns(database, 'wiki_review_state')).toEqual(expect.arrayContaining([
+      'wiki_page_id', 'chapter_id', 'chapter_content_sha256', 'reviewed_at', 'reviewed_by',
+    ]))
 
     expect(database.exec(`SELECT title FROM books WHERE id = 'book-1'`)[0].values[0][0])
       .toBe('Legacy Book')
@@ -206,6 +301,22 @@ describe('schema migrations', () => {
     expect(database.exec(
       `SELECT activity_type, words_added FROM chapter_activity WHERE id = 'revision-1'`,
     )[0].values[0]).toEqual(['save', 2])
+    expect(database.exec(
+      `SELECT updated_at FROM chapters WHERE id = 'chapter-1'`,
+    )[0].values[0][0]).toBe('2025-01-08T00:00:00.000Z')
+    expect(database.exec(
+      `SELECT updated_at FROM books WHERE id = 'book-1'`,
+    )[0].values[0][0]).toBe('2025-01-08T00:00:00.000Z')
+    const customStableId = String(database.exec(
+      `SELECT stable_id FROM custom_reviewer_profiles WHERE id = 7`,
+    )[0].values[0][0])
+    expect(customStableId).toMatch(/^profile:[0-9a-f-]{36}$/)
+    expect(database.exec(
+      `SELECT profile_stable_id FROM chapter_reviews WHERE id = 'review-1'`,
+    )[0].values[0][0]).toBe(customStableId)
+    expect(database.exec(
+      `SELECT stable_id, updated_at FROM ai_profiles WHERE id = 1`,
+    )[0].values[0]).toEqual(['system:editorial', '2025-01-01T00:00:00.000Z'])
     expect(database.exec(
       `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_chapter_activity_book_created'`,
     )[0].values[0][0]).toBe('idx_chapter_activity_book_created')
@@ -235,8 +346,8 @@ describe('schema migrations', () => {
 
     expect(schemaVersion(database)).toBe(CURRENT_SCHEMA_VERSION)
     expect(columns(database, 'image_assets')).toEqual(expect.arrayContaining(['image_data', 'notes']))
-    expect(beginTransaction).toHaveBeenCalledOnce()
-    expect(commitTransaction).toHaveBeenCalledOnce()
+    expect(beginTransaction).toHaveBeenCalledTimes(2)
+    expect(commitTransaction).toHaveBeenCalledTimes(2)
     expect(rollbackTransaction).not.toHaveBeenCalled()
     expect(ctx.requestPersistence).not.toHaveBeenCalled()
   })

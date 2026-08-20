@@ -183,6 +183,11 @@ describe('chapters', () => {
 
     let chapters = await db.getChapters('book-1')
     expect(chapters.map((c) => c.id).sort()).toEqual(['ch-1', 'ch-2'])
+    expect(chapters[0]).toMatchObject({
+      cover_image_id: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    })
 
     await db.deleteChapter('ch-1', 'book-1')
     chapters = await db.getChapters('book-1')
@@ -333,6 +338,8 @@ describe('chapter summaries', () => {
       characters: ['Alice', 'Bob'],
       beats: ['Opening'],
       spoilers_ok: true,
+      generated_by: 'ai',
+      model: 'test-model',
     })
 
     const summary = await db.getSummary('ch-1')
@@ -344,6 +351,19 @@ describe('chapter summaries', () => {
       characters: '["Alice","Bob"]',
       beats: '["Opening"]',
       spoilers_ok: true,
+      generated_by: 'ai',
+      model: 'test-model',
+    })
+    await db.saveSummary({
+      chapter_id: 'ch-1', summary: 'A manually revised recap.', pov: 'Alice',
+      characters: ['Alice', 'Bob'], beats: ['Opening'], spoilers_ok: true,
+      generated_by: 'user', model: null,
+    })
+    expect(rawDatabase(db).exec(
+      `SELECT COUNT(*) FROM chapter_summaries WHERE chapter_id = 'ch-1'`,
+    )[0].values[0][0]).toBe(1)
+    expect(await db.getSummary('ch-1')).toMatchObject({
+      summary: 'A manually revised recap.', generated_by: 'user', model: null,
     })
     expect(await db.getSummary('missing')).toBeNull()
   })
@@ -363,10 +383,18 @@ describe('part summaries', () => {
       summary: 'Part recap.',
       characters: ['Alice'],
       beats: ['Beat'],
+      generated_by: 'ai',
+      model: 'test-model',
     })
 
     const summary = await db.getPartSummary(partId)
-    expect(summary).toMatchObject({ part_id: partId, summary: 'Part recap.', characters: '["Alice"]' })
+    expect(summary).toMatchObject({
+      part_id: partId,
+      summary: 'Part recap.',
+      characters: '["Alice"]',
+      generated_by: 'ai',
+      model: 'test-model',
+    })
 
     await db.deletePartSummary(partId)
     expect(await db.getPartSummary(partId)).toBeNull()
@@ -391,7 +419,10 @@ describe('reviews', () => {
 
     let reviews = await db.getReviews('ch-1')
     expect(reviews).toHaveLength(1)
-    expect(reviews[0].review_text).toBe('Nice chapter.')
+    expect(reviews[0]).toMatchObject({
+      review_text: 'Nice chapter.',
+      profile_stable_id: 'system:editorial',
+    })
 
     await db.deleteReview(reviews[0].id)
     reviews = await db.getReviews('ch-1')
@@ -424,6 +455,17 @@ describe('custom reviewer profiles', () => {
     let profiles = await db.getCustomProfiles()
     expect(profiles).toHaveLength(1)
     expect(profiles[0].name).toBe('Snarky')
+    expect(profiles[0].stable_id).toMatch(/^profile:[0-9a-f-]{36}$/)
+
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+    await db.saveReview({
+      chapter_id: 'ch-1', review_text: 'Portable review.', prompt_used: null,
+      profile_id: id, profile_name: 'Snarky', tone_key: `custom-${id}`,
+    })
+    expect(await db.getReviews('ch-1')).toEqual([
+      expect.objectContaining({ profile_stable_id: profiles[0].stable_id }),
+    ])
 
     await db.updateCustomProfile(id, { name: 'Kindly' })
     profiles = await db.getCustomProfiles()
@@ -431,6 +473,41 @@ describe('custom reviewer profiles', () => {
 
     await db.deleteCustomProfile(id)
     expect(await db.getCustomProfiles()).toHaveLength(0)
+  })
+})
+
+describe('portable backup metadata', () => {
+  it('round-trips wiki review state and emits named rows for schema-ordered tables', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+    const wikiId = await db.createWikiPage({
+      book_id: 'book-1', page_name: 'Alice', content: '', summary: '',
+    })
+    rawDatabase(db).run(
+      `INSERT INTO wiki_review_state
+        (wiki_page_id, chapter_id, chapter_content_sha256, reviewed_at, reviewed_by)
+       VALUES (?, ?, ?, ?, ?)`,
+      [wikiId, 'ch-1', 'a'.repeat(64), '2026-08-20T15:00:00.000Z', 'agent'],
+    )
+
+    const backup = await db.exportDatabase()
+    const serialized = JSON.parse(new TextDecoder().decode(backup)) as {
+      chapter_revisions: unknown[]
+      wiki_review_state: Array<Record<string, unknown>>
+    }
+    expect(Array.isArray(serialized.chapter_revisions[0])).toBe(false)
+    expect(serialized.wiki_review_state).toEqual([expect.objectContaining({
+      wiki_page_id: wikiId,
+      chapter_id: 'ch-1',
+      reviewed_by: 'agent',
+    })])
+
+    const restoredDb = await makeDb()
+    await restoredDb.importDatabase(backup)
+    const restoredBackup = JSON.parse(
+      new TextDecoder().decode(await restoredDb.exportDatabase()),
+    ) as { wiki_review_state: Array<Record<string, unknown>> }
+    expect(restoredBackup.wiki_review_state).toEqual(serialized.wiki_review_state)
   })
 })
 
@@ -482,7 +559,7 @@ describe('wiki pages', () => {
       version: number
       wiki_pages: Array<Record<string, unknown>>
     }
-    expect(serialized.version).toBe(5)
+    expect(serialized.version).toBe(6)
     expect(serialized.wiki_pages).toContainEqual(expect.objectContaining({
       id: wikiId,
       page_name: 'Alice Liddell',

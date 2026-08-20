@@ -502,6 +502,7 @@ const saveBookTitle = async () => {
       part_order: book.value.part_order || "[]",
       cover_image_id: book.value.cover_image_id ?? null,
       created_at: book.value.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
 
     // Update local ref

@@ -83,13 +83,14 @@ async function getBookPartOrder(ctx: DatabaseContext, bookId: string): Promise<s
 
 async function saveBookPartOrder(ctx: DatabaseContext, bookId: string, partOrder: string[]): Promise<void> {
   const uniqueOrder = Array.from(new Set(partOrder))
-  const query = `UPDATE books SET part_order = ? WHERE id = ?`
+  const query = `UPDATE books SET part_order = ?, updated_at = ? WHERE id = ?`
   const serialized = JSON.stringify(uniqueOrder)
+  const updatedAt = new Date().toISOString()
 
   if (ctx.isNative) {
-    await ctx.connection.run(query, [serialized, bookId])
+    await ctx.connection.run(query, [serialized, updatedAt, bookId])
   } else {
-    ctx.connection.run(query, [serialized, bookId])
+    ctx.connection.run(query, [serialized, updatedAt, bookId])
     ctx.requestPersistence()
   }
 }
@@ -181,14 +182,15 @@ export async function deletePart(ctx: DatabaseContext, partId: string): Promise<
       if (result[0]?.values[0]) bookId = (result[0].values[0][0] as string) || null
     }
 
-    const updateChaptersQuery = `UPDATE chapters SET part_id = NULL WHERE part_id = ?`
+    const updateChaptersQuery = `UPDATE chapters SET part_id = NULL, updated_at = ? WHERE part_id = ?`
+    const updatedAt = new Date().toISOString()
     const deleteQuery = `DELETE FROM book_parts WHERE id = ?`
     if (txCtx.isNative) {
-      await txCtx.connection.run(updateChaptersQuery, [partId])
+      await txCtx.connection.run(updateChaptersQuery, [updatedAt, partId])
       await txCtx.connection.run(deleteQuery, [partId])
       await txCtx.connection.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId])
     } else {
-      txCtx.connection.run(updateChaptersQuery, [partId])
+      txCtx.connection.run(updateChaptersQuery, [updatedAt, partId])
       txCtx.connection.run(deleteQuery, [partId])
       txCtx.connection.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId])
     }
@@ -211,28 +213,36 @@ export async function updateChapterOrders(
   partUpdates: Record<string, string[]>,
   partOrder?: string[],
 ): Promise<void> {
+  const updatedAt = new Date().toISOString()
   // Update book's chapter_order
-  const updateBookQuery = `UPDATE books SET chapter_order = ? WHERE id = ?`
+  const updateBookQuery = `UPDATE books SET chapter_order = ?, updated_at = ? WHERE id = ?`
 
   if (ctx.isNative) {
-    await ctx.connection.run(updateBookQuery, [JSON.stringify(chapterOrder), bookId])
+    await ctx.connection.run(updateBookQuery, [JSON.stringify(chapterOrder), updatedAt, bookId])
 
     // Update each part's chapter_order and chapter part_id assignments
     for (const [partId, chapterIds] of Object.entries(partUpdates)) {
       if (partId === 'null') {
         // Remove part_id from these chapters
         for (const chapterId of chapterIds) {
-          await ctx.connection.run('UPDATE chapters SET part_id = NULL WHERE id = ?', [chapterId])
+          await ctx.connection.run(
+            'UPDATE chapters SET part_id = NULL, updated_at = ? WHERE id = ?',
+            [updatedAt, chapterId],
+          )
         }
       } else {
         // Update part's chapter_order
-        await ctx.connection.run('UPDATE book_parts SET chapter_order = ? WHERE id = ?', [
+        await ctx.connection.run('UPDATE book_parts SET chapter_order = ?, updated_at = ? WHERE id = ?', [
           JSON.stringify(chapterIds),
+          updatedAt,
           partId,
         ])
         // Assign chapters to this part
         for (const chapterId of chapterIds) {
-          await ctx.connection.run('UPDATE chapters SET part_id = ? WHERE id = ?', [partId, chapterId])
+          await ctx.connection.run(
+            'UPDATE chapters SET part_id = ?, updated_at = ? WHERE id = ?',
+            [partId, updatedAt, chapterId],
+          )
         }
       }
     }
@@ -241,24 +251,31 @@ export async function updateChapterOrders(
       await saveBookPartOrder(ctx, bookId, partOrder)
     }
   } else {
-    ctx.connection.run(updateBookQuery, [JSON.stringify(chapterOrder), bookId])
+    ctx.connection.run(updateBookQuery, [JSON.stringify(chapterOrder), updatedAt, bookId])
 
     // Update each part's chapter_order and chapter part_id assignments
     for (const [partId, chapterIds] of Object.entries(partUpdates)) {
       if (partId === 'null') {
         // Remove part_id from these chapters
         for (const chapterId of chapterIds) {
-          ctx.connection.run('UPDATE chapters SET part_id = NULL WHERE id = ?', [chapterId])
+          ctx.connection.run(
+            'UPDATE chapters SET part_id = NULL, updated_at = ? WHERE id = ?',
+            [updatedAt, chapterId],
+          )
         }
       } else {
         // Update part's chapter_order
-        ctx.connection.run('UPDATE book_parts SET chapter_order = ? WHERE id = ?', [
+        ctx.connection.run('UPDATE book_parts SET chapter_order = ?, updated_at = ? WHERE id = ?', [
           JSON.stringify(chapterIds),
+          updatedAt,
           partId,
         ])
         // Assign chapters to this part
         for (const chapterId of chapterIds) {
-          ctx.connection.run('UPDATE chapters SET part_id = ? WHERE id = ?', [partId, chapterId])
+          ctx.connection.run(
+            'UPDATE chapters SET part_id = ?, updated_at = ? WHERE id = ?',
+            [partId, updatedAt, chapterId],
+          )
         }
       }
     }

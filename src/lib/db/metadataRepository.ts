@@ -12,6 +12,7 @@
 import type { DatabaseContext, QueryRow } from './connection'
 import { readQueryRowValue } from './rowUtils'
 import { runInTransaction } from './transaction'
+import { createPortableProfileId } from '@/lib/portableIds'
 import type {
   ChapterSummary,
   PartSummary,
@@ -33,6 +34,8 @@ function toWebSummary(row: unknown[]): ChapterSummary {
     spoilers_ok: typeof row[6] === 'boolean' ? row[6] : typeof row[6] === 'number' ? Boolean(row[6]) : null,
     created_at: String(row[7]),
     updated_at: String(row[8]),
+    generated_by: row[9] === 'ai' || row[9] === 'user' ? row[9] : null,
+    model: typeof row[10] === 'string' ? row[10] : null,
   }
 }
 
@@ -51,6 +54,11 @@ function toNativeSummary(row: QueryRow): ChapterSummary {
         : null,
     created_at: String(readQueryRowValue(row, 7, 'created_at')),
     updated_at: String(readQueryRowValue(row, 8, 'updated_at')),
+    generated_by: readQueryRowValue(row, 9, 'generated_by') === 'ai'
+      || readQueryRowValue(row, 9, 'generated_by') === 'user'
+      ? readQueryRowValue(row, 9, 'generated_by') as 'ai' | 'user' : null,
+    model: typeof readQueryRowValue(row, 10, 'model') === 'string'
+      ? readQueryRowValue(row, 10, 'model') as string : null,
   }
 }
 
@@ -63,6 +71,8 @@ function toWebPartSummary(row: unknown[]): PartSummary {
     beats: typeof row[4] === 'string' ? row[4] : null,
     created_at: String(row[5]),
     updated_at: String(row[6]),
+    generated_by: row[7] === 'ai' || row[7] === 'user' ? row[7] : null,
+    model: typeof row[8] === 'string' ? row[8] : null,
   }
 }
 
@@ -75,6 +85,11 @@ function toNativePartSummary(row: QueryRow): PartSummary {
     beats: typeof readQueryRowValue(row, 4, 'beats') === 'string' ? readQueryRowValue(row, 4, 'beats') as string : null,
     created_at: String(readQueryRowValue(row, 5, 'created_at')),
     updated_at: String(readQueryRowValue(row, 6, 'updated_at')),
+    generated_by: readQueryRowValue(row, 7, 'generated_by') === 'ai'
+      || readQueryRowValue(row, 7, 'generated_by') === 'user'
+      ? readQueryRowValue(row, 7, 'generated_by') as 'ai' | 'user' : null,
+    model: typeof readQueryRowValue(row, 8, 'model') === 'string'
+      ? readQueryRowValue(row, 8, 'model') as string : null,
   }
 }
 
@@ -89,6 +104,7 @@ function toWebReview(row: unknown[]): ChapterReview {
     tone_key: typeof row[6] === 'string' ? row[6] : null,
     created_at: String(row[7]),
     updated_at: String(row[8]),
+    profile_stable_id: typeof row[9] === 'string' ? row[9] : null,
   }
 }
 
@@ -103,6 +119,8 @@ function toNativeReview(row: QueryRow): ChapterReview {
     tone_key: typeof readQueryRowValue(row, 6, 'tone_key') === 'string' ? readQueryRowValue(row, 6, 'tone_key') as string : null,
     created_at: String(readQueryRowValue(row, 7, 'created_at')),
     updated_at: String(readQueryRowValue(row, 8, 'updated_at')),
+    profile_stable_id: typeof readQueryRowValue(row, 9, 'profile_stable_id') === 'string'
+      ? readQueryRowValue(row, 9, 'profile_stable_id') as string : null,
   }
 }
 
@@ -133,6 +151,7 @@ function toWebCustomProfile(row: unknown[]): CustomReviewerProfile {
     description: String(row[2]),
     created_at: String(row[3]),
     updated_at: String(row[4]),
+    stable_id: String(row[5]),
   }
 }
 
@@ -143,6 +162,7 @@ function toNativeCustomProfile(row: QueryRow): CustomReviewerProfile {
     description: String(readQueryRowValue(row, 2, 'description') ?? ''),
     created_at: String(readQueryRowValue(row, 3, 'created_at')),
     updated_at: String(readQueryRowValue(row, 4, 'updated_at')),
+    stable_id: String(readQueryRowValue(row, 5, 'stable_id')),
   }
 }
 
@@ -155,11 +175,20 @@ export async function saveSummary(ctx: DatabaseContext, summary: {
   characters: string[]
   beats: string[]
   spoilers_ok: boolean
+  generated_by?: 'ai' | 'user' | null
+  model?: string | null
 }): Promise<void> {
-  const id = `summary-${summary.chapter_id}-${Date.now()}`
   const now = new Date().toISOString()
-  const query = `INSERT OR REPLACE INTO chapter_summaries (id, chapter_id, summary, pov, characters, beats, spoilers_ok, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  const existing = await getSummary(ctx, summary.chapter_id)
+  const id = existing?.id ?? `summary-${summary.chapter_id}-${Date.now()}`
+  const createdAt = existing?.created_at ?? now
+  const generatedBy = summary.generated_by === undefined
+    ? existing?.generated_by ?? null : summary.generated_by
+  const model = summary.model === undefined ? existing?.model ?? null : summary.model
+  const query = `INSERT OR REPLACE INTO chapter_summaries
+                   (id, chapter_id, summary, pov, characters, beats, spoilers_ok, created_at,
+                    updated_at, generated_by, model)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
   const params = [
     id,
@@ -169,8 +198,10 @@ export async function saveSummary(ctx: DatabaseContext, summary: {
     JSON.stringify(summary.characters),
     JSON.stringify(summary.beats),
     summary.spoilers_ok ? 1 : 0,
+    createdAt,
     now,
-    now,
+    generatedBy,
+    model,
   ]
 
   if (ctx.isNative) {
@@ -202,13 +233,20 @@ export async function savePartSummary(ctx: DatabaseContext, summary: {
   summary: string
   characters: string[]
   beats: string[]
+  generated_by?: 'ai' | 'user' | null
+  model?: string | null
 }): Promise<void> {
   const id = `part-summary-${summary.part_id}`
   const now = new Date().toISOString()
   const existing = await getPartSummary(ctx, summary.part_id)
   const createdAt = existing?.created_at ?? now
-  const query = `INSERT OR REPLACE INTO part_summaries (id, part_id, summary, characters, beats, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`
+  const generatedBy = summary.generated_by === undefined
+    ? existing?.generated_by ?? null : summary.generated_by
+  const model = summary.model === undefined ? existing?.model ?? null : summary.model
+  const query = `INSERT OR REPLACE INTO part_summaries
+                   (id, part_id, summary, characters, beats, created_at, updated_at,
+                    generated_by, model)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
   const params = [
     id,
@@ -218,6 +256,8 @@ export async function savePartSummary(ctx: DatabaseContext, summary: {
     JSON.stringify(summary.beats),
     createdAt,
     now,
+    generatedBy,
+    model,
   ]
 
   if (ctx.isNative) {
@@ -262,11 +302,32 @@ export async function saveReview(ctx: DatabaseContext, review: {
   profile_id: number | null
   profile_name: string | null
   tone_key: string | null
+  profile_stable_id?: string | null
 }): Promise<void> {
   const id = `review-${review.chapter_id}-${Date.now()}`
   const now = new Date().toISOString()
-  const query = `INSERT INTO chapter_reviews (id, chapter_id, review_text, prompt_used, profile_id, profile_name, tone_key, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  let profileStableId = review.profile_stable_id ?? null
+  if (!profileStableId && review.profile_id !== null) {
+    const profileQuery = `SELECT stable_id FROM custom_reviewer_profiles WHERE id = ? LIMIT 1`
+    if (ctx.isNative) {
+      const result = await ctx.connection.query(profileQuery, [review.profile_id])
+      const value = result.values?.[0]
+        ? readQueryRowValue(result.values[0], 0, 'stable_id') : null
+      profileStableId = typeof value === 'string' ? value : null
+    } else {
+      const result = ctx.connection.exec(profileQuery, [review.profile_id])
+      const value = result[0]?.values[0]?.[0]
+      profileStableId = typeof value === 'string' ? value : null
+    }
+  }
+  if (!profileStableId && review.profile_id === null && review.tone_key
+    && !review.tone_key.startsWith('custom-')) {
+    profileStableId = `system:${review.tone_key}`
+  }
+  const query = `INSERT INTO chapter_reviews
+                   (id, chapter_id, review_text, prompt_used, profile_id, profile_name, tone_key,
+                    created_at, updated_at, profile_stable_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
   const params = [
     id,
@@ -278,6 +339,7 @@ export async function saveReview(ctx: DatabaseContext, review: {
     review.tone_key,
     now,
     now,
+    profileStableId,
   ]
 
   if (ctx.isNative) {
@@ -382,11 +444,13 @@ export async function createCustomProfile(ctx: DatabaseContext, profile: {
   description: string
 }): Promise<number> {
   const id = Date.now()
+  const stableId = createPortableProfileId()
   const now = new Date().toISOString()
-  const query = `INSERT INTO custom_reviewer_profiles (id, name, description, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?)`
+  const query = `INSERT INTO custom_reviewer_profiles
+                   (id, name, description, created_at, updated_at, stable_id)
+                 VALUES (?, ?, ?, ?, ?, ?)`
 
-  const params = [id, profile.name, profile.description, now, now]
+  const params = [id, profile.name, profile.description, now, now, stableId]
 
   if (ctx.isNative) {
     await ctx.connection.run(query, params)

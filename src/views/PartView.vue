@@ -309,6 +309,7 @@ const saveEditedSummary = async () => {
       summary: editedSummary.value.trim(),
       characters: partSummary.value.characters,
       beats: partSummary.value.beats,
+      generated_by: "user",
     });
     await loadPartSummaryData(part.value.id);
     isEditingSummary.value = false;
@@ -353,6 +354,7 @@ const handleGeneratePartSummary = async () => {
       summary: result.summary,
       characters: result.characters,
       beats: result.beats,
+      generated_by: "ai",
     });
     await loadPartSummaryData(part.value.id);
     isEditingSummary.value = false;

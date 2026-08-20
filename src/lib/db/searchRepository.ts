@@ -297,8 +297,11 @@ export async function replaceFindReplaceMatches(
     const updatedText = result.fields.text ?? text
     const trimmedText = updatedText.trim()
     const wordCount = trimmedText ? trimmedText.split(/\s+/).length : 0
-    const updateQuery = `UPDATE chapters SET title = ?, text = ?, word_count = ? WHERE id = ?`
-    const params = [updatedTitle, updatedText, wordCount, request.targetId]
+    const updateQuery = `UPDATE chapters
+                         SET title = ?, text = ?, word_count = ?, updated_at = ? WHERE id = ?`
+    const params = [
+      updatedTitle, updatedText, wordCount, new Date().toISOString(), request.targetId,
+    ]
 
     if (ctx.isNative) {
       await ctx.connection.run(updateQuery, params)
@@ -400,8 +403,11 @@ export async function restoreFindReplaceFields(ctx: DatabaseContext, request: Re
     const restoredText = request.fields.text ?? currentText
     const trimmedText = restoredText.trim()
     const wordCount = trimmedText ? trimmedText.split(/\s+/).length : 0
-    const updateQuery = `UPDATE chapters SET title = ?, text = ?, word_count = ? WHERE id = ?`
-    const params = [restoredTitle, restoredText, wordCount, request.targetId]
+    const updateQuery = `UPDATE chapters
+                         SET title = ?, text = ?, word_count = ?, updated_at = ? WHERE id = ?`
+    const params = [
+      restoredTitle, restoredText, wordCount, new Date().toISOString(), request.targetId,
+    ]
 
     if (ctx.isNative) {
       await ctx.connection.run(updateQuery, params)
@@ -522,13 +528,15 @@ export async function replaceInChapter(ctx: DatabaseContext, chapterId: string, 
   const newTitle = currentTitle !== null ? replaceWithCasePreservation(currentTitle, regex, replaceTerm) : null
 
   // Update chapter
-  const updateQuery = `UPDATE chapters SET title = ?, text = ?, word_count = ? WHERE id = ?`
+  const updateQuery = `UPDATE chapters
+                       SET title = ?, text = ?, word_count = ?, updated_at = ? WHERE id = ?`
   const wordCount = newText.trim().split(/\s+/).length
+  const updatedAt = new Date().toISOString()
 
   if (ctx.isNative) {
-    await ctx.connection.run(updateQuery, [newTitle, newText, wordCount, chapterId])
+    await ctx.connection.run(updateQuery, [newTitle, newText, wordCount, updatedAt, chapterId])
   } else {
-    ctx.connection.run(updateQuery, [newTitle, newText, wordCount, chapterId])
+    ctx.connection.run(updateQuery, [newTitle, newText, wordCount, updatedAt, chapterId])
     ctx.requestPersistence()
   }
 }

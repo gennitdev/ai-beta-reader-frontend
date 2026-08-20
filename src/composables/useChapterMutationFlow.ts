@@ -55,6 +55,8 @@ interface ChapterMutationFlowOptions {
     characters: string[]
     beats: string[]
     spoilers_ok: boolean
+    generated_by?: 'ai' | 'user' | null
+    model?: string | null
   }) => Promise<void>
   saveNotesToDb: (chapterId: string, notes: string) => Promise<void>
   saveReviewToDb: (review: {
@@ -261,6 +263,7 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
         characters: options.chapter.value.characters || [],
         beats: options.chapter.value.beats || [],
         spoilers_ok: options.chapter.value.spoilers_ok || false,
+        generated_by: 'user',
       })
       options.chapter.value.summary = options.editedSummary.value
       return true
@@ -354,6 +357,7 @@ export function useChapterMutationFlow(options: ChapterMutationFlowOptions) {
         characters: generatedCharacters,
         beats: beatsArray,
         spoilers_ok: result.spoilers_ok,
+        generated_by: 'ai',
       })
       options.invalidateChapterSummary(chapter.id)
 
