@@ -1,6 +1,9 @@
 import { ref, type Ref } from 'vue'
 import JSZip from 'jszip'
+import packageInfo from '../../package.json'
 import type { Book, Chapter, ChapterNote, BookPart, ImageAsset } from '@/lib/database'
+import { createFullLibraryBundleExport } from '@/lib/libraryBundle/export'
+import { createPortableId } from '@/lib/portableIds'
 import {
   buildMarkdownExportFiles,
   orderChaptersForBook,
@@ -21,6 +24,7 @@ interface UseDataExportDeps {
   fetchPartCover: (partId: string) => Promise<ImageAsset | null>
   fetchChapterImages: (chapterId: string) => Promise<ImageAsset[]>
   getImageBlob: (image: ImageAsset) => Promise<Blob>
+  exportDatabase: () => Promise<Uint8Array>
 }
 
 function triggerZipDownload(content: Blob, fileName: string) {
@@ -52,12 +56,13 @@ export function useDataExport(deps: UseDataExportDeps) {
     fetchPartCover,
     fetchChapterImages,
     getImageBlob,
+    exportDatabase,
   } = deps
 
   const isExporting = ref(false)
   const exportProgress = ref('')
   const exportError = ref('')
-  const exportFormat = ref<'zip' | 'markdown'>('zip')
+  const exportFormat = ref<'bundle' | 'zip' | 'markdown'>('bundle')
   const markdownGranularity = ref<'book' | 'part'>('book')
   const includeNotes = ref(true)
 
@@ -80,6 +85,42 @@ export function useDataExport(deps: UseDataExportDeps) {
 
     if (image.notes?.trim()) {
       folder.file(`${stripFileExtension(imageFileName)}.notes.md`, image.notes)
+    }
+  }
+
+  const exportFullLibraryBundle = async () => {
+    if (isExporting.value) return
+
+    exportError.value = ''
+    try {
+      isExporting.value = true
+      exportProgress.value = 'Creating a consistent library snapshot...'
+      const databaseBackup = await exportDatabase()
+      exportProgress.value = 'Writing canonical bundle files and verifying images...'
+      const exportedAt = new Date().toISOString()
+      const bundle = await createFullLibraryBundleExport(databaseBackup, {
+        bundleId: createPortableId('bundle'),
+        exportedAt,
+        appVersion: packageInfo.version,
+        readAssetBytes: async (asset) => {
+          const blob = await getImageBlob(asset)
+          return new Uint8Array(await blob.arrayBuffer())
+        },
+      })
+
+      exportProgress.value = 'Creating backup ZIP...'
+      triggerZipDownload(
+        new Blob([bundle.zipBytes.slice().buffer], { type: 'application/zip' }),
+        `beta-bot-library-${exportedAt.slice(0, 10)}.zip`,
+      )
+      exportProgress.value = 'Full library backup exported!'
+      setTimeout(() => { exportProgress.value = '' }, 3000)
+    } catch (err) {
+      console.error('Full library export failed:', err)
+      exportError.value = 'Export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
+      exportProgress.value = ''
+    } finally {
+      isExporting.value = false
     }
   }
 
@@ -345,7 +386,9 @@ export function useDataExport(deps: UseDataExportDeps) {
   }
 
   const handleExport = () => {
-    if (exportFormat.value === 'markdown') {
+    if (exportFormat.value === 'bundle') {
+      exportFullLibraryBundle()
+    } else if (exportFormat.value === 'markdown') {
       exportAsMarkdown()
     } else {
       exportUserData()
@@ -360,5 +403,6 @@ export function useDataExport(deps: UseDataExportDeps) {
     markdownGranularity,
     includeNotes,
     handleExport,
+    exportFullLibraryBundle,
   }
 }

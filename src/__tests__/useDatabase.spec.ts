@@ -121,6 +121,14 @@ describe('useDatabase — book/chapter state', () => {
     expect(dbProxy.deleteChapter).toHaveBeenCalledWith('ch-1', 'b1')
     expect(dbProxy.getChapters).toHaveBeenCalled()
   })
+
+  it('exports a flushed database snapshot through the public composable', async () => {
+    const api = useDatabase()
+    const backup = new Uint8Array([1, 2, 3])
+    dbProxy.exportDatabase.mockResolvedValueOnce(backup)
+    await expect(api.exportDatabase()).resolves.toBe(backup)
+    expect(dbProxy.exportDatabase).toHaveBeenCalledOnce()
+  })
 })
 
 describe('useDatabase — cloud sync guards', () => {
