@@ -6,7 +6,10 @@ import { useDatabase } from './useDatabase'
 import { isDesktopAppRuntime } from '@/utils/platform'
 import {
   dataUrlToBlob,
+  cleanupOrphanedImageContent,
+  deleteImageMetadataThenContent,
   ElectronImageContentStore,
+  inspectImageContent,
   IndexedDbImageContentStore,
   type ImageContentStore,
 } from '@/lib/imageContentStore'
@@ -292,14 +295,26 @@ export function useImageLibrary() {
 
   async function deleteImage(image: ImageAsset) {
     const contentStore = getContentStore()
-    await deleteImageAssetRecord(image.id)
-    clearCachedSource(image.id)
-
-    try {
-      await contentStore.delete(image)
-    } catch (error) {
-      console.warn('Failed to delete image content', error)
+    const result = await deleteImageMetadataThenContent(
+      image,
+      deleteImageAssetRecord,
+      contentStore,
+      clearCachedSource,
+    )
+    if (result.orphanedContent) {
+      logger.warn(
+        `[ImageLibrary] Metadata for ${image.id} was deleted, but its content could not be removed. `
+        + 'The unreferenced content will be eligible for reconciliation.',
+        result.contentError,
+      )
     }
+  }
+
+  async function reconcileImageContent(assets: ImageAsset[], removeOrphans = false) {
+    const contentStore = getContentStore()
+    return removeOrphans
+      ? cleanupOrphanedImageContent(contentStore, assets)
+      : inspectImageContent(contentStore, assets)
   }
 
   async function fetchChapterImages(chapterId: string) {
@@ -444,6 +459,7 @@ export function useImageLibrary() {
     addImagesFromFiles,
     canDisplayImages,
     deleteImage,
+    reconcileImageContent,
     fetchChapterImages,
     fetchFirstChapterImage,
     fetchChapterThumbnails,

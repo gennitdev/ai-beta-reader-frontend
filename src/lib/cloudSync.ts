@@ -13,9 +13,12 @@ import {
   type ImageContentStore,
 } from './imageContentStore';
 import {
+  captureImageContentSnapshot,
   enrichImageRowsForBackup,
+  restoreImageContentSnapshot,
   restoreImageRows,
   stripImageDataFromRows,
+  type ImageContentSnapshot,
 } from './cloudSyncImageAssets';
 import type { ImportRow } from './databaseImportExport';
 
@@ -952,6 +955,8 @@ export class CloudSync {
       }
     }
 
+    let restoreStoreForRollback: ImageContentStore | null = null;
+    let imageContentSnapshot: ImageContentSnapshot[] = [];
     try {
       let dataToImport = decrypted;
       const importJson = JSON.parse(new TextDecoder().decode(decrypted)) as BackupPayload;
@@ -966,6 +971,11 @@ export class CloudSync {
       if (Array.isArray(importJson.image_assets) && importJson.image_assets.length > 0) {
         if (restoreStore) {
           logger.log('[CloudSync] Writing image content from backup...');
+          restoreStoreForRollback = restoreStore;
+          imageContentSnapshot = await captureImageContentSnapshot(
+            importJson.image_assets,
+            restoreStore,
+          );
           const result = await restoreImageRows(importJson.image_assets, restoreStore);
           importJson.image_assets = result.rows;
           restoredAssets = result.assets;
@@ -1004,6 +1014,13 @@ export class CloudSync {
       return true;
     } catch (error) {
       console.error('Failed to import database after decryption:', error);
+      if (restoreStoreForRollback && imageContentSnapshot.length > 0) {
+        try {
+          await restoreImageContentSnapshot(imageContentSnapshot, restoreStoreForRollback);
+        } catch (rollbackError) {
+          console.error('[CloudSync] Failed to roll back image content after restore failure:', rollbackError);
+        }
+      }
       throw error; // Re-throw to show the actual error
     }
   }

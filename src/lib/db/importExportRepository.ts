@@ -15,6 +15,7 @@ import {
   WIKI_PAGE_COLUMNS,
   normalizeDatabaseImportData,
   normalizeImageAssetImportRows,
+  parseDatabaseImportData,
   type DatabaseImportData,
   type ImportRow,
 } from '@/lib/databaseImportExport'
@@ -157,7 +158,7 @@ export async function exportDatabase(ctx: DatabaseContext): Promise<Uint8Array> 
 
 export async function importDatabase(ctx: DatabaseContext, data: Uint8Array): Promise<void> {
   const jsonString = new TextDecoder().decode(data)
-  const importData = normalizeDatabaseImportData(JSON.parse(jsonString))
+  const importData = parseDatabaseImportData(JSON.parse(jsonString))
   logger.log('[Database] importDatabase: image_assets count:', importData.image_assets?.length || 0)
   if (importData.image_assets?.length > 0) {
     logger.log('[Database] importDatabase: First image_asset:', importData.image_assets[0])
@@ -174,17 +175,46 @@ export async function importDatabase(ctx: DatabaseContext, data: Uint8Array): Pr
     }
   }
 
+  const execute = async (sql: string) => {
+    if (ctx.isNative) {
+      await ctx.connection.execute(sql)
+    } else {
+      ctx.connection.run(sql)
+    }
+  }
+  const beginTransaction = async () => {
+    if (ctx.isNative && ctx.connection.beginTransaction) {
+      await ctx.connection.beginTransaction()
+    } else {
+      await execute('BEGIN TRANSACTION')
+    }
+  }
+  const commitTransaction = async () => {
+    if (ctx.isNative && ctx.connection.commitTransaction) {
+      await ctx.connection.commitTransaction()
+    } else {
+      await execute('COMMIT')
+    }
+  }
+  const rollbackTransaction = async () => {
+    if (ctx.isNative && ctx.connection.rollbackTransaction) {
+      await ctx.connection.rollbackTransaction()
+    } else {
+      await execute('ROLLBACK')
+    }
+  }
+
   // Skip intermediate saves during bulk import (saves 170MB+ being written hundreds of times)
   ctx.setImporting(true)
+  let transactionStarted = false
 
   try {
-    // Disable foreign key constraints during import
-    // Use execute() on native platforms for PRAGMA commands
-    if (ctx.isNative) {
-      await ctx.connection.execute('PRAGMA foreign_keys = OFF')
-    } else {
-      ctx.connection.run('PRAGMA foreign_keys = OFF')
-    }
+    // Keep constraints enabled and wrap the destructive replace in one
+    // transaction. A malformed relationship or interrupted insert must leave
+    // the user's existing database untouched.
+    await execute('PRAGMA foreign_keys = ON')
+    await beginTransaction()
+    transactionStarted = true
 
     const tablesToClear = [
       'chapter_wiki_mentions',
@@ -197,13 +227,13 @@ export async function importDatabase(ctx: DatabaseContext, data: Uint8Array): Pr
       'chapter_revisions',
       'chapter_activity',
       'image_wiki_tags',
+      'image_assets',
       'wiki_pages',
       'chapters',
       'book_parts',
       'books',
       'custom_reviewer_profiles',
       'ai_profiles',
-      'image_assets',
     ]
 
     for (const table of tablesToClear) {
@@ -267,14 +297,23 @@ export async function importDatabase(ctx: DatabaseContext, data: Uint8Array): Pr
     await importTable('image_wiki_tags', importData.image_wiki_tags)
     await importTable('chapter_notes', importData.chapter_notes)
 
-    // Re-enable foreign key constraints after import
-    // Use execute() on native platforms for PRAGMA commands
-    if (ctx.isNative) {
-      await ctx.connection.execute('PRAGMA foreign_keys = ON')
-    } else {
-      ctx.connection.run('PRAGMA foreign_keys = ON')
+    await commitTransaction()
+    transactionStarted = false
+  } catch (error) {
+    if (transactionStarted) {
+      try {
+        await rollbackTransaction()
+      } catch (rollbackError) {
+        logger.error('[Database] Failed to roll back database import:', rollbackError)
+      }
     }
+    throw error
   } finally {
+    try {
+      await execute('PRAGMA foreign_keys = ON')
+    } catch (error) {
+      logger.error('[Database] Failed to restore foreign-key enforcement:', error)
+    }
     ctx.setImporting(false)
   }
 

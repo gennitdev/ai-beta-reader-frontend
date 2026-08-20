@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   normalizeDatabaseImportData,
   normalizeImageAssetImportRows,
+  parseDatabaseImportData,
 } from '@/lib/databaseImportExport'
 
 describe('database import/export helpers', () => {
@@ -146,5 +147,35 @@ describe('database import/export helpers', () => {
         notes: '',
       },
     ])
+  })
+
+  it.each([[null], [[]], ['not a backup'], [42]])(
+    'rejects non-object restore payloads before normalization: %j',
+    (payload) => {
+      expect(() => parseDatabaseImportData(payload)).toThrow('must be a JSON object')
+    },
+  )
+
+  it('rejects object payloads that could otherwise normalize to an empty database', () => {
+    expect(() => parseDatabaseImportData({})).toThrow(/missing the books or chapters collection/)
+    expect(() => parseDatabaseImportData({ version: 5, books: [] })).toThrow(
+      /missing the books or chapters collection/,
+    )
+  })
+
+  it('rejects backups produced by a newer database version', () => {
+    expect(() => parseDatabaseImportData({
+      version: 6,
+      books: [],
+      chapters: [],
+    })).toThrow(/newer than supported version 5/)
+  })
+
+  it('continues accepting versionless legacy backups with core collections', () => {
+    expect(parseDatabaseImportData({ books: [], chapters: [] })).toMatchObject({
+      version: 4,
+      books: [],
+      chapters: [],
+    })
   })
 })

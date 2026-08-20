@@ -9,6 +9,7 @@
 
 import { IMAGE_ASSET_COLUMNS } from '@/lib/databaseImportExport'
 import type { DatabaseContext } from './connection'
+import { runInTransaction } from './transaction'
 import type { ImageAsset, ImageAssetType, ImageWikiTag } from '../database'
 
 // --- Row mappers ------------------------------------------------------------
@@ -88,18 +89,22 @@ export async function deleteImageAsset(ctx: DatabaseContext, imageId: string): P
   const deleteTagsQuery = `DELETE FROM image_wiki_tags WHERE image_id = ?`
   const deleteQuery = `DELETE FROM image_assets WHERE id = ?`
 
-  if (ctx.isNative) {
-    await ctx.connection.run(unlinkCoverQuery, [imageId])
-    await ctx.connection.run(unlinkPartCoverQuery, [imageId])
-    await ctx.connection.run(unlinkChapterCoverQuery, [imageId])
-    await ctx.connection.run(deleteTagsQuery, [imageId])
-    await ctx.connection.run(deleteQuery, [imageId])
-  } else {
-    ctx.connection.run(unlinkCoverQuery, [imageId])
-    ctx.connection.run(unlinkPartCoverQuery, [imageId])
-    ctx.connection.run(unlinkChapterCoverQuery, [imageId])
-    ctx.connection.run(deleteTagsQuery, [imageId])
-    ctx.connection.run(deleteQuery, [imageId])
+  await runInTransaction(ctx, async (txCtx) => {
+    if (txCtx.isNative) {
+      await txCtx.connection.run(unlinkCoverQuery, [imageId])
+      await txCtx.connection.run(unlinkPartCoverQuery, [imageId])
+      await txCtx.connection.run(unlinkChapterCoverQuery, [imageId])
+      await txCtx.connection.run(deleteTagsQuery, [imageId])
+      await txCtx.connection.run(deleteQuery, [imageId])
+    } else {
+      txCtx.connection.run(unlinkCoverQuery, [imageId])
+      txCtx.connection.run(unlinkPartCoverQuery, [imageId])
+      txCtx.connection.run(unlinkChapterCoverQuery, [imageId])
+      txCtx.connection.run(deleteTagsQuery, [imageId])
+      txCtx.connection.run(deleteQuery, [imageId])
+    }
+  })
+  if (!ctx.isNative) {
     ctx.requestPersistence()
     await ctx.flushPersistence()
   }
