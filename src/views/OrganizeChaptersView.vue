@@ -5,6 +5,14 @@ import { useDatabase } from '@/composables/useDatabase'
 import OrganizeHeader from '@/components/organize/OrganizeHeader.vue'
 import OrganizePartsBoard from '@/components/organize/OrganizePartsBoard.vue'
 import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter } from '@/lib/database'
+import {
+  applyChapterOrder,
+  arraysEqual,
+  buildChapterOrder,
+  moveListItem,
+  parseIdArray,
+  reconcilePartOrder,
+} from '@/lib/chapterOrganization'
 import type { Chapter, OrganizedPart, ChaptersByPart } from '@/types/organize'
 
 const route = useRoute()
@@ -107,16 +115,6 @@ const chaptersByPart = computed<ChaptersByPart>(() => {
   }
 })
 
-const parseIdArray = (value: string | null | undefined): string[] => {
-  if (!value) return []
-  try {
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
 const syncBoardLists = () => {
   const partIdSet = new Set<string>()
   const nextPartLists: Record<string, Chapter[]> = {}
@@ -135,9 +133,6 @@ const syncBoardLists = () => {
     .map((chapter) => chapter)
 }
 
-const arraysEqual = (a: string[], b: string[]) =>
-  a.length === b.length && a.every((value, index) => value === b[index])
-
 const setPartOrderState = (newOrder: string[]) => {
   const uniqueOrder = Array.from(new Set(newOrder))
   partOrder.value = uniqueOrder
@@ -153,17 +148,9 @@ const syncPartOrderWithParts = async () => {
     return
   }
 
-  const storedOrder = parseIdArray(book.value.part_order)
-  const partIds = parts.value.map((part) => part.id)
-  const sanitized = storedOrder.filter((id) => partIds.includes(id))
-  const missing = parts.value
-    .filter((part) => !sanitized.includes(part.id))
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-    .map((part) => part.id)
+  const { order: updatedOrder, changed } = reconcilePartOrder(book.value.part_order, parts.value)
 
-  const updatedOrder = [...sanitized, ...missing]
-
-  if (!arraysEqual(updatedOrder, storedOrder)) {
+  if (changed) {
     try {
       await updatePartOrder(requireBookId(), updatedOrder)
     } catch (error) {
@@ -188,30 +175,6 @@ const persistPartOrder = async (newOrder: string[]) => {
     console.error('Failed to update part order:', error)
     return false
   }
-}
-
-const buildChapterOrder = (partUpdates: Record<string, string[]>) => {
-  const chapterOrder: string[] = []
-
-  if (partUpdates['null']) {
-    chapterOrder.push(...partUpdates['null'])
-  }
-
-  const visited = new Set<string>()
-  partOrder.value.forEach((partId) => {
-    visited.add(partId)
-    if (partUpdates[partId]) {
-      chapterOrder.push(...partUpdates[partId])
-    }
-  })
-
-  Object.entries(partUpdates).forEach(([partId, chapterIds]) => {
-    if (partId !== 'null' && !visited.has(partId)) {
-      chapterOrder.push(...chapterIds)
-    }
-  })
-
-  return chapterOrder
 }
 
 const formatWordCount = (count: number) => {
@@ -265,31 +228,8 @@ const loadData = async () => {
 
     const chapterList = await Promise.all(chapterPromises)
 
-    const applyOrder = (items: Chapter[], orderIds: string[]) => {
-      if (!orderIds.length) return items
-      const chapterMap = new Map(items.map((chapter) => [chapter.id, chapter]))
-      const ordered: Chapter[] = []
-
-      orderIds.forEach((id) => {
-        const chapter = chapterMap.get(id)
-        if (chapter) {
-          ordered.push(chapter)
-          chapterMap.delete(id)
-        }
-      })
-
-      chapterMap.forEach((chapter) => {
-        ordered.push(chapter)
-      })
-
-      return ordered.map((chapter, index) => ({
-        ...chapter,
-        position: index,
-      }))
-    }
-
     const chapterOrderIds = parseIdArray(book.value?.chapter_order)
-    chapters.value = applyOrder(chapterList, chapterOrderIds)
+    chapters.value = applyChapterOrder(chapterList, chapterOrderIds)
 
     const partOrderMap = new Map(
       parts.value.map((part) => [part.id, parseIdArray(part.chapter_order)])
@@ -404,7 +344,7 @@ const saveChapterOrder = async () => {
       partUpdates[part.id] = part.chapters.map((c) => c.id)
     })
 
-    const chapterOrder = buildChapterOrder(partUpdates)
+    const chapterOrder = buildChapterOrder(partUpdates, partOrder.value)
     await updateChapterOrders(requireBookId(), chapterOrder, partUpdates, partOrder.value)
     await loadData()
   } catch (error) {
@@ -466,18 +406,12 @@ const moveChapterToPart = async (chapterId: string, partId: string | null) => {
 }
 
 const moveChapterUp = async (chapterList: Chapter[], index: number) => {
-  if (index === 0) return
-  const temp = chapterList[index]
-  chapterList[index] = chapterList[index - 1]
-  chapterList[index - 1] = temp
+  if (!moveListItem(chapterList, index, -1)) return
   await saveChapterOrder()
 }
 
 const moveChapterDown = async (chapterList: Chapter[], index: number) => {
-  if (index >= chapterList.length - 1) return
-  const temp = chapterList[index]
-  chapterList[index] = chapterList[index + 1]
-  chapterList[index + 1] = temp
+  if (!moveListItem(chapterList, index, 1)) return
   await saveChapterOrder()
 }
 
