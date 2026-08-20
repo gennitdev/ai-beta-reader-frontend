@@ -96,7 +96,7 @@ src/
 - **Vue 3** - Composition API with `<script setup>`
 - **TypeScript** - Type safety throughout
 - **Vue Router** - Client-side routing with nested routes
-- **Pinia** - State management
+- **Vue composables** - Shared application and UI state
 - **Tailwind CSS** - Utility-first styling with dark mode
 - **Headless UI** - Accessible unstyled components
 - **Heroicons** - Icon library
@@ -107,7 +107,6 @@ src/
 - **Axios** - HTTP client for backend API
 - **Markdown-it + Highlight.js** - Markdown parsing and syntax highlighting
 - **crypto-js** - Data encryption for cloud sync
-- **Vue Query** - Server state management
 
 ## Environment Variables
 ```bash
