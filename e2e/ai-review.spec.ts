@@ -26,20 +26,17 @@ test('generate a chapter summary and render POV + characters', async ({ page, op
   await seedOpenAIKey(page)
   await createBookWithChapter(page, SEED)
 
-  // Narrow layouts collapse the summary panel behind a toggle; desktop layouts show it directly.
-  const showSummaryButton = page.getByRole('button', { name: 'Show Summary Panel' }).filter({ visible: true })
-  if (await showSummaryButton.count()) {
-    await showSummaryButton.first().click()
-  }
+  const summaryCard = page.getByRole('region', { name: 'Summary' }).filter({ visible: true }).first()
 
   // Turn off the wiki-update side effect so summary generation is a single call.
-  await page.getByRole('checkbox').filter({ visible: true }).first().uncheck()
+  await summaryCard.getByRole('checkbox').uncheck()
 
-  await page.getByRole('button', { name: 'Generate', exact: true }).filter({ visible: true }).first().click()
+  await summaryCard.getByRole('button', { name: 'Generate', exact: true }).click()
+
+  // A saved summary collapses to its preview; reopen it to inspect structured details.
+  await summaryCard.getByRole('button', { name: 'Show all' }).click()
 
   // The parsed summary is persisted and rendered.
-  await expect(page.getByText('Alice confronts Bob at the tower.').filter({ visible: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Show all' }).filter({ visible: true }).first().click()
   await expect(page.getByText('Third person limited').filter({ visible: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Alice' }).filter({ visible: true }).first()).toBeVisible()
   expect(openai.callCount()).toBeGreaterThan(0)

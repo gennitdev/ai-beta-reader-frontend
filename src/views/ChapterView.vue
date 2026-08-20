@@ -18,10 +18,10 @@ import {
   formatDate,
   getTruncatedText,
 } from "@/utils/chapterView";
-import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterNotesPanel from "@/components/chapter/ChapterNotesPanel.vue";
 import ChapterContentSection from "@/components/chapter/ChapterContentSection.vue";
+import ChapterPreviewCard from "@/components/chapter/ChapterPreviewCard.vue";
 import ChapterReviewsSection from "@/components/chapter/ChapterReviewsSection.vue";
 import ChapterHeroSection from "@/components/chapter/ChapterHeroSection.vue";
 import ChapterIllustrationsSection from "@/components/chapter/ChapterIllustrationsSection.vue";
@@ -157,7 +157,6 @@ const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ??
 const {
   showSummaryPanel,
   showNotesPanel,
-  showIllustrationsPanel,
   showFullChapterText,
   isEditingSummary,
   editedSummary,
@@ -171,7 +170,14 @@ const {
 } = useChapterPanels({ chapter });
 
 // Reading font-size preference (shared with wiki pages, persisted)
-const { fontSize } = useReadingFontSize();
+const { fontSize, fontFamily } = useReadingFontSize();
+
+const readingTextSizeClass = computed(() => {
+  if (fontSize.value === "small") return "text-sm";
+  if (fontSize.value === "large") return "text-lg";
+  if (fontSize.value === "extra-large") return "text-xl";
+  return "text-base";
+});
 
 // Chapter delete state
 const showDeleteModal = ref(false);
@@ -519,64 +525,85 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="w-full">
-    <ChapterHeaderBar
-      v-if="!heroImageSrc"
-      :is-mobile-route="isMobileRoute"
-      :chapter-title="chapter?.title || null"
-      :chapter-id="chapterId"
-      :word-count="chapter?.word_count || 0"
-      :is-summarized="Boolean(chapter?.summary)"
-      :is-editing="isEditing"
-      :edited-title="editedTitle"
-      :show-summary-panel="showSummaryPanel"
-      :saving-chapter="savingChapter"
-      :has-unsaved-changes="hasUnsavedChanges"
-      @go-back="goBack"
-      @update:editedTitle="editedTitle = $event"
-      @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
-      @start-edit="startEdit"
-      @cancel-edit="cancelEdit"
-      @save-chapter="saveChapter"
-      @delete-chapter="requestDeleteChapter"
-    />
-
+  <div class="w-full lg:h-full lg:overflow-hidden">
     <!-- Hero Image Section -->
     <ChapterHeroSection
       v-if="heroImageSrc"
+      class="lg:hidden"
       :hero-image-src="heroImageSrc"
-      :book-title="currentBook?.title || ''"
-      :chapter-title="chapter?.title || ''"
-      :word-count="chapter?.word_count || 0"
-      :has-summary="Boolean(chapter?.summary)"
-      :is-editing="isEditing"
-      :edited-title="editedTitle"
-      :saving-chapter="savingChapter"
-      :has-unsaved-changes="hasUnsavedChanges"
-      @update:edited-title="editedTitle = $event"
+      :show-back="!isMobileRoute"
       @open-lightbox="openHeroLightbox"
       @go-back="goBack"
-      @start-edit="startEdit"
-      @cancel-edit="cancelEdit"
-      @save-chapter="saveChapter"
-      @delete-chapter="requestDeleteChapter"
     />
 
-    <div class="w-full max-w-6xl px-4 pt-6 md:mx-auto lg:px-8">
-      <div class="lg:grid lg:grid-cols-3 lg:gap-8">
-        <div class="lg:col-span-2">
+    <div class="w-full max-w-6xl px-4 pt-6 md:mx-auto lg:h-full lg:max-w-none lg:px-0 lg:pt-0">
+      <div class="lg:grid lg:h-full lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+        <div class="lg:min-h-0 lg:overflow-y-auto">
+          <ChapterHeroSection
+            v-if="heroImageSrc"
+            class="hidden lg:block"
+            :hero-image-src="heroImageSrc"
+            @open-lightbox="openHeroLightbox"
+            @go-back="goBack"
+          />
+
+          <div class="lg:mx-auto lg:max-w-4xl lg:px-8 lg:pt-6">
+          <div v-if="chapter" class="mb-2">
+            <button
+              v-if="isMobileRoute"
+              type="button"
+              class="mb-5 inline-flex items-center rounded-md px-2 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+              @click="goBack"
+            >
+              <svg class="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
+
+            <label
+              v-if="isEditing"
+              class="block text-center"
+              :class="[readingTextSizeClass, `reading-font-${fontFamily}`]"
+            >
+              <span class="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Chapter title
+              </span>
+              <input
+                v-model="editedTitle"
+                type="text"
+                placeholder="Enter chapter title..."
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-center text-[2.25em] font-extrabold leading-[1.111] text-gray-900 placeholder-gray-400 focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-navy-800 dark:text-white dark:placeholder-gray-500"
+                data-testid="chapter-title-input"
+              />
+            </label>
+            <div
+              v-else
+              class="prose prose-gray max-w-none dark:prose-invert"
+              :class="[readingTextSizeClass, `reading-font-${fontFamily}`]"
+            >
+              <h1 class="!m-0 text-center">
+                {{ chapter.title || "Untitled Chapter" }}
+              </h1>
+            </div>
+          </div>
+
           <ChapterStatusBar
+            v-if="chapter"
+            class="mb-6 lg:hidden"
             :word-count="chapter?.word_count || 0"
             :has-summary="Boolean(chapter?.summary)"
             :has-notes="Boolean(chapter?.notes)"
-            :show-summary-panel="showSummaryPanel"
-            :show-notes-panel="showNotesPanel"
-            :has-illustrations="chapterImages.length > 0"
-            :show-illustrations-panel="showIllustrationsPanel || chapterImages.length > 0"
-            :can-select-images="chapterImageUploadAvailable"
-            @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
-            @toggle-notes-panel="showNotesPanel = !showNotesPanel"
-            @toggle-illustrations-panel="showIllustrationsPanel = !showIllustrationsPanel"
+            :chapter-text="chapter.text"
+            :font-size="fontSize"
+            :font-family="fontFamily"
+            :is-editing="isEditing"
+            :saving-chapter="savingChapter"
+            :has-unsaved-changes="hasUnsavedChanges"
+            @start-edit="startEdit"
+            @cancel-edit="cancelEdit"
+            @save-chapter="saveChapter"
+            @delete-chapter="requestDeleteChapter"
           />
           <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
             <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-gold-600"></div>
@@ -586,98 +613,190 @@ onBeforeUnmount(() => {
             v-else-if="chapter"
             class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-6 sm:divide-y-0"
           >
-        <ChapterSummaryPanel
-          v-if="showSummaryPanel"
-          :chapter-summary="chapter.summary || ''"
-          :chapter-pov="chapter.pov ?? undefined"
-          :chapter-characters="chapter.characters || []"
-          :chapter-beats="chapter.beats || []"
-          :is-editing-summary="isEditingSummary"
-          :edited-summary="editedSummary"
-          :generating-summary="generatingSummary"
-          :saving-summary="savingSummary"
-          :update-wiki-enabled="updateWikiOnSummary"
-          :summary-progress="summaryProgress"
-          :summary-error="summaryError"
-          :wiki-update-results="wikiUpdateResults"
-          :show-wiki-update-results="showWikiUpdateResults"
-          :character-lookup="getCharacterWikiInfo"
-          :route-prefix="routePrefix"
-          :book-id="bookId"
-          @update:editedSummary="editedSummary = $event"
-          @update:updateWikiEnabled="updateWikiOnSummary = $event"
-          @start-edit="startEditingSummary"
-          @cancel-edit="cancelEditingSummary"
-          @save="handleSaveSummary"
-          @generate="() => generateSummary(updateWikiOnSummary)"
-          @character-click="navigateToWiki"
-          @dismiss-wiki-results="showWikiUpdateResults = false"
-        />
+            <ChapterContentSection
+              :is-editing="isEditing"
+              :edited-text="editedText"
+              :chapter-text="chapter.text"
+              :show-full-chapter-text="showFullChapterText"
+              :truncated-chapter-text="chapterTruncation"
+              :font-size="fontSize"
+              :font-family="fontFamily"
+              @update:editedText="editedText = $event"
+              @toggle-full-chapter="showFullChapterText = $event"
+            />
 
-        <ChapterNotesPanel
-          v-if="showNotesPanel"
-          :chapter-notes="chapter.notes || ''"
-          :is-editing-notes="isEditingNotes"
-          :edited-notes="editedNotes"
-          :saving-notes="savingNotes"
-          @update:editedNotes="editedNotes = $event"
-          @start-edit="startEditingNotes"
-          @cancel-edit="cancelEditingNotes"
-          @save="handleSaveNotes"
-        />
+            <div class="space-y-4 py-6 lg:hidden">
+              <ChapterPreviewCard
+                title="Summary"
+                :content="chapter.summary || ''"
+                :expanded="showSummaryPanel"
+                @toggle-expanded="showSummaryPanel = !showSummaryPanel"
+              >
+                <ChapterSummaryPanel
+                  :chapter-summary="chapter.summary || ''"
+                  :chapter-pov="chapter.pov ?? undefined"
+                  :chapter-characters="chapter.characters || []"
+                  :chapter-beats="chapter.beats || []"
+                  :is-editing-summary="isEditingSummary"
+                  :edited-summary="editedSummary"
+                  :generating-summary="generatingSummary"
+                  :saving-summary="savingSummary"
+                  :update-wiki-enabled="updateWikiOnSummary"
+                  :summary-progress="summaryProgress"
+                  :summary-error="summaryError"
+                  :wiki-update-results="wikiUpdateResults"
+                  :show-wiki-update-results="showWikiUpdateResults"
+                  :character-lookup="getCharacterWikiInfo"
+                  :route-prefix="routePrefix"
+                  :book-id="bookId"
+                  @update:editedSummary="editedSummary = $event"
+                  @update:updateWikiEnabled="updateWikiOnSummary = $event"
+                  @start-edit="startEditingSummary"
+                  @cancel-edit="cancelEditingSummary"
+                  @save="handleSaveSummary"
+                  @generate="() => generateSummary(updateWikiOnSummary)"
+                  @character-click="navigateToWiki"
+                  @dismiss-wiki-results="showWikiUpdateResults = false"
+                />
+              </ChapterPreviewCard>
 
-        <ChapterContentSection
-          :is-editing="isEditing"
-          :edited-text="editedText"
-          :chapter-text="chapter.text"
-          :show-full-chapter-text="showFullChapterText"
-          :truncated-chapter-text="chapterTruncation"
-          :font-size="fontSize"
-          @update:editedText="editedText = $event"
-          @toggle-full-chapter="showFullChapterText = $event"
-        />
+              <ChapterPreviewCard
+                title="Notes"
+                :content="chapter.notes || ''"
+                :expanded="showNotesPanel"
+                @toggle-expanded="showNotesPanel = !showNotesPanel"
+              >
+                <ChapterNotesPanel
+                  :chapter-notes="chapter.notes || ''"
+                  :is-editing-notes="isEditingNotes"
+                  :edited-notes="editedNotes"
+                  :saving-notes="savingNotes"
+                  @update:editedNotes="editedNotes = $event"
+                  @start-edit="startEditingNotes"
+                  @cancel-edit="cancelEditingNotes"
+                  @save="handleSaveNotes"
+                />
+              </ChapterPreviewCard>
+            </div>
 
-        <ChapterReviewsSection
-          :review-tone="reviewTone"
-          :custom-profiles="customProfiles"
-          :saved-reviews="savedReviews"
-          :loading-reviews="loadingReviews"
-          :generating-review="generatingReview"
-          :deleting-review-id="deletingReviewId"
-          :expanded-reviews="expandedReviews"
-          :expanded-prompts="expandedPrompts"
-          :format-date="formatDate"
-          :get-truncated-text="getTruncatedText"
-          @update:reviewTone="reviewTone = $event"
-          @generate-review="generateReview"
-          @delete-review="deleteReview"
-          @toggle-review="toggleReviewExpansion"
-          @toggle-prompt="togglePromptExpansion"
-        />
+            <ChapterReviewsSection
+              :review-tone="reviewTone"
+              :custom-profiles="customProfiles"
+              :saved-reviews="savedReviews"
+              :loading-reviews="loadingReviews"
+              :generating-review="generatingReview"
+              :deleting-review-id="deletingReviewId"
+              :expanded-reviews="expandedReviews"
+              :expanded-prompts="expandedPrompts"
+              :format-date="formatDate"
+              :get-truncated-text="getTruncatedText"
+              @update:reviewTone="reviewTone = $event"
+              @generate-review="generateReview"
+              @delete-review="deleteReview"
+              @toggle-review="toggleReviewExpansion"
+              @toggle-prompt="togglePromptExpansion"
+            />
 
-        <div class="mt-6 lg:hidden">
-          <ChapterWikiLinksCard
-            :route-prefix="routePrefix"
-            :book-id="bookId"
-            :chapter-id="chapterId"
-            :links="linkedWikiPages"
-            :options="linkedWikiPageOptions"
-            :selected-ids="selectedLinkedWikiPageIds"
-            :loading="loadingLinkedWikiPages"
-            :is-editing="isEditingLinkedWikiPages"
-            :saving="savingLinkedWikiPages"
-            @start-edit="startEditingLinkedWikiPages"
-            @cancel-edit="cancelEditingLinkedWikiPages"
-            @save="saveLinkedWikiPages"
-            @update:selected-ids="selectedLinkedWikiPageIds = $event"
-          />
-        </div>
+            <div class="mt-6 lg:hidden">
+              <ChapterWikiLinksCard
+                :route-prefix="routePrefix"
+                :book-id="bookId"
+                :chapter-id="chapterId"
+                :links="linkedWikiPages"
+                :options="linkedWikiPageOptions"
+                :selected-ids="selectedLinkedWikiPageIds"
+                :loading="loadingLinkedWikiPages"
+                :is-editing="isEditingLinkedWikiPages"
+                :saving="savingLinkedWikiPages"
+                @start-edit="startEditingLinkedWikiPages"
+                @cancel-edit="cancelEditingLinkedWikiPages"
+                @save="saveLinkedWikiPages"
+                @update:selected-ids="selectedLinkedWikiPageIds = $event"
+              />
+            </div>
+          </div>
           </div>
         </div>
 
-        <aside class="mt-6 space-y-6 lg:mt-0">
+        <aside
+          class="mt-6 space-y-6 lg:mt-0 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-gray-200 lg:bg-gray-100/60 lg:px-6 lg:py-6 dark:lg:border-navy-700 dark:lg:bg-navy-950/30"
+          data-testid="chapter-detail-sidebar"
+        >
+          <ChapterStatusBar
+            v-if="chapter"
+            class="hidden lg:block"
+            :word-count="chapter?.word_count || 0"
+            :has-summary="Boolean(chapter?.summary)"
+            :has-notes="Boolean(chapter?.notes)"
+            :chapter-text="chapter.text"
+            :font-size="fontSize"
+            :font-family="fontFamily"
+            :is-editing="isEditing"
+            :saving-chapter="savingChapter"
+            :has-unsaved-changes="hasUnsavedChanges"
+            @start-edit="startEdit"
+            @cancel-edit="cancelEdit"
+            @save-chapter="saveChapter"
+            @delete-chapter="requestDeleteChapter"
+          />
+
+          <ChapterPreviewCard
+            v-if="chapter"
+            class="hidden lg:block"
+            title="Summary"
+            :content="chapter.summary || ''"
+            :expanded="showSummaryPanel"
+            @toggle-expanded="showSummaryPanel = !showSummaryPanel"
+          >
+            <ChapterSummaryPanel
+              :chapter-summary="chapter.summary || ''"
+              :chapter-pov="chapter.pov ?? undefined"
+              :chapter-characters="chapter.characters || []"
+              :chapter-beats="chapter.beats || []"
+              :is-editing-summary="isEditingSummary"
+              :edited-summary="editedSummary"
+              :generating-summary="generatingSummary"
+              :saving-summary="savingSummary"
+              :update-wiki-enabled="updateWikiOnSummary"
+              :summary-progress="summaryProgress"
+              :summary-error="summaryError"
+              :wiki-update-results="wikiUpdateResults"
+              :show-wiki-update-results="showWikiUpdateResults"
+              :character-lookup="getCharacterWikiInfo"
+              :route-prefix="routePrefix"
+              :book-id="bookId"
+              @update:editedSummary="editedSummary = $event"
+              @update:updateWikiEnabled="updateWikiOnSummary = $event"
+              @start-edit="startEditingSummary"
+              @cancel-edit="cancelEditingSummary"
+              @save="handleSaveSummary"
+              @generate="() => generateSummary(updateWikiOnSummary)"
+              @character-click="navigateToWiki"
+              @dismiss-wiki-results="showWikiUpdateResults = false"
+            />
+          </ChapterPreviewCard>
+
+          <ChapterPreviewCard
+            v-if="chapter"
+            class="hidden lg:block"
+            title="Notes"
+            :content="chapter.notes || ''"
+            :expanded="showNotesPanel"
+            @toggle-expanded="showNotesPanel = !showNotesPanel"
+          >
+            <ChapterNotesPanel
+              :chapter-notes="chapter.notes || ''"
+              :is-editing-notes="isEditingNotes"
+              :edited-notes="editedNotes"
+              :saving-notes="savingNotes"
+              @update:editedNotes="editedNotes = $event"
+              @start-edit="startEditingNotes"
+              @cancel-edit="cancelEditingNotes"
+              @save="handleSaveNotes"
+            />
+          </ChapterPreviewCard>
+
           <ChapterIllustrationsSection
-            v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
             layout="panel"
             :images="chapterImages"
             :image-sources="chapterImageSources"
@@ -719,7 +838,11 @@ onBeforeUnmount(() => {
             :loading="loadingChapterRevisions"
           />
 
-          <FontSizeControl v-model="fontSize" variant="panel" />
+          <FontSizeControl
+            v-model="fontSize"
+            v-model:font-family="fontFamily"
+            variant="panel"
+          />
         </aside>
       </div>
     </div>

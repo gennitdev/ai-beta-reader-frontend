@@ -89,19 +89,10 @@ vi.mock('@/composables/useChapterMutationFlow', async () => {
 
 vi.mock('@/composables/useReadingFontSize', async () => {
   const { ref } = await import('vue')
-  return { useReadingFontSize: () => ({ fontSize: ref('18') }) }
+  return { useReadingFontSize: () => ({ fontSize: ref('medium'), fontFamily: ref('system') }) }
 })
 
 import ChapterView from '@/views/ChapterView.vue'
-
-const HeaderStub = {
-  props: ['chapterTitle', 'wordCount', 'isEditing', 'editedTitle'],
-  emits: ['goBack', 'startEdit', 'cancelEdit', 'saveChapter', 'deleteChapter', 'update:editedTitle'],
-  template: `<header><span data-testid="header-title">{{ chapterTitle }}</span><span data-testid="word-count">{{ wordCount }}</span>
-    <input data-testid="edited-title" :value="editedTitle" @input="$emit('update:editedTitle', $event.target.value)" />
-    <button data-testid="back" @click="$emit('goBack')">Back</button><button data-testid="edit" @click="$emit('startEdit')">Edit</button>
-    <button data-testid="save-chapter" @click="$emit('saveChapter')">Save</button><button data-testid="delete-chapter" @click="$emit('deleteChapter')">Delete</button></header>`,
-}
 
 const ContentStub = {
   props: ['chapterText', 'editedText', 'truncatedChapterText'], emits: ['update:editedText'],
@@ -109,8 +100,21 @@ const ContentStub = {
 }
 
 const StatusStub = {
-  emits: ['toggleSummaryPanel', 'toggleNotesPanel'],
-  template: '<div><button data-testid="summary-toggle" @click="$emit(\'toggleSummaryPanel\')">Summary</button><button data-testid="notes-toggle" @click="$emit(\'toggleNotesPanel\')">Notes</button></div>',
+  props: ['isEditing'],
+  emits: ['startEdit', 'saveChapter', 'deleteChapter'],
+  template: `<div>
+    <button data-testid="edit" @click="$emit('startEdit')">Edit Chapter</button>
+    <button data-testid="save-chapter" @click="$emit('saveChapter')">Save Chapter</button>
+    <button data-testid="delete-chapter" @click="$emit('deleteChapter')">Delete chapter</button>
+  </div>`,
+}
+
+const PreviewStub = {
+  props: ['title', 'content', 'expanded'], emits: ['toggleExpanded'],
+  template: `<section>
+    <button :data-testid="title === 'Summary' ? 'summary-toggle' : 'notes-toggle'" @click="$emit('toggleExpanded')">Show all</button>
+    <slot v-if="expanded || !content" />
+  </section>`,
 }
 
 const SummaryStub = {
@@ -151,10 +155,12 @@ function mountView() {
   const wrapper = mount(ChapterView, {
     global: {
       stubs: {
-        ChapterHeaderBar: HeaderStub, ChapterHeroSection: true, ChapterStatusBar: StatusStub,
+        ChapterHeroSection: true, ChapterStatusBar: StatusStub,
+        ChapterPreviewCard: PreviewStub,
         ChapterSummaryPanel: SummaryStub, ChapterNotesPanel: NotesStub, ChapterContentSection: ContentStub,
         ChapterReviewsSection: ReviewsStub, ChapterWikiLinksCard: LinksStub, ChapterVersionHistory: true,
-        ChapterIllustrationsSection: true, FontSizeControl: true, IllustrationDetail: true,
+        ChapterIllustrationsSection: { template: '<div data-testid="illustrations-card" />' },
+        FontSizeControl: true, IllustrationDetail: true,
         ConfirmDeleteModal: DeleteModalStub, Modal: { template: '<div><slot /></div>' },
       },
     },
@@ -201,10 +207,18 @@ describe('ChapterView', () => {
     expect(h.loadBooks).toHaveBeenCalled()
     expect(h.loadChapters).toHaveBeenCalledWith('book-1')
     expect(h.refreshChapterImages).toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="header-title"]').text()).toBe('The Gate')
+    expect(wrapper.get('h1').text()).toBe('The Gate')
+    expect(wrapper.get('h1').classes()).toContain('!m-0')
+    expect(wrapper.get('h1').element.parentElement?.classList).toContain('prose')
+    expect(wrapper.get('h1').element.parentElement?.classList).toContain('text-base')
+    expect(wrapper.get('h1').element.parentElement?.classList).toContain('reading-font-system')
     expect(wrapper.get('[data-testid="chapter-text"]').text()).toBe('A ghost waits at the gate.')
     expect(wrapper.text()).toContain('Specific and vivid.')
     expect(wrapper.text()).toContain('Heliconia')
+    expect(wrapper.get('[data-testid="illustrations-card"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="chapter-detail-sidebar"]').classes()).toEqual(
+      expect.arrayContaining(['lg:overflow-y-auto', 'lg:border-l']),
+    )
   })
 
   it('saves edited title and text, recalculates words, and reloads revisions', async () => {
@@ -212,7 +226,9 @@ describe('ChapterView', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="edit"]').trigger('click')
-    await wrapper.get('[data-testid="edited-title"]').setValue('The Open Gate')
+    expect(wrapper.get('[data-testid="chapter-title-input"]').classes()).toContain('text-[2.25em]')
+    expect(wrapper.get('[data-testid="chapter-title-input"]').element.parentElement?.classList).toContain('reading-font-system')
+    await wrapper.get('[data-testid="chapter-title-input"]').setValue('The Open Gate')
     await wrapper.get('[data-testid="edited-text"]').setValue('The ghost finally steps through.')
     await wrapper.get('[data-testid="save-chapter"]').trigger('click')
     await flushPromises()
@@ -221,7 +237,7 @@ describe('ChapterView', () => {
       id: 'chapter-1', title: 'The Open Gate', text: 'The ghost finally steps through.', word_count: 5,
     }))
     expect(h.getChapterRevisions).toHaveBeenCalledTimes(2)
-    expect(wrapper.get('[data-testid="header-title"]').text()).toBe('The Open Gate')
+    expect(wrapper.get('h1').text()).toBe('The Open Gate')
   })
 
   it('opens summary and notes panels and delegates their saves', async () => {
