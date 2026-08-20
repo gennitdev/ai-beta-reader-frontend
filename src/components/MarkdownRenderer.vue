@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github-dark.css'
 import { processWikiLinks } from '@/utils/wikiLinks'
 
 // Helper function to generate heading anchors
@@ -182,12 +181,8 @@ const fontSizeClass = computed(() => {
   color: #334155; /* slate-700 for light mode */
 }
 
-/* Dark mode is driven by prefers-color-scheme (Tailwind's default "media"
-   strategy — there is no .dark class on the page). */
-@media (prefers-color-scheme: dark) {
-  .markdown-body {
-    color: #e2e8f0; /* softer off-white to prevent glare on dark */
-  }
+:global(.dark) .markdown-body {
+  color: #e2e8f0; /* softer off-white to prevent glare on dark */
 }
 
 /* Generous paragraph spacing so the eye rests between thoughts */
@@ -207,10 +202,8 @@ const fontSizeClass = computed(() => {
   color: #475569;
 }
 
-@media (prefers-color-scheme: dark) {
-  .markdown-body :deep(blockquote) {
-    background-color: rgba(255, 255, 255, 0.04);
-    color: #cbd5e1;
-  }
+:global(.dark) .markdown-body :deep(blockquote) {
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
 }
 </style>

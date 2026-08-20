@@ -8,8 +8,9 @@ import { useCloudSync } from '@/composables/useCloudSync'
 import { useBrowserStorage } from '@/composables/useBrowserStorage'
 import { useDataExport } from '@/composables/useDataExport'
 import { useBardwallSettings } from '@/composables/useBardwallSettings'
+import { useTheme } from '@/composables/useTheme'
 import { formatStorageBytes } from '@/lib/browserStorage'
-import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon, CircleStackIcon, MusicalNoteIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, CloudArrowUpIcon, ArrowPathIcon, CircleStackIcon, MusicalNoteIcon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 
@@ -41,6 +42,7 @@ const goBack = () => {
 }
 
 const { bardwallEnabled } = useBardwallSettings()
+const { theme, setTheme } = useTheme()
 
 // OpenAI API key management
 const {
@@ -134,6 +136,51 @@ onMounted(async () => {
 
     <!-- Main Content -->
     <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <section class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800" aria-labelledby="appearance-heading">
+        <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+          <h2 id="appearance-heading" class="text-lg font-semibold text-gray-900 dark:text-white">Appearance</h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Choose the theme used throughout beta bot.
+          </p>
+        </div>
+        <div class="grid gap-3 px-6 py-4 sm:grid-cols-2" role="radiogroup" aria-labelledby="appearance-heading">
+          <button
+            type="button"
+            role="radio"
+            :aria-checked="theme === 'light'"
+            data-testid="theme-light"
+            class="flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors"
+            :class="theme === 'light'
+              ? 'border-gold-500 bg-gold-50 text-gold-900 ring-1 ring-gold-500 dark:bg-gold-900/30 dark:text-gold-100'
+              : 'border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'"
+            @click="setTheme('light')"
+          >
+            <SunIcon class="h-5 w-5" />
+            <span>
+              <span class="block font-medium">Light</span>
+              <span class="block text-xs opacity-75">Bright backgrounds and dark text</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            :aria-checked="theme === 'dark'"
+            data-testid="theme-dark"
+            class="flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors"
+            :class="theme === 'dark'
+              ? 'border-gold-500 bg-gold-50 text-gold-900 ring-1 ring-gold-500 dark:bg-gold-900/30 dark:text-gold-100'
+              : 'border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'"
+            @click="setTheme('dark')"
+          >
+            <MoonIcon class="h-5 w-5" />
+            <span>
+              <span class="block font-medium">Dark</span>
+              <span class="block text-xs opacity-75">Deep navy backgrounds and light text</span>
+            </span>
+          </button>
+        </div>
+      </section>
+
       <div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800">
         <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <div class="flex items-center space-x-2">

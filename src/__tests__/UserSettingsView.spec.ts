@@ -72,6 +72,7 @@ vi.mock('@/utils/platform', () => ({
 
 import UserSettingsView from '@/views/UserSettingsView.vue'
 import { BARDWALL_ENABLED_STORAGE_KEY } from '@/composables/useBardwallSettings'
+import { setTheme, THEME_STORAGE_KEY } from '@/composables/useTheme'
 
 const wrappers: VueWrapper[] = []
 
@@ -98,6 +99,8 @@ function button(wrapper: VueWrapper, label: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
+  setTheme('light')
+  localStorage.removeItem(THEME_STORAGE_KEY)
   h.books = []
   h.chapters = []
   h.cloudSyncReady = true
@@ -117,6 +120,24 @@ afterEach(() => {
 })
 
 describe('UserSettingsView', () => {
+  describe('appearance setting', () => {
+    it('switches themes and persists the selection', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="theme-light"]').attributes('aria-checked')).toBe('true')
+
+      await wrapper.get('[data-testid="theme-dark"]').trigger('click')
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
+      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
+      expect(wrapper.get('[data-testid="theme-dark"]').attributes('aria-checked')).toBe('true')
+
+      await wrapper.get('[data-testid="theme-light"]').trigger('click')
+      expect(document.documentElement.classList.contains('dark')).toBe(false)
+      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light')
+    })
+  })
+
   describe('Bardwall feature setting', () => {
     it('shows Bardwall by default', async () => {
       const wrapper = mountView()

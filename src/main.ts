@@ -1,23 +1,36 @@
 import './style.css'
 
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
 import App from './App.vue'
 import router from './router'
+import { initializeTheme, useTheme, type Theme } from '@/composables/useTheme'
+
+const initialTheme = initializeTheme()
+
+function syncNativeTheme(theme: Theme) {
+  if (!Capacitor.isNativePlatform()) return
+
+  const isDark = theme === 'dark'
+  void StatusBar.setBackgroundColor({ color: isDark ? '#00132f' : '#f9fafb' }).catch(() => {
+    // Ignore errors if background color configuration is unsupported.
+  })
+  void StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark }).catch(() => {
+    // Ignore style errors on unsupported platforms.
+  })
+}
 
 if (Capacitor.isNativePlatform()) {
   void StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {
     // Ignore errors if status bar overlay configuration is unsupported
   })
-  void StatusBar.setBackgroundColor({ color: '#1f2937' /* Tailwind gray-800 */ }).catch(() => {
-    // Fallback silently if background color cannot be applied
-  })
-  void StatusBar.setStyle({ style: Style.Light }).catch(() => {
-    // Ignore style errors on unsupported platforms
-  })
+  syncNativeTheme(initialTheme)
 }
+
+const { theme } = useTheme()
+watch(theme, syncNativeTheme)
 
 const app = createApp(App)
 
