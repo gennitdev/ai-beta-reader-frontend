@@ -272,7 +272,7 @@ describe('schema migrations', () => {
       'part_id', 'cover_image_id', 'updated_at',
     ]))
     expect(columns(database, 'image_assets')).toEqual(expect.arrayContaining([
-      'image_data', 'notes',
+      'image_data', 'notes', 'content_hash', 'content_hash_algorithm', 'content_byte_length',
     ]))
     expect(columns(database, 'wiki_pages')).toEqual(expect.arrayContaining([
       'is_pinned', 'cover_image_id',
@@ -345,9 +345,11 @@ describe('schema migrations', () => {
     await runMigrations(ctx)
 
     expect(schemaVersion(database)).toBe(CURRENT_SCHEMA_VERSION)
-    expect(columns(database, 'image_assets')).toEqual(expect.arrayContaining(['image_data', 'notes']))
-    expect(beginTransaction).toHaveBeenCalledTimes(2)
-    expect(commitTransaction).toHaveBeenCalledTimes(2)
+    expect(columns(database, 'image_assets')).toEqual(expect.arrayContaining([
+      'image_data', 'notes', 'content_hash', 'content_hash_algorithm', 'content_byte_length',
+    ]))
+    expect(beginTransaction).toHaveBeenCalledTimes(3)
+    expect(commitTransaction).toHaveBeenCalledTimes(3)
     expect(rollbackTransaction).not.toHaveBeenCalled()
     expect(ctx.requestPersistence).not.toHaveBeenCalled()
   })

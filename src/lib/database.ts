@@ -197,6 +197,9 @@ export interface ImageAsset {
   file_path: string;
   mime_type: string | null;
   image_data: string | null; // Base64 data URL for web storage and backup/restore
+  content_hash?: string | null;
+  content_hash_algorithm?: string | null;
+  content_byte_length?: number | null;
   notes: string;
   created_at: string;
   updated_at: string;

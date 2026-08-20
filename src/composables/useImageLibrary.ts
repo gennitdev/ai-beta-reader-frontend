@@ -17,6 +17,7 @@ import {
   browserStorageError,
   requestPersistentBrowserStorage,
 } from '@/lib/browserStorage'
+import { hashImageContent, verifyImageContent } from '@/lib/imageContentHash'
 
 function sanitizeBridgeAvailability(): boolean {
   return typeof window !== 'undefined' && Boolean(window.desktopImages) && isDesktopAppRuntime()
@@ -189,6 +190,28 @@ export function useImageLibrary() {
     imageSourceCache.delete(imageId)
   }
 
+  async function addContentIntegrity(asset: ImageAsset, blob: Blob): Promise<void> {
+    Object.assign(asset, await hashImageContent(blob))
+  }
+
+  async function verifyContentIntegrity(image: ImageAsset, blob: Blob): Promise<void> {
+    if (!image.content_hash) return
+    if (!image.content_hash_algorithm || image.content_byte_length == null) {
+      throw new Error(`The integrity metadata for ${image.file_name || 'this image'} is incomplete.`)
+    }
+    try {
+      await verifyImageContent(blob, {
+        content_hash: image.content_hash,
+        content_hash_algorithm: image.content_hash_algorithm,
+        content_byte_length: image.content_byte_length,
+      })
+    } catch (error) {
+      throw new Error(
+        `The image ${image.file_name || image.id} ${error instanceof Error ? error.message : String(error)}. Restore it from a known-good backup or replace it.`,
+      )
+    }
+  }
+
   async function getImageBlob(image: ImageAsset): Promise<Blob> {
     let storedBlob: Blob | null
     try {
@@ -197,8 +220,15 @@ export function useImageLibrary() {
       if (!electronImageStorageAvailable.value) throw browserStorageError(error, 'loaded')
       throw error
     }
-    if (storedBlob) return storedBlob
-    if (image.image_data) return dataUrlToBlob(image.image_data)
+    if (storedBlob) {
+      await verifyContentIntegrity(image, storedBlob)
+      return storedBlob
+    }
+    if (image.image_data) {
+      const embeddedBlob = dataUrlToBlob(image.image_data)
+      await verifyContentIntegrity(image, embeddedBlob)
+      return embeddedBlob
+    }
     throw new Error(
       `The image data for ${image.file_name || 'this image'} is missing from this device. Restore a backup that includes the image or remove the broken image entry.`,
     )
@@ -231,6 +261,9 @@ export function useImageLibrary() {
         chapterId,
         assetType: 'chapter',
       })
+      const blob = await getContentStore().read(asset)
+      if (!blob) throw new Error(`The selected image ${asset.file_name} could not be read after it was copied.`)
+      await addContentIntegrity(asset, blob)
       await saveImageAssetRecord(asset)
       saved.push(asset)
     }
@@ -264,6 +297,8 @@ export function useImageLibrary() {
           created_at: now,
           updated_at: now,
         }
+
+        await addContentIntegrity(asset, file)
 
         try {
           await browserImageStore.write(asset, file)
@@ -365,6 +400,9 @@ export function useImageLibrary() {
         chapterId: null,
         assetType: 'cover',
       })
+      const blob = await getContentStore().read(asset)
+      if (!blob) throw new Error(`The selected image ${asset.file_name} could not be read after it was copied.`)
+      await addContentIntegrity(asset, blob)
       await saveImageAssetRecord(asset)
     } else {
       const files = await selectBrowserImages(false)
@@ -403,6 +441,9 @@ export function useImageLibrary() {
         chapterId: null,
         assetType: 'part_cover',
       })
+      const blob = await getContentStore().read(asset)
+      if (!blob) throw new Error(`The selected image ${asset.file_name} could not be read after it was copied.`)
+      await addContentIntegrity(asset, blob)
       await saveImageAssetRecord(asset)
     } else {
       const files = await selectBrowserImages(false)

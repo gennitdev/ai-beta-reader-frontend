@@ -27,6 +27,9 @@ export function imageAssetFromSqlRow(row: unknown[]): ImageAsset {
     notes: row[8] == null ? '' : String(row[8]),
     created_at: String(row[9]),
     updated_at: String(row[10]),
+    content_hash: row[11] == null ? null : String(row[11]),
+    content_hash_algorithm: row[12] == null ? null : String(row[12]),
+    content_byte_length: row[13] == null ? null : Number(row[13]),
   }
 }
 
@@ -43,6 +46,9 @@ export function imageAssetFromNativeRow(row: Record<string, unknown>): ImageAsse
     notes: row.notes == null ? '' : String(row.notes),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
+    content_hash: row.content_hash == null ? null : String(row.content_hash),
+    content_hash_algorithm: row.content_hash_algorithm == null ? null : String(row.content_hash_algorithm),
+    content_byte_length: row.content_byte_length == null ? null : Number(row.content_byte_length),
   }
 }
 
@@ -57,8 +63,8 @@ function imageColumns(alias?: string): string {
 
 export async function saveImageAsset(ctx: DatabaseContext, asset: ImageAsset): Promise<void> {
   const query = `INSERT OR REPLACE INTO image_assets
-    (id, book_id, chapter_id, asset_type, file_name, file_path, mime_type, image_data, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    (id, book_id, chapter_id, asset_type, file_name, file_path, mime_type, image_data, notes, created_at, updated_at, content_hash, content_hash_algorithm, content_byte_length)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   const params = [
     asset.id,
     asset.book_id,
@@ -71,6 +77,9 @@ export async function saveImageAsset(ctx: DatabaseContext, asset: ImageAsset): P
     asset.notes ?? '',
     asset.created_at,
     asset.updated_at,
+    asset.content_hash ?? null,
+    asset.content_hash_algorithm ?? null,
+    asset.content_byte_length ?? null,
   ]
 
   if (ctx.isNative) {

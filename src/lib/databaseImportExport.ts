@@ -1,4 +1,4 @@
-export const DATABASE_EXPORT_VERSION = 6
+export const DATABASE_EXPORT_VERSION = 7
 
 export const IMAGE_ASSET_COLUMNS = [
   'id',
@@ -12,6 +12,9 @@ export const IMAGE_ASSET_COLUMNS = [
   'notes',
   'created_at',
   'updated_at',
+  'content_hash',
+  'content_hash_algorithm',
+  'content_byte_length',
 ]
 
 export const WIKI_PAGE_COLUMNS = [

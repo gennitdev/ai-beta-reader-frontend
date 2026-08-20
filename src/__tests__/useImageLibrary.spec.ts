@@ -77,6 +77,9 @@ describe('useImageLibrary browser lifecycle', () => {
     expect(saved[0]).toEqual(expect.objectContaining({
       file_path: 'web/00000000-0000-4000-8000-000000000001/one.png',
       image_data: null,
+      content_hash: '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
+      content_hash_algorithm: 'sha256-v1',
+      content_byte_length: 3,
     }))
     randomUUID.mockRestore()
   })
@@ -124,6 +127,18 @@ describe('useImageLibrary browser lifecycle', () => {
     await expect(library.getImageBlob(asset({ id: 'missing', file_name: 'missing.png' })))
       .rejects.toThrow('image data for missing.png is missing')
     expect(read).toHaveBeenCalledTimes(4)
+  })
+
+  it('rejects stored bytes that do not match persisted integrity metadata', async () => {
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'read')
+      .mockResolvedValue(new Blob([new Uint8Array([9, 9, 9])], { type: 'image/png' }))
+    const library = useImageLibrary()
+
+    await expect(library.getImageBlob(asset({
+      content_hash: '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
+      content_hash_algorithm: 'sha256-v1',
+      content_byte_length: 3,
+    }))).rejects.toThrow(/failed its integrity check.*known-good backup/i)
   })
 
   it('deletes metadata first and reports orphaned content for later reconciliation', async () => {
