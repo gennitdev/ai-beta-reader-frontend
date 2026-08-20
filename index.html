@@ -11,6 +11,26 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
     <title>beta bot</title>
+    <script>
+      (() => {
+        const storageKey = 'beta-bot-theme'
+        let storedTheme = null
+
+        try {
+          storedTheme = localStorage.getItem(storageKey)
+        } catch {
+          // Storage can be unavailable in hardened browser contexts.
+        }
+
+        const systemTheme = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light'
+        const theme = storedTheme === 'light' || storedTheme === 'dark' ? storedTheme : systemTheme
+        document.documentElement.classList.toggle('dark', theme === 'dark')
+        document.documentElement.dataset.theme = theme
+        document.documentElement.style.colorScheme = theme
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

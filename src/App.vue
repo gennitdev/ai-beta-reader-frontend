@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
-import { MagnifyingGlassIcon, PlusIcon, Bars3Icon, XMarkIcon, Cog6ToothIcon } from '@heroicons/vue/24/outline'
+import { MagnifyingGlassIcon, PlusIcon, Bars3Icon, XMarkIcon, Cog6ToothIcon, MoonIcon, SunIcon } from '@heroicons/vue/24/outline'
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
 import BrowserStorageNotice from '@/components/BrowserStorageNotice.vue'
 import PersistenceErrorNotice from '@/components/PersistenceErrorNotice.vue'
 import logoHorizontal from '@/assets/logo-horizontal.png'
+import logoHorizontalLight from '@/assets/logo-horizontal-light.png'
 import logoStacked from '@/assets/logo-stacked.png'
 import { getPrimaryNavItems } from '@/config/navigation'
 import { useBardwallSettings } from '@/composables/useBardwallSettings'
+import { useTheme } from '@/composables/useTheme'
 import type { Book, Chapter, ChapterRevision } from '@/lib/database'
 import type { FindReplaceScope } from '@/lib/findReplace'
 
@@ -46,6 +48,7 @@ const searchService = {
 
 const isSideNavOpen = ref(false)
 const { bardwallEnabled } = useBardwallSettings()
+const { theme, toggleTheme } = useTheme()
 const sideNavItems = computed(() => getPrimaryNavItems(bardwallEnabled.value))
 const standardSideNavItems = computed(() => sideNavItems.value.filter((item) => !item.featured))
 const featuredSideNavItems = computed(() => sideNavItems.value.filter((item) => item.featured))
@@ -280,7 +283,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
       </button>
 
       <!-- Header -->
-      <header v-else class="bg-navy-900 border-b border-navy-800 shadow-sm safe-area-top">
+      <header v-else class="safe-area-top border-b border-gray-200 bg-white shadow-sm dark:border-navy-800 dark:bg-navy-900">
         <div class="px-4 sm:px-6">
         <!-- Desktop layout -->
         <div
@@ -294,7 +297,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               @click="toggleSideNav"
               :aria-expanded="isSideNavOpen"
               aria-controls="side-nav"
-              class="p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
+              class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white"
               aria-label="Toggle navigation"
             >
               <Bars3Icon v-if="!isSideNavOpen" class="w-6 h-6" />
@@ -305,7 +308,12 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               class="flex items-center flex-shrink-0"
               aria-label="Open my books"
             >
-              <img :src="logoHorizontal" alt="beta bot" class="h-8 w-auto" />
+              <img
+                :src="theme === 'dark' ? logoHorizontal : logoHorizontalLight"
+                alt="beta bot"
+                class="w-auto"
+                :class="theme === 'dark' ? 'h-8' : '-my-1 h-10'"
+              />
             </router-link>
 
             <!-- Show breadcrumbs if available, otherwise show main nav -->
@@ -314,19 +322,19 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
                 <router-link
                   v-if="crumb.to"
                   :to="crumb.to"
-                  class="text-gold-300 hover:text-gold-200 transition-colors"
+                  class="text-gold-700 transition-colors hover:text-gold-600 dark:text-gold-300 dark:hover:text-gold-200"
                 >
                   {{ crumb.label }}
                 </router-link>
                 <span
                   v-else
-                  class="text-gray-200"
+                  class="text-gray-800 dark:text-gray-200"
                 >
                   {{ crumb.label }}
                 </span>
                 <span
                   v-if="index < breadcrumbs.length - 1"
-                  class="mx-2 text-gray-500"
+                  class="mx-2 text-gray-400 dark:text-gray-500"
                 >
                   >
                 </span>
@@ -335,8 +343,8 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
             <nav v-else-if="!isSettingsRoute" class="flex items-center space-x-6 whitespace-nowrap">
               <router-link
                 to="/books"
-                class="text-gray-200 hover:text-gold-300 font-medium transition-colors"
-                active-class="text-gold-300"
+                class="font-medium text-gray-700 transition-colors hover:text-gold-700 dark:text-gray-200 dark:hover:text-gold-300"
+                active-class="text-gold-700 dark:text-gold-300"
               >
                 My Books
               </router-link>
@@ -348,7 +356,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
             <button
               v-if="currentBookId"
               @click="goToNewChapter"
-              class="hidden md:flex items-center justify-center p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
+              class="hidden items-center justify-center rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white md:flex"
               title="New Chapter"
               aria-label="Create new chapter"
             >
@@ -358,13 +366,13 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
             <button
               v-if="currentBookId"
               @click="showSearchModal = true"
-              class="hidden md:flex items-center px-3 py-1.5 text-sm text-gray-300 bg-navy-800 hover:bg-navy-700 rounded-md border border-navy-700 transition-colors"
+              class="hidden items-center rounded-md border border-gray-200 bg-gray-100 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-200 dark:border-navy-700 dark:bg-navy-800 dark:text-gray-300 dark:hover:bg-navy-700 md:flex"
             >
               <MagnifyingGlassIcon class="w-4 h-4 mr-2" />
               <span class="whitespace-nowrap">
                 Type
                 <kbd
-                  class="px-1 py-0.5 text-xs font-semibold text-gray-200 bg-navy-900 border border-navy-700 rounded"
+                  class="rounded border border-gray-300 bg-white px-1 py-0.5 text-xs font-semibold text-gray-700 dark:border-navy-700 dark:bg-navy-900 dark:text-gray-200"
                 >
                   /
                 </kbd>
@@ -376,10 +384,22 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
             <button
               v-if="currentBookId"
               @click="showSearchModal = true"
-              class="md:hidden text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
+              class="rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white md:hidden"
               title="Search"
             >
               <MagnifyingGlassIcon class="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              class="hidden rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white md:flex"
+              :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+              :title="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+              :aria-pressed="theme === 'dark'"
+              data-testid="header-theme-toggle"
+              @click="toggleTheme"
+            >
+              <SunIcon v-if="theme === 'dark'" class="h-5 w-5" />
+              <MoonIcon v-else class="h-5 w-5" />
             </button>
             <!-- Settings menu -->
             <router-link
@@ -390,7 +410,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               <div class="w-8 h-8 bg-gold-500 rounded-full flex items-center justify-center">
                 <Cog6ToothIcon class="w-5 h-5 text-navy-900" />
               </div>
-              <span class="text-sm font-medium text-gray-200">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
                 Settings
               </span>
             </router-link>
@@ -399,7 +419,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               href="https://github.com/gennitdev/ai-beta-reader-frontend"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center px-3 py-2 text-gray-300 hover:text-white transition-colors"
+              class="inline-flex items-center px-3 py-2 text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
               title="View on GitHub"
             >
               <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -418,7 +438,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
                 @click="toggleSideNav"
                 :aria-expanded="isSideNavOpen"
                 aria-controls="side-nav"
-                class="p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
+                class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white"
                 aria-label="Toggle navigation"
               >
                 <Bars3Icon v-if="!isSideNavOpen" class="w-6 h-6" />
@@ -429,7 +449,12 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
                 class="flex items-center"
                 aria-label="Open my books"
               >
-                <img :src="logoHorizontal" alt="beta bot" class="h-8 w-auto" />
+                <img
+                  :src="theme === 'dark' ? logoHorizontal : logoHorizontalLight"
+                  alt="beta bot"
+                  class="w-auto"
+                  :class="theme === 'dark' ? 'h-8' : '-my-1 h-10'"
+                />
               </router-link>
             </div>
 
@@ -438,7 +463,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               <button
                 v-if="currentBookId"
                 @click="showSearchModal = true"
-                class="p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
+                class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white"
                 title="Search"
               >
                 <MagnifyingGlassIcon class="w-5 h-5" />
@@ -446,11 +471,24 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               <button
                 v-if="currentBookId"
                 @click="goToNewChapter"
-                class="p-2 text-gray-300 hover:text-white hover:bg-navy-800 rounded-md transition-colors"
+                class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white"
                 title="New Chapter"
                 aria-label="Create new chapter"
               >
                 <PlusIcon class="w-5 h-5" />
+              </button>
+
+              <button
+                type="button"
+                class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white"
+                :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+                :title="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+                :aria-pressed="theme === 'dark'"
+                data-testid="mobile-theme-toggle"
+                @click="toggleTheme"
+              >
+                <SunIcon v-if="theme === 'dark'" class="h-5 w-5" />
+                <MoonIcon v-else class="h-5 w-5" />
               </button>
 
               <!-- Settings menu -->
@@ -468,7 +506,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
                 href="https://github.com/gennitdev/ai-beta-reader-frontend"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center p-2 text-gray-300 hover:text-white transition-colors"
+                class="inline-flex items-center p-2 text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                 title="View on GitHub"
               >
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -484,19 +522,19 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               <router-link
                 v-if="crumb.to"
                 :to="crumb.to"
-                class="text-gold-300 hover:text-gold-200 transition-colors whitespace-nowrap"
+                class="whitespace-nowrap text-gold-700 transition-colors hover:text-gold-600 dark:text-gold-300 dark:hover:text-gold-200"
               >
                 {{ crumb.label }}
               </router-link>
               <span
                 v-else
-                class="text-gray-200 whitespace-nowrap"
+                class="whitespace-nowrap text-gray-800 dark:text-gray-200"
               >
                 {{ crumb.label }}
               </span>
               <span
                 v-if="index < breadcrumbs.length - 1"
-                class="mx-2 text-gray-500 whitespace-nowrap"
+                class="mx-2 whitespace-nowrap text-gray-400 dark:text-gray-500"
               >
                 >
               </span>
@@ -505,8 +543,8 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
           <nav v-else-if="!isSettingsRoute" class="flex items-center">
             <router-link
               to="/books"
-              class="text-gray-200 hover:text-gold-300 font-medium transition-colors"
-              active-class="text-gold-300"
+              class="font-medium text-gray-700 transition-colors hover:text-gold-700 dark:text-gray-200 dark:hover:text-gold-300"
+              active-class="text-gold-700 dark:text-gold-300"
             >
               My Books
             </router-link>

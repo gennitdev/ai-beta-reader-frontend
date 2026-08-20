@@ -56,18 +56,16 @@
   color: #00132f;
 }
 
-@media (prefers-color-scheme: dark) {
-  .legal-copy :deep(h2) {
-    color: #ffffff;
-  }
+:global(.dark .legal-copy h2) {
+  color: #ffffff;
+}
 
-  .legal-copy :deep(a) {
-    color: #deba63;
-  }
+:global(.dark .legal-copy a) {
+  color: #deba63;
+}
 
-  .legal-copy :deep(code) {
-    background: #122a47;
-    color: #fae8cd;
-  }
+:global(.dark .legal-copy code) {
+  background: #122a47;
+  color: #fae8cd;
 }
 </style>
