@@ -44,6 +44,15 @@ export function setupReloadWatcher(electronCapacitorApp: ElectronCapacitorApp): 
     });
 }
 
+export function scheduleRendererReady(mainWindow: BrowserWindow, isDev: boolean): void {
+  setTimeout(() => {
+    if (isDev) {
+      mainWindow.webContents.openDevTools();
+    }
+    CapElectronEventEmitter.emit('CAPELECTRON_DeeplinkListenerInitialized', '');
+  }, 400);
+}
+
 // Define our class to manage our app.
 export class ElectronCapacitorApp {
   private MainWindow: BrowserWindow | null = null;
@@ -205,43 +214,40 @@ export class ElectronCapacitorApp {
       if (!this.CapacitorFileConfig.electron?.hideMainWindowOnLaunch) {
         this.MainWindow.show();
       }
-      setTimeout(() => {
-        if (electronIsDev) {
-          this.MainWindow.webContents.openDevTools();
-        }
-        CapElectronEventEmitter.emit('CAPELECTRON_DeeplinkListenerInitialized', '');
-      }, 400);
+      scheduleRendererReady(this.MainWindow, electronIsDev);
     });
   }
 }
 
 // Set a CSP up for our application based on the custom scheme
+export function buildContentSecurityPolicy(customScheme: string, isDev: boolean): string {
+  // Allow 'wasm-unsafe-eval' for sql.js WebAssembly
+  // Allow Google Identity Services for OAuth
+  const defaultSrc = isDev
+    ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' 'wasm-unsafe-eval' data: blob:`
+    : `default-src ${customScheme}://* 'unsafe-inline' 'wasm-unsafe-eval' data: blob:`;
+  // Allow loading Google Identity Services script
+  const scriptSrc = isDev
+    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com`
+    : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com`;
+  const styleSrc = `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com`;
+  const fontSrc = `font-src 'self' data: https://fonts.gstatic.com`;
+  // Allow connecting to Google APIs for OAuth and Drive, and OpenAI API
+  const connectSrc = isDev
+    ? `connect-src ${customScheme}://* devtools://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://api.openai.com`
+    : `connect-src ${customScheme}://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://api.openai.com`;
+  // Allow Google auth popups/frames
+  const frameSrc = `frame-src https://accounts.google.com`;
+
+  return [defaultSrc, scriptSrc, styleSrc, fontSrc, connectSrc, frameSrc].join('; ');
+}
+
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    // Allow 'wasm-unsafe-eval' for sql.js WebAssembly
-    // Allow Google Identity Services for OAuth
-    const defaultSrc = electronIsDev
-      ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' 'wasm-unsafe-eval' data: blob:`
-      : `default-src ${customScheme}://* 'unsafe-inline' 'wasm-unsafe-eval' data: blob:`;
-    // Allow loading Google Identity Services script
-    const scriptSrc = electronIsDev
-      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com`
-      : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com`;
-    const styleSrc = `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com`;
-    const fontSrc = `font-src 'self' data: https://fonts.gstatic.com`;
-    // Allow connecting to Google APIs for OAuth and Drive, and OpenAI API
-    const connectSrc = electronIsDev
-      ? `connect-src ${customScheme}://* devtools://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://api.openai.com`
-      : `connect-src ${customScheme}://* data: blob: https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://api.openai.com`;
-    // Allow Google auth popups/frames
-    const frameSrc = `frame-src https://accounts.google.com`;
-
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [
-          [defaultSrc, scriptSrc, styleSrc, fontSrc, connectSrc, frameSrc].join('; '),
-        ],
+        'Content-Security-Policy': [buildContentSecurityPolicy(customScheme, electronIsDev)],
       },
     });
   });

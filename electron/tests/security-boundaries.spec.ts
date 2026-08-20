@@ -60,4 +60,11 @@ describe('Electron security boundaries', () => {
 
     expect(() => decodeImageDataUrl(`data:image/png;base64,${oversized}`)).toThrow(/maximum/)
   })
+
+  it('rejects a maximum-length unpadded payload that decodes beyond the byte limit', () => {
+    const encodedLength = Math.ceil(MAX_IMAGE_BYTES / 3) * 4
+    const decodedBeyondLimit = 'A'.repeat(encodedLength)
+
+    expect(() => decodeImageDataUrl(`data:image/png;base64,${decodedBeyondLimit}`)).toThrow(/maximum/)
+  })
 })
