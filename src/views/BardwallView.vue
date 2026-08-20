@@ -5,6 +5,7 @@ import { ArrowLeftIcon, CurrencyDollarIcon, MoonIcon } from '@heroicons/vue/24/o
 import { useBardwallChallenge } from '@/composables/useBardwallChallenge'
 import { useBardwallLastWord } from '@/composables/useBardwallLastWord'
 import { useBardwallOfferings } from '@/composables/useBardwallOfferings'
+import { useBardwallPerformance } from '@/composables/useBardwallPerformance'
 import BardwallTownMap, { type BardwallLocation } from '@/components/bardwall/BardwallTownMap.vue'
 import BardwallAmphitheater from '@/components/bardwall/BardwallAmphitheater.vue'
 import BardwallMorning from '@/components/bardwall/BardwallMorning.vue'
@@ -20,10 +21,8 @@ import {
   BARDWALL_STORY_RUBRIC,
   BARDWALL_WYRM_POTIONS,
   HELICONIA_PERSISTENCE_MESSAGES,
-  calculateBardwallPay,
   countBardwallWords,
   eatBardwallFood,
-  getBardwallDateKey,
   healBardAtApothecary,
   loadBardwallState,
   offerFlowerToHeliconia,
@@ -46,9 +45,6 @@ const router = useRouter()
 const screen = ref<BardwallScreen>('gate')
 const hasEntered = ref(false)
 const game = ref(loadBardwallState())
-const lastReward = ref({ coins: 0, words: 0 })
-const goalChoice = ref<number | 'custom'>(500)
-const customGoal = ref('')
 const marketMessage = ref<string | null>(null)
 const inventoryMessage = ref<string | null>(null)
 const lodgingChoice = ref<BardwallLodging>('tent')
@@ -79,6 +75,24 @@ const {
   removeToldPassages,
   resetOfferings,
 } = useBardwallOfferings(toldPassageIds)
+const {
+  lastReward,
+  goalChoice,
+  customGoal,
+  dailyGoal,
+  chosenGoal,
+  validChosenGoal,
+  expectedPay,
+  dailyProgress,
+  setDailyGoal: setPerformanceGoal,
+  tellStory: recordPerformance,
+  resetPerformanceUi,
+} = useBardwallPerformance(game, {
+  selectedOffering,
+  selectedPassages,
+  selectedWordCount,
+  removeToldPassages,
+})
 const {
   challengeGoalChoice,
   challengeWagerChoice,
@@ -131,15 +145,6 @@ const {
   resetLastWordUi,
   formatLastWordDate,
 } = useBardwallLastWord(game)
-const todayKey = computed(() => getBardwallDateKey())
-const dailyGoal = computed(() => game.value.dailyGoal?.date === todayKey.value ? game.value.dailyGoal : null)
-const chosenGoal = computed(() => goalChoice.value === 'custom' ? Number(customGoal.value) : goalChoice.value)
-const validChosenGoal = computed(() => Number.isFinite(chosenGoal.value) && chosenGoal.value > 0)
-const expectedPay = computed(() => calculateBardwallPay(selectedWordCount.value, dailyGoal.value?.wordCount ?? 0))
-const dailyProgress = computed(() => {
-  if (!dailyGoal.value) return 0
-  return Math.min(100, (dailyGoal.value.wordsTold / dailyGoal.value.wordCount) * 100)
-})
 const selectedNourishment = computed(() => BARDWALL_FOOD_ITEMS.reduce((total, item) => (
   total + item.nourishment * (mealSelection.value[item.id] ?? 0)
 ), 0))
@@ -221,46 +226,13 @@ const enterBardwall = async () => {
 }
 
 const setDailyGoal = async () => {
-  if (!validChosenGoal.value) return
-  game.value = {
-    ...game.value,
-    dailyGoal: {
-      date: todayKey.value,
-      wordCount: Math.round(chosenGoal.value),
-      wordsTold: 0,
-      coinsEarned: 0,
-      locked: false,
-    },
-  }
-  saveBardwallState(game.value)
+  if (!setPerformanceGoal()) return
   screen.value = 'town'
   if (!offerings.value.length) await loadOfferings()
 }
 
 const tellStory = () => {
-  if (!selectedOffering.value || selectedWordCount.value === 0) return
-  const words = selectedWordCount.value
-  const coins = expectedPay.value
-  const newlyToldPassageIds = selectedPassages.value.map((passage) => passage.id)
-  const goal = dailyGoal.value
-  if (!goal) return
-  game.value = {
-    ...game.value,
-    coins: game.value.coins + coins,
-    storiesTold: game.value.storiesTold + 1,
-    totalWordsTold: game.value.totalWordsTold + words,
-    dailyGoal: {
-      ...goal,
-      wordsTold: goal.wordsTold + words,
-      coinsEarned: goal.coinsEarned + coins,
-      locked: true,
-    },
-    toldPassageIds: [...new Set([...game.value.toldPassageIds, ...newlyToldPassageIds])],
-  }
-  saveBardwallState(game.value)
-  removeToldPassages(newlyToldPassageIds)
-  lastReward.value = { coins, words }
-  screen.value = 'reward'
+  if (recordPerformance()) screen.value = 'reward'
 }
 
 const returnToTown = async () => {
@@ -402,8 +374,7 @@ const endDay = () => {
 }
 
 const beginNextDay = () => {
-  goalChoice.value = 500
-  customGoal.value = ''
+  resetPerformanceUi()
   screen.value = 'goal'
 }
 
@@ -417,9 +388,7 @@ const beginBardwallAgain = async () => {
 
   game.value = resetBardwallState()
   resetOfferings()
-  lastReward.value = { coins: 0, words: 0 }
-  goalChoice.value = 500
-  customGoal.value = ''
+  resetPerformanceUi()
   marketMessage.value = null
   inventoryMessage.value = null
   lodgingChoice.value = 'tent'
