@@ -1,8 +1,6 @@
 import './style.css'
 
 import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import { VueQueryPlugin } from '@tanstack/vue-query'
 import { Capacitor } from '@capacitor/core'
 import { StatusBar, Style } from '@capacitor/status-bar'
 
@@ -23,8 +21,6 @@ if (Capacitor.isNativePlatform()) {
 
 const app = createApp(App)
 
-app.use(createPinia())
 app.use(router)
-app.use(VueQueryPlugin)
 
 app.mount('#app')
