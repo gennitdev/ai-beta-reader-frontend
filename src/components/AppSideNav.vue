@@ -43,9 +43,9 @@ const isBookActive = (bookId: string) => currentPath.value.startsWith(`/books/${
     aria-label="Primary navigation"
   >
     <router-link
-      to="/"
+      to="/books"
       class="flex items-center justify-center w-8 h-8 rounded-lg bg-gold-600 text-white font-semibold text-xs hover:bg-gold-500 transition-colors mx-auto"
-      aria-label="Go to dashboard"
+      aria-label="Open my books"
     >
       B
     </router-link>

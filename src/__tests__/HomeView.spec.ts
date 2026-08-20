@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({ books: [] as Array<{ id: string }> }))
 const loadBooks = vi.hoisted(() => vi.fn(async () => {}))
 const routerReplace = vi.hoisted(() => vi.fn())
 const routerPush = vi.hoisted(() => vi.fn())
+const runtime = vi.hoisted(() => ({ desktop: false, mobile: false }))
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: routerReplace, push: routerPush }),
@@ -19,6 +20,11 @@ vi.mock('@/composables/useDatabase', async () => {
     useDatabase: () => ({ books: ref(state.books), loadBooks }),
   }
 })
+
+vi.mock('@/utils/platform', () => ({
+  isDesktopAppRuntime: () => runtime.desktop,
+  isNativeMobileRuntime: () => runtime.mobile,
+}))
 
 function mountHome() {
   return mount(HomeView, {
@@ -35,6 +41,8 @@ function mountHome() {
 
 beforeEach(() => {
   state.books = []
+  runtime.desktop = false
+  runtime.mobile = false
   vi.clearAllMocks()
 })
 
@@ -54,13 +62,22 @@ describe('HomeView', () => {
     expect(wrapper.text()).toContain('optional Google Drive backup')
   })
 
-  it('redirects to /books when the user already has books', async () => {
+  it('shows an Open Beta Bot CTA without redirecting returning web users', async () => {
     state.books = [{ id: 'book-1' }]
     const wrapper = mountHome()
     await flushPromises()
 
+    expect(routerReplace).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Open Beta Bot')
+    expect(wrapper.text()).not.toContain('Start Writing Now')
+  })
+
+  it.each(['desktop', 'mobile'] as const)('keeps the %s app app-first', async (platform) => {
+    runtime[platform] = true
+    const wrapper = mountHome()
+    await flushPromises()
+
     expect(routerReplace).toHaveBeenCalledWith('/books')
-    // Still on the loading state, so the landing CTA is not rendered.
     expect(wrapper.text()).not.toContain('Start Writing Now')
   })
 

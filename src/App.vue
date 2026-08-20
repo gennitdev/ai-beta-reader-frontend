@@ -296,7 +296,11 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               <Bars3Icon v-if="!isSideNavOpen" class="w-6 h-6" />
               <XMarkIcon v-else class="w-6 h-6" />
             </button>
-            <router-link to="/" class="flex items-center flex-shrink-0">
+            <router-link
+              to="/books"
+              class="flex items-center flex-shrink-0"
+              aria-label="Open my books"
+            >
               <img :src="logoHorizontal" alt="beta bot" class="h-8 w-auto" />
             </router-link>
 
@@ -416,7 +420,11 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
                 <Bars3Icon v-if="!isSideNavOpen" class="w-6 h-6" />
                 <XMarkIcon v-else class="w-6 h-6" />
               </button>
-              <router-link to="/" class="flex items-center">
+              <router-link
+                to="/books"
+                class="flex items-center"
+                aria-label="Open my books"
+              >
                 <img :src="logoHorizontal" alt="beta bot" class="h-8 w-auto" />
               </router-link>
             </div>
@@ -529,10 +537,10 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
           >
             <div class="mb-4 flex shrink-0 items-start justify-between">
               <router-link
-                to="/"
+                to="/books"
                 class="block overflow-hidden rounded-xl ring-1 ring-navy-900/10 transition-opacity hover:opacity-90"
                 @click="closeSideNav"
-                aria-label="beta bot home"
+                aria-label="Open my books"
               >
                 <img :src="logoStacked" alt="beta bot" class="h-28 w-28 object-cover" />
               </router-link>
