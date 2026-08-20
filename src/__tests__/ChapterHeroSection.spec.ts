@@ -9,7 +9,12 @@ describe('ChapterHeroSection', () => {
       props: { heroImageSrc: '/chapter-cover.jpg' },
     })
 
-    expect(wrapper.get('img').attributes('src')).toBe('/chapter-cover.jpg')
+    expect(wrapper.findAll('img')).toHaveLength(2)
+    expect(wrapper.get('[data-testid="chapter-hero-image"]').attributes('src')).toBe('/chapter-cover.jpg')
+    expect(wrapper.get('[data-testid="chapter-hero-image"]').classes()).toContain('object-contain')
+    expect(wrapper.get('[data-testid="chapter-hero-backdrop"]').classes()).toContain('object-cover')
+    expect(wrapper.get('[data-testid="chapter-hero-backdrop"]').classes()).toContain('blur-2xl')
+    expect(wrapper.get('[data-testid="chapter-hero-backdrop"]').attributes('aria-hidden')).toBe('true')
     expect(wrapper.text()).toBe('Back')
 
     await wrapper.get('button').trigger('click')
