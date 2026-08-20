@@ -27,6 +27,14 @@ describe('router', () => {
     expect(router.resolve('/terms').meta.title).toBe('Terms of Use | beta bot')
   })
 
+  it('updates the document title after navigation', async () => {
+    await router.push('/privacy')
+    expect(document.title).toBe('Privacy Policy | beta bot')
+
+    await router.push('/books')
+    expect(document.title).toBe('beta bot')
+  })
+
   it('keeps Bardwall locations and cave activities inside Bardwall routes', () => {
     const market = router.resolve('/bardwall/market')
     expect(market.name).toBe('bardwall-location')

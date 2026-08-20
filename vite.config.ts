@@ -39,12 +39,12 @@ export default defineConfig({
       // Ratchet policy: keep these just below the current measured coverage so
       // they act as a regression floor. When a change raises coverage, nudge the
       // matching threshold up to lock in the gain — never lower them to make a
-      // change pass. Current actuals: stmts 74.18 / branch 52.81 / funcs 67.98 / lines 75.98.
+      // change pass. Current actuals: stmts 75.98 / branch 54.56 / funcs 69.93 / lines 77.74.
       thresholds: {
-        statements: 74,
-        branches: 52,
-        functions: 67,
-        lines: 75,
+        statements: 75,
+        branches: 54,
+        functions: 69,
+        lines: 77,
         'electron/src/**': {
           statements: 99,
           branches: 89,
