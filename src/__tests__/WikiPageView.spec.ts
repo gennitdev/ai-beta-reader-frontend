@@ -77,7 +77,7 @@ vi.mock('@/composables/useWikiImages', async () => {
 
 vi.mock('@/composables/useReadingFontSize', async () => {
   const { ref } = await import('vue')
-  return { useReadingFontSize: () => ({ fontSize: ref(18) }) }
+  return { useReadingFontSize: () => ({ fontSize: ref('medium'), fontFamily: ref('system') }) }
 })
 
 import WikiPageView from '@/views/WikiPageView.vue'

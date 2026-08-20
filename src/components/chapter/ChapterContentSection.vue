@@ -32,6 +32,10 @@ defineProps({
     type: String,
     default: "medium",
   },
+  fontFamily: {
+    type: String,
+    default: "system",
+  },
 });
 
 const emit = defineEmits<{
@@ -59,7 +63,7 @@ const toggleFullChapter = (value: boolean) => {
 
       <div v-else class="prose prose-gray max-w-none dark:prose-invert">
         <template v-if="!showFullChapterText && truncatedChapterText.needsTruncation">
-          <MarkdownRenderer :text="truncatedChapterText.truncated" :font-size="fontSize" reading-layout />
+          <MarkdownRenderer :text="truncatedChapterText.truncated" :font-size="fontSize" :font-family="fontFamily" reading-layout />
           <div class="not-prose">
             <span class="text-gray-500">...</span>
             <button
@@ -71,7 +75,7 @@ const toggleFullChapter = (value: boolean) => {
           </div>
         </template>
         <template v-else>
-          <MarkdownRenderer :text="chapterText" :font-size="fontSize" reading-layout />
+          <MarkdownRenderer :text="chapterText" :font-size="fontSize" :font-family="fontFamily" reading-layout />
           <div v-if="truncatedChapterText.needsTruncation" class="not-prose">
             <button
               @click="toggleFullChapter(false)"

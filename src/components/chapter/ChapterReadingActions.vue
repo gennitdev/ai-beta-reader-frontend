@@ -14,9 +14,11 @@ import {
 const props = withDefaults(defineProps<{
   chapterText?: string
   fontSize?: string
+  fontFamily?: string
 }>(), {
   chapterText: '',
   fontSize: 'medium',
+  fontFamily: 'system',
 })
 
 const isFullscreen = ref(false)
@@ -100,9 +102,7 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <section class="rounded-xl border border-gray-200 bg-white p-4 pt-5 dark:border-gray-700 dark:bg-navy-800">
-      <h3 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Reading</h3>
-      <div class="space-y-2">
+    <div class="space-y-2">
         <button
           type="button"
           class="flex w-full items-center gap-2 rounded-md border px-3 py-2.5 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2"
@@ -128,8 +128,7 @@ onUnmounted(() => {
           <ArrowsPointingOutIcon class="h-4 w-4 shrink-0" />
           Fullscreen reading
         </button>
-      </div>
-    </section>
+    </div>
 
     <Teleport to="body">
       <div v-if="isFullscreen" class="fixed inset-0 z-50">
@@ -150,7 +149,7 @@ onUnmounted(() => {
                   Exit fullscreen
                 </button>
                 <div class="prose prose-lg max-w-none dark:prose-invert">
-                  <MarkdownRenderer :text="chapterText" :font-size="fontSize" reading-layout />
+                  <MarkdownRenderer :text="chapterText" :font-size="fontSize" :font-family="fontFamily" reading-layout />
                 </div>
               </div>
             </div>

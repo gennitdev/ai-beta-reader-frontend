@@ -18,12 +18,10 @@ import {
   formatDate,
   getTruncatedText,
 } from "@/utils/chapterView";
-import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterNotesPanel from "@/components/chapter/ChapterNotesPanel.vue";
 import ChapterContentSection from "@/components/chapter/ChapterContentSection.vue";
 import ChapterPreviewCard from "@/components/chapter/ChapterPreviewCard.vue";
-import ChapterReadingActions from "@/components/chapter/ChapterReadingActions.vue";
 import ChapterReviewsSection from "@/components/chapter/ChapterReviewsSection.vue";
 import ChapterHeroSection from "@/components/chapter/ChapterHeroSection.vue";
 import ChapterIllustrationsSection from "@/components/chapter/ChapterIllustrationsSection.vue";
@@ -172,7 +170,7 @@ const {
 } = useChapterPanels({ chapter });
 
 // Reading font-size preference (shared with wiki pages, persisted)
-const { fontSize } = useReadingFontSize();
+const { fontSize, fontFamily } = useReadingFontSize();
 
 // Chapter delete state
 const showDeleteModal = ref(false);
@@ -521,56 +519,64 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="w-full">
-    <ChapterHeaderBar
-      v-if="!heroImageSrc"
-      :is-mobile-route="isMobileRoute"
-      :chapter-title="chapter?.title || null"
-      :chapter-id="chapterId"
-      :word-count="chapter?.word_count || 0"
-      :is-summarized="Boolean(chapter?.summary)"
-      :is-editing="isEditing"
-      :edited-title="editedTitle"
-      :show-summary-panel="showSummaryPanel"
-      :saving-chapter="savingChapter"
-      :has-unsaved-changes="hasUnsavedChanges"
-      @go-back="goBack"
-      @update:editedTitle="editedTitle = $event"
-      @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
-      @start-edit="startEdit"
-      @cancel-edit="cancelEdit"
-      @save-chapter="saveChapter"
-      @delete-chapter="requestDeleteChapter"
-    />
-
     <!-- Hero Image Section -->
     <ChapterHeroSection
       v-if="heroImageSrc"
       :hero-image-src="heroImageSrc"
-      :book-title="currentBook?.title || ''"
-      :chapter-title="chapter?.title || ''"
-      :word-count="chapter?.word_count || 0"
-      :has-summary="Boolean(chapter?.summary)"
-      :is-editing="isEditing"
-      :edited-title="editedTitle"
-      :saving-chapter="savingChapter"
-      :has-unsaved-changes="hasUnsavedChanges"
-      @update:edited-title="editedTitle = $event"
+      :show-back="!isMobileRoute"
       @open-lightbox="openHeroLightbox"
       @go-back="goBack"
-      @start-edit="startEdit"
-      @cancel-edit="cancelEdit"
-      @save-chapter="saveChapter"
-      @delete-chapter="requestDeleteChapter"
     />
 
     <div class="w-full max-w-6xl px-4 pt-6 md:mx-auto lg:px-8">
       <div class="lg:grid lg:grid-cols-3 lg:gap-8">
         <div class="lg:col-span-2">
+          <div v-if="chapter" class="mb-6">
+            <button
+              v-if="isMobileRoute"
+              type="button"
+              class="mb-5 inline-flex items-center rounded-md px-2 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+              @click="goBack"
+            >
+              <svg class="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
+
+            <label v-if="isEditing" class="block text-center">
+              <span class="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Chapter title
+              </span>
+              <input
+                v-model="editedTitle"
+                type="text"
+                placeholder="Enter chapter title..."
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-center text-2xl font-bold text-gray-900 placeholder-gray-400 focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-navy-800 dark:text-white dark:placeholder-gray-500 sm:text-3xl"
+                data-testid="chapter-title-input"
+              />
+            </label>
+            <h1 v-else class="text-center text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
+              {{ chapter.title || "Untitled Chapter" }}
+            </h1>
+          </div>
+
           <ChapterStatusBar
-            class="lg:hidden"
+            v-if="chapter"
+            class="mb-6 lg:hidden"
             :word-count="chapter?.word_count || 0"
             :has-summary="Boolean(chapter?.summary)"
             :has-notes="Boolean(chapter?.notes)"
+            :chapter-text="chapter.text"
+            :font-size="fontSize"
+            :font-family="fontFamily"
+            :is-editing="isEditing"
+            :saving-chapter="savingChapter"
+            :has-unsaved-changes="hasUnsavedChanges"
+            @start-edit="startEdit"
+            @cancel-edit="cancelEdit"
+            @save-chapter="saveChapter"
+            @delete-chapter="requestDeleteChapter"
           />
           <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
             <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-gold-600"></div>
@@ -580,13 +586,6 @@ onBeforeUnmount(() => {
             v-else-if="chapter"
             class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-6 sm:divide-y-0"
           >
-            <ChapterReadingActions
-              v-if="!isEditing"
-              class="mb-6 lg:hidden"
-              :chapter-text="chapter.text"
-              :font-size="fontSize"
-            />
-
             <ChapterContentSection
               :is-editing="isEditing"
               :edited-text="editedText"
@@ -594,6 +593,7 @@ onBeforeUnmount(() => {
               :show-full-chapter-text="showFullChapterText"
               :truncated-chapter-text="chapterTruncation"
               :font-size="fontSize"
+              :font-family="fontFamily"
               @update:editedText="editedText = $event"
               @toggle-full-chapter="showFullChapterText = $event"
             />
@@ -692,18 +692,21 @@ onBeforeUnmount(() => {
 
         <aside class="mt-6 space-y-6 lg:mt-0">
           <ChapterStatusBar
+            v-if="chapter"
             class="hidden lg:block"
-            variant="panel"
             :word-count="chapter?.word_count || 0"
             :has-summary="Boolean(chapter?.summary)"
             :has-notes="Boolean(chapter?.notes)"
-          />
-
-          <ChapterReadingActions
-            v-if="chapter && !isEditing"
-            class="hidden lg:block"
             :chapter-text="chapter.text"
             :font-size="fontSize"
+            :font-family="fontFamily"
+            :is-editing="isEditing"
+            :saving-chapter="savingChapter"
+            :has-unsaved-changes="hasUnsavedChanges"
+            @start-edit="startEdit"
+            @cancel-edit="cancelEdit"
+            @save-chapter="saveChapter"
+            @delete-chapter="requestDeleteChapter"
           />
 
           <ChapterPreviewCard
@@ -804,7 +807,11 @@ onBeforeUnmount(() => {
             :loading="loadingChapterRevisions"
           />
 
-          <FontSizeControl v-model="fontSize" variant="panel" />
+          <FontSizeControl
+            v-model="fontSize"
+            v-model:font-family="fontFamily"
+            variant="panel"
+          />
         </aside>
       </div>
     </div>

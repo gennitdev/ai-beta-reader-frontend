@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ReadingFontSize } from '@/composables/useReadingFontSize'
+import type { ReadingFontFamily, ReadingFontSize } from '@/composables/useReadingFontSize'
 
 const props = withDefaults(
   defineProps<{
     modelValue: ReadingFontSize
+    fontFamily: ReadingFontFamily
     /**
      * 'card'  — matches sidebar info cards (rounded-lg, gray-800, shadow).
      * 'panel' — matches the chapter illustration panel (rounded-xl, no
@@ -12,11 +13,12 @@ const props = withDefaults(
      */
     variant?: 'card' | 'panel'
   }>(),
-  { variant: 'card' }
+  { variant: 'card', fontFamily: 'system' }
 )
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: ReadingFontSize): void
+  (e: 'update:fontFamily', value: ReadingFontFamily): void
 }>()
 
 const containerClass = computed(() =>
@@ -29,6 +31,13 @@ const options: { key: ReadingFontSize; label: string; sizeClass: string }[] = [
   { key: 'small', label: 'A', sizeClass: 'text-xs' },
   { key: 'medium', label: 'A', sizeClass: 'text-base' },
   { key: 'large', label: 'A', sizeClass: 'text-xl' },
+]
+
+const fontOptions: { key: ReadingFontFamily; label: string }[] = [
+  { key: 'system', label: 'System Sans' },
+  { key: 'atkinson', label: 'Atkinson Hyperlegible' },
+  { key: 'serif', label: 'Georgia Serif' },
+  { key: 'opendyslexic', label: 'OpenDyslexic' },
 ]
 </script>
 
@@ -58,5 +67,19 @@ const options: { key: ReadingFontSize; label: string; sizeClass: string }[] = [
         {{ option.label }}
       </button>
     </div>
+
+    <label class="mt-4 block">
+      <span class="mb-2 block text-xs font-medium text-gray-500 dark:text-gray-400">Text font</span>
+      <select
+        :value="fontFamily"
+        class="w-full rounded-md border-gray-300 bg-white py-2 pl-3 pr-8 text-sm text-gray-700 focus:border-gold-500 focus:ring-gold-500 dark:border-gray-600 dark:bg-navy-900 dark:text-gray-200"
+        aria-label="Reading text font"
+        @change="emit('update:fontFamily', ($event.target as HTMLSelectElement).value as ReadingFontFamily)"
+      >
+        <option v-for="option in fontOptions" :key="option.key" :value="option.key">
+          {{ option.label }}
+        </option>
+      </select>
+    </label>
   </div>
 </template>

@@ -41,6 +41,9 @@ describe('MarkdownRenderer', () => {
 
   it('applies the reading-layout class when enabled', () => {
     expect(render({ text: 'x', readingLayout: true })).toContain('markdown-body')
+    expect(render({ text: 'x', readingLayout: true })).toContain('reading-font-system')
+    expect(render({ text: 'x', readingLayout: true, fontFamily: 'serif' })).toContain('reading-font-serif')
+    expect(render({ text: 'x', readingLayout: true, fontFamily: 'opendyslexic' })).toContain('reading-font-opendyslexic')
     expect(render({ text: 'x', readingLayout: false })).not.toContain('markdown-body')
   })
 

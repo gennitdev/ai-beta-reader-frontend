@@ -31,6 +31,10 @@ const props = defineProps({
     type: String,
     default: 'medium',
   },
+  fontFamily: {
+    type: String,
+    default: 'system',
+  },
   imageMaxHeight: {
     type: String,
     default: '350px',
@@ -126,12 +130,14 @@ const fontSizeClass = computed(() => {
       return 'text-base'
   }
 })
+
+const fontFamilyClass = computed(() => `reading-font-${props.fontFamily}`)
 </script>
 
 <template>
   <div
     class="markdown-renderer prose prose-gray max-w-none"
-    :class="[fontSizeClass, { 'markdown-body': readingLayout }]"
+    :class="[fontSizeClass, { 'markdown-body': readingLayout }, readingLayout ? fontFamilyClass : '']"
     v-html="renderedHtml"
   />
 </template>
@@ -175,10 +181,25 @@ const fontSizeClass = computed(() => {
    the surrounding layout owns the left/right margins. */
 .markdown-body {
   padding: 2rem 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.65;
   letter-spacing: -0.01em;
   color: #334155; /* slate-700 for light mode */
+}
+
+.reading-font-system {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.reading-font-atkinson {
+  font-family: "Atkinson Hyperlegible", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.reading-font-serif {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.reading-font-opendyslexic {
+  font-family: "OpenDyslexic", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 :global(.dark .markdown-body) {

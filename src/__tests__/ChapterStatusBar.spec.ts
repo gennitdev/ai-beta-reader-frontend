@@ -10,9 +10,9 @@ const baseProps = {
 }
 
 describe('ChapterStatusBar', () => {
-  it('renders chapter details as a sidebar panel', () => {
+  it('renders chapter details and all full-width chapter actions', () => {
     const wrapper = mount(ChapterStatusBar, {
-      props: { ...baseProps, variant: 'panel' },
+      props: { ...baseProps, chapterText: 'A quiet chapter.' },
     })
 
     expect(wrapper.text()).toContain('Chapter tools')
@@ -20,14 +20,29 @@ describe('ChapterStatusBar', () => {
     expect(wrapper.text()).toContain('Not summarized')
     expect(wrapper.text()).toContain('No Notes')
 
-    expect(wrapper.find('button').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Copy chapter text')
+    expect(wrapper.text()).toContain('Fullscreen reading')
+    expect(wrapper.text()).toContain('Edit Chapter')
+    expect(wrapper.text()).toContain('Delete chapter')
+    expect(wrapper.findAll('button').every((button) => button.classes().includes('w-full'))).toBe(true)
   })
 
-  it('keeps the compact inline layout as the default', () => {
-    const wrapper = mount(ChapterStatusBar, { props: baseProps })
+  it('switches to editing actions and emits their events', async () => {
+    const wrapper = mount(ChapterStatusBar, {
+      props: { ...baseProps, isEditing: true, hasUnsavedChanges: true },
+    })
 
-    expect(wrapper.text()).not.toContain('Chapter tools')
-    expect(wrapper.classes()).toContain('flex')
-    expect(wrapper.text()).toContain('No Notes')
+    expect(wrapper.text()).not.toContain('Copy chapter text')
+    expect(wrapper.text()).toContain('Save Chapter')
+    expect(wrapper.text()).toContain('Cancel Editing')
+
+    const buttons = wrapper.findAll('button')
+    await buttons.find((button) => button.text() === 'Save Chapter')!.trigger('click')
+    await buttons.find((button) => button.text() === 'Cancel Editing')!.trigger('click')
+    await buttons.find((button) => button.text() === 'Delete chapter')!.trigger('click')
+
+    expect(wrapper.emitted('save-chapter')).toHaveLength(1)
+    expect(wrapper.emitted('cancel-edit')).toHaveLength(1)
+    expect(wrapper.emitted('delete-chapter')).toHaveLength(1)
   })
 })

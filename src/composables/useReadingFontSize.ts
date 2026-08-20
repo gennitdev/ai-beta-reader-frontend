@@ -1,31 +1,51 @@
 import { ref, watch, type Ref } from 'vue'
 
 export type ReadingFontSize = 'small' | 'medium' | 'large'
+export type ReadingFontFamily = 'system' | 'atkinson' | 'serif' | 'opendyslexic'
 
-const STORAGE_KEY = 'reading_font_size'
+const SIZE_STORAGE_KEY = 'reading_font_size'
+const FAMILY_STORAGE_KEY = 'reading_font_family'
 const VALID_SIZES: ReadingFontSize[] = ['small', 'medium', 'large']
+const VALID_FAMILIES: ReadingFontFamily[] = ['system', 'atkinson', 'serif', 'opendyslexic']
 
 function readStoredSize(): ReadingFontSize {
   if (typeof localStorage === 'undefined') return 'medium'
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = localStorage.getItem(SIZE_STORAGE_KEY)
   return stored && VALID_SIZES.includes(stored as ReadingFontSize)
     ? (stored as ReadingFontSize)
     : 'medium'
 }
 
+function readStoredFamily(): ReadingFontFamily {
+  if (typeof localStorage === 'undefined') return 'system'
+  const stored = localStorage.getItem(FAMILY_STORAGE_KEY)
+  return stored && VALID_FAMILIES.includes(stored as ReadingFontFamily)
+    ? (stored as ReadingFontFamily)
+    : 'system'
+}
+
 /**
- * Reading font-size preference for long-form markdown (chapter + wiki pages).
- * Persisted to localStorage under a shared key so the choice follows the reader
- * across pages.
+ * Reading typography preferences for long-form markdown (chapter + wiki pages).
+ * Persisted to localStorage so the choices follow the reader across pages.
  */
-export function useReadingFontSize(): { fontSize: Ref<ReadingFontSize> } {
+export function useReadingFontSize(): {
+  fontSize: Ref<ReadingFontSize>
+  fontFamily: Ref<ReadingFontFamily>
+} {
   const fontSize = ref<ReadingFontSize>(readStoredSize())
+  const fontFamily = ref<ReadingFontFamily>(readStoredFamily())
 
   watch(fontSize, (value) => {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, value)
+      localStorage.setItem(SIZE_STORAGE_KEY, value)
     }
   })
 
-  return { fontSize }
+  watch(fontFamily, (value) => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(FAMILY_STORAGE_KEY, value)
+    }
+  })
+
+  return { fontSize, fontFamily }
 }
