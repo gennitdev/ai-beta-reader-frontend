@@ -148,27 +148,27 @@ const closeLightbox = () => {
     class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-navy-800 overflow-y-auto relative"
   >
     <div class="p-2 pt-2 pb-16">
-      <div class="relative overflow-hidden rounded-lg mb-3">
+      <div class="mb-4">
         <div
           v-if="coverImageSrc"
-          class="w-full overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-pointer"
+          class="mx-auto flex w-fit max-w-full cursor-pointer overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700"
           @click="openLightbox"
         >
           <img
             :src="coverImageSrc"
-            class="w-full transition-opacity hover:opacity-90"
+            class="max-h-56 h-auto w-auto max-w-full object-contain transition-opacity hover:opacity-90"
             alt="Book cover"
             title="Click to view full size"
           />
         </div>
         <div
           v-else
-          class="aspect-[16/9] w-full bg-gradient-to-br from-gold-100 via-indigo-50 to-purple-100 dark:from-gold-900/40 dark:via-indigo-900/30 dark:to-purple-900/40 flex items-center justify-center"
+          class="mx-auto flex h-28 w-full max-w-48 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-gold-100 via-indigo-50 to-purple-100 dark:from-gold-900/40 dark:via-indigo-900/30 dark:to-purple-900/40"
         >
-          <BookOpenIcon class="w-16 h-16 text-gold-300 dark:text-gold-600 opacity-60" />
+          <BookOpenIcon class="h-12 w-12 text-gold-300 opacity-60 dark:text-gold-600" />
         </div>
 
-        <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-3 py-3 pt-10">
+        <div class="mt-3 px-1">
           <div v-if="isEditingBookTitle" class="flex flex-col space-y-2">
             <input
               :value="editingBookTitle"
@@ -176,7 +176,7 @@ const closeLightbox = () => {
               @keyup.enter="saveBookTitle"
               @keyup.esc="cancelEditingBookTitle"
               type="text"
-              class="text-lg font-bold bg-white/90 dark:bg-gray-700/90 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-gold-500"
+              class="rounded border border-gray-300 bg-white px-2 py-1 text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               placeholder="Book title"
               autofocus
               @click.stop
@@ -197,18 +197,18 @@ const closeLightbox = () => {
             </div>
           </div>
 
-          <div v-else class="flex items-end justify-between">
+          <div v-else class="flex items-start justify-between">
             <div class="flex-1 min-w-0">
-              <h1 class="text-lg font-bold text-white drop-shadow-md truncate">
+              <h1 class="truncate text-lg font-bold text-gray-900 dark:text-white">
                 {{ book?.title }}
               </h1>
-              <p class="mt-0.5 text-xs text-gray-200">
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                 {{ chapterCount }} chapter{{ chapterCount !== 1 ? 's' : '' }} · {{ formatWordCount(totalWordCount) }} words
               </p>
             </div>
             <button
               @click.stop="startEditingBookTitle"
-              class="p-1 text-white/70 hover:text-white flex-shrink-0 ml-2"
+              class="ml-2 flex-shrink-0 rounded p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
               title="Rename book"
             >
               <PencilIcon class="w-4 h-4" />

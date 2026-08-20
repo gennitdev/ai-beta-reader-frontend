@@ -93,7 +93,7 @@ const {
   () => bookId.value
 )
 
-const { fontSize } = useReadingFontSize()
+const { fontSize, fontFamily } = useReadingFontSize()
 const wikiPage = ref<WikiPage | null>(null)
 const wikiHistory = ref<WikiUpdate[]>([])
 const characters = ref<Character[]>([])
@@ -706,6 +706,7 @@ watch(
                 :characters="characters"
                 :book-id="bookId"
                 :font-size="fontSize"
+                :font-family="fontFamily"
                 :enable-wiki-links="true"
                 reading-layout
               />
@@ -723,7 +724,11 @@ watch(
       <!-- Sidebar -->
       <div class="space-y-6">
         <!-- Reading text size -->
-        <FontSizeControl v-if="!isEditing && wikiPage.content" v-model="fontSize" />
+        <FontSizeControl
+          v-if="!isEditing && wikiPage.content"
+          v-model="fontSize"
+          v-model:font-family="fontFamily"
+        />
 
         <!-- Page Info -->
         <WikiPageInfoCard
