@@ -5,6 +5,7 @@ import {
   LightBulbIcon,
   BookOpenIcon,
 } from '@heroicons/vue/24/outline'
+import CoverHeroImage from '@/components/images/CoverHeroImage.vue'
 
 defineProps<{
   heroImageSrc: string | null;
@@ -32,15 +33,12 @@ const getTypeIcon = (type: string) => {
 <template>
   <div class="relative w-full">
     <!-- Hero image container -->
-    <div
-      class="relative h-48 w-full cursor-pointer overflow-hidden bg-navy-900 sm:h-64 md:h-80 lg:h-96"
-      @click="emit('open-lightbox')"
+    <CoverHeroImage
+      :src="heroImageSrc!"
+      alt="Wiki page hero"
+      test-id-prefix="wiki"
+      @activate="emit('open-lightbox')"
     >
-      <img
-        :src="heroImageSrc!"
-        class="h-full w-full object-cover opacity-90 transition-opacity hover:opacity-100"
-        alt="Wiki page hero"
-      />
       <!-- Gradient overlay -->
       <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
       <!-- Page info overlay -->
@@ -59,7 +57,7 @@ const getTypeIcon = (type: string) => {
           </span>
         </div>
       </div>
-    </div>
+    </CoverHeroImage>
 
     <!-- Back button overlay -->
     <button

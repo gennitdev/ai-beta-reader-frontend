@@ -24,6 +24,7 @@ import {
 import { loadOpenAIApiKey } from "@/lib/apiKeyStorage";
 import type { Book, BookPart, ImageAsset } from "@/lib/database";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
+import CoverHeroImage from "@/components/images/CoverHeroImage.vue";
 import Modal from "@/components/Modal.vue";
 
 const route = useRoute();
@@ -445,15 +446,12 @@ watch([bookId, partId], async () => {
           <!-- Part Cover Hero -->
           <div v-if="partCoverSrc" class="relative -mx-3 -mt-8 mb-8 sm:-mx-6 lg:-mx-8">
             <!-- Hero image container -->
-            <div
-              class="relative h-48 w-full overflow-hidden bg-navy-900 sm:h-64 md:h-80 lg:h-96 cursor-pointer"
-              @click="openPartCoverLightbox"
+            <CoverHeroImage
+              :src="partCoverSrc"
+              alt="Part cover"
+              test-id-prefix="part"
+              @activate="openPartCoverLightbox"
             >
-              <img
-                :src="partCoverSrc"
-                class="h-full w-full object-cover opacity-90 transition-opacity hover:opacity-100"
-                alt="Part cover"
-              />
               <!-- Gradient overlay -->
               <div
                 class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"
@@ -469,7 +467,7 @@ watch([bookId, partId], async () => {
                   {{ totalWordCount.toLocaleString() }} words
                 </p>
               </div>
-            </div>
+            </CoverHeroImage>
             <!-- Cover action buttons -->
             <div
               v-if="canSelectImages"
