@@ -21,6 +21,8 @@ export const ipcMain = {
 export const ipcRenderer = {
   invoke: vi.fn(),
   send: vi.fn(),
+  addListener: vi.fn(),
+  removeListener: vi.fn(),
   on: vi.fn((channel: string, listener: IpcHandler) => {
     rendererListeners.set(channel, listener)
   }),
