@@ -1,6 +1,10 @@
 import { app, ipcMain, safeStorage } from 'electron';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import {
+  assertAllowedSecureStorageKey,
+  assertSecureStorageValue,
+} from './security-boundaries';
 
 /**
  * Persists small secrets (e.g. OAuth tokens) encrypted at rest using Electron's
@@ -17,8 +21,8 @@ function secureDir(): string {
 }
 
 function securePath(key: string): string {
-  const safeName = key.replace(/[^a-zA-Z0-9-_]/g, '_');
-  return path.join(secureDir(), `${safeName}.bin`);
+  assertAllowedSecureStorageKey(key);
+  return path.join(secureDir(), `${key}.bin`);
 }
 
 async function handleGet(key: string): Promise<string | null> {
@@ -35,6 +39,8 @@ async function handleGet(key: string): Promise<string | null> {
 }
 
 async function handleSet(key: string, value: string): Promise<void> {
+  assertAllowedSecureStorageKey(key);
+  assertSecureStorageValue(value);
   if (!safeStorage.isEncryptionAvailable()) {
     throw new Error('OS-level encryption is not available on this system.');
   }
@@ -48,7 +54,13 @@ async function handleRemove(key: string): Promise<void> {
 }
 
 export function registerSecureStorageBridge(): void {
-  ipcMain.handle('secure-storage:get', (_event, key: string) => handleGet(key));
+  ipcMain.handle('secure-storage:get', (_event, key: string) => {
+    assertAllowedSecureStorageKey(key);
+    return handleGet(key);
+  });
   ipcMain.handle('secure-storage:set', (_event, key: string, value: string) => handleSet(key, value));
-  ipcMain.handle('secure-storage:remove', (_event, key: string) => handleRemove(key));
+  ipcMain.handle('secure-storage:remove', (_event, key: string) => {
+    assertAllowedSecureStorageKey(key);
+    return handleRemove(key);
+  });
 }

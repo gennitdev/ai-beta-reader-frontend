@@ -2,6 +2,11 @@ import { app, dialog, ipcMain } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
+import {
+  decodeImageDataUrl,
+  isSupportedImageMimeType,
+  resolveContainedPath,
+} from './security-boundaries';
 
 const IMAGE_FILTER_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'];
 
@@ -73,12 +78,7 @@ async function copyIntoLibrary(sourcePath: string, options: CopyOptions): Promis
 }
 
 function resolveRelativePath(relativePath: string) {
-  const baseDir = imagesRoot();
-  const resolved = path.resolve(baseDir, relativePath);
-  if (!resolved.startsWith(baseDir)) {
-    throw new Error('Invalid image path');
-  }
-  return resolved;
+  return resolveContainedPath(imagesRoot(), relativePath);
 }
 
 export function registerDesktopImageBridge() {
@@ -132,7 +132,9 @@ export function registerDesktopImageBridge() {
     }
     const absolutePath = resolveRelativePath(payload.relativePath);
     const buffer = await readFile(absolutePath);
-    const mimeType = payload.mimeType ?? getMimeType(path.extname(absolutePath)) ?? 'application/octet-stream';
+    const mimeType = isSupportedImageMimeType(payload.mimeType)
+      ? payload.mimeType
+      : getMimeType(path.extname(absolutePath)) ?? 'application/octet-stream';
     const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
     return { dataUrl };
   });
@@ -166,17 +168,10 @@ export function registerDesktopImageBridge() {
       throw new Error('Missing image path or data');
     }
 
-    // Parse the data URL to get the binary data
-    const matches = payload.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (!matches) {
-      throw new Error('Invalid data URL format');
-    }
-
-    const base64Data = matches[2];
-    const buffer = Buffer.from(base64Data, 'base64');
+    const { buffer } = decodeImageDataUrl(payload.dataUrl);
 
     // Ensure the directory exists
-    const absolutePath = path.join(imagesRoot(), payload.relativePath);
+    const absolutePath = resolveRelativePath(payload.relativePath);
     const dir = path.dirname(absolutePath);
     await ensureDirectory(dir);
 
