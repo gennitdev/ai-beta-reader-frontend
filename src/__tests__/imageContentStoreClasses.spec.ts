@@ -90,6 +90,11 @@ describe('IndexedDbImageContentStore', () => {
     expect(del).toHaveBeenCalledWith('imageBlobs', 'img-3', undefined)
   })
 
+  it('deletes a reconciled orphan directly by id', async () => {
+    await store.deleteStoredId('orphan-3')
+    expect(del).toHaveBeenCalledWith('imageBlobs', 'orphan-3', undefined)
+  })
+
   it('exists reflects whether a record is present', async () => {
     read.mockResolvedValue(new Blob(['x']))
     expect(await store.exists(asset())).toBe(true)

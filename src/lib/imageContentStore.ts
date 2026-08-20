@@ -14,6 +14,7 @@ export interface ImageContentStore {
   delete(asset: ImageAsset): Promise<void>
   exists(asset: ImageAsset): Promise<boolean>
   listStoredIds?(): Promise<string[]>
+  deleteStoredId?(imageId: string): Promise<void>
 }
 
 interface IndexedDbImageRecord {
@@ -25,6 +26,18 @@ interface IndexedDbImageRecord {
 export interface ImageContentReconciliation {
   missingImageIds: string[]
   orphanedImageIds: string[]
+}
+
+export interface ImageContentCleanup extends ImageContentReconciliation {
+  deletedOrphanIds: string[]
+  failedOrphanIds: string[]
+}
+
+export interface CrossStoreImageDeletion {
+  metadataDeleted: true
+  contentDeleted: boolean
+  orphanedContent: boolean
+  contentError?: unknown
 }
 
 export function dataUrlToBlob(dataUrl: string): Blob {
@@ -94,6 +107,10 @@ export class IndexedDbImageContentStore implements ImageContentStore {
     const keys = await listIndexedDbKeys(IMAGE_BLOBS_STORE, this.factory)
     return keys.filter((key): key is string => typeof key === 'string')
   }
+
+  async deleteStoredId(imageId: string): Promise<void> {
+    await deleteIndexedDbValue(IMAGE_BLOBS_STORE, imageId, this.factory)
+  }
 }
 
 export class ElectronImageContentStore implements ImageContentStore {
@@ -146,4 +163,55 @@ export async function inspectImageContent(
   const orphanedImageIds = storedIds.filter((id) => !referencedIds.has(id))
 
   return { missingImageIds, orphanedImageIds }
+}
+
+/**
+ * Delete metadata before content so a cross-store failure can only leave an
+ * unreferenced blob, never a live database record pointing at missing bytes.
+ */
+export async function deleteImageMetadataThenContent(
+  asset: ImageAsset,
+  deleteMetadata: (imageId: string) => Promise<void>,
+  store: ImageContentStore,
+  afterMetadataDelete: (imageId: string) => void = () => undefined,
+): Promise<CrossStoreImageDeletion> {
+  await deleteMetadata(asset.id)
+  afterMetadataDelete(asset.id)
+
+  try {
+    await store.delete(asset)
+    return { metadataDeleted: true, contentDeleted: true, orphanedContent: false }
+  } catch (contentError) {
+    return {
+      metadataDeleted: true,
+      contentDeleted: false,
+      orphanedContent: true,
+      contentError,
+    }
+  }
+}
+
+/** Remove content-store records that no longer have database metadata. */
+export async function cleanupOrphanedImageContent(
+  store: ImageContentStore,
+  assets: ImageAsset[],
+): Promise<ImageContentCleanup> {
+  const reconciliation = await inspectImageContent(store, assets)
+  const deletedOrphanIds: string[] = []
+  const failedOrphanIds: string[] = []
+
+  if (!store.deleteStoredId) {
+    return { ...reconciliation, deletedOrphanIds, failedOrphanIds: [...reconciliation.orphanedImageIds] }
+  }
+
+  for (const imageId of reconciliation.orphanedImageIds) {
+    try {
+      await store.deleteStoredId(imageId)
+      deletedOrphanIds.push(imageId)
+    } catch {
+      failedOrphanIds.push(imageId)
+    }
+  }
+
+  return { ...reconciliation, deletedOrphanIds, failedOrphanIds }
 }
