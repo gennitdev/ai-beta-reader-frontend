@@ -153,6 +153,7 @@ function mountView() {
         teleport: true,
         RouterLink: { template: '<a><slot /></a>' },
         MarkdownRenderer: { props: ['text'], template: '<div data-testid="summary">{{ text }}</div>' },
+        CoverHeroImage: false,
         Modal: { template: '<div><slot /></div>' },
         IllustrationDetail: true,
         ArrowLeftIcon: true, ArrowDownTrayIcon: true, SparklesIcon: true,

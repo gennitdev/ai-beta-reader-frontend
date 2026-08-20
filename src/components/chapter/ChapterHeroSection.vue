@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CoverHeroImage from '@/components/images/CoverHeroImage.vue';
+
 withDefaults(defineProps<{
   heroImageSrc: string | null;
   showBack?: boolean;
@@ -15,28 +17,14 @@ const emit = defineEmits<{
 <template>
   <div class="relative w-full">
     <!-- Hero image container -->
-    <div
-      class="relative h-48 w-full cursor-pointer overflow-hidden bg-navy-900 sm:h-64 md:h-80 lg:h-96"
-      @click="emit('open-lightbox')"
+    <CoverHeroImage
+      :src="heroImageSrc!"
+      alt="Chapter hero"
+      test-id-prefix="chapter"
+      @activate="emit('open-lightbox')"
     >
-      <!-- A blurred cover-fill copy carries the image colors into any side gaps. -->
-      <img
-        :src="heroImageSrc!"
-        class="absolute inset-0 h-full w-full scale-110 object-cover opacity-55 blur-2xl"
-        alt=""
-        aria-hidden="true"
-        data-testid="chapter-hero-backdrop"
-      />
-      <div class="absolute inset-0 bg-black/25"></div>
-
-      <img
-        :src="heroImageSrc!"
-        class="relative z-10 h-full w-full object-contain transition-opacity hover:opacity-95"
-        alt="Chapter hero"
-        data-testid="chapter-hero-image"
-      />
-      <div class="pointer-events-none absolute inset-0 z-20 bg-gradient-to-b from-black/15 via-transparent to-black/10"></div>
-    </div>
+      <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/10"></div>
+    </CoverHeroImage>
 
     <!-- Back button overlay -->
     <button
