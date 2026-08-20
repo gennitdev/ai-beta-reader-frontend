@@ -1,12 +1,27 @@
 import { ref, watch, type Ref } from 'vue'
 
 export type ReadingFontSize = 'small' | 'medium' | 'large'
-export type ReadingFontFamily = 'system' | 'atkinson' | 'serif' | 'opendyslexic'
+export type ReadingFontFamily =
+  | 'system'
+  | 'atkinson'
+  | 'serif'
+  | 'literata'
+  | 'source-serif'
+  | 'lora'
+  | 'opendyslexic'
 
 const SIZE_STORAGE_KEY = 'reading_font_size'
 const FAMILY_STORAGE_KEY = 'reading_font_family'
 const VALID_SIZES: ReadingFontSize[] = ['small', 'medium', 'large']
-const VALID_FAMILIES: ReadingFontFamily[] = ['system', 'atkinson', 'serif', 'opendyslexic']
+const VALID_FAMILIES: ReadingFontFamily[] = [
+  'system',
+  'atkinson',
+  'serif',
+  'literata',
+  'source-serif',
+  'lora',
+  'opendyslexic',
+]
 
 function readStoredSize(): ReadingFontSize {
   if (typeof localStorage === 'undefined') return 'medium'

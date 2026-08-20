@@ -14,6 +14,9 @@ describe('FontSizeControl', () => {
     expect(wrapper.text()).toContain('Text font')
     expect(select.text()).toContain('Atkinson Hyperlegible')
     expect(select.text()).toContain('Georgia Serif')
+    expect(select.text()).toContain('Literata')
+    expect(select.text()).toContain('Source Serif 4')
+    expect(select.text()).toContain('Lora')
     expect(select.text()).toContain('OpenDyslexic')
 
     await select.setValue('opendyslexic')

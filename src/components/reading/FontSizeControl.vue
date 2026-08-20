@@ -37,6 +37,9 @@ const fontOptions: { key: ReadingFontFamily; label: string }[] = [
   { key: 'system', label: 'System Sans' },
   { key: 'atkinson', label: 'Atkinson Hyperlegible' },
   { key: 'serif', label: 'Georgia Serif' },
+  { key: 'literata', label: 'Literata' },
+  { key: 'source-serif', label: 'Source Serif 4' },
+  { key: 'lora', label: 'Lora' },
   { key: 'opendyslexic', label: 'OpenDyslexic' },
 ]
 </script>

@@ -531,7 +531,7 @@ onBeforeUnmount(() => {
     <div class="w-full max-w-6xl px-4 pt-6 md:mx-auto lg:px-8">
       <div class="lg:grid lg:grid-cols-3 lg:gap-8">
         <div class="lg:col-span-2">
-          <div v-if="chapter" class="mb-6">
+          <div v-if="chapter" class="mb-2">
             <button
               v-if="isMobileRoute"
               type="button"
@@ -553,10 +553,15 @@ onBeforeUnmount(() => {
                 type="text"
                 placeholder="Enter chapter title..."
                 class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-center text-2xl font-bold text-gray-900 placeholder-gray-400 focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-navy-800 dark:text-white dark:placeholder-gray-500 sm:text-3xl"
+                :class="`reading-font-${fontFamily}`"
                 data-testid="chapter-title-input"
               />
             </label>
-            <h1 v-else class="text-center text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
+            <h1
+              v-else
+              class="text-center text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl"
+              :class="`reading-font-${fontFamily}`"
+            >
               {{ chapter.title || "Untitled Chapter" }}
             </h1>
           </div>

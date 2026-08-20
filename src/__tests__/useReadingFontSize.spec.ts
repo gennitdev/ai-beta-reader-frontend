@@ -59,8 +59,8 @@ describe('useReadingFontSize', () => {
   })
 
   it('reads valid font choices and rejects invalid ones', () => {
-    localStorageMock.setItem(FONT_STORAGE_KEY, 'serif')
-    expect(useReadingFontSize().fontFamily.value).toBe('serif')
+    localStorageMock.setItem(FONT_STORAGE_KEY, 'source-serif')
+    expect(useReadingFontSize().fontFamily.value).toBe('source-serif')
 
     localStorageMock.setItem(FONT_STORAGE_KEY, 'comic-sans')
     expect(useReadingFontSize().fontFamily.value).toBe('system')

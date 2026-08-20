@@ -25,6 +25,9 @@ describe('ChapterStatusBar', () => {
     expect(wrapper.text()).toContain('Edit Chapter')
     expect(wrapper.text()).toContain('Delete chapter')
     expect(wrapper.findAll('button').every((button) => button.classes().includes('w-full'))).toBe(true)
+    const deleteButton = wrapper.findAll('button').find((button) => button.text() === 'Delete chapter')!
+    expect(deleteButton.classes()).toContain('text-gray-600')
+    expect(deleteButton.classes()).not.toContain('text-red-600')
   })
 
   it('switches to editing actions and emits their events', async () => {

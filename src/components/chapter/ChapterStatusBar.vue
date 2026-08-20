@@ -123,7 +123,7 @@ const actionClass = computed(() =>
 
       <button
         type="button"
-        :class="[actionClass, 'border-red-300 text-red-600 hover:border-red-400 hover:bg-red-50 dark:border-red-900/70 dark:text-red-400 dark:hover:bg-red-950/30']"
+        :class="[actionClass, 'border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700/60 dark:hover:text-white']"
         :disabled="savingChapter"
         @click="emit('delete-chapter')"
       >

@@ -186,22 +186,6 @@ const fontFamilyClass = computed(() => `reading-font-${props.fontFamily}`)
   color: #334155; /* slate-700 for light mode */
 }
 
-.reading-font-system {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
-
-.reading-font-atkinson {
-  font-family: "Atkinson Hyperlegible", -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-.reading-font-serif {
-  font-family: Georgia, "Times New Roman", serif;
-}
-
-.reading-font-opendyslexic {
-  font-family: "OpenDyslexic", -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
 :global(.dark .markdown-body) {
   color: #f3f4f6;
 }
