@@ -16,16 +16,30 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      include: ['src/**/*.{ts,vue}'],
+      // Measure authored application runtime code across browser and Electron.
+      // Declarations and view-model-only types have no runtime behavior, while
+      // compatibility shims are build-time platform substitutes.
+      include: [
+        'src/**/*.{ts,vue}',
+        'electron/src/**/*.{ts,js}',
+      ],
+      exclude: [
+        '**/*.d.ts',
+        '**/*.spec.ts',
+        'src/types/**',
+        'src/shims/**',
+        'src/**/__tests__/**',
+        'electron/tests/**',
+      ],
       // Ratchet policy: keep these just below the current measured coverage so
       // they act as a regression floor. When a change raises coverage, nudge the
       // matching threshold up to lock in the gain — never lower them to make a
-      // change pass. Current actuals: stmts 49.6 / branch 34.3 / funcs 44.4 / lines 50.6.
+      // change pass. Current actuals: stmts 64.25 / branch 46.42 / funcs 57.61 / lines 65.68.
       thresholds: {
-        statements: 53,
-        branches: 35,
-        functions: 48,
-        lines: 54,
+        statements: 64,
+        branches: 46,
+        functions: 57,
+        lines: 65,
       },
     },
   },
