@@ -10,6 +10,7 @@
 import { countRevisionChanges } from '@/lib/revisionDiff'
 import type { DatabaseContext, QueryRow } from './connection'
 import { readQueryRowValue } from './rowUtils'
+import { runInTransaction } from './transaction'
 import type { Book, Chapter, ChapterRevision, ChapterRevisionActivity } from '../database'
 
 // --- Row mappers ------------------------------------------------------------
@@ -276,7 +277,7 @@ export async function getChapters(ctx: DatabaseContext, bookId: string): Promise
   }
 }
 
-export async function deleteChapter(ctx: DatabaseContext, chapterId: string, bookId: string): Promise<void> {
+async function deleteChapterRows(ctx: DatabaseContext, chapterId: string, bookId: string): Promise<void> {
   // Lookup part assignment before deletion
   let partId: string | null = null
   let deletedTitle: string | null = null
@@ -399,9 +400,11 @@ export async function deleteChapter(ctx: DatabaseContext, chapterId: string, boo
     }
   }
 
-  if (!ctx.isNative) {
-    ctx.requestPersistence()
-  }
+}
+
+export async function deleteChapter(ctx: DatabaseContext, chapterId: string, bookId: string): Promise<void> {
+  await runInTransaction(ctx, async (txCtx) => deleteChapterRows(txCtx, chapterId, bookId))
+  if (!ctx.isNative) ctx.requestPersistence()
 }
 
 /** Append a chapter id to its book's `chapter_order` if not already present. */

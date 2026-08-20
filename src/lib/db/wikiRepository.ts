@@ -20,6 +20,7 @@ import { dispatchChapterWikiLinksChanged } from '@/utils/chapterWikiLinkEvents'
 import type { DatabaseContext, QueryRow } from './connection'
 import { readQueryRowValue } from './rowUtils'
 import { getTableColumnNames } from './schema'
+import { runInTransaction } from './transaction'
 import type {
   WikiPage,
   ChapterWikiMention,
@@ -376,18 +377,20 @@ export async function deleteWikiPage(ctx: DatabaseContext, pageId: string): Prom
   // Delete the wiki page itself
   const deletePageQuery = `DELETE FROM wiki_pages WHERE id = ?`
 
-  if (ctx.isNative) {
-    await ctx.connection.run(deleteUpdatesQuery, [pageId])
-    await ctx.connection.run(deleteMentionsQuery, [pageId])
-    await ctx.connection.run(deleteImageTagsQuery, [pageId])
-    await ctx.connection.run(deletePageQuery, [pageId])
-  } else {
-    ctx.connection.run(deleteUpdatesQuery, [pageId])
-    ctx.connection.run(deleteMentionsQuery, [pageId])
-    ctx.connection.run(deleteImageTagsQuery, [pageId])
-    ctx.connection.run(deletePageQuery, [pageId])
-    ctx.requestPersistence()
-  }
+  await runInTransaction(ctx, async (txCtx) => {
+    if (txCtx.isNative) {
+      await txCtx.connection.run(deleteUpdatesQuery, [pageId])
+      await txCtx.connection.run(deleteMentionsQuery, [pageId])
+      await txCtx.connection.run(deleteImageTagsQuery, [pageId])
+      await txCtx.connection.run(deletePageQuery, [pageId])
+    } else {
+      txCtx.connection.run(deleteUpdatesQuery, [pageId])
+      txCtx.connection.run(deleteMentionsQuery, [pageId])
+      txCtx.connection.run(deleteImageTagsQuery, [pageId])
+      txCtx.connection.run(deletePageQuery, [pageId])
+    }
+  })
+  if (!ctx.isNative) ctx.requestPersistence()
 }
 
 export async function trackWikiUpdate(ctx: DatabaseContext, update: {

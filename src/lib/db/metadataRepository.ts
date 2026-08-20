@@ -11,6 +11,7 @@
 
 import type { DatabaseContext, QueryRow } from './connection'
 import { readQueryRowValue } from './rowUtils'
+import { runInTransaction } from './transaction'
 import type {
   ChapterSummary,
   PartSummary,
@@ -433,12 +434,14 @@ export async function deleteCustomProfile(ctx: DatabaseContext, profileId: numbe
   const deleteReviewsQuery = `DELETE FROM chapter_reviews WHERE profile_id = ?`
   const deleteProfileQuery = `DELETE FROM custom_reviewer_profiles WHERE id = ?`
 
-  if (ctx.isNative) {
-    await ctx.connection.run(deleteReviewsQuery, [profileId])
-    await ctx.connection.run(deleteProfileQuery, [profileId])
-  } else {
-    ctx.connection.run(deleteReviewsQuery, [profileId])
-    ctx.connection.run(deleteProfileQuery, [profileId])
-    ctx.requestPersistence()
-  }
+  await runInTransaction(ctx, async (txCtx) => {
+    if (txCtx.isNative) {
+      await txCtx.connection.run(deleteReviewsQuery, [profileId])
+      await txCtx.connection.run(deleteProfileQuery, [profileId])
+    } else {
+      txCtx.connection.run(deleteReviewsQuery, [profileId])
+      txCtx.connection.run(deleteProfileQuery, [profileId])
+    }
+  })
+  if (!ctx.isNative) ctx.requestPersistence()
 }

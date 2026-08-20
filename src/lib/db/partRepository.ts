@@ -8,6 +8,7 @@
 
 import type { DatabaseContext, QueryRow } from './connection'
 import { readQueryRowValue } from './rowUtils'
+import { runInTransaction } from './transaction'
 import type { BookPart } from '../database'
 
 // --- Row mappers ------------------------------------------------------------
@@ -168,42 +169,36 @@ export async function updatePartOrder(ctx: DatabaseContext, bookId: string, part
 }
 
 export async function deletePart(ctx: DatabaseContext, partId: string): Promise<void> {
-  let bookId: string | null = null
-  const getBookIdQuery = `SELECT book_id FROM book_parts WHERE id = ? LIMIT 1`
+  await runInTransaction(ctx, async (txCtx) => {
+    let bookId: string | null = null
+    const getBookIdQuery = `SELECT book_id FROM book_parts WHERE id = ? LIMIT 1`
 
-  if (ctx.isNative) {
-    const result = await ctx.connection.query(getBookIdQuery, [partId])
-    if (result.values && result.values[0]) {
-      bookId = result.values[0].book_id as string
+    if (txCtx.isNative) {
+      const result = await txCtx.connection.query(getBookIdQuery, [partId])
+      if (result.values && result.values[0]) bookId = result.values[0].book_id as string
+    } else {
+      const result = txCtx.connection.exec(getBookIdQuery, [partId])
+      if (result[0]?.values[0]) bookId = (result[0].values[0][0] as string) || null
     }
-  } else {
-    const result = ctx.connection.exec(getBookIdQuery, [partId])
-    if (result.length > 0 && result[0].values && result[0].values[0]) {
-      const row = result[0].values[0]
-      bookId = (row[0] as string) || null
+
+    const updateChaptersQuery = `UPDATE chapters SET part_id = NULL WHERE part_id = ?`
+    const deleteQuery = `DELETE FROM book_parts WHERE id = ?`
+    if (txCtx.isNative) {
+      await txCtx.connection.run(updateChaptersQuery, [partId])
+      await txCtx.connection.run(deleteQuery, [partId])
+      await txCtx.connection.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId])
+    } else {
+      txCtx.connection.run(updateChaptersQuery, [partId])
+      txCtx.connection.run(deleteQuery, [partId])
+      txCtx.connection.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId])
     }
-  }
 
-  // Remove part reference from chapters
-  const updateChaptersQuery = `UPDATE chapters SET part_id = NULL WHERE part_id = ?`
-  const deleteQuery = `DELETE FROM book_parts WHERE id = ?`
-
-  if (ctx.isNative) {
-    await ctx.connection.run(updateChaptersQuery, [partId])
-    await ctx.connection.run(deleteQuery, [partId])
-    await ctx.connection.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId])
-  } else {
-    ctx.connection.run(updateChaptersQuery, [partId])
-    ctx.connection.run(deleteQuery, [partId])
-    ctx.connection.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId])
-    ctx.requestPersistence()
-  }
-
-  if (bookId) {
-    const currentOrder = await getBookPartOrder(ctx, bookId)
-    const updatedOrder = currentOrder.filter((id) => id !== partId)
-    await saveBookPartOrder(ctx, bookId, updatedOrder)
-  }
+    if (bookId) {
+      const currentOrder = await getBookPartOrder(txCtx, bookId)
+      await saveBookPartOrder(txCtx, bookId, currentOrder.filter((id) => id !== partId))
+    }
+  })
+  if (!ctx.isNative) ctx.requestPersistence()
 }
 
 export async function updateChapterOrders(

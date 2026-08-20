@@ -46,6 +46,18 @@ function chapter(overrides: Partial<Chapter> = {}): Chapter {
   }
 }
 
+function rawDatabase(database: AppDatabase): {
+  run(sql: string, params?: unknown[]): void
+  exec(sql: string, params?: unknown[]): Array<{ values: unknown[][] }>
+} {
+  return (database as unknown as {
+    db: {
+      run(sql: string, params?: unknown[]): void
+      exec(sql: string, params?: unknown[]): Array<{ values: unknown[][] }>
+    }
+  }).db
+}
+
 let db: AppDatabase
 
 beforeEach(async () => {
@@ -534,6 +546,127 @@ describe('image assets', () => {
 
     await db.deleteImageAsset('img-1')
     expect(await db.getChapterImages('ch-1')).toHaveLength(0)
+  })
+})
+
+describe('atomic destructive operations', () => {
+  const image = (overrides: Partial<ImageAsset> = {}): ImageAsset => ({
+    id: 'img-1',
+    book_id: 'book-1',
+    chapter_id: 'ch-1',
+    asset_type: 'illustration',
+    file_name: 'img.png',
+    file_path: 'images/img.png',
+    mime_type: 'image/png',
+    image_data: null,
+    notes: '',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  })
+
+  it('rolls back chapter cleanup, activity, and ordering when deletion fails', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+    await db.saveSummary({
+      chapter_id: 'ch-1', summary: 'Summary', pov: null, characters: [], beats: [], spoilers_ok: false,
+    })
+    await db.saveImageAsset(image())
+    rawDatabase(db).run(`CREATE TRIGGER reject_chapter_delete BEFORE DELETE ON chapters
+      BEGIN SELECT RAISE(ABORT, 'forced chapter failure'); END`)
+
+    await expect(db.deleteChapter('ch-1', 'book-1')).rejects.toThrow('forced chapter failure')
+
+    expect(await db.getChapters('book-1')).toEqual([expect.objectContaining({ id: 'ch-1' })])
+    expect(await db.getSummary('ch-1')).toEqual(expect.objectContaining({ summary: 'Summary' }))
+    expect(await db.getChapterImages('ch-1')).toEqual([expect.objectContaining({ id: 'img-1' })])
+    expect(await db.getChapterRevisions('ch-1')).toHaveLength(1)
+    expect(await db.getBookRevisionActivity('book-1')).toHaveLength(1)
+    expect(JSON.parse((await db.getBooks())[0].chapter_order)).toEqual(['ch-1'])
+  })
+
+  it('rolls back chapter assignment and ordering when part deletion fails', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+    const part = await db.createPart({ book_id: 'book-1', name: 'Part One' })
+    await db.updateChapterOrders('book-1', ['ch-1'], { [part.id]: ['ch-1'] }, [part.id])
+    await db.savePartSummary({ part_id: part.id, summary: 'Part summary', characters: [], beats: [] })
+    rawDatabase(db).run(`CREATE TRIGGER reject_part_delete BEFORE DELETE ON book_parts
+      BEGIN SELECT RAISE(ABORT, 'forced part failure'); END`)
+
+    await expect(db.deletePart(part.id)).rejects.toThrow('forced part failure')
+
+    expect(await db.getParts('book-1')).toEqual([expect.objectContaining({ id: part.id })])
+    expect((await db.getChapters('book-1'))[0].part_id).toBe(part.id)
+    expect(await db.getPartSummary(part.id)).toEqual(expect.objectContaining({ summary: 'Part summary' }))
+    expect(JSON.parse((await db.getBooks())[0].part_order)).toEqual([part.id])
+  })
+
+  it('rolls back wiki relationships when page deletion fails', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+    const wikiId = await db.createWikiPage({
+      book_id: 'book-1', page_name: 'Alice', content: '', summary: '',
+    })
+    await db.addChapterWikiMention('ch-1', wikiId)
+    await db.saveImageAsset(image())
+    await db.setImageWikiTags('img-1', [wikiId])
+    await db.trackWikiUpdate({ wiki_page_id: wikiId, chapter_id: 'ch-1', update_type: 'updated' })
+    rawDatabase(db).run(`CREATE TRIGGER reject_wiki_delete BEFORE DELETE ON wiki_pages
+      BEGIN SELECT RAISE(ABORT, 'forced wiki failure'); END`)
+
+    await expect(db.deleteWikiPage(wikiId)).rejects.toThrow('forced wiki failure')
+
+    expect(await db.getWikiPageById(wikiId)).toEqual(expect.objectContaining({ id: wikiId }))
+    expect(await db.getChapterWikiMentions('ch-1')).toEqual([
+      expect.objectContaining({ wiki_page_id: wikiId }),
+    ])
+    expect(await db.getImageWikiTags('img-1')).toEqual([
+      expect.objectContaining({ wiki_page_id: wikiId }),
+    ])
+    expect(rawDatabase(db).exec('SELECT COUNT(*) FROM wiki_updates')[0].values[0][0]).toBe(1)
+  })
+
+  it('rolls back cover unlinking and tags when image deletion fails', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+    const part = await db.createPart({ book_id: 'book-1', name: 'Part One' })
+    const wikiId = await db.createWikiPage({
+      book_id: 'book-1', page_name: 'Alice', content: '', summary: '',
+    })
+    await db.saveImageAsset(image())
+    await db.setBookCoverImage('book-1', 'img-1')
+    await db.setPartCoverImageId(part.id, 'img-1')
+    await db.setChapterCoverImageId('ch-1', 'img-1')
+    await db.setImageWikiTags('img-1', [wikiId])
+    rawDatabase(db).run(`CREATE TRIGGER reject_image_delete BEFORE DELETE ON image_assets
+      BEGIN SELECT RAISE(ABORT, 'forced image failure'); END`)
+
+    await expect(db.deleteImageAsset('img-1')).rejects.toThrow('forced image failure')
+
+    expect((await db.getBookCoverImage('book-1'))?.id).toBe('img-1')
+    expect((await db.getPartCoverImage(part.id))?.id).toBe('img-1')
+    expect((await db.getChapterCoverImage('ch-1'))?.id).toBe('img-1')
+    expect(await db.getImageWikiTags('img-1')).toHaveLength(1)
+  })
+
+  it('rolls back review cleanup when reviewer profile deletion fails', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+    const profileId = await db.createCustomProfile({ name: 'Careful', description: 'Checks details' })
+    await db.saveReview({
+      chapter_id: 'ch-1', review_text: 'Review', prompt_used: null,
+      profile_id: profileId, profile_name: 'Careful', tone_key: null,
+    })
+    rawDatabase(db).run(`CREATE TRIGGER reject_profile_delete BEFORE DELETE ON custom_reviewer_profiles
+      BEGIN SELECT RAISE(ABORT, 'forced profile failure'); END`)
+
+    await expect(db.deleteCustomProfile(profileId)).rejects.toThrow('forced profile failure')
+
+    expect(await db.getCustomProfiles()).toEqual([expect.objectContaining({ id: profileId })])
+    expect(await db.getReviews('ch-1')).toEqual([
+      expect.objectContaining({ profile_id: profileId, review_text: 'Review' }),
+    ])
   })
 })
 

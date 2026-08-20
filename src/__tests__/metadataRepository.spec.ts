@@ -121,10 +121,13 @@ describe('metadataRepository (web path)', () => {
     await metadataRepo.deleteCustomProfile(ctx, 42)
 
     expect(runCalls.map((c) => c.sql)).toEqual([
+      'BEGIN TRANSACTION',
       expect.stringContaining('DELETE FROM chapter_reviews WHERE profile_id = ?'),
       expect.stringContaining('DELETE FROM custom_reviewer_profiles WHERE id = ?'),
+      'COMMIT',
     ])
-    expect(runCalls[0].params).toEqual([42])
+    expect(runCalls[1].params).toEqual([42])
+    expect(runCalls[2].params).toEqual([42])
     // Web path persists once after the mutation batch.
     expect(requestPersistence).toHaveBeenCalledOnce()
   })
