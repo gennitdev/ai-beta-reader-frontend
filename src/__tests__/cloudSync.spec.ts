@@ -56,6 +56,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  delete (window as Window & { google?: unknown }).google
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -197,5 +199,126 @@ describe('GoogleDriveProvider basics', () => {
   it('is not web-SDK-ready until the GIS SDK has loaded', () => {
     const provider = new GoogleDriveProvider('web-client')
     expect(provider.isWebSdkReady()).toBe(false)
+  })
+
+  it('rejects authentication when the client ID is missing', async () => {
+    await expect(new GoogleDriveProvider('').authenticate()).rejects.toThrow(
+      'Google Drive client ID is not configured',
+    )
+  })
+
+  it('loads the existing GIS namespace and authenticates with a consent prompt', async () => {
+    let tokenCallback: ((response: { access_token?: string; error?: string }) => void) | undefined
+    const requestAccessToken = vi.fn()
+    const initTokenClient = vi.fn((config: {
+      callback: (response: { access_token?: string; error?: string }) => void
+    }) => {
+      tokenCallback = config.callback
+      return { requestAccessToken }
+    })
+    ;(window as Window & { google?: unknown }).google = {
+      accounts: { oauth2: { initTokenClient } },
+    }
+    const provider = new GoogleDriveProvider('web-client')
+
+    const authentication = provider.authenticate()
+    await vi.waitFor(() => expect(requestAccessToken).toHaveBeenCalledWith({ prompt: 'consent' }))
+    tokenCallback?.({ access_token: 'gis-access-token' })
+    await authentication
+
+    expect(initTokenClient).toHaveBeenCalledWith(expect.objectContaining({
+      client_id: 'web-client',
+      scope: 'https://www.googleapis.com/auth/drive.file',
+    }))
+    expect(provider.isAuthenticated()).toBe(true)
+    expect(provider.isWebSdkReady()).toBe(true)
+  })
+
+  it.each([
+    [{ error: 'access_denied' }, 'access_denied'],
+    [{}, 'did not include an access token'],
+  ])('rejects invalid GIS token callbacks', async (response, message) => {
+    let tokenCallback: ((value: { access_token?: string; error?: string }) => void) | undefined
+    ;(window as Window & { google?: unknown }).google = {
+      accounts: {
+        oauth2: {
+          initTokenClient: (config: {
+            callback: (value: { access_token?: string; error?: string }) => void
+          }) => {
+            tokenCallback = config.callback
+            return { requestAccessToken: vi.fn() }
+          },
+        },
+      },
+    }
+    const authentication = new GoogleDriveProvider('web-client').authenticate()
+    await vi.waitFor(() => expect(tokenCallback).toBeTypeOf('function'))
+    tokenCallback?.(response)
+
+    await expect(authentication).rejects.toThrow(message)
+  })
+
+  it('updates an existing Drive file using an authenticated multipart request', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: 'drive-file-1' }] }) })
+      .mockResolvedValueOnce({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = new GoogleDriveProvider('web-client')
+    ;(provider as unknown as { accessToken: string }).accessToken = 'token-123'
+
+    await provider.upload('backup.enc', 'encrypted-data')
+
+    expect(fetchMock.mock.calls[0][0]).toContain("q=name='backup.enc'")
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://www.googleapis.com/upload/drive/v3/files/drive-file-1?uploadType=multipart',
+    )
+    expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer token-123' },
+      body: expect.any(FormData),
+    }))
+  })
+
+  it('creates a Drive file, returns missing downloads, and fetches existing content', async () => {
+    const provider = new GoogleDriveProvider('web-client')
+    ;(provider as unknown as { accessToken: string }).accessToken = 'token-123'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [] }) })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: 'drive-file-2' }] }) })
+      .mockResolvedValueOnce({ ok: true, text: async () => 'encrypted-backup' })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await provider.upload('backup.enc', 'data')
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    )
+    expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({ method: 'POST' }))
+    await expect(provider.download('missing.enc')).resolves.toBeNull()
+    await expect(provider.download('backup.enc')).resolves.toBe('encrypted-backup')
+    expect(fetchMock.mock.calls[4][0]).toBe(
+      'https://www.googleapis.com/drive/v3/files/drive-file-2?alt=media',
+    )
+  })
+
+  it('surfaces Drive search, upload, and download failures', async () => {
+    const provider = new GoogleDriveProvider('web-client')
+    ;(provider as unknown as { accessToken: string }).accessToken = 'token-123'
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, statusText: 'Forbidden' }))
+    await expect(provider.download('backup.enc')).rejects.toThrow('Search failed: Forbidden')
+
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [] }) })
+      .mockResolvedValueOnce({
+        ok: false, status: 413, statusText: 'Too Large', text: async () => 'quota',
+      }))
+    await expect(provider.upload('backup.enc', 'data')).rejects.toThrow('Upload failed: 413 Too Large')
+
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: 'drive-file-3' }] }) })
+      .mockResolvedValueOnce({ ok: false, statusText: 'Unavailable' }))
+    await expect(provider.download('backup.enc')).rejects.toThrow('Download failed: Unavailable')
   })
 })
