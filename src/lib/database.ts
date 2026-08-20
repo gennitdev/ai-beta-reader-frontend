@@ -53,6 +53,7 @@ export interface Book {
   part_order: string; // JSON array of part IDs
   cover_image_id?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Chapter {
@@ -64,6 +65,7 @@ export interface Chapter {
   word_count: number;
   cover_image_id?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ChapterRevision {
@@ -113,6 +115,8 @@ export interface ChapterSummary {
   spoilers_ok: boolean | null;
   created_at: string;
   updated_at: string;
+  generated_by: 'ai' | 'user' | null;
+  model: string | null;
 }
 
 export interface PartSummary {
@@ -123,6 +127,8 @@ export interface PartSummary {
   beats: string | null; // JSON array as string
   created_at: string;
   updated_at: string;
+  generated_by: 'ai' | 'user' | null;
+  model: string | null;
 }
 
 export interface ChapterReview {
@@ -135,6 +141,7 @@ export interface ChapterReview {
   tone_key: string | null;
   created_at: string;
   updated_at: string;
+  profile_stable_id: string | null;
 }
 
 export interface ChapterNote {
@@ -151,6 +158,15 @@ export interface CustomReviewerProfile {
   description: string;
   created_at: string;
   updated_at: string;
+  stable_id: string;
+}
+
+export interface WikiReviewState {
+  wiki_page_id: string;
+  chapter_id: string;
+  chapter_content_sha256: string;
+  reviewed_at: string;
+  reviewed_by: string;
 }
 
 export interface WikiPage {
@@ -506,6 +522,8 @@ export class AppDatabase {
     characters: string[];
     beats: string[];
     spoilers_ok: boolean;
+    generated_by?: 'ai' | 'user' | null;
+    model?: string | null;
   }) {
     return metadataRepo.saveSummary(this.context, summary);
   }
@@ -519,6 +537,8 @@ export class AppDatabase {
     summary: string;
     characters: string[];
     beats: string[];
+    generated_by?: 'ai' | 'user' | null;
+    model?: string | null;
   }) {
     return metadataRepo.savePartSummary(this.context, summary);
   }
@@ -539,6 +559,7 @@ export class AppDatabase {
     profile_id: number | null;
     profile_name: string | null;
     tone_key: string | null;
+    profile_stable_id?: string | null;
   }) {
     return metadataRepo.saveReview(this.context, review);
   }

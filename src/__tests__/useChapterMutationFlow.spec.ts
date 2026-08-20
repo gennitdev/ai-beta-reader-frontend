@@ -171,6 +171,7 @@ describe('useChapterMutationFlow', () => {
       characters: ['Alice'],
       beats: ['Opening'],
       spoilers_ok: false,
+      generated_by: 'user',
     })
     expect(chapter.value?.summary).toBe('Updated summary')
     expect(flow.savingSummary.value).toBe(false)
@@ -222,6 +223,7 @@ describe('useChapterMutationFlow', () => {
     expect(state.saveSummaryToDb).toHaveBeenCalledWith({
       chapter_id: 'chapter-1', summary: 'Generated summary', pov: 'Elizabeth',
       characters: ['Elizabeth Bennet'], beats: ['Arrival'], spoilers_ok: true,
+      generated_by: 'ai',
     })
     expect(state.updateWikiPage).toHaveBeenCalledWith('wiki-elizabeth', {
       content: 'Wiki content', summary: 'Wiki summary',

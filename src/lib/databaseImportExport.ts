@@ -1,4 +1,4 @@
-export const DATABASE_EXPORT_VERSION = 5
+export const DATABASE_EXPORT_VERSION = 6
 
 export const IMAGE_ASSET_COLUMNS = [
   'id',
@@ -52,6 +52,7 @@ export interface DatabaseImportData {
   image_assets: ImportRow[]
   image_wiki_tags: ImportRow[]
   chapter_notes: ImportRow[]
+  wiki_review_state: ImportRow[]
 }
 
 interface CapacitorTableSchemaColumn {
@@ -135,6 +136,7 @@ export function convertCapacitorExport(exportData: CapacitorExportShape): Databa
     image_assets: rowsToObjects('image_assets'),
     image_wiki_tags: rowsToObjects('image_wiki_tags'),
     chapter_notes: rowsToObjects('chapter_notes'),
+    wiki_review_state: rowsToObjects('wiki_review_state'),
   }
 }
 
@@ -168,6 +170,7 @@ export function normalizeDatabaseImportData(raw: unknown): DatabaseImportData {
     image_assets: readRows(normalized, 'image_assets'),
     image_wiki_tags: readRows(normalized, 'image_wiki_tags'),
     chapter_notes: readRows(normalized, 'chapter_notes'),
+    wiki_review_state: readRows(normalized, 'wiki_review_state'),
   }
 }
 

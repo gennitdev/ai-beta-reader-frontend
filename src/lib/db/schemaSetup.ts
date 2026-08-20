@@ -8,6 +8,7 @@
  */
 
 import type { DatabaseContext } from './connection'
+import { createPortableProfileId } from '@/lib/portableIds'
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -21,7 +22,8 @@ const SCHEMA = `
     chapter_order TEXT DEFAULT '[]',
     part_order TEXT DEFAULT '[]',
     cover_image_id TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS chapters (
@@ -33,6 +35,7 @@ const SCHEMA = `
     word_count INTEGER,
     cover_image_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
     FOREIGN KEY (book_id) REFERENCES books(id),
     FOREIGN KEY (part_id) REFERENCES book_parts(id)
   );
@@ -88,6 +91,8 @@ const SCHEMA = `
     spoilers_ok BOOLEAN,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    generated_by TEXT,
+    model TEXT,
     FOREIGN KEY (chapter_id) REFERENCES chapters(id)
   );
 
@@ -99,6 +104,8 @@ const SCHEMA = `
     beats TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    generated_by TEXT,
+    model TEXT,
     FOREIGN KEY (part_id) REFERENCES book_parts(id)
   );
 
@@ -126,6 +133,7 @@ const SCHEMA = `
     character_name TEXT NOT NULL,
     wiki_page_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
     FOREIGN KEY (book_id) REFERENCES books(id),
     FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id)
   );
@@ -140,6 +148,7 @@ const SCHEMA = `
     tone_key TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    profile_stable_id TEXT,
     FOREIGN KEY (chapter_id) REFERENCES chapters(id)
   );
 
@@ -148,7 +157,8 @@ const SCHEMA = `
     name TEXT NOT NULL,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    stable_id TEXT
   );
 
   CREATE TABLE IF NOT EXISTS ai_profiles (
@@ -158,7 +168,9 @@ const SCHEMA = `
     system_prompt TEXT NOT NULL,
     is_system BOOLEAN,
     is_default BOOLEAN,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    stable_id TEXT,
+    updated_at TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS wiki_updates (
@@ -218,6 +230,17 @@ const SCHEMA = `
     FOREIGN KEY (chapter_id) REFERENCES chapters(id)
   );
 
+  CREATE TABLE IF NOT EXISTS wiki_review_state (
+    wiki_page_id TEXT NOT NULL,
+    chapter_id TEXT NOT NULL,
+    chapter_content_sha256 TEXT NOT NULL,
+    reviewed_at TIMESTAMP NOT NULL,
+    reviewed_by TEXT NOT NULL,
+    PRIMARY KEY (wiki_page_id, chapter_id),
+    FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id),
+    FOREIGN KEY (chapter_id) REFERENCES chapters(id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_image_assets_book ON image_assets(book_id);
   CREATE INDEX IF NOT EXISTS idx_image_assets_chapter ON image_assets(chapter_id);
   CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_image ON image_wiki_tags(image_id);
@@ -227,9 +250,10 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_chapter_revisions_chapter_created ON chapter_revisions(chapter_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_chapter_revisions_book_created ON chapter_revisions(book_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_chapter_activity_book_created ON chapter_activity(book_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_wiki_review_state_chapter ON wiki_review_state(chapter_id);
 `
 
-export const CURRENT_SCHEMA_VERSION = 1
+export const CURRENT_SCHEMA_VERSION = 2
 
 interface ColumnMigration {
   table: string
@@ -381,9 +405,131 @@ async function applyLegacySchemaMigration(ctx: DatabaseContext): Promise<void> {
   }
 }
 
+const PORTABLE_COLUMN_MIGRATIONS: ColumnMigration[] = [
+  { table: 'books', column: 'updated_at', definition: 'TIMESTAMP' },
+  { table: 'chapters', column: 'updated_at', definition: 'TIMESTAMP' },
+  { table: 'book_characters', column: 'updated_at', definition: 'TIMESTAMP' },
+  { table: 'custom_reviewer_profiles', column: 'stable_id', definition: 'TEXT' },
+  { table: 'ai_profiles', column: 'stable_id', definition: 'TEXT' },
+  { table: 'ai_profiles', column: 'updated_at', definition: 'TIMESTAMP' },
+  { table: 'chapter_summaries', column: 'generated_by', definition: 'TEXT' },
+  { table: 'chapter_summaries', column: 'model', definition: 'TEXT' },
+  { table: 'part_summaries', column: 'generated_by', definition: 'TEXT' },
+  { table: 'part_summaries', column: 'model', definition: 'TEXT' },
+  { table: 'chapter_reviews', column: 'profile_stable_id', definition: 'TEXT' },
+]
+
+async function queryRows(
+  ctx: DatabaseContext,
+  sql: string,
+): Promise<Array<Record<string, unknown>>> {
+  if (ctx.isNative) {
+    const result = await ctx.connection.query(sql)
+    return result.values ?? []
+  }
+
+  const result = ctx.connection.exec(sql)
+  if (result.length === 0) return []
+  return result[0].values.map((row) => Object.fromEntries(
+    result[0].columns.map((column, index) => [column, row[index]]),
+  ))
+}
+
+async function backfillStableProfileIds(ctx: DatabaseContext): Promise<void> {
+  const customProfiles = await queryRows(
+    ctx,
+    `SELECT id FROM custom_reviewer_profiles WHERE stable_id IS NULL OR stable_id = '' ORDER BY id`,
+  )
+  for (const profile of customProfiles) {
+    const stableId = createPortableProfileId()
+    await ctx.connection.run(
+      `UPDATE custom_reviewer_profiles SET stable_id = ? WHERE id = ?`,
+      [stableId, profile.id],
+    )
+  }
+
+  const aiProfiles = await queryRows(
+    ctx,
+    `SELECT id, tone_key, is_system FROM ai_profiles WHERE stable_id IS NULL OR stable_id = '' ORDER BY id`,
+  )
+  for (const profile of aiProfiles) {
+    const kind = Boolean(profile.is_system) ? 'system' : 'ai'
+    const toneKey = String(profile.tone_key)
+    const stableId = kind === 'system' ? `system:${toneKey}` : `ai:${toneKey}:${String(profile.id)}`
+    await ctx.connection.run(`UPDATE ai_profiles SET stable_id = ? WHERE id = ?`, [stableId, profile.id])
+  }
+}
+
+async function applyPortableBundleSchemaMigration(ctx: DatabaseContext): Promise<void> {
+  for (const migration of PORTABLE_COLUMN_MIGRATIONS) {
+    if (!await columnExists(ctx, migration.table, migration.column)) {
+      await execute(
+        ctx,
+        `ALTER TABLE ${migration.table} ADD COLUMN ${migration.column} ${migration.definition}`,
+      )
+    }
+  }
+
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS wiki_review_state (
+      wiki_page_id TEXT NOT NULL,
+      chapter_id TEXT NOT NULL,
+      chapter_content_sha256 TEXT NOT NULL,
+      reviewed_at TIMESTAMP NOT NULL,
+      reviewed_by TEXT NOT NULL,
+      PRIMARY KEY (wiki_page_id, chapter_id),
+      FOREIGN KEY (wiki_page_id) REFERENCES wiki_pages(id),
+      FOREIGN KEY (chapter_id) REFERENCES chapters(id)
+    )`,
+    `UPDATE chapters SET updated_at = created_at WHERE updated_at IS NULL`,
+    `UPDATE chapters SET updated_at = (SELECT MAX(created_at) FROM chapter_revisions WHERE chapter_id = chapters.id)
+      WHERE EXISTS (SELECT 1 FROM chapter_revisions WHERE chapter_id = chapters.id)
+        AND (SELECT MAX(created_at) FROM chapter_revisions WHERE chapter_id = chapters.id) > updated_at`,
+    `UPDATE chapters SET updated_at = (SELECT MAX(updated_at) FROM chapter_summaries WHERE chapter_id = chapters.id)
+      WHERE EXISTS (SELECT 1 FROM chapter_summaries WHERE chapter_id = chapters.id)
+        AND (SELECT MAX(updated_at) FROM chapter_summaries WHERE chapter_id = chapters.id) > updated_at`,
+    `UPDATE chapters SET updated_at = (SELECT MAX(updated_at) FROM chapter_notes WHERE chapter_id = chapters.id)
+      WHERE EXISTS (SELECT 1 FROM chapter_notes WHERE chapter_id = chapters.id)
+        AND (SELECT MAX(updated_at) FROM chapter_notes WHERE chapter_id = chapters.id) > updated_at`,
+    `UPDATE chapters SET updated_at = (SELECT MAX(updated_at) FROM chapter_reviews WHERE chapter_id = chapters.id)
+      WHERE EXISTS (SELECT 1 FROM chapter_reviews WHERE chapter_id = chapters.id)
+        AND (SELECT MAX(updated_at) FROM chapter_reviews WHERE chapter_id = chapters.id) > updated_at`,
+    `UPDATE books SET updated_at = created_at WHERE updated_at IS NULL`,
+    `UPDATE books SET updated_at = (SELECT MAX(updated_at) FROM chapters WHERE book_id = books.id)
+      WHERE EXISTS (SELECT 1 FROM chapters WHERE book_id = books.id)
+        AND (SELECT MAX(updated_at) FROM chapters WHERE book_id = books.id) > updated_at`,
+    `UPDATE books SET updated_at = (SELECT MAX(updated_at) FROM book_parts WHERE book_id = books.id)
+      WHERE EXISTS (SELECT 1 FROM book_parts WHERE book_id = books.id)
+        AND (SELECT MAX(updated_at) FROM book_parts WHERE book_id = books.id) > updated_at`,
+    `UPDATE books SET updated_at = (SELECT MAX(updated_at) FROM wiki_pages WHERE book_id = books.id)
+      WHERE EXISTS (SELECT 1 FROM wiki_pages WHERE book_id = books.id)
+        AND (SELECT MAX(updated_at) FROM wiki_pages WHERE book_id = books.id) > updated_at`,
+    `UPDATE book_characters SET updated_at = created_at WHERE updated_at IS NULL`,
+    `UPDATE ai_profiles SET updated_at = created_at WHERE updated_at IS NULL`,
+  ]
+  for (const statement of statements) await execute(ctx, statement)
+
+  await backfillStableProfileIds(ctx)
+
+  const finalStatements = [
+    `UPDATE chapter_reviews SET profile_stable_id = (
+      SELECT stable_id FROM custom_reviewer_profiles WHERE id = chapter_reviews.profile_id
+    ) WHERE profile_stable_id IS NULL AND profile_id IS NOT NULL`,
+    `UPDATE chapter_reviews SET profile_stable_id = 'system:' || tone_key
+      WHERE profile_stable_id IS NULL AND profile_id IS NULL AND tone_key IS NOT NULL
+        AND tone_key NOT LIKE 'custom-%'`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_reviewer_profiles_stable_id
+      ON custom_reviewer_profiles(stable_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_profiles_stable_id ON ai_profiles(stable_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_wiki_review_state_chapter ON wiki_review_state(chapter_id)`,
+  ]
+  for (const statement of finalStatements) await execute(ctx, statement)
+}
+
 /** Append future migrations here; each version is committed and recorded separately. */
 const SCHEMA_MIGRATIONS: SchemaMigration[] = [
   { version: 1, apply: applyLegacySchemaMigration },
+  { version: 2, apply: applyPortableBundleSchemaMigration },
 ]
 
 export async function createTables(ctx: DatabaseContext): Promise<void> {

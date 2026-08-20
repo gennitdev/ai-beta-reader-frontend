@@ -326,6 +326,7 @@ describe('PartView', () => {
     await flushPromises()
     expect(h.savePartSummary).toHaveBeenCalledWith({
       part_id: 'part-1', summary: 'Revised overview', characters: ['Alice'], beats: ['Arrival'],
+      generated_by: 'user',
     })
 
     await button(wrapper, 'Edit').trigger('click')
@@ -377,6 +378,7 @@ describe('PartView', () => {
     )
     expect(h.savePartSummary).toHaveBeenCalledWith({
       part_id: 'part-1', summary: 'Generated overview', characters: ['Alice'], beats: ['A turning point'],
+      generated_by: 'ai',
     })
 
     h.generateSummary.mockRejectedValueOnce(new Error('rate limited'))

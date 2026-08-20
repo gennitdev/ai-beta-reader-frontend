@@ -178,7 +178,9 @@ describe('searchRepository mutations', () => {
     })
 
     expect(result.replacedCount).toBe(3)
-    expect(runCalls[0].params).toEqual(['James Returns', 'James met JAMES.', 3, 'c1'])
+    expect(runCalls[0].params).toEqual([
+      'James Returns', 'James met JAMES.', 3, expect.any(String), 'c1',
+    ])
     expect(requestPersistence).toHaveBeenCalledOnce()
     expect(dispatchChapterWikiLinksChanged).toHaveBeenCalledWith({ chapterIds: ['c1'], wikiPageIds: [] })
   })
@@ -242,7 +244,7 @@ describe('searchRepository mutations', () => {
       fields: { title: 'Old', text: 'two words' },
     })
 
-    expect(runCalls[0].params).toEqual(['Old', 'two words', 2, 'c1'])
+    expect(runCalls[0].params).toEqual(['Old', 'two words', 2, expect.any(String), 'c1'])
   })
 
   it('performs literal, case-preserving whole-target replacements', async () => {
@@ -250,7 +252,9 @@ describe('searchRepository mutations', () => {
       { title: 'A.B and A.B', text: 'a.b A.B A.b' },
     ]])
     await replaceInChapter(chapter.ctx, 'c1', 'a.b', 'x')
-    expect(chapter.runCalls[0].params).toEqual(['X and X', 'x X X', 3, 'c1'])
+    expect(chapter.runCalls[0].params).toEqual([
+      'X and X', 'x X X', 3, expect.any(String), 'c1',
+    ])
 
     const wiki = makeNativeContext([[
       { page_name: 'Jon', content: 'jon JON', summary: 'Jon' },

@@ -97,6 +97,8 @@ describe('metadataRepository (web path)', () => {
       spoilers_ok: true,
       created_at: 'created',
       updated_at: 'updated',
+      generated_by: null,
+      model: null,
     })
   })
 

@@ -9,6 +9,7 @@
  */
 
 import { logger } from '@/lib/logger'
+import { createPortableProfileId } from '@/lib/portableIds'
 import {
   DATABASE_EXPORT_VERSION,
   IMAGE_ASSET_COLUMNS,
@@ -27,6 +28,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function normalizeCustomProfileImportRows(rows: ImportRow[]): Record<string, unknown>[] {
+  return rows.map((row) => {
+    const profile = Array.isArray(row)
+      ? {
+          id: row[0], name: row[1], description: row[2], created_at: row[3],
+          updated_at: row[4], stable_id: row[5],
+        }
+      : row
+    return {
+      ...profile,
+      stable_id: typeof profile.stable_id === 'string' && profile.stable_id
+        ? profile.stable_id : createPortableProfileId(),
+    }
+  })
+}
+
+function normalizeAiProfileImportRows(rows: ImportRow[]): Record<string, unknown>[] {
+  return rows.map((row) => {
+    const profile = Array.isArray(row)
+      ? {
+          id: row[0], name: row[1], tone_key: row[2], system_prompt: row[3],
+          is_system: row[4], is_default: row[5], created_at: row[6], stable_id: row[7],
+          updated_at: row[8],
+        }
+      : row
+    const kind = Boolean(profile.is_system) ? 'system' : 'ai'
+    const generatedStableId = kind === 'system'
+      ? `system:${String(profile.tone_key)}`
+      : `ai:${String(profile.tone_key)}:${String(profile.id)}`
+    return {
+      ...profile,
+      stable_id: typeof profile.stable_id === 'string' && profile.stable_id
+        ? profile.stable_id : generatedStableId,
+      updated_at: profile.updated_at ?? profile.created_at,
+    }
+  })
+}
+
 function toImportedBook(row: ImportRow): Book {
   if (Array.isArray(row)) {
     return {
@@ -36,6 +75,7 @@ function toImportedBook(row: ImportRow): Book {
       part_order: typeof row[3] === 'string' ? row[3] : '[]',
       cover_image_id: typeof row[4] === 'string' ? row[4] : null,
       created_at: String(row[5]),
+      updated_at: typeof row[6] === 'string' ? row[6] : String(row[5]),
     }
   }
 
@@ -46,6 +86,7 @@ function toImportedBook(row: ImportRow): Book {
     part_order: typeof row.part_order === 'string' ? row.part_order : '[]',
     cover_image_id: typeof row.cover_image_id === 'string' ? row.cover_image_id : null,
     created_at: String(row.created_at),
+    updated_at: typeof row.updated_at === 'string' ? row.updated_at : String(row.created_at),
   }
 }
 
@@ -58,7 +99,10 @@ function toImportedChapter(row: ImportRow): Chapter {
       title: typeof row[3] === 'string' ? row[3] : undefined,
       text: String(row[4] ?? ''),
       word_count: Number(row[5] ?? 0),
-      created_at: String(row[6]),
+      cover_image_id: row.length >= 8 && typeof row[6] === 'string' ? row[6] : null,
+      created_at: String(row.length >= 8 ? row[7] : row[6]),
+      updated_at: typeof row[8] === 'string'
+        ? row[8] : String(row.length >= 8 ? row[7] : row[6]),
     }
   }
 
@@ -69,7 +113,9 @@ function toImportedChapter(row: ImportRow): Chapter {
     title: typeof row.title === 'string' ? row.title : undefined,
     text: String(row.text ?? ''),
     word_count: Number(row.word_count ?? 0),
+    cover_image_id: typeof row.cover_image_id === 'string' ? row.cover_image_id : null,
     created_at: String(row.created_at),
+    updated_at: typeof row.updated_at === 'string' ? row.updated_at : String(row.created_at),
   }
 }
 
@@ -115,13 +161,12 @@ export async function exportDatabase(ctx: DatabaseContext): Promise<Uint8Array> 
     }
 
     // Get all data from other tables
-    const getAllFromTable = (tableName: string) => {
-      const result = ctx.connection.exec(`SELECT * FROM ${tableName}`)
-      return result.length > 0 ? result[0].values : []
-    }
-    const getAllObjectsFromTable = (tableName: string, columns: string[]) => {
-      const result = ctx.connection.exec(`SELECT ${columns.join(', ')} FROM ${tableName}`)
+    const getAllObjectsFromTable = (tableName: string, selectedColumns?: string[]) => {
+      const projection = selectedColumns?.join(', ') ?? '*'
+      const result = ctx.connection.exec(`SELECT ${projection} FROM ${tableName}`)
       if (result.length === 0) return []
+
+      const columns = selectedColumns ?? result[0].columns
 
       return result[0].values.map((row: unknown[]) =>
         columns.reduce((entry, column, index) => {
@@ -135,21 +180,22 @@ export async function exportDatabase(ctx: DatabaseContext): Promise<Uint8Array> 
       version: DATABASE_EXPORT_VERSION,
       books,
       chapters: allChapters,
-      chapter_revisions: getAllFromTable('chapter_revisions'),
-      chapter_activity: getAllFromTable('chapter_activity'),
-      book_parts: getAllFromTable('book_parts'),
-      chapter_summaries: getAllFromTable('chapter_summaries'),
-      part_summaries: getAllFromTable('part_summaries'),
+      chapter_revisions: getAllObjectsFromTable('chapter_revisions'),
+      chapter_activity: getAllObjectsFromTable('chapter_activity'),
+      book_parts: getAllObjectsFromTable('book_parts'),
+      chapter_summaries: getAllObjectsFromTable('chapter_summaries'),
+      part_summaries: getAllObjectsFromTable('part_summaries'),
       wiki_pages: getAllObjectsFromTable('wiki_pages', WIKI_PAGE_COLUMNS),
-      book_characters: getAllFromTable('book_characters'),
-      chapter_reviews: getAllFromTable('chapter_reviews'),
-      custom_reviewer_profiles: getAllFromTable('custom_reviewer_profiles'),
-      ai_profiles: getAllFromTable('ai_profiles'),
-      wiki_updates: getAllFromTable('wiki_updates'),
-      chapter_wiki_mentions: getAllFromTable('chapter_wiki_mentions'),
+      book_characters: getAllObjectsFromTable('book_characters'),
+      chapter_reviews: getAllObjectsFromTable('chapter_reviews'),
+      custom_reviewer_profiles: getAllObjectsFromTable('custom_reviewer_profiles'),
+      ai_profiles: getAllObjectsFromTable('ai_profiles'),
+      wiki_updates: getAllObjectsFromTable('wiki_updates'),
+      chapter_wiki_mentions: getAllObjectsFromTable('chapter_wiki_mentions'),
       image_assets: getAllObjectsFromTable('image_assets', IMAGE_ASSET_COLUMNS),
       image_wiki_tags: getAllObjectsFromTable('image_wiki_tags', ['image_id', 'wiki_page_id', 'created_at']),
-      chapter_notes: getAllFromTable('chapter_notes'),
+      chapter_notes: getAllObjectsFromTable('chapter_notes'),
+      wiki_review_state: getAllObjectsFromTable('wiki_review_state'),
     }
 
     return new TextEncoder().encode(JSON.stringify(exportData))
@@ -224,6 +270,7 @@ export async function importDatabase(ctx: DatabaseContext, data: Uint8Array): Pr
       'chapter_summaries',
       'part_summaries',
       'chapter_notes',
+      'wiki_review_state',
       'chapter_revisions',
       'chapter_activity',
       'image_wiki_tags',
@@ -285,17 +332,28 @@ export async function importDatabase(ctx: DatabaseContext, data: Uint8Array): Pr
       FROM chapter_revisions WHERE revision_kind = 'save'`)
 
     await importTable('wiki_pages', importData.wiki_pages)
-    await importTable('custom_reviewer_profiles', importData.custom_reviewer_profiles)
-    await importTable('ai_profiles', importData.ai_profiles)
+    await importTable(
+      'custom_reviewer_profiles',
+      normalizeCustomProfileImportRows(importData.custom_reviewer_profiles),
+    )
+    await importTable('ai_profiles', normalizeAiProfileImportRows(importData.ai_profiles))
     await importTable('chapter_summaries', importData.chapter_summaries)
     await importTable('part_summaries', importData.part_summaries)
     await importTable('chapter_reviews', importData.chapter_reviews)
+    await run(`UPDATE chapter_reviews SET profile_stable_id = (
+      SELECT stable_id FROM custom_reviewer_profiles WHERE id = chapter_reviews.profile_id
+    ) WHERE profile_stable_id IS NULL AND profile_id IS NOT NULL`)
+    await run(`UPDATE chapter_reviews SET profile_stable_id = 'system:' || tone_key
+      WHERE profile_stable_id IS NULL AND profile_id IS NULL AND tone_key IS NOT NULL
+        AND tone_key NOT LIKE 'custom-%'`)
     await importTable('book_characters', importData.book_characters)
+    await run(`UPDATE book_characters SET updated_at = created_at WHERE updated_at IS NULL`)
     await importTable('wiki_updates', importData.wiki_updates)
     await importTable('chapter_wiki_mentions', importData.chapter_wiki_mentions)
     await importTable('image_assets', normalizeImageAssetImportRows(importData.image_assets))
     await importTable('image_wiki_tags', importData.image_wiki_tags)
     await importTable('chapter_notes', importData.chapter_notes)
+    await importTable('wiki_review_state', importData.wiki_review_state)
 
     await commitTransaction()
     transactionStarted = false
@@ -349,6 +407,7 @@ export async function importFromNeonExport(ctx: DatabaseContext, jsonData: unkno
     image_assets: [],
     image_wiki_tags: [],
     chapter_notes: [],
+    wiki_review_state: [],
   }
 
   // Map Neon table exports to our format
@@ -385,6 +444,7 @@ export async function importFromNeonExport(ctx: DatabaseContext, jsonData: unkno
   transformedData.image_assets = Array.isArray(sourceData.image_assets) ? sourceData.image_assets.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : []
   transformedData.image_wiki_tags = Array.isArray(sourceData.image_wiki_tags) ? sourceData.image_wiki_tags.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : []
   transformedData.chapter_notes = Array.isArray(sourceData.chapter_notes) ? sourceData.chapter_notes.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : []
+  transformedData.wiki_review_state = Array.isArray(sourceData.wiki_review_state) ? sourceData.wiki_review_state.filter((row): row is ImportRow => isRecord(row) || Array.isArray(row)) : []
 
   // Use the standard import function
   const jsonString = JSON.stringify(transformedData)

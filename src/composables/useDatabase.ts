@@ -309,6 +309,8 @@ export function useDatabase() {
     characters: string[];
     beats: string[];
     spoilers_ok: boolean;
+    generated_by?: 'ai' | 'user' | null;
+    model?: string | null;
   }) {
     try {
       await initializeDatabase()
@@ -336,6 +338,8 @@ export function useDatabase() {
     summary: string;
     characters: string[];
     beats: string[];
+    generated_by?: 'ai' | 'user' | null;
+    model?: string | null;
   }) {
     try {
       await initializeDatabase()
@@ -366,6 +370,7 @@ export function useDatabase() {
     profile_id: number | null;
     profile_name: string | null;
     tone_key: string | null;
+    profile_stable_id?: string | null;
   }) {
     try {
       await initializeDatabase()

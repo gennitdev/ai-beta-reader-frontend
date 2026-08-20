@@ -23,6 +23,7 @@ function toNativeBook(row: Record<string, unknown>): Book {
     part_order: typeof row.part_order === 'string' ? row.part_order : '[]',
     cover_image_id: typeof row.cover_image_id === 'string' ? row.cover_image_id : null,
     created_at: String(row.created_at),
+    updated_at: String(row.updated_at ?? row.created_at),
   }
 }
 
@@ -34,6 +35,7 @@ function toWebBook(row: unknown[]): Book {
     part_order: typeof row[3] === 'string' ? row[3] : '[]',
     cover_image_id: typeof row[4] === 'string' ? row[4] : null,
     created_at: String(row[5]),
+    updated_at: String(row[6] ?? row[5]),
   }
 }
 
@@ -45,7 +47,9 @@ function toWebChapter(row: unknown[]): Chapter {
     title: typeof row[3] === 'string' ? row[3] : undefined,
     text: String(row[4] ?? ''),
     word_count: Number(row[5] ?? 0),
-    created_at: String(row[6]),
+    cover_image_id: typeof row[6] === 'string' ? row[6] : null,
+    created_at: String(row[7]),
+    updated_at: String(row[8] ?? row[7]),
   }
 }
 
@@ -57,7 +61,12 @@ function toNativeChapter(row: QueryRow): Chapter {
     title: typeof readQueryRowValue(row, 3, 'title') === 'string' ? readQueryRowValue(row, 3, 'title') as string : undefined,
     text: String(readQueryRowValue(row, 4, 'text') ?? ''),
     word_count: Number(readQueryRowValue(row, 5, 'word_count') ?? 0),
-    created_at: String(readQueryRowValue(row, 6, 'created_at')),
+    cover_image_id: typeof readQueryRowValue(row, 6, 'cover_image_id') === 'string'
+      ? readQueryRowValue(row, 6, 'cover_image_id') as string : null,
+    created_at: String(readQueryRowValue(row, 7, 'created_at')),
+    updated_at: String(
+      readQueryRowValue(row, 8, 'updated_at') ?? readQueryRowValue(row, 7, 'created_at'),
+    ),
   }
 }
 
@@ -101,10 +110,13 @@ function countChangedWords(previousText: string, nextText: string): { added: num
 // --- Books ------------------------------------------------------------------
 
 export async function saveBook(ctx: DatabaseContext, book: Book): Promise<void> {
-  const query = `INSERT OR REPLACE INTO books (id, title, chapter_order, part_order, cover_image_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`
+  const query = `INSERT OR REPLACE INTO books
+    (id, title, chapter_order, part_order, cover_image_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`
   const chapterOrder = book.chapter_order || '[]'
   const partOrder = book.part_order || '[]'
   const coverImageId = book.cover_image_id ?? null
+  const updatedAt = book.updated_at ?? book.created_at
 
   if (ctx.isNative) {
     await ctx.connection.run(query, [
@@ -114,15 +126,19 @@ export async function saveBook(ctx: DatabaseContext, book: Book): Promise<void> 
       partOrder,
       coverImageId,
       book.created_at,
+      updatedAt,
     ])
   } else {
-    ctx.connection.run(query, [book.id, book.title, chapterOrder, partOrder, coverImageId, book.created_at])
+    ctx.connection.run(query, [
+      book.id, book.title, chapterOrder, partOrder, coverImageId, book.created_at, updatedAt,
+    ])
     ctx.requestPersistence()
   }
 }
 
 export async function getBooks(ctx: DatabaseContext): Promise<Book[]> {
-  const query = `SELECT id, title, chapter_order, part_order, cover_image_id, created_at FROM books ORDER BY created_at DESC`
+  const query = `SELECT id, title, chapter_order, part_order, cover_image_id, created_at, updated_at
+                 FROM books ORDER BY created_at DESC`
 
   if (ctx.isNative) {
     const result = await ctx.connection.query(query)
@@ -146,7 +162,8 @@ export async function saveChapter(
 ): Promise<string | null> {
   const createRevision = options.createRevision !== false
   let createdRevisionId: string | null = null
-  const existingQuery = `SELECT id, book_id, part_id, title, text, word_count, created_at
+  const existingQuery = `SELECT id, book_id, part_id, title, text, word_count, cover_image_id,
+                                created_at, updated_at
                          FROM chapters WHERE id = ? LIMIT 1`
   let existing: Chapter | null = null
   if (createRevision) {
@@ -160,14 +177,20 @@ export async function saveChapter(
   }
 
   const changed = options.forceRevision === true || !existing || existing.title !== chapter.title || existing.text !== chapter.text
-  const query = `INSERT INTO chapters (id, book_id, part_id, title, text, word_count, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)
+  const updatedAt = createRevision && existing && changed
+    ? new Date().toISOString()
+    : chapter.updated_at ?? chapter.created_at
+  const query = `INSERT INTO chapters
+                   (id, book_id, part_id, title, text, word_count, cover_image_id, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                  ON CONFLICT(id) DO UPDATE SET
                    book_id = excluded.book_id,
                    part_id = excluded.part_id,
                    title = excluded.title,
                    text = excluded.text,
-                   word_count = excluded.word_count`
+                   word_count = excluded.word_count,
+                   cover_image_id = excluded.cover_image_id,
+                   updated_at = excluded.updated_at`
 
   if (ctx.isNative) {
     await ctx.connection.run(query, [
@@ -177,7 +200,9 @@ export async function saveChapter(
       chapter.title,
       chapter.text,
       chapter.word_count,
+      chapter.cover_image_id ?? null,
       chapter.created_at,
+      updatedAt,
     ])
   } else {
     ctx.connection.run(query, [
@@ -187,7 +212,9 @@ export async function saveChapter(
       chapter.title,
       chapter.text,
       chapter.word_count,
+      chapter.cover_image_id ?? null,
       chapter.created_at,
+      updatedAt,
     ])
     ctx.requestPersistence()
   }
@@ -263,7 +290,8 @@ async function insertChapterActivity(ctx: DatabaseContext, activity: {
 }
 
 export async function getChapters(ctx: DatabaseContext, bookId: string): Promise<Chapter[]> {
-  const query = `SELECT id, book_id, part_id, title, text, word_count, created_at
+  const query = `SELECT id, book_id, part_id, title, text, word_count, cover_image_id,
+                        created_at, updated_at
                  FROM chapters WHERE book_id = ? ORDER BY created_at`
 
   if (ctx.isNative) {
@@ -362,12 +390,17 @@ async function deleteChapterRows(ctx: DatabaseContext, chapterId: string, bookId
   }
 
   const updatedBookOrder = bookOrder.filter((id) => id !== chapterId)
-  const updateBookOrderQuery = `UPDATE books SET chapter_order = ? WHERE id = ?`
+  const updateBookOrderQuery = `UPDATE books SET chapter_order = ?, updated_at = ? WHERE id = ?`
+  const bookUpdatedAt = new Date().toISOString()
 
   if (ctx.isNative) {
-    await ctx.connection.run(updateBookOrderQuery, [JSON.stringify(updatedBookOrder), bookId])
+    await ctx.connection.run(updateBookOrderQuery, [
+      JSON.stringify(updatedBookOrder), bookUpdatedAt, bookId,
+    ])
   } else {
-    ctx.connection.run(updateBookOrderQuery, [JSON.stringify(updatedBookOrder), bookId])
+    ctx.connection.run(updateBookOrderQuery, [
+      JSON.stringify(updatedBookOrder), bookUpdatedAt, bookId,
+    ])
   }
 
   // Update part order if needed
@@ -434,12 +467,13 @@ async function addChapterToBookOrder(ctx: DatabaseContext, bookId: string, chapt
   // Only add if not already present
   if (!currentOrder.includes(chapterId)) {
     currentOrder.push(chapterId)
-    const updateQuery = `UPDATE books SET chapter_order = ? WHERE id = ?`
+    const updateQuery = `UPDATE books SET chapter_order = ?, updated_at = ? WHERE id = ?`
+    const updatedAt = new Date().toISOString()
 
     if (ctx.isNative) {
-      await ctx.connection.run(updateQuery, [JSON.stringify(currentOrder), bookId])
+      await ctx.connection.run(updateQuery, [JSON.stringify(currentOrder), updatedAt, bookId])
     } else {
-      ctx.connection.run(updateQuery, [JSON.stringify(currentOrder), bookId])
+      ctx.connection.run(updateQuery, [JSON.stringify(currentOrder), updatedAt, bookId])
       ctx.requestPersistence()
     }
   }
@@ -511,7 +545,8 @@ export async function restoreChapterRevision(ctx: DatabaseContext, revisionId: s
   const revisionQuery = `SELECT id, chapter_id, book_id, title, text, word_count, words_added, words_removed,
                                 revision_kind, created_at, discarded_at
                          FROM chapter_revisions WHERE id = ? AND discarded_at IS NULL LIMIT 1`
-  const chapterQuery = `SELECT id, book_id, part_id, title, text, word_count, created_at
+  const chapterQuery = `SELECT id, book_id, part_id, title, text, word_count, cover_image_id,
+                               created_at, updated_at
                         FROM chapters WHERE id = ? LIMIT 1`
 
   let target: ChapterRevision | null = null
