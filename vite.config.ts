@@ -12,7 +12,7 @@ export default defineConfig({
   ],
   test: {
     environment: 'node',
-    include: ['src/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'electron/tests/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
