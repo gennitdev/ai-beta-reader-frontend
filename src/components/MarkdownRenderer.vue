@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import { processWikiLinks } from '@/utils/wikiLinks'
@@ -116,7 +117,10 @@ const renderedHtml = computed(() => {
     `<img$1 style="max-height: ${props.imageMaxHeight}; width: auto;" class="max-w-full h-auto rounded-lg shadow-md">`
   )
 
-  return html
+  // Content can originate from imported manuscripts and AI responses, so it
+  // must be treated as untrusted even though raw HTML is a supported Markdown
+  // feature. Sanitize the final document after all renderer transformations.
+  return DOMPurify.sanitize(html)
 })
 
 const fontSizeClass = computed(() => {
