@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon, CurrencyDollarIcon, MoonIcon } from '@heroicons/vue/24/outline'
 import { useBardwallChallenge } from '@/composables/useBardwallChallenge'
+import { useBardwallLastWord } from '@/composables/useBardwallLastWord'
 import { useBardwallOfferings } from '@/composables/useBardwallOfferings'
 import BardwallTownMap, { type BardwallLocation } from '@/components/bardwall/BardwallTownMap.vue'
 import BardwallAmphitheater from '@/components/bardwall/BardwallAmphitheater.vue'
@@ -20,7 +21,6 @@ import {
   BARDWALL_WYRM_POTIONS,
   HELICONIA_PERSISTENCE_MESSAGES,
   calculateBardwallPay,
-  appendBardwallLastWordExchange,
   countBardwallWords,
   eatBardwallFood,
   getBardwallDateKey,
@@ -33,14 +33,10 @@ import {
   resolveBardwallNight,
   resetBardwallState,
   saveBardwallState,
-  startBardwallLastWordStory,
-  updateBardwallLastWordDraft,
   type BardwallFoodId,
   type BardwallLodging,
   type BardwallPotionId,
 } from '@/lib/bardwall'
-import { continueBardwallLastWordStory } from '@/lib/openai'
-import { loadOpenAIApiKey } from '@/lib/apiKeyStorage'
 import { getBardwallCardImage, getBardwallPlaceImage, getBardwallPotionImage } from '@/lib/bardwallAssets'
 
 const routeLocations = new Set<BardwallLocation>(['amphitheater', 'market', 'inn', 'shrine', 'apothecary', 'camp', 'challenge', 'cave'])
@@ -65,9 +61,6 @@ const shrineMessage = ref<string | null>(null)
 const treatmentMessage = ref<string | null>(null)
 const showResetDialog = ref(false)
 const resetConfirmation = ref('')
-const selectedLastWordStoryId = ref<string | null>(null)
-const lastWordMessage = ref<string | null>(null)
-const vesperSpeaking = ref(false)
 
 const toldPassageIds = computed(() => game.value.toldPassageIds)
 const {
@@ -123,6 +116,21 @@ const {
   wagerLabel,
   scoreTotal,
 } = useBardwallChallenge(game)
+const {
+  lastWordMessage,
+  vesperSpeaking,
+  lastWordStories,
+  selectedLastWordStory,
+  lastWordDraftCount,
+  canAskVesper,
+  beginLastWordStory,
+  openLastWordStory,
+  returnToLastWordShelf,
+  updateLastWordDraft,
+  askVesperToContinue,
+  resetLastWordUi,
+  formatLastWordDate,
+} = useBardwallLastWord(game)
 const todayKey = computed(() => getBardwallDateKey())
 const dailyGoal = computed(() => game.value.dailyGoal?.date === todayKey.value ? game.value.dailyGoal : null)
 const chosenGoal = computed(() => goalChoice.value === 'custom' ? Number(customGoal.value) : goalChoice.value)
@@ -137,9 +145,6 @@ const selectedNourishment = computed(() => BARDWALL_FOOD_ITEMS.reduce((total, it
 ), 0))
 const nourishmentDeficit = computed(() => Math.max(0, BARDWALL_DAILY_NOURISHMENT - selectedNourishment.value))
 const foodInventory = computed(() => BARDWALL_FOOD_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
-const lastWordStories = computed(() => [...game.value.lastWordStories].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
-const selectedLastWordStory = computed(() => game.value.lastWordStories.find((story) => story.id === selectedLastWordStoryId.value) ?? null)
-const lastWordDraftCount = computed(() => countBardwallWords(selectedLastWordStory.value?.draft ?? ''))
 const heliconiaMessage = computed(() => {
   const messageIndex = Math.max(0, game.value.heliconiaVisits - 2) % HELICONIA_PERSISTENCE_MESSAGES.length
   return HELICONIA_PERSISTENCE_MESSAGES[messageIndex]
@@ -201,8 +206,7 @@ const goToWyrmGame = async () => {
 
 const goToLastWordGame = async () => {
   screen.value = 'last-word'
-  selectedLastWordStoryId.value = null
-  lastWordMessage.value = null
+  resetLastWordUi()
   await router.push({ name: 'bardwall-location', params: { location: 'cave', activity: 'last-word' } })
 }
 
@@ -310,71 +314,8 @@ const updateChallengeStoryFromEvent = (event: Event) => {
   updateChallengeStory((event.target as HTMLTextAreaElement).value)
 }
 
-const beginLastWordStory = () => {
-  const created = startBardwallLastWordStory(game.value)
-  game.value = created.state
-  selectedLastWordStoryId.value = created.storyId
-  lastWordMessage.value = null
-  saveBardwallState(game.value)
-}
-
-const openLastWordStory = (storyId: string) => {
-  selectedLastWordStoryId.value = storyId
-  lastWordMessage.value = null
-}
-
-const returnToLastWordShelf = () => {
-  selectedLastWordStoryId.value = null
-  lastWordMessage.value = null
-}
-
-const updateLastWordDraft = (event: Event) => {
-  if (!selectedLastWordStoryId.value) return
-  const draft = (event.target as HTMLTextAreaElement).value
-  game.value = updateBardwallLastWordDraft(game.value, selectedLastWordStoryId.value, draft)
-  saveBardwallState(game.value)
-}
-
-const askVesperToContinue = async () => {
-  const story = selectedLastWordStory.value
-  if (!story || lastWordDraftCount.value < 1 || lastWordDraftCount.value > 2000) return
-  let apiKey: string | null
-  try {
-    apiKey = await loadOpenAIApiKey()
-  } catch (error) {
-    lastWordMessage.value = error instanceof Error ? error.message : 'The saved OpenAI API key could not be loaded.'
-    return
-  }
-  if (!apiKey) {
-    lastWordMessage.value = 'Add your OpenAI API key in Settings before Vesper can answer.'
-    return
-  }
-
-  const bardText = story.draft
-  vesperSpeaking.value = true
-  lastWordMessage.value = null
-  try {
-    const continuation = await continueBardwallLastWordStory(apiKey, {
-      title: story.title,
-      turns: story.turns.map((turn) => ({ speaker: turn.speaker, text: turn.text })),
-      bardText,
-      targetWords: lastWordDraftCount.value,
-    })
-    game.value = appendBardwallLastWordExchange(game.value, story.id, bardText, continuation)
-    saveBardwallState(game.value)
-    lastWordMessage.value = `You offered ${countBardwallWords(bardText).toLocaleString()} words. Vesper answered with ${countBardwallWords(continuation).toLocaleString()}. He still has the last word.`
-  } catch (error) {
-    lastWordMessage.value = error instanceof Error ? error.message : 'Vesper fell unexpectedly silent.'
-  } finally {
-    vesperSpeaking.value = false
-  }
-}
-
-const formatLastWordDate = (value: string) => {
-  if (!value) return 'Awaiting its first words'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Date unknown'
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+const updateLastWordDraftFromEvent = (event: Event) => {
+  updateLastWordDraft((event.target as HTMLTextAreaElement).value)
 }
 
 const buyFlower = () => {
@@ -490,9 +431,7 @@ const beginBardwallAgain = async () => {
   shrineMessage.value = null
   treatmentMessage.value = null
   resetChallengeUi()
-  selectedLastWordStoryId.value = null
-  lastWordMessage.value = null
-  vesperSpeaking.value = false
+  resetLastWordUi()
   hasEntered.value = false
   screen.value = 'gate'
   closeResetDialog()
@@ -1017,10 +956,10 @@ watch(() => [route.params.location, route.params.activity], () => {
 
             <div class="mx-auto mt-8 max-w-3xl rounded-xl border border-violet-200/20 bg-black/30 p-5">
               <div class="flex items-center justify-between gap-4 text-sm"><label for="last-word-draft" class="font-semibold">Your next words</label><span :class="lastWordDraftCount > 2000 ? 'text-rose-300' : 'text-stone-400'">{{ lastWordDraftCount.toLocaleString() }} / 2,000 words</span></div>
-              <textarea id="last-word-draft" data-testid="last-word-draft" :value="selectedLastWordStory.draft" class="mt-3 min-h-56 w-full rounded-xl border border-stone-600 bg-[#0b0910] p-4 font-serif text-lg leading-8 text-stone-100 outline-none focus:border-violet-300 disabled:opacity-60" placeholder="Write one word or a thousand…" :disabled="vesperSpeaking" @input="updateLastWordDraft"></textarea>
+              <textarea id="last-word-draft" data-testid="last-word-draft" :value="selectedLastWordStory.draft" class="mt-3 min-h-56 w-full rounded-xl border border-stone-600 bg-[#0b0910] p-4 font-serif text-lg leading-8 text-stone-100 outline-none focus:border-violet-300 disabled:opacity-60" placeholder="Write one word or a thousand…" :disabled="vesperSpeaking" @input="updateLastWordDraftFromEvent"></textarea>
               <p class="mt-3 text-xs leading-5 text-stone-400">Your draft is saved locally as you write. Vesper will answer with approximately the same number of words, then save both turns.</p>
               <p v-if="lastWordMessage" class="mt-4 rounded-lg border p-3 text-sm" :class="lastWordMessage.includes('last word') ? 'border-violet-300/25 bg-violet-300/10 text-violet-100' : 'border-rose-300/25 bg-rose-300/10 text-rose-200'">{{ lastWordMessage }} <button v-if="lastWordMessage.includes('OpenAI')" class="ml-1 underline" @click="router.push('/settings')">Open Settings</button></p>
-              <button data-testid="submit-last-word-turn" class="mt-5 w-full rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#21182d] hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="lastWordDraftCount < 1 || lastWordDraftCount > 2000 || vesperSpeaking" @click="askVesperToContinue">{{ vesperSpeaking ? 'Vesper is finding his words…' : 'Give Vesper your words' }}</button>
+              <button data-testid="submit-last-word-turn" class="mt-5 w-full rounded-lg bg-violet-300 px-5 py-3 font-semibold text-[#21182d] hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40" :disabled="!canAskVesper" @click="askVesperToContinue">{{ vesperSpeaking ? 'Vesper is finding his words…' : 'Give Vesper your words' }}</button>
             </div>
             <p class="mt-6 text-center font-serif italic text-stone-400">You may leave whenever you wish. Vesper will remember what comes next.</p>
           </template>
