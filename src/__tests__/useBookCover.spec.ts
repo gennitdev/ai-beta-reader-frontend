@@ -18,6 +18,7 @@ function setup(bookValue: Book | null = { id: 'book-1', title: 'B', chapter_orde
     pickNewBookCover: vi.fn(async () => asset({ id: 'img-2' })),
     deleteImage: vi.fn(async () => {}),
     setBookCoverImageId: vi.fn(async () => {}),
+    confirmDelete: vi.fn(() => true),
   }
   return { book, deps, cover: useBookCover(deps) }
 }
@@ -86,5 +87,18 @@ describe('useBookCover', () => {
     const { cover, deps } = setup()
     await cover.handleDeleteBookCover()
     expect(deps.deleteImage).not.toHaveBeenCalled()
+  })
+
+  it('does not delete the cover when permanent deletion is canceled', async () => {
+    const { cover, deps } = setup()
+    await cover.loadBookCoverImage('book-1')
+    deps.confirmDelete.mockReturnValue(false)
+
+    await cover.handleDeleteBookCover()
+
+    expect(deps.confirmDelete).toHaveBeenCalledWith(expect.stringContaining('cannot be undone'))
+    expect(deps.deleteImage).not.toHaveBeenCalled()
+    expect(deps.setBookCoverImageId).not.toHaveBeenCalled()
+    expect(cover.bookCoverSrc.value).toBe('blob:cover')
   })
 })

@@ -8,6 +8,7 @@ interface UseBookCoverDeps {
   pickNewBookCover: (bookId: string) => Promise<ImageAsset | null>
   deleteImage: (asset: ImageAsset) => Promise<void>
   setBookCoverImageId: (bookId: string, imageId: string | null) => Promise<void>
+  confirmDelete?: (message: string) => boolean
 }
 
 /**
@@ -15,7 +16,15 @@ interface UseBookCoverDeps {
  * the derived source URL and loading/error state.
  */
 export function useBookCover(deps: UseBookCoverDeps) {
-  const { book, fetchBookCover, getImageSource, pickNewBookCover, deleteImage, setBookCoverImageId } = deps
+  const {
+    book,
+    fetchBookCover,
+    getImageSource,
+    pickNewBookCover,
+    deleteImage,
+    setBookCoverImageId,
+    confirmDelete = (message: string) => globalThis.confirm(message),
+  } = deps
 
   const bookCoverImage = ref<ImageAsset | null>(null)
   const bookCoverSrc = ref<string | null>(null)
@@ -57,6 +66,7 @@ export function useBookCover(deps: UseBookCoverDeps) {
 
   const handleDeleteBookCover = async () => {
     if (!book.value || !bookCoverImage.value) return
+    if (!confirmDelete('Permanently delete this book cover image? This action cannot be undone.')) return
 
     coverLoading.value = true
     coverError.value = null

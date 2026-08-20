@@ -443,5 +443,8 @@ export async function deleteCustomProfile(ctx: DatabaseContext, profileId: numbe
       txCtx.connection.run(deleteProfileQuery, [profileId])
     }
   })
-  if (!ctx.isNative) ctx.requestPersistence()
+  if (!ctx.isNative) {
+    ctx.requestPersistence()
+    await ctx.flushPersistence()
+  }
 }

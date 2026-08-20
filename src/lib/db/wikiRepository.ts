@@ -390,7 +390,10 @@ export async function deleteWikiPage(ctx: DatabaseContext, pageId: string): Prom
       txCtx.connection.run(deletePageQuery, [pageId])
     }
   })
-  if (!ctx.isNative) ctx.requestPersistence()
+  if (!ctx.isNative) {
+    ctx.requestPersistence()
+    await ctx.flushPersistence()
+  }
 }
 
 export async function trackWikiUpdate(ctx: DatabaseContext, update: {

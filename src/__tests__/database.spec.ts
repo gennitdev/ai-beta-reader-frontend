@@ -58,6 +58,16 @@ function rawDatabase(database: AppDatabase): {
   }).db
 }
 
+function rejectNextPersistence(database: AppDatabase, error: Error) {
+  const request = vi.fn()
+  const flush = vi.fn(async () => { throw error })
+  const internal = database as unknown as {
+    persistenceCoordinator: { request(): void; flush(): Promise<void> }
+  }
+  internal.persistenceCoordinator = { request, flush }
+  return { request, flush }
+}
+
 let db: AppDatabase
 
 beforeEach(async () => {
@@ -667,6 +677,36 @@ describe('atomic destructive operations', () => {
     expect(await db.getReviews('ch-1')).toEqual([
       expect.objectContaining({ profile_id: profileId, review_text: 'Review' }),
     ])
+  })
+
+  it('does not report committed deletes as durable until their snapshots flush', async () => {
+    const persistenceError = new Error('snapshot interrupted')
+
+    const chapterDb = await makeDb()
+    await chapterDb.saveBook(book())
+    await chapterDb.saveChapter(chapter())
+    const chapterPersistence = rejectNextPersistence(chapterDb, persistenceError)
+    await expect(chapterDb.deleteChapter('ch-1', 'book-1')).rejects.toBe(persistenceError)
+    expect(await chapterDb.getChapters('book-1')).toEqual([])
+    expect(chapterPersistence.request).toHaveBeenCalledOnce()
+
+    const partDb = await makeDb()
+    await partDb.saveBook(book())
+    const part = await partDb.createPart({ book_id: 'book-1', name: 'Part One' })
+    const partPersistence = rejectNextPersistence(partDb, persistenceError)
+    await expect(partDb.deletePart(part.id)).rejects.toBe(persistenceError)
+    expect(await partDb.getParts('book-1')).toEqual([])
+    expect(partPersistence.flush).toHaveBeenCalledOnce()
+
+    const wikiDb = await makeDb()
+    await wikiDb.saveBook(book())
+    const wikiId = await wikiDb.createWikiPage({
+      book_id: 'book-1', page_name: 'Alice', content: '', summary: '',
+    })
+    const wikiPersistence = rejectNextPersistence(wikiDb, persistenceError)
+    await expect(wikiDb.deleteWikiPage(wikiId)).rejects.toBe(persistenceError)
+    expect(await wikiDb.getWikiPageById(wikiId)).toBeNull()
+    expect(wikiPersistence.flush).toHaveBeenCalledOnce()
   })
 })
 

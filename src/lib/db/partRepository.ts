@@ -198,7 +198,10 @@ export async function deletePart(ctx: DatabaseContext, partId: string): Promise<
       await saveBookPartOrder(txCtx, bookId, currentOrder.filter((id) => id !== partId))
     }
   })
-  if (!ctx.isNative) ctx.requestPersistence()
+  if (!ctx.isNative) {
+    ctx.requestPersistence()
+    await ctx.flushPersistence()
+  }
 }
 
 export async function updateChapterOrders(

@@ -19,6 +19,7 @@ function makeContext(execResults: ExecResult[][] = []) {
   const runCalls: Array<{ sql: string; params?: unknown[] }> = []
   const execCalls: Array<{ sql: string; params?: unknown[] }> = []
   const requestPersistence = vi.fn()
+  const flushPersistence = vi.fn(async () => undefined)
   let execIndex = 0
 
   const connection: AppDatabaseConnection = {
@@ -44,9 +45,11 @@ function makeContext(execResults: ExecResult[][] = []) {
     connection,
     isNative: false,
     requestPersistence,
+    flushPersistence,
+    setImporting: vi.fn(),
   }
 
-  return { ctx, runCalls, execCalls, requestPersistence }
+  return { ctx, runCalls, execCalls, requestPersistence, flushPersistence }
 }
 
 describe('metadataRepository (web path)', () => {
@@ -116,7 +119,7 @@ describe('metadataRepository (web path)', () => {
   })
 
   it('deleteCustomProfile also removes reviews that reference the profile', async () => {
-    const { ctx, runCalls, requestPersistence } = makeContext()
+    const { ctx, runCalls, requestPersistence, flushPersistence } = makeContext()
 
     await metadataRepo.deleteCustomProfile(ctx, 42)
 
@@ -130,6 +133,15 @@ describe('metadataRepository (web path)', () => {
     expect(runCalls[2].params).toEqual([42])
     // Web path persists once after the mutation batch.
     expect(requestPersistence).toHaveBeenCalledOnce()
+    expect(flushPersistence).toHaveBeenCalledOnce()
+  })
+
+  it('does not report profile deletion as durable when snapshot persistence fails', async () => {
+    const { ctx, flushPersistence } = makeContext()
+    const persistenceError = new Error('IndexedDB unavailable')
+    flushPersistence.mockRejectedValueOnce(persistenceError)
+
+    await expect(metadataRepo.deleteCustomProfile(ctx, 42)).rejects.toBe(persistenceError)
   })
 
   it('updateCustomProfile only sets provided fields', async () => {

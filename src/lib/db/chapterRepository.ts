@@ -404,7 +404,10 @@ async function deleteChapterRows(ctx: DatabaseContext, chapterId: string, bookId
 
 export async function deleteChapter(ctx: DatabaseContext, chapterId: string, bookId: string): Promise<void> {
   await runInTransaction(ctx, async (txCtx) => deleteChapterRows(txCtx, chapterId, bookId))
-  if (!ctx.isNative) ctx.requestPersistence()
+  if (!ctx.isNative) {
+    ctx.requestPersistence()
+    await ctx.flushPersistence()
+  }
 }
 
 /** Append a chapter id to its book's `chapter_order` if not already present. */
