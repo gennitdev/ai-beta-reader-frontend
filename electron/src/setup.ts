@@ -12,6 +12,8 @@ import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
 
+import { installWindowNavigationPolicy } from './window-security';
+
 // Define components for a watcher to detect when the webapp is changed so we can reload in Dev mode.
 const reloadWatcher = {
   debouncer: null,
@@ -133,7 +135,7 @@ export class ElectronCapacitorApp {
     this.mainWindowState.manage(this.MainWindow);
 
     if (this.CapacitorFileConfig.backgroundColor) {
-      this.MainWindow.setBackgroundColor(this.CapacitorFileConfig.electron.backgroundColor);
+      this.MainWindow.setBackgroundColor(this.CapacitorFileConfig.backgroundColor);
     }
 
     // If we close the main window with the splashscreen enabled we need to destory the ref.
@@ -190,18 +192,7 @@ export class ElectronCapacitorApp {
     }
 
     // Security
-    this.MainWindow.webContents.setWindowOpenHandler((details) => {
-      if (!details.url.includes(this.customScheme)) {
-        return { action: 'deny' };
-      } else {
-        return { action: 'allow' };
-      }
-    });
-    this.MainWindow.webContents.on('will-navigate', (event, _newURL) => {
-      if (!this.MainWindow.webContents.getURL().includes(this.customScheme)) {
-        event.preventDefault();
-      }
-    });
+    installWindowNavigationPolicy(this.MainWindow.webContents, this.customScheme);
 
     // Link electron plugins into the system.
     setupCapacitorElectronPlugins();
@@ -233,7 +224,9 @@ export function setupContentSecurityPolicy(customScheme: string): void {
       ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' 'wasm-unsafe-eval' data: blob:`
       : `default-src ${customScheme}://* 'unsafe-inline' 'wasm-unsafe-eval' data: blob:`;
     // Allow loading Google Identity Services script
-    const scriptSrc = `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com`;
+    const scriptSrc = electronIsDev
+      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com`
+      : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com`;
     const styleSrc = `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com`;
     const fontSrc = `font-src 'self' data: https://fonts.gstatic.com`;
     // Allow connecting to Google APIs for OAuth and Drive, and OpenAI API
