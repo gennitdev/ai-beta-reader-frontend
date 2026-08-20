@@ -1,63 +1,59 @@
 <script setup lang="ts">
-import { CheckCircleIcon, DocumentTextIcon } from "@heroicons/vue/24/outline";
+import { computed } from "vue";
+import {
+  Bars3BottomLeftIcon,
+  CheckCircleIcon,
+  DocumentTextIcon,
+} from "@heroicons/vue/24/outline";
 
-defineProps<{
-  wordCount: number;
-  hasSummary: boolean;
-  hasNotes: boolean;
-  showSummaryPanel: boolean;
-  showNotesPanel: boolean;
-  hasIllustrations?: boolean;
-  showIllustrationsPanel?: boolean;
-  canSelectImages?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    wordCount: number;
+    hasSummary: boolean;
+    hasNotes: boolean;
+    variant?: "inline" | "panel";
+  }>(),
+  { variant: "inline" },
+);
 
-const emit = defineEmits<{
-  'toggle-summary-panel': [];
-  'toggle-notes-panel': [];
-  'toggle-illustrations-panel': [];
-}>();
+const isPanel = computed(() => props.variant === "panel");
+
+const containerClass = computed(() =>
+  isPanel.value
+    ? "rounded-xl border border-gray-200 bg-white p-4 pt-5 text-sm dark:border-gray-700 dark:bg-navy-800"
+    : "my-3 flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400",
+);
 </script>
 
 <template>
-  <div class="my-3 flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-    <span class="whitespace-nowrap">{{ wordCount.toLocaleString() }} words</span>
-    <div class="flex items-center whitespace-nowrap">
-      <CheckCircleIcon
-        :class="hasSummary ? 'text-green-500' : 'text-gray-300'"
-        class="mr-1 h-4 w-4"
-      />
-      <span :class="hasSummary ? 'text-green-600' : 'text-gray-500'">
-        {{ hasSummary ? "Summarized" : "Not summarized" }}
-      </span>
+  <section :class="containerClass" aria-label="Chapter tools">
+    <h3 v-if="isPanel" class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+      Chapter tools
+    </h3>
+
+    <div :class="isPanel ? 'space-y-2 text-gray-600 dark:text-gray-400' : 'contents'">
+      <div class="flex items-center whitespace-nowrap">
+        <Bars3BottomLeftIcon v-if="isPanel" class="mr-2 h-4 w-4 text-gray-400" />
+        <span>{{ wordCount.toLocaleString() }} words</span>
+      </div>
+      <div class="flex items-center whitespace-nowrap">
+        <CheckCircleIcon
+          class="h-4 w-4"
+          :class="[hasSummary ? 'text-green-500' : 'text-gray-300', isPanel ? 'mr-2' : 'mr-1']"
+        />
+        <span :class="hasSummary ? 'text-green-600' : 'text-gray-500'">
+          {{ hasSummary ? "Summarized" : "Not summarized" }}
+        </span>
+      </div>
+      <div class="flex items-center whitespace-nowrap">
+        <DocumentTextIcon
+          class="h-4 w-4"
+          :class="[hasNotes ? 'text-purple-500' : 'text-gray-300', isPanel ? 'mr-2' : 'mr-1']"
+        />
+        <span :class="hasNotes ? 'text-purple-600' : 'text-gray-500'">
+          {{ hasNotes ? "Has Notes" : "No Notes" }}
+        </span>
+      </div>
     </div>
-    <div class="flex items-center whitespace-nowrap">
-      <DocumentTextIcon
-        :class="hasNotes ? 'text-purple-500' : 'text-gray-300'"
-        class="mr-1 h-4 w-4"
-      />
-      <span :class="hasNotes ? 'text-purple-600' : 'text-gray-500'">
-        {{ hasNotes ? "Has Notes" : "No Notes" }}
-      </span>
-    </div>
-    <button
-      @click="emit('toggle-summary-panel')"
-      class="font-medium text-gold-600 transition-colors hover:text-gold-800 dark:text-gold-400 dark:hover:text-gold-300"
-    >
-      {{ showSummaryPanel ? "Hide Summary Panel" : "Show Summary Panel" }}
-    </button>
-    <button
-      @click="emit('toggle-notes-panel')"
-      class="font-medium text-purple-600 transition-colors hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
-    >
-      {{ showNotesPanel ? "Hide Notes Panel" : "Show Notes Panel" }}
-    </button>
-    <button
-      v-if="canSelectImages"
-      @click="emit('toggle-illustrations-panel')"
-      class="font-medium text-emerald-600 transition-colors hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
-    >
-      {{ showIllustrationsPanel ? "Hide Illustrations" : "Show Illustrations" }}
-    </button>
-  </div>
+  </section>
 </template>

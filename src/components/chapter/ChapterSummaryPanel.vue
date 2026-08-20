@@ -104,9 +104,9 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
 <template>
   <div class="py-4">
     <div>
-      <div class="mb-4 flex items-center justify-between">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Chapter Summary</h3>
-        <div class="flex items-center space-x-2">
+      <div class="mb-4 space-y-3">
+        <h3 class="w-full text-lg font-semibold text-gray-900 dark:text-white">Chapter Summary</h3>
+        <div class="flex w-full flex-wrap items-center justify-end gap-2">
           <button
             v-if="chapterSummary && !isEditingSummary"
             @click="emit('start-edit')"

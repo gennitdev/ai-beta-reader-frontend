@@ -8,8 +8,8 @@ interface UseChapterPanelsDeps {
 }
 
 /**
- * UI state for the chapter side panels: which panels are open, the summary/notes
- * edit buffers and their open/cancel transitions, the "expand full text" toggle,
+ * UI state for the chapter detail panels: summary/notes expansion, their edit
+ * buffers and open/cancel transitions, the "expand full text" toggle,
  * and the persisted "update wiki on summary" preference.
  *
  * The edit buffers (`editedSummary`, `editedNotes`) are shared with
@@ -22,7 +22,6 @@ export function useChapterPanels(deps: UseChapterPanelsDeps) {
   // Panel visibility
   const showSummaryPanel = ref(false);
   const showNotesPanel = ref(false);
-  const showIllustrationsPanel = ref(false);
   const showFullChapterText = ref(false);
 
   // Summary editing state
@@ -70,7 +69,6 @@ export function useChapterPanels(deps: UseChapterPanelsDeps) {
   return {
     showSummaryPanel,
     showNotesPanel,
-    showIllustrationsPanel,
     showFullChapterText,
     isEditingSummary,
     editedSummary,

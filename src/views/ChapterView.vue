@@ -22,6 +22,8 @@ import ChapterHeaderBar from "@/components/chapter/ChapterHeaderBar.vue";
 import ChapterSummaryPanel from "@/components/chapter/ChapterSummaryPanel.vue";
 import ChapterNotesPanel from "@/components/chapter/ChapterNotesPanel.vue";
 import ChapterContentSection from "@/components/chapter/ChapterContentSection.vue";
+import ChapterPreviewCard from "@/components/chapter/ChapterPreviewCard.vue";
+import ChapterReadingActions from "@/components/chapter/ChapterReadingActions.vue";
 import ChapterReviewsSection from "@/components/chapter/ChapterReviewsSection.vue";
 import ChapterHeroSection from "@/components/chapter/ChapterHeroSection.vue";
 import ChapterIllustrationsSection from "@/components/chapter/ChapterIllustrationsSection.vue";
@@ -157,7 +159,6 @@ const currentPartNumber = computed(() => getPartNumber(chapter.value?.part_id ??
 const {
   showSummaryPanel,
   showNotesPanel,
-  showIllustrationsPanel,
   showFullChapterText,
   isEditingSummary,
   editedSummary,
@@ -566,17 +567,10 @@ onBeforeUnmount(() => {
       <div class="lg:grid lg:grid-cols-3 lg:gap-8">
         <div class="lg:col-span-2">
           <ChapterStatusBar
+            class="lg:hidden"
             :word-count="chapter?.word_count || 0"
             :has-summary="Boolean(chapter?.summary)"
             :has-notes="Boolean(chapter?.notes)"
-            :show-summary-panel="showSummaryPanel"
-            :show-notes-panel="showNotesPanel"
-            :has-illustrations="chapterImages.length > 0"
-            :show-illustrations-panel="showIllustrationsPanel || chapterImages.length > 0"
-            :can-select-images="chapterImageUploadAvailable"
-            @toggle-summary-panel="showSummaryPanel = !showSummaryPanel"
-            @toggle-notes-panel="showNotesPanel = !showNotesPanel"
-            @toggle-illustrations-panel="showIllustrationsPanel = !showIllustrationsPanel"
           />
           <div v-if="loading && !chapter" class="flex h-64 items-center justify-center">
             <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-gold-600"></div>
@@ -586,98 +580,189 @@ onBeforeUnmount(() => {
             v-else-if="chapter"
             class="divide-y divide-gray-200 dark:divide-gray-700 sm:space-y-6 sm:divide-y-0"
           >
-        <ChapterSummaryPanel
-          v-if="showSummaryPanel"
-          :chapter-summary="chapter.summary || ''"
-          :chapter-pov="chapter.pov ?? undefined"
-          :chapter-characters="chapter.characters || []"
-          :chapter-beats="chapter.beats || []"
-          :is-editing-summary="isEditingSummary"
-          :edited-summary="editedSummary"
-          :generating-summary="generatingSummary"
-          :saving-summary="savingSummary"
-          :update-wiki-enabled="updateWikiOnSummary"
-          :summary-progress="summaryProgress"
-          :summary-error="summaryError"
-          :wiki-update-results="wikiUpdateResults"
-          :show-wiki-update-results="showWikiUpdateResults"
-          :character-lookup="getCharacterWikiInfo"
-          :route-prefix="routePrefix"
-          :book-id="bookId"
-          @update:editedSummary="editedSummary = $event"
-          @update:updateWikiEnabled="updateWikiOnSummary = $event"
-          @start-edit="startEditingSummary"
-          @cancel-edit="cancelEditingSummary"
-          @save="handleSaveSummary"
-          @generate="() => generateSummary(updateWikiOnSummary)"
-          @character-click="navigateToWiki"
-          @dismiss-wiki-results="showWikiUpdateResults = false"
-        />
+            <ChapterReadingActions
+              v-if="!isEditing"
+              class="mb-6 lg:hidden"
+              :chapter-text="chapter.text"
+              :font-size="fontSize"
+            />
 
-        <ChapterNotesPanel
-          v-if="showNotesPanel"
-          :chapter-notes="chapter.notes || ''"
-          :is-editing-notes="isEditingNotes"
-          :edited-notes="editedNotes"
-          :saving-notes="savingNotes"
-          @update:editedNotes="editedNotes = $event"
-          @start-edit="startEditingNotes"
-          @cancel-edit="cancelEditingNotes"
-          @save="handleSaveNotes"
-        />
+            <ChapterContentSection
+              :is-editing="isEditing"
+              :edited-text="editedText"
+              :chapter-text="chapter.text"
+              :show-full-chapter-text="showFullChapterText"
+              :truncated-chapter-text="chapterTruncation"
+              :font-size="fontSize"
+              @update:editedText="editedText = $event"
+              @toggle-full-chapter="showFullChapterText = $event"
+            />
 
-        <ChapterContentSection
-          :is-editing="isEditing"
-          :edited-text="editedText"
-          :chapter-text="chapter.text"
-          :show-full-chapter-text="showFullChapterText"
-          :truncated-chapter-text="chapterTruncation"
-          :font-size="fontSize"
-          @update:editedText="editedText = $event"
-          @toggle-full-chapter="showFullChapterText = $event"
-        />
+            <div class="space-y-4 py-6 lg:hidden">
+              <ChapterPreviewCard
+                title="Summary"
+                :content="chapter.summary || ''"
+                :expanded="showSummaryPanel"
+                @toggle-expanded="showSummaryPanel = !showSummaryPanel"
+              >
+                <ChapterSummaryPanel
+                  :chapter-summary="chapter.summary || ''"
+                  :chapter-pov="chapter.pov ?? undefined"
+                  :chapter-characters="chapter.characters || []"
+                  :chapter-beats="chapter.beats || []"
+                  :is-editing-summary="isEditingSummary"
+                  :edited-summary="editedSummary"
+                  :generating-summary="generatingSummary"
+                  :saving-summary="savingSummary"
+                  :update-wiki-enabled="updateWikiOnSummary"
+                  :summary-progress="summaryProgress"
+                  :summary-error="summaryError"
+                  :wiki-update-results="wikiUpdateResults"
+                  :show-wiki-update-results="showWikiUpdateResults"
+                  :character-lookup="getCharacterWikiInfo"
+                  :route-prefix="routePrefix"
+                  :book-id="bookId"
+                  @update:editedSummary="editedSummary = $event"
+                  @update:updateWikiEnabled="updateWikiOnSummary = $event"
+                  @start-edit="startEditingSummary"
+                  @cancel-edit="cancelEditingSummary"
+                  @save="handleSaveSummary"
+                  @generate="() => generateSummary(updateWikiOnSummary)"
+                  @character-click="navigateToWiki"
+                  @dismiss-wiki-results="showWikiUpdateResults = false"
+                />
+              </ChapterPreviewCard>
 
-        <ChapterReviewsSection
-          :review-tone="reviewTone"
-          :custom-profiles="customProfiles"
-          :saved-reviews="savedReviews"
-          :loading-reviews="loadingReviews"
-          :generating-review="generatingReview"
-          :deleting-review-id="deletingReviewId"
-          :expanded-reviews="expandedReviews"
-          :expanded-prompts="expandedPrompts"
-          :format-date="formatDate"
-          :get-truncated-text="getTruncatedText"
-          @update:reviewTone="reviewTone = $event"
-          @generate-review="generateReview"
-          @delete-review="deleteReview"
-          @toggle-review="toggleReviewExpansion"
-          @toggle-prompt="togglePromptExpansion"
-        />
+              <ChapterPreviewCard
+                title="Notes"
+                :content="chapter.notes || ''"
+                :expanded="showNotesPanel"
+                @toggle-expanded="showNotesPanel = !showNotesPanel"
+              >
+                <ChapterNotesPanel
+                  :chapter-notes="chapter.notes || ''"
+                  :is-editing-notes="isEditingNotes"
+                  :edited-notes="editedNotes"
+                  :saving-notes="savingNotes"
+                  @update:editedNotes="editedNotes = $event"
+                  @start-edit="startEditingNotes"
+                  @cancel-edit="cancelEditingNotes"
+                  @save="handleSaveNotes"
+                />
+              </ChapterPreviewCard>
+            </div>
 
-        <div class="mt-6 lg:hidden">
-          <ChapterWikiLinksCard
-            :route-prefix="routePrefix"
-            :book-id="bookId"
-            :chapter-id="chapterId"
-            :links="linkedWikiPages"
-            :options="linkedWikiPageOptions"
-            :selected-ids="selectedLinkedWikiPageIds"
-            :loading="loadingLinkedWikiPages"
-            :is-editing="isEditingLinkedWikiPages"
-            :saving="savingLinkedWikiPages"
-            @start-edit="startEditingLinkedWikiPages"
-            @cancel-edit="cancelEditingLinkedWikiPages"
-            @save="saveLinkedWikiPages"
-            @update:selected-ids="selectedLinkedWikiPageIds = $event"
-          />
-        </div>
+            <ChapterReviewsSection
+              :review-tone="reviewTone"
+              :custom-profiles="customProfiles"
+              :saved-reviews="savedReviews"
+              :loading-reviews="loadingReviews"
+              :generating-review="generatingReview"
+              :deleting-review-id="deletingReviewId"
+              :expanded-reviews="expandedReviews"
+              :expanded-prompts="expandedPrompts"
+              :format-date="formatDate"
+              :get-truncated-text="getTruncatedText"
+              @update:reviewTone="reviewTone = $event"
+              @generate-review="generateReview"
+              @delete-review="deleteReview"
+              @toggle-review="toggleReviewExpansion"
+              @toggle-prompt="togglePromptExpansion"
+            />
+
+            <div class="mt-6 lg:hidden">
+              <ChapterWikiLinksCard
+                :route-prefix="routePrefix"
+                :book-id="bookId"
+                :chapter-id="chapterId"
+                :links="linkedWikiPages"
+                :options="linkedWikiPageOptions"
+                :selected-ids="selectedLinkedWikiPageIds"
+                :loading="loadingLinkedWikiPages"
+                :is-editing="isEditingLinkedWikiPages"
+                :saving="savingLinkedWikiPages"
+                @start-edit="startEditingLinkedWikiPages"
+                @cancel-edit="cancelEditingLinkedWikiPages"
+                @save="saveLinkedWikiPages"
+                @update:selected-ids="selectedLinkedWikiPageIds = $event"
+              />
+            </div>
           </div>
         </div>
 
         <aside class="mt-6 space-y-6 lg:mt-0">
+          <ChapterStatusBar
+            class="hidden lg:block"
+            variant="panel"
+            :word-count="chapter?.word_count || 0"
+            :has-summary="Boolean(chapter?.summary)"
+            :has-notes="Boolean(chapter?.notes)"
+          />
+
+          <ChapterReadingActions
+            v-if="chapter && !isEditing"
+            class="hidden lg:block"
+            :chapter-text="chapter.text"
+            :font-size="fontSize"
+          />
+
+          <ChapterPreviewCard
+            v-if="chapter"
+            class="hidden lg:block"
+            title="Summary"
+            :content="chapter.summary || ''"
+            :expanded="showSummaryPanel"
+            @toggle-expanded="showSummaryPanel = !showSummaryPanel"
+          >
+            <ChapterSummaryPanel
+              :chapter-summary="chapter.summary || ''"
+              :chapter-pov="chapter.pov ?? undefined"
+              :chapter-characters="chapter.characters || []"
+              :chapter-beats="chapter.beats || []"
+              :is-editing-summary="isEditingSummary"
+              :edited-summary="editedSummary"
+              :generating-summary="generatingSummary"
+              :saving-summary="savingSummary"
+              :update-wiki-enabled="updateWikiOnSummary"
+              :summary-progress="summaryProgress"
+              :summary-error="summaryError"
+              :wiki-update-results="wikiUpdateResults"
+              :show-wiki-update-results="showWikiUpdateResults"
+              :character-lookup="getCharacterWikiInfo"
+              :route-prefix="routePrefix"
+              :book-id="bookId"
+              @update:editedSummary="editedSummary = $event"
+              @update:updateWikiEnabled="updateWikiOnSummary = $event"
+              @start-edit="startEditingSummary"
+              @cancel-edit="cancelEditingSummary"
+              @save="handleSaveSummary"
+              @generate="() => generateSummary(updateWikiOnSummary)"
+              @character-click="navigateToWiki"
+              @dismiss-wiki-results="showWikiUpdateResults = false"
+            />
+          </ChapterPreviewCard>
+
+          <ChapterPreviewCard
+            v-if="chapter"
+            class="hidden lg:block"
+            title="Notes"
+            :content="chapter.notes || ''"
+            :expanded="showNotesPanel"
+            @toggle-expanded="showNotesPanel = !showNotesPanel"
+          >
+            <ChapterNotesPanel
+              :chapter-notes="chapter.notes || ''"
+              :is-editing-notes="isEditingNotes"
+              :edited-notes="editedNotes"
+              :saving-notes="savingNotes"
+              @update:editedNotes="editedNotes = $event"
+              @start-edit="startEditingNotes"
+              @cancel-edit="cancelEditingNotes"
+              @save="handleSaveNotes"
+            />
+          </ChapterPreviewCard>
+
           <ChapterIllustrationsSection
-            v-if="chapterImages.length > 0 || (chapterImageUploadAvailable && showIllustrationsPanel)"
             layout="panel"
             :images="chapterImages"
             :image-sources="chapterImageSources"

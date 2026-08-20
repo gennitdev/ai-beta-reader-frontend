@@ -1,18 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted, type PropType } from "vue";
+import type { PropType } from "vue";
 import TextEditor from "@/components/TextEditor.vue";
 import MarkdownRenderer from "@/components/MarkdownRenderer.vue";
-import { copyToClipboardWithResult } from "@/utils/clipboard";
-import { isNativeMobileRuntime } from "@/utils/platform";
-import {
-  ArrowsPointingOutIcon,
-  ArrowsPointingInIcon,
-  DocumentDuplicateIcon,
-  CheckIcon,
-  ExclamationTriangleIcon,
-} from "@heroicons/vue/24/outline";
 
-const props = defineProps({
+defineProps({
   isEditing: {
     type: Boolean,
     default: false,
@@ -51,131 +42,10 @@ const emit = defineEmits<{
 const toggleFullChapter = (value: boolean) => {
   emit("toggle-full-chapter", value);
 };
-
-const isFullscreen = ref(false);
-let previousBodyOverflow: string | null = null;
-const chapterCopied = ref(false);
-const chapterCopyWarning = ref(false);
-let chapterCopyTimeout: ReturnType<typeof setTimeout> | null = null;
-
-// Mobile clipboard has issues with text over ~3500 words
-const MOBILE_WORD_LIMIT = 3500;
-
-const countWords = (text: string): number => {
-  if (!text) return 0;
-  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") {
-    isFullscreen.value = false;
-  }
-};
-
-const resetChapterCopyState = () => {
-  if (chapterCopyTimeout) {
-    clearTimeout(chapterCopyTimeout);
-    chapterCopyTimeout = null;
-  }
-  chapterCopied.value = false;
-  chapterCopyWarning.value = false;
-};
-
-const copyChapterToClipboard = async () => {
-  if (!props.chapterText) return;
-  try {
-    resetChapterCopyState();
-    const result = await copyToClipboardWithResult(props.chapterText);
-    if (result.success) {
-      chapterCopied.value = true;
-
-      // Warn only on native mobile runtimes, and prefer clipboard verification
-      const isMobile = isNativeMobileRuntime();
-      const wordCount = countWords(props.chapterText);
-      if (isMobile && (result.likelyTruncated || (!result.verified && wordCount > MOBILE_WORD_LIMIT))) {
-        chapterCopyWarning.value = true;
-      }
-
-      chapterCopyTimeout = setTimeout(() => {
-        chapterCopied.value = false;
-        chapterCopyWarning.value = false;
-        chapterCopyTimeout = null;
-      }, chapterCopyWarning.value ? 5000 : 2000);
-    } else {
-      console.error("Failed to copy chapter text");
-    }
-  } catch (error) {
-    console.error("Failed to copy chapter text:", error);
-  }
-};
-
-const enableFullscreenEffects = () => {
-  if (typeof document === "undefined") return;
-  previousBodyOverflow = document.body.style.overflow;
-  document.body.style.overflow = "hidden";
-  if (typeof window !== "undefined") {
-    window.addEventListener("keydown", handleKeydown);
-  }
-};
-
-const disableFullscreenEffects = () => {
-  if (typeof document === "undefined") return;
-  document.body.style.overflow = previousBodyOverflow ?? "";
-  previousBodyOverflow = null;
-  if (typeof window !== "undefined") {
-    window.removeEventListener("keydown", handleKeydown);
-  }
-};
-
-watch(isFullscreen, (value) => {
-  if (value) {
-    enableFullscreenEffects();
-  } else {
-    disableFullscreenEffects();
-  }
-});
-
-onUnmounted(() => {
-  if (isFullscreen.value) {
-    disableFullscreenEffects();
-  }
-  resetChapterCopyState();
-});
 </script>
 
 <template>
   <div class="relative w-full">
-    <div v-if="!isEditing" class="mb-2 flex justify-end gap-2">
-      <button
-        type="button"
-        class="inline-flex h-10 items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2"
-        :class="chapterCopyWarning
-          ? 'border-amber-400 text-amber-600 dark:border-amber-500 dark:text-amber-400'
-          : 'border-gray-300 text-gray-600 hover:border-gray-400 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white'"
-        :disabled="!chapterText"
-        @click="copyChapterToClipboard"
-      >
-        <component
-          :is="chapterCopyWarning ? ExclamationTriangleIcon : (chapterCopied ? CheckIcon : DocumentDuplicateIcon)"
-          class="h-4 w-4"
-        />
-        <span class="hidden sm:inline">
-          <template v-if="chapterCopyWarning">May be truncated</template>
-          <template v-else-if="chapterCopied">Copied</template>
-          <template v-else>Copy</template>
-        </span>
-        <span class="sr-only">Copy chapter text</span>
-      </button>
-      <button
-        type="button"
-        class="inline-flex h-10 items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
-        @click.stop="isFullscreen = true"
-      >
-        <ArrowsPointingOutIcon class="h-4 w-4" />
-        <span class="hidden sm:inline">Fullscreen</span>
-        <span class="sr-only">Enter fullscreen reading mode</span>
-      </button>
-    </div>
     <div class="flex w-full">
       <div v-if="isEditing" class="w-full">
         <TextEditor
@@ -214,33 +84,4 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
-
-  <Teleport to="body">
-    <div v-if="isFullscreen" class="fixed inset-0 z-50">
-      <div
-        class="absolute inset-0 bg-navy-900/80 backdrop-blur-sm"
-        @click="isFullscreen = false"
-      ></div>
-      <div class="relative z-10 flex h-full flex-col">
-        <div class="flex-1 overflow-y-auto px-4 py-8 sm:px-8" @click="isFullscreen = false">
-          <div class="mx-auto max-w-4xl" @click.stop>
-            <div class="relative rounded-lg bg-white p-6 shadow-2xl dark:bg-navy-900">
-              <button
-                type="button"
-                class="absolute right-4 top-4 inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
-                @click.stop="isFullscreen = false"
-              >
-                <ArrowsPointingInIcon class="h-4 w-4" />
-                <span class="hidden sm:inline">Exit fullscreen</span>
-                <span class="sr-only">Exit fullscreen reading mode</span>
-              </button>
-              <div class="prose prose-lg max-w-none dark:prose-invert">
-                <MarkdownRenderer :text="chapterText" :font-size="fontSize" reading-layout />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </Teleport>
 </template>

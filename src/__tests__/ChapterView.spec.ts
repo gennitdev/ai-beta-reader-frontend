@@ -109,8 +109,15 @@ const ContentStub = {
 }
 
 const StatusStub = {
-  emits: ['toggleSummaryPanel', 'toggleNotesPanel'],
-  template: '<div><button data-testid="summary-toggle" @click="$emit(\'toggleSummaryPanel\')">Summary</button><button data-testid="notes-toggle" @click="$emit(\'toggleNotesPanel\')">Notes</button></div>',
+  template: '<div />',
+}
+
+const PreviewStub = {
+  props: ['title', 'content', 'expanded'], emits: ['toggleExpanded'],
+  template: `<section>
+    <button :data-testid="title === 'Summary' ? 'summary-toggle' : 'notes-toggle'" @click="$emit('toggleExpanded')">Show all</button>
+    <slot v-if="expanded || !content" />
+  </section>`,
 }
 
 const SummaryStub = {
@@ -152,9 +159,11 @@ function mountView() {
     global: {
       stubs: {
         ChapterHeaderBar: HeaderStub, ChapterHeroSection: true, ChapterStatusBar: StatusStub,
+        ChapterPreviewCard: PreviewStub, ChapterReadingActions: true,
         ChapterSummaryPanel: SummaryStub, ChapterNotesPanel: NotesStub, ChapterContentSection: ContentStub,
         ChapterReviewsSection: ReviewsStub, ChapterWikiLinksCard: LinksStub, ChapterVersionHistory: true,
-        ChapterIllustrationsSection: true, FontSizeControl: true, IllustrationDetail: true,
+        ChapterIllustrationsSection: { template: '<div data-testid="illustrations-card" />' },
+        FontSizeControl: true, IllustrationDetail: true,
         ConfirmDeleteModal: DeleteModalStub, Modal: { template: '<div><slot /></div>' },
       },
     },
@@ -205,6 +214,7 @@ describe('ChapterView', () => {
     expect(wrapper.get('[data-testid="chapter-text"]').text()).toBe('A ghost waits at the gate.')
     expect(wrapper.text()).toContain('Specific and vivid.')
     expect(wrapper.text()).toContain('Heliconia')
+    expect(wrapper.get('[data-testid="illustrations-card"]').exists()).toBe(true)
   })
 
   it('saves edited title and text, recalculates words, and reloads revisions', async () => {
