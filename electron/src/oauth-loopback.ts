@@ -1,7 +1,6 @@
 import { ipcMain, shell } from 'electron';
-import * as http from 'http';
-import * as url from 'url';
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
+import * as http from 'node:http';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -81,12 +80,12 @@ async function performLoopbackOAuth(config: OAuthConfig): Promise<OAuthResult> {
     }, 3 * 60 * 1000);
 
     server = http.createServer(async (req, res) => {
-      const parsedUrl = url.parse(req.url || '', true);
+      const parsedUrl = new URL(req.url || '/', redirectUri);
 
       if (parsedUrl.pathname === '/callback') {
-        const code = parsedUrl.query.code as string;
-        const returnedState = parsedUrl.query.state as string;
-        const error = parsedUrl.query.error as string;
+        const code = parsedUrl.searchParams.get('code');
+        const returnedState = parsedUrl.searchParams.get('state');
+        const error = parsedUrl.searchParams.get('error');
 
         if (error) {
           res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -94,7 +93,7 @@ async function performLoopbackOAuth(config: OAuthConfig): Promise<OAuthResult> {
             <html>
               <body style="font-family: system-ui; padding: 40px; text-align: center;">
                 <h2>Authentication Failed</h2>
-                <p>Error: ${error}</p>
+                <p>Authentication was denied or could not be completed.</p>
                 <p>You can close this window.</p>
               </body>
             </html>
@@ -196,7 +195,10 @@ async function performLoopbackOAuth(config: OAuthConfig): Promise<OAuthResult> {
       const authUrl = `${GOOGLE_AUTH_URL}?${authParams.toString()}`;
 
       // Open system browser
-      shell.openExternal(authUrl);
+      void shell.openExternal(authUrl).catch((error) => {
+        cleanup();
+        reject(error);
+      });
     });
 
     server.on('error', (err) => {
@@ -239,14 +241,15 @@ async function exchangeCodeForTokens(
     const errorText = await response.text();
     console.error('[OAuth] Token exchange failed:', response.status, errorText);
 
-    // Try to parse as JSON for more details
+    let errorMessage = `${response.status} ${errorText}`;
     try {
       const errorJson = JSON.parse(errorText);
       console.error('[OAuth] Error details:', JSON.stringify(errorJson, null, 2));
-      throw new Error(`Token exchange failed: ${errorJson.error} - ${errorJson.error_description || errorText}`);
+      errorMessage = `${errorJson.error} - ${errorJson.error_description || errorText}`;
     } catch {
-      throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
+      // Preserve the status and raw response when the provider did not return JSON.
     }
+    throw new Error(`Token exchange failed: ${errorMessage}`);
   }
 
   const data = await response.json();

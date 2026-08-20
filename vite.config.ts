@@ -13,6 +13,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.spec.ts', 'electron/tests/**/*.spec.ts'],
+    alias: {
+      electron: fileURLToPath(new URL('./electron/tests/mocks/electron.ts', import.meta.url)),
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
@@ -34,12 +37,12 @@ export default defineConfig({
       // Ratchet policy: keep these just below the current measured coverage so
       // they act as a regression floor. When a change raises coverage, nudge the
       // matching threshold up to lock in the gain — never lower them to make a
-      // change pass. Current actuals: stmts 64.25 / branch 46.42 / funcs 57.61 / lines 65.68.
+      // change pass. Current actuals: stmts 65.86 / branch 47.10 / funcs 59.08 / lines 67.41.
       thresholds: {
-        statements: 64,
-        branches: 46,
-        functions: 57,
-        lines: 65,
+        statements: 65,
+        branches: 47,
+        functions: 59,
+        lines: 67,
       },
     },
   },

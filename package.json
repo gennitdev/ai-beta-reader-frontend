@@ -15,6 +15,7 @@
     "type-check": "vue-tsc --build",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:electron": "vitest run electron/tests",
     "test:electron-security": "vitest run electron/tests/security-boundaries.spec.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
