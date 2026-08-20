@@ -318,6 +318,10 @@ export class AppDatabase {
       if (savedDb) {
         try {
           this.db = new SQL.Database(savedDb) as unknown as AppDatabaseConnection;
+          // sql.js may defer reporting malformed bytes until the first query.
+          // Probe the schema while we can still distinguish restore failures
+          // from later application migrations and preserve the stored copy.
+          this.db.exec('PRAGMA schema_version');
         } catch (error) {
           console.error('[AppDatabase] Failed to restore stored database.', error);
           const source = migratedFromLocalStorage ? 'legacy localStorage' : 'IndexedDB';
@@ -337,7 +341,11 @@ export class AppDatabase {
             const verificationDb = new SQL.Database(
               verifiedSnapshot,
             ) as unknown as AppDatabaseConnection;
-            verificationDb.close();
+            try {
+              verificationDb.exec('PRAGMA schema_version');
+            } finally {
+              verificationDb.close();
+            }
             try {
               localStorage.setItem('sqliteDbMigratedToIndexedDB', 'true');
             } catch (error) {

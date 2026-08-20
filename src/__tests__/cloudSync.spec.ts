@@ -84,6 +84,18 @@ describe('CloudSync backup + restore', () => {
     expect(provider.authenticate).toHaveBeenCalled()
   })
 
+  it('stops before exporting when authentication fails', async () => {
+    const provider = fakeProvider({
+      isAuthenticated: vi.fn(() => false),
+      authenticate: vi.fn(async () => { throw new Error('sign-in cancelled') }),
+    })
+
+    await expect(new CloudSync(provider).backup('pw')).rejects.toThrow('sign-in cancelled')
+
+    expect(dbMock.exportDatabase).not.toHaveBeenCalled()
+    expect(provider.upload).not.toHaveBeenCalled()
+  })
+
   it('wraps upload failures with a helpful message', async () => {
     const provider = fakeProvider({
       upload: vi.fn(async () => {
@@ -105,6 +117,74 @@ describe('CloudSync backup + restore', () => {
     const cs = new CloudSync(provider)
     await cs.backup('right-password')
     await expect(cs.restore('wrong-password')).rejects.toThrow(/Incorrect password/)
+  })
+
+  it('rejects a corrupt compressed payload before importing it', async () => {
+    const encrypted = await Encryption.encrypt(new Uint8Array([1, 2, 3, 4]), 'pw')
+    const provider = fakeProvider({ download: vi.fn(async () => `GZ1:${encrypted}`) })
+
+    await expect(new CloudSync(provider).restore('pw')).rejects.toThrow(
+      'Failed to decompress backup. The file may be corrupted',
+    )
+
+    expect(dbMock.importDatabase).not.toHaveBeenCalled()
+  })
+
+  it('rejects decrypted content that is not a backup before importing it', async () => {
+    const encrypted = await Encryption.encrypt(new TextEncoder().encode('not-json'), 'pw')
+    const provider = fakeProvider({ download: vi.fn(async () => encrypted) })
+
+    await expect(new CloudSync(provider).restore('pw')).rejects.toThrow()
+
+    expect(dbMock.importDatabase).not.toHaveBeenCalled()
+  })
+
+  it('rolls back earlier image writes when a later image cannot be restored', async () => {
+    const original = new Uint8Array([9, 8, 7])
+    const blobs = new Map<string, Blob>([
+      ['existing', new Blob([original], { type: 'image/png' })],
+    ])
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'read').mockImplementation(
+      async (asset) => blobs.get(asset.id) ?? null,
+    )
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'write').mockImplementation(
+      async (asset, blob) => {
+        if (asset.id === 'new') throw new Error('disk full')
+        blobs.set(asset.id, blob)
+      },
+    )
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'delete').mockImplementation(
+      async (asset) => { blobs.delete(asset.id) },
+    )
+
+    const payload = {
+      ...EXPORT,
+      image_assets: [
+        {
+          id: 'existing', book_id: 'b1', chapter_id: null, asset_type: 'cover',
+          file_name: 'existing.png', file_path: 'web/existing.png', mime_type: 'image/png',
+          image_data: 'data:image/png;base64,AQID', notes: '', created_at: '', updated_at: '',
+        },
+        {
+          id: 'new', book_id: 'b1', chapter_id: null, asset_type: 'cover',
+          file_name: 'new.png', file_path: 'web/new.png', mime_type: 'image/png',
+          image_data: 'data:image/png;base64,BAUG', notes: '', created_at: '', updated_at: '',
+        },
+      ],
+    }
+    const encrypted = await Encryption.encrypt(
+      new TextEncoder().encode(JSON.stringify(payload)),
+      'pw',
+    )
+    const provider = fakeProvider({ download: vi.fn(async () => encrypted) })
+
+    await expect(new CloudSync(provider).restore('pw')).rejects.toThrow(
+      'Failed to restore image new.png (new): disk full',
+    )
+
+    expect(new Uint8Array(await blobs.get('existing')!.arrayBuffer())).toEqual(original)
+    expect(blobs.has('new')).toBe(false)
+    expect(dbMock.importDatabase).not.toHaveBeenCalled()
   })
 
   it('rolls back staged image content when the database import fails', async () => {
@@ -149,6 +229,45 @@ describe('CloudSync backup + restore', () => {
       new Uint8Array([9, 8, 7]),
     )
     expect(blobs.has('new')).toBe(false)
+  })
+
+  it('preserves the database error when best-effort image rollback also fails', async () => {
+    const originalBlob = new Blob([new Uint8Array([9, 8, 7])], { type: 'image/png' })
+    let storedBlob = originalBlob
+    let writeCount = 0
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'read').mockImplementation(
+      async () => storedBlob,
+    )
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'write').mockImplementation(
+      async (_asset, blob) => {
+        writeCount += 1
+        if (writeCount === 2) throw new Error('rollback storage unavailable')
+        storedBlob = blob
+      },
+    )
+
+    const payload = {
+      ...EXPORT,
+      image_assets: [{
+        id: 'existing', book_id: 'b1', chapter_id: null, asset_type: 'cover',
+        file_name: 'existing.png', file_path: 'web/existing.png', mime_type: 'image/png',
+        image_data: 'data:image/png;base64,AQID', notes: '', created_at: '', updated_at: '',
+      }],
+    }
+    const encrypted = await Encryption.encrypt(
+      new TextEncoder().encode(JSON.stringify(payload)),
+      'pw',
+    )
+    dbMock.importDatabase.mockRejectedValueOnce(new Error('database import failed'))
+
+    await expect(new CloudSync(fakeProvider({
+      download: vi.fn(async () => encrypted),
+    })).restore('pw')).rejects.toThrow('database import failed')
+
+    expect(console.error).toHaveBeenCalledWith(
+      '[CloudSync] Failed to roll back image content after restore failure:',
+      expect.objectContaining({ message: expect.stringContaining('rollback storage unavailable') }),
+    )
   })
 })
 
