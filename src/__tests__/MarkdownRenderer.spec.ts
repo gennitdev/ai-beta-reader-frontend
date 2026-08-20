@@ -17,6 +17,7 @@ describe('MarkdownRenderer', () => {
   it('maps the fontSize prop to a text size class', () => {
     expect(render({ text: 'x', fontSize: 'small' })).toContain('text-sm')
     expect(render({ text: 'x', fontSize: 'large' })).toContain('text-lg')
+    expect(render({ text: 'x', fontSize: 'extra-large' })).toContain('text-xl')
     expect(render({ text: 'x', fontSize: 'medium' })).toContain('text-base')
     expect(render({ text: 'x', fontSize: 'unknown' })).toContain('text-base')
   })
@@ -43,6 +44,7 @@ describe('MarkdownRenderer', () => {
     expect(render({ text: 'x', readingLayout: true })).toContain('markdown-body')
     expect(render({ text: 'x', readingLayout: true })).toContain('reading-font-system')
     expect(render({ text: 'x', readingLayout: true, fontFamily: 'serif' })).toContain('reading-font-serif')
+    expect(render({ text: 'x', readingLayout: true, fontFamily: 'eb-garamond' })).toContain('reading-font-eb-garamond')
     expect(render({ text: 'x', readingLayout: true, fontFamily: 'literata' })).toContain('reading-font-literata')
     expect(render({ text: 'x', readingLayout: true, fontFamily: 'source-serif' })).toContain('reading-font-source-serif')
     expect(render({ text: 'x', readingLayout: true, fontFamily: 'lora' })).toContain('reading-font-lora')

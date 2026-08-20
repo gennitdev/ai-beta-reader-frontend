@@ -172,6 +172,13 @@ const {
 // Reading font-size preference (shared with wiki pages, persisted)
 const { fontSize, fontFamily } = useReadingFontSize();
 
+const readingTextSizeClass = computed(() => {
+  if (fontSize.value === "small") return "text-sm";
+  if (fontSize.value === "large") return "text-lg";
+  if (fontSize.value === "extra-large") return "text-xl";
+  return "text-base";
+});
+
 // Chapter delete state
 const showDeleteModal = ref(false);
 const deletingChapter = ref(false);
@@ -518,19 +525,29 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="w-full">
+  <div class="w-full lg:h-full lg:overflow-hidden">
     <!-- Hero Image Section -->
     <ChapterHeroSection
       v-if="heroImageSrc"
+      class="lg:hidden"
       :hero-image-src="heroImageSrc"
       :show-back="!isMobileRoute"
       @open-lightbox="openHeroLightbox"
       @go-back="goBack"
     />
 
-    <div class="w-full max-w-6xl px-4 pt-6 md:mx-auto lg:px-8">
-      <div class="lg:grid lg:grid-cols-3 lg:gap-8">
-        <div class="lg:col-span-2">
+    <div class="w-full max-w-6xl px-4 pt-6 md:mx-auto lg:h-full lg:max-w-none lg:px-0 lg:pt-0">
+      <div class="lg:grid lg:h-full lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+        <div class="lg:min-h-0 lg:overflow-y-auto">
+          <ChapterHeroSection
+            v-if="heroImageSrc"
+            class="hidden lg:block"
+            :hero-image-src="heroImageSrc"
+            @open-lightbox="openHeroLightbox"
+            @go-back="goBack"
+          />
+
+          <div class="lg:mx-auto lg:max-w-4xl lg:px-8 lg:pt-6">
           <div v-if="chapter" class="mb-2">
             <button
               v-if="isMobileRoute"
@@ -544,7 +561,11 @@ onBeforeUnmount(() => {
               Back
             </button>
 
-            <label v-if="isEditing" class="block text-center">
+            <label
+              v-if="isEditing"
+              class="block text-center"
+              :class="[readingTextSizeClass, `reading-font-${fontFamily}`]"
+            >
               <span class="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 Chapter title
               </span>
@@ -552,18 +573,19 @@ onBeforeUnmount(() => {
                 v-model="editedTitle"
                 type="text"
                 placeholder="Enter chapter title..."
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-center text-2xl font-bold text-gray-900 placeholder-gray-400 focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-navy-800 dark:text-white dark:placeholder-gray-500 sm:text-3xl"
-                :class="`reading-font-${fontFamily}`"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-center text-[2.25em] font-extrabold leading-[1.111] text-gray-900 placeholder-gray-400 focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500 dark:border-gray-600 dark:bg-navy-800 dark:text-white dark:placeholder-gray-500"
                 data-testid="chapter-title-input"
               />
             </label>
-            <h1
+            <div
               v-else
-              class="text-center text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl"
-              :class="`reading-font-${fontFamily}`"
+              class="prose prose-gray max-w-none dark:prose-invert"
+              :class="[readingTextSizeClass, `reading-font-${fontFamily}`]"
             >
-              {{ chapter.title || "Untitled Chapter" }}
-            </h1>
+              <h1 class="!m-0 text-center">
+                {{ chapter.title || "Untitled Chapter" }}
+              </h1>
+            </div>
           </div>
 
           <ChapterStatusBar
@@ -693,9 +715,13 @@ onBeforeUnmount(() => {
               />
             </div>
           </div>
+          </div>
         </div>
 
-        <aside class="mt-6 space-y-6 lg:mt-0">
+        <aside
+          class="mt-6 space-y-6 lg:mt-0 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-gray-200 lg:bg-gray-100/60 lg:px-6 lg:py-6 dark:lg:border-navy-700 dark:lg:bg-navy-950/30"
+          data-testid="chapter-detail-sidebar"
+        >
           <ChapterStatusBar
             v-if="chapter"
             class="hidden lg:block"

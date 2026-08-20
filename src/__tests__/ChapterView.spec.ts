@@ -208,11 +208,17 @@ describe('ChapterView', () => {
     expect(h.loadChapters).toHaveBeenCalledWith('book-1')
     expect(h.refreshChapterImages).toHaveBeenCalled()
     expect(wrapper.get('h1').text()).toBe('The Gate')
-    expect(wrapper.get('h1').classes()).toContain('reading-font-system')
+    expect(wrapper.get('h1').classes()).toContain('!m-0')
+    expect(wrapper.get('h1').element.parentElement?.classList).toContain('prose')
+    expect(wrapper.get('h1').element.parentElement?.classList).toContain('text-base')
+    expect(wrapper.get('h1').element.parentElement?.classList).toContain('reading-font-system')
     expect(wrapper.get('[data-testid="chapter-text"]').text()).toBe('A ghost waits at the gate.')
     expect(wrapper.text()).toContain('Specific and vivid.')
     expect(wrapper.text()).toContain('Heliconia')
     expect(wrapper.get('[data-testid="illustrations-card"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="chapter-detail-sidebar"]').classes()).toEqual(
+      expect.arrayContaining(['lg:overflow-y-auto', 'lg:border-l']),
+    )
   })
 
   it('saves edited title and text, recalculates words, and reloads revisions', async () => {
@@ -220,7 +226,8 @@ describe('ChapterView', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="edit"]').trigger('click')
-    expect(wrapper.get('[data-testid="chapter-title-input"]').classes()).toContain('reading-font-system')
+    expect(wrapper.get('[data-testid="chapter-title-input"]').classes()).toContain('text-[2.25em]')
+    expect(wrapper.get('[data-testid="chapter-title-input"]').element.parentElement?.classList).toContain('reading-font-system')
     await wrapper.get('[data-testid="chapter-title-input"]').setValue('The Open Gate')
     await wrapper.get('[data-testid="edited-text"]').setValue('The ghost finally steps through.')
     await wrapper.get('[data-testid="save-chapter"]').trigger('click')

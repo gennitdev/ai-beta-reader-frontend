@@ -31,12 +31,14 @@ const options: { key: ReadingFontSize; label: string; sizeClass: string }[] = [
   { key: 'small', label: 'A', sizeClass: 'text-xs' },
   { key: 'medium', label: 'A', sizeClass: 'text-base' },
   { key: 'large', label: 'A', sizeClass: 'text-xl' },
+  { key: 'extra-large', label: 'A', sizeClass: 'text-2xl' },
 ]
 
 const fontOptions: { key: ReadingFontFamily; label: string }[] = [
   { key: 'system', label: 'System Sans' },
   { key: 'atkinson', label: 'Atkinson Hyperlegible' },
   { key: 'serif', label: 'Georgia Serif' },
+  { key: 'eb-garamond', label: 'EB Garamond' },
   { key: 'literata', label: 'Literata' },
   { key: 'source-serif', label: 'Source Serif 4' },
   { key: 'lora', label: 'Lora' },

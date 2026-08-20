@@ -12,8 +12,10 @@ describe('FontSizeControl', () => {
     const select = wrapper.get('select')
     expect(wrapper.text()).toContain('Text size')
     expect(wrapper.text()).toContain('Text font')
+    expect(wrapper.get('[role="group"]').findAll('button')).toHaveLength(4)
     expect(select.text()).toContain('Atkinson Hyperlegible')
     expect(select.text()).toContain('Georgia Serif')
+    expect(select.text()).toContain('EB Garamond')
     expect(select.text()).toContain('Literata')
     expect(select.text()).toContain('Source Serif 4')
     expect(select.text()).toContain('Lora')
@@ -21,5 +23,8 @@ describe('FontSizeControl', () => {
 
     await select.setValue('opendyslexic')
     expect(wrapper.emitted('update:fontFamily')).toEqual([['opendyslexic']])
+
+    await wrapper.get('button[title="Extra-large"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')).toEqual([['extra-large']])
   })
 })

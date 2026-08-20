@@ -1,10 +1,11 @@
 import { ref, watch, type Ref } from 'vue'
 
-export type ReadingFontSize = 'small' | 'medium' | 'large'
+export type ReadingFontSize = 'small' | 'medium' | 'large' | 'extra-large'
 export type ReadingFontFamily =
   | 'system'
   | 'atkinson'
   | 'serif'
+  | 'eb-garamond'
   | 'literata'
   | 'source-serif'
   | 'lora'
@@ -12,11 +13,12 @@ export type ReadingFontFamily =
 
 const SIZE_STORAGE_KEY = 'reading_font_size'
 const FAMILY_STORAGE_KEY = 'reading_font_family'
-const VALID_SIZES: ReadingFontSize[] = ['small', 'medium', 'large']
+const VALID_SIZES: ReadingFontSize[] = ['small', 'medium', 'large', 'extra-large']
 const VALID_FAMILIES: ReadingFontFamily[] = [
   'system',
   'atkinson',
   'serif',
+  'eb-garamond',
   'literata',
   'source-serif',
   'lora',

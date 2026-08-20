@@ -38,9 +38,9 @@ describe('useReadingFontSize', () => {
   })
 
   it('reads a valid stored size', () => {
-    localStorageMock.setItem(STORAGE_KEY, 'large')
+    localStorageMock.setItem(STORAGE_KEY, 'extra-large')
     const { fontSize } = useReadingFontSize()
-    expect(fontSize.value).toBe('large')
+    expect(fontSize.value).toBe('extra-large')
   })
 
   it('falls back to medium for an invalid stored value', () => {
@@ -59,8 +59,8 @@ describe('useReadingFontSize', () => {
   })
 
   it('reads valid font choices and rejects invalid ones', () => {
-    localStorageMock.setItem(FONT_STORAGE_KEY, 'source-serif')
-    expect(useReadingFontSize().fontFamily.value).toBe('source-serif')
+    localStorageMock.setItem(FONT_STORAGE_KEY, 'eb-garamond')
+    expect(useReadingFontSize().fontFamily.value).toBe('eb-garamond')
 
     localStorageMock.setItem(FONT_STORAGE_KEY, 'comic-sans')
     expect(useReadingFontSize().fontFamily.value).toBe('system')

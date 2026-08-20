@@ -125,6 +125,8 @@ const fontSizeClass = computed(() => {
       return 'text-sm'
     case 'large':
       return 'text-lg'
+    case 'extra-large':
+      return 'text-xl'
     case 'medium':
     default:
       return 'text-base'
