@@ -56,15 +56,15 @@
   color: #00132f;
 }
 
-:global(.dark) .legal-copy :deep(h2) {
+:global(.dark .legal-copy h2) {
   color: #ffffff;
 }
 
-:global(.dark) .legal-copy :deep(a) {
+:global(.dark .legal-copy a) {
   color: #deba63;
 }
 
-:global(.dark) .legal-copy :deep(code) {
+:global(.dark .legal-copy code) {
   background: #122a47;
   color: #fae8cd;
 }

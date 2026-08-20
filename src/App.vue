@@ -6,6 +6,7 @@ import { useDatabase } from '@/composables/useDatabase'
 import SearchModal from '@/components/SearchModal.vue'
 import BrowserStorageNotice from '@/components/BrowserStorageNotice.vue'
 import logoHorizontal from '@/assets/logo-horizontal.png'
+import logoHorizontalLight from '@/assets/logo-horizontal-light.png'
 import logoStacked from '@/assets/logo-stacked.png'
 import { getPrimaryNavItems } from '@/config/navigation'
 import { useBardwallSettings } from '@/composables/useBardwallSettings'
@@ -303,7 +304,12 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               class="flex items-center flex-shrink-0"
               aria-label="Open my books"
             >
-              <img :src="logoHorizontal" alt="beta bot" class="h-8 w-auto" />
+              <img
+                :src="theme === 'dark' ? logoHorizontal : logoHorizontalLight"
+                alt="beta bot"
+                class="w-auto"
+                :class="theme === 'dark' ? 'h-8' : '-my-1 h-10'"
+              />
             </router-link>
 
             <!-- Show breadcrumbs if available, otherwise show main nav -->
@@ -439,7 +445,12 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
                 class="flex items-center"
                 aria-label="Open my books"
               >
-                <img :src="logoHorizontal" alt="beta bot" class="h-8 w-auto" />
+                <img
+                  :src="theme === 'dark' ? logoHorizontal : logoHorizontalLight"
+                  alt="beta bot"
+                  class="w-auto"
+                  :class="theme === 'dark' ? 'h-8' : '-my-1 h-10'"
+                />
               </router-link>
             </div>
 

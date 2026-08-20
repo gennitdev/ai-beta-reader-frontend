@@ -130,7 +130,7 @@ const fontSizeClass = computed(() => {
 
 <template>
   <div
-    class="prose prose-gray dark:prose-invert max-w-none"
+    class="markdown-renderer prose prose-gray max-w-none"
     :class="[fontSizeClass, { 'markdown-body': readingLayout }]"
     v-html="renderedHtml"
   />
@@ -181,8 +181,30 @@ const fontSizeClass = computed(() => {
   color: #334155; /* slate-700 for light mode */
 }
 
-:global(.dark) .markdown-body {
-  color: #e2e8f0; /* softer off-white to prevent glare on dark */
+:global(.dark .markdown-body) {
+  color: #f3f4f6;
+}
+
+/* Typography uses semantic custom properties for nested elements, so setting
+   only the renderer's text color leaves headings, links, lists, and code at
+   their default contrast. Keep the complete dark reading palette explicit. */
+:global(.dark .markdown-renderer) {
+  --tw-prose-body: #e5e7eb;
+  --tw-prose-headings: #ffffff;
+  --tw-prose-lead: #d1d5db;
+  --tw-prose-links: #f0ca81;
+  --tw-prose-bold: #ffffff;
+  --tw-prose-counters: #d1d5db;
+  --tw-prose-bullets: #d1d5db;
+  --tw-prose-hr: #4b5563;
+  --tw-prose-quotes: #f3f4f6;
+  --tw-prose-quote-borders: #d3a63f;
+  --tw-prose-captions: #d1d5db;
+  --tw-prose-code: #fae8cd;
+  --tw-prose-pre-code: #e5e7eb;
+  --tw-prose-pre-bg: #00091c;
+  --tw-prose-th-borders: #6b7280;
+  --tw-prose-td-borders: #4b5563;
 }
 
 /* Generous paragraph spacing so the eye rests between thoughts */
@@ -202,8 +224,8 @@ const fontSizeClass = computed(() => {
   color: #475569;
 }
 
-:global(.dark) .markdown-body :deep(blockquote) {
-  background-color: rgba(255, 255, 255, 0.04);
-  color: #cbd5e1;
+:global(.dark .markdown-body blockquote) {
+  background-color: rgba(255, 255, 255, 0.07);
+  color: #f3f4f6;
 }
 </style>
