@@ -20,6 +20,7 @@ describe('PersistenceCoordinator', () => {
     let revision = 1
     const firstWrite = deferred<void>()
     const snapshots: number[] = []
+    const onPersisted = vi.fn()
     const writeSnapshot = vi.fn(async (snapshot: Uint8Array) => {
       snapshots.push(snapshot[0])
       if (snapshots.length === 1) await firstWrite.promise
@@ -27,6 +28,7 @@ describe('PersistenceCoordinator', () => {
     const coordinator = new PersistenceCoordinator({
       exportSnapshot: () => new Uint8Array([revision]),
       writeSnapshot,
+      onPersisted,
     })
 
     coordinator.request()
@@ -43,6 +45,7 @@ describe('PersistenceCoordinator', () => {
 
     expect(snapshots).toEqual([1, 3])
     expect(writeSnapshot).toHaveBeenCalledTimes(2)
+    expect(onPersisted).toHaveBeenCalledTimes(2)
     expect(coordinator.hasPendingChanges()).toBe(false)
   })
 
@@ -83,6 +86,32 @@ describe('PersistenceCoordinator', () => {
     await coordinator.flush()
 
     expect(writeSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('reports snapshot export failures and retries the same pending revision', async () => {
+    let exportShouldFail = true
+    const exportError = new Error('database export failed')
+    const onBackgroundError = vi.fn()
+    const writeSnapshot = vi.fn(async () => undefined)
+    const coordinator = new PersistenceCoordinator({
+      exportSnapshot: () => {
+        if (exportShouldFail) throw exportError
+        return new Uint8Array([7])
+      },
+      writeSnapshot,
+      onBackgroundError,
+    })
+
+    coordinator.request()
+    await vi.waitFor(() => expect(onBackgroundError).toHaveBeenCalledWith(exportError))
+    expect(coordinator.hasPendingChanges()).toBe(true)
+    expect(writeSnapshot).not.toHaveBeenCalled()
+
+    exportShouldFail = false
+    await coordinator.flush()
+
+    expect(writeSnapshot).toHaveBeenCalledWith(new Uint8Array([7]))
+    expect(coordinator.hasPendingChanges()).toBe(false)
   })
 })
 
