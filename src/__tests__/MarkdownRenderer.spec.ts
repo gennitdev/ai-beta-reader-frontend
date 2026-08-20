@@ -14,6 +14,27 @@ describe('MarkdownRenderer', () => {
     expect(html).toContain('<p>')
   })
 
+  it('preserves safe HTML while removing executable markup', () => {
+    const html = render({
+      text: '<section class="callout">Safe</section><script>window.pwned = true</script><img src="x" onerror="window.pwned = true">',
+    })
+
+    expect(html).toContain('<section class="callout">Safe</section>')
+    expect(html).not.toContain('<script')
+    expect(html).not.toContain('onerror')
+    expect(html).not.toContain('window.pwned')
+  })
+
+  it('removes unsafe link protocols and event handlers', () => {
+    const html = render({
+      text: '<a href="javascript:alert(1)" onclick="alert(2)">unsafe link</a>',
+    })
+
+    expect(html).toContain('unsafe link')
+    expect(html).not.toContain('javascript:')
+    expect(html).not.toContain('onclick')
+  })
+
   it('maps the fontSize prop to a text size class', () => {
     expect(render({ text: 'x', fontSize: 'small' })).toContain('text-sm')
     expect(render({ text: 'x', fontSize: 'large' })).toContain('text-lg')
