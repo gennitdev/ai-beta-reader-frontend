@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { SparklesIcon, ChatBubbleLeftRightIcon, DocumentTextIcon, BookOpenIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
+import {
+  SparklesIcon,
+  ChatBubbleLeftRightIcon,
+  DocumentTextIcon,
+  BookOpenIcon,
+  LightBulbIcon,
+} from '@heroicons/vue/24/outline'
 import logoStacked from '@/assets/logo-stacked.png'
 import { useDatabase } from '@/composables/useDatabase'
+import { isDesktopAppRuntime, isNativeMobileRuntime } from '@/utils/platform'
 
 const router = useRouter()
 const { books, loadBooks } = useDatabase()
@@ -11,17 +18,20 @@ const { books, loadBooks } = useDatabase()
 // Only show the detailed steps when the user clicks.
 const showDetailedSteps = ref(false)
 const isLoading = ref(true)
+const hasBooks = computed(() => books.value.length > 0)
+const primaryCtaLabel = computed(() => hasBooks.value ? 'Open Beta Bot' : 'Start Writing Now')
 
 onMounted(async () => {
   await loadBooks()
-  // Redirect to books page if user already has books
-  if (books.value.length > 0) {
-    router.replace('/books')
-    // Keep showing loading spinner during navigation
-  } else {
-    // Only show landing page if user has no books
-    isLoading.value = false
+
+  // Installed apps should remain app-first. On the hosted web app, keep the
+  // public homepage visible even when this browser already has local books.
+  if (isNativeMobileRuntime() || isDesktopAppRuntime()) {
+    await router.replace('/books')
+    return
   }
+
+  isLoading.value = false
 })
 
 const handleGetStarted = () => {
@@ -104,7 +114,7 @@ const detailedSteps = [
               @click="handleGetStarted"
               class="w-full inline-flex items-center justify-center px-6 py-3 bg-gold-500 text-navy-900 rounded-xl hover:bg-gold-400 transition-colors font-semibold text-lg shadow-xl shadow-gold-500/30"
             >
-              Start Writing Now
+              {{ primaryCtaLabel }}
             </button>
             <router-link
               to="/docs"

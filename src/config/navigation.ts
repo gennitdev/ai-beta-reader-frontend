@@ -1,5 +1,12 @@
 import type { Component } from 'vue'
-import { BookOpenIcon, SparklesIcon, Cog6ToothIcon, DocumentTextIcon, MusicalNoteIcon } from '@heroicons/vue/24/outline'
+import {
+  BookOpenIcon,
+  SparklesIcon,
+  Cog6ToothIcon,
+  DocumentTextIcon,
+  InformationCircleIcon,
+  MusicalNoteIcon,
+} from '@heroicons/vue/24/outline'
 
 export interface NavItem {
   to: string
@@ -34,6 +41,12 @@ export const primaryNavItems: NavItem[] = [
     label: 'Screenshots & Tutorial',
     icon: DocumentTextIcon,
     isActive: (path: string) => path.startsWith('/docs')
+  },
+  {
+    to: '/',
+    label: 'About Beta Bot',
+    icon: InformationCircleIcon,
+    isActive: (path: string) => path === '/'
   },
   {
     to: '/settings',
