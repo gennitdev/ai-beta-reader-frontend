@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftIcon, CurrencyDollarIcon, MoonIcon } from '@heroicons/vue/24/outline'
+import { useBardwallChallenge } from '@/composables/useBardwallChallenge'
 import { useBardwallOfferings } from '@/composables/useBardwallOfferings'
 import BardwallTownMap, { type BardwallLocation } from '@/components/bardwall/BardwallTownMap.vue'
 import BardwallAmphitheater from '@/components/bardwall/BardwallAmphitheater.vue'
@@ -13,44 +14,32 @@ import {
   BARDWALL_DAILY_NOURISHMENT,
   BARDWALL_FLOWER_PRICE,
   BARDWALL_CAFE_ITEMS,
-  BARDWALL_CHALLENGE_CARDS,
   BARDWALL_FOOD_ITEMS,
   BARDWALL_MARKET_ITEMS,
   BARDWALL_STORY_RUBRIC,
   BARDWALL_WYRM_POTIONS,
-  DEFAULT_BARDWALL_JUDGE_RUBRIC,
-  DEFAULT_BARDWALL_ORLA_PROMPT,
   HELICONIA_PERSISTENCE_MESSAGES,
   calculateBardwallPay,
-  advanceBardwallChallengeDraft,
   appendBardwallLastWordExchange,
   countBardwallWords,
   eatBardwallFood,
   getBardwallDateKey,
-  getBardwallChallengeWordRange,
   healBardAtApothecary,
   loadBardwallState,
   offerFlowerToHeliconia,
   purchaseBardwallFood,
   purchaseBardwallFlower,
-  resetBardwallChallenge,
-  resolveBardwallChallenge,
   drinkWyrmPotion,
   resolveBardwallNight,
   resetBardwallState,
   saveBardwallState,
-  startBardwallChallenge,
   startBardwallLastWordStory,
-  toggleBardwallChallengeCard,
-  updateBardwallChallengeRules,
   updateBardwallLastWordDraft,
   type BardwallFoodId,
   type BardwallLodging,
   type BardwallPotionId,
-  type BardwallChallengeWager,
-  type BardwallChallengeScores,
 } from '@/lib/bardwall'
-import { continueBardwallLastWordStory, runBardwallStoryChallenge } from '@/lib/openai'
+import { continueBardwallLastWordStory } from '@/lib/openai'
 import { loadOpenAIApiKey } from '@/lib/apiKeyStorage'
 import { getBardwallCardImage, getBardwallPlaceImage, getBardwallPotionImage } from '@/lib/bardwallAssets'
 
@@ -76,20 +65,9 @@ const shrineMessage = ref<string | null>(null)
 const treatmentMessage = ref<string | null>(null)
 const showResetDialog = ref(false)
 const resetConfirmation = ref('')
-const challengeGoalChoice = ref<100 | 250 | 500 | 1000>(250)
-const challengeWagerChoice = ref(game.value.coins >= 1
-  ? 'coins:1'
-  : `item:${BARDWALL_FOOD_ITEMS.find((item) => game.value.inventory[item.id] > 0)?.id ?? ''}`)
-const challengeMessage = ref<string | null>(null)
-const judgingChallenge = ref(false)
-const customChallengeWager = ref('')
-const showChallengeRulesEditor = ref(false)
-const challengeJudgeRubricDraft = ref(game.value.challengeRules.judgeRubric)
-const challengeOrlaPromptDraft = ref(game.value.challengeRules.orlaPrompt)
 const selectedLastWordStoryId = ref<string | null>(null)
 const lastWordMessage = ref<string | null>(null)
 const vesperSpeaking = ref(false)
-const previewChallengeCardId = ref<typeof BARDWALL_CHALLENGE_CARDS[number]['id'] | null>(null)
 
 const toldPassageIds = computed(() => game.value.toldPassageIds)
 const {
@@ -108,6 +86,43 @@ const {
   removeToldPassages,
   resetOfferings,
 } = useBardwallOfferings(toldPassageIds)
+const {
+  challengeGoalChoice,
+  challengeWagerChoice,
+  challengeMessage,
+  judgingChallenge,
+  customChallengeWager,
+  showChallengeRulesEditor,
+  challengeJudgeRubricDraft,
+  challengeOrlaPromptDraft,
+  challengeCards,
+  previewChallengeCard,
+  challengeStakes,
+  heldChallengeCards,
+  challengeStoryWordCount,
+  challengeWordRange,
+  challengeStoryInRange,
+  challengeWordGuidance,
+  challengeFoodWagers,
+  challengeWagerValid,
+  customChallengeWagerGuidance,
+  challengeRulesValid,
+  beginCoffeehouseChallenge,
+  toggleChallengeCard,
+  openChallengeCardPreview,
+  closeChallengeCardPreview,
+  advanceChallengeDraft,
+  updateChallengeStory,
+  judgeChallenge,
+  beginAnotherChallenge,
+  openChallengeRulesEditor,
+  closeChallengeRulesEditor,
+  restoreDefaultChallengeRules,
+  saveChallengeRules,
+  resetChallengeUi,
+  wagerLabel,
+  scoreTotal,
+} = useBardwallChallenge(game)
 const todayKey = computed(() => getBardwallDateKey())
 const dailyGoal = computed(() => game.value.dailyGoal?.date === todayKey.value ? game.value.dailyGoal : null)
 const chosenGoal = computed(() => goalChoice.value === 'custom' ? Number(customGoal.value) : goalChoice.value)
@@ -122,70 +137,6 @@ const selectedNourishment = computed(() => BARDWALL_FOOD_ITEMS.reduce((total, it
 ), 0))
 const nourishmentDeficit = computed(() => Math.max(0, BARDWALL_DAILY_NOURISHMENT - selectedNourishment.value))
 const foodInventory = computed(() => BARDWALL_FOOD_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
-const challengeCards = computed(() => game.value.challenge.cards.map((draftCard) => ({
-  ...draftCard,
-  card: BARDWALL_CHALLENGE_CARDS.find((card) => card.id === draftCard.cardId)!,
-})))
-const previewChallengeCard = computed(() => BARDWALL_CHALLENGE_CARDS.find((card) => card.id === previewChallengeCardId.value) ?? null)
-const challengeStakes = computed(() => {
-  const wager = game.value.challenge.wager
-  if (!wager) return null
-  if (wager.type === 'coins') {
-    const stake = `${wager.amount.toLocaleString()} ${wager.amount === 1 ? 'coin' : 'coins'}`
-    const payout = `${(wager.amount * 2).toLocaleString()} coins`
-    return {
-      win: `Gain ${stake} (${payout} returned from the table).`,
-      lose: `Lose ${stake}.`,
-      draw: `Get your ${stake} back.`,
-    }
-  }
-  const item = BARDWALL_FOOD_ITEMS.find((candidate) => candidate.id === wager.itemId)
-  const label = item ? `${item.icon} ${item.name}` : 'wagered item'
-  return {
-    win: `Gain another ${label} (two returned from the table).`,
-    lose: `Lose your ${label}.`,
-    draw: `Get your ${label} back.`,
-  }
-})
-const heldChallengeCards = computed(() => game.value.challenge.cards.filter((card) => card.held).length)
-const challengeStoryWordCount = computed(() => countBardwallWords(game.value.challenge.playerStory))
-const challengeWordRange = computed(() => getBardwallChallengeWordRange(game.value.challenge.goal))
-const challengeStoryInRange = computed(() => challengeStoryWordCount.value >= challengeWordRange.value.minimum && challengeStoryWordCount.value <= challengeWordRange.value.maximum)
-const challengeWordGuidance = computed(() => {
-  if (challengeStoryWordCount.value < challengeWordRange.value.minimum) {
-    const remaining = challengeWordRange.value.minimum - challengeStoryWordCount.value
-    return `Write at least ${remaining.toLocaleString()} more ${remaining === 1 ? 'word' : 'words'}.`
-  }
-  if (challengeStoryWordCount.value > challengeWordRange.value.maximum) {
-    const excess = challengeStoryWordCount.value - challengeWordRange.value.maximum
-    return `Cut at least ${excess.toLocaleString()} ${excess === 1 ? 'word' : 'words'}.`
-  }
-  return 'Your story is within the challenge range.'
-})
-const challengeFoodWagers = computed(() => BARDWALL_FOOD_ITEMS.filter((item) => game.value.inventory[item.id] > 0))
-const challengeWagerValid = computed(() => {
-  const [type, value] = challengeWagerChoice.value.split(':')
-  if (type === 'coins') {
-    const amount = value === 'custom' ? Number(customChallengeWager.value) : Number(value)
-    return Number.isInteger(amount) && amount >= 1 && amount <= game.value.coins
-  }
-  return type === 'item'
-    && BARDWALL_FOOD_ITEMS.some((item) => item.id === value)
-    && game.value.inventory[value as BardwallFoodId] > 0
-})
-const customChallengeWagerGuidance = computed(() => {
-  if (challengeWagerChoice.value !== 'coins:custom') return null
-  const amount = Number(customChallengeWager.value)
-  if (!Number.isInteger(amount) || amount < 1) return 'Enter a whole-number wager of at least 1 coin.'
-  if (amount > game.value.coins) return `You only have ${game.value.coins.toLocaleString()} ${game.value.coins === 1 ? 'coin' : 'coins'}.`
-  return `Orla will match your ${amount.toLocaleString()}-coin wager.`
-})
-const challengeRulesValid = computed(() => (
-  challengeJudgeRubricDraft.value.trim().length > 0
-  && challengeJudgeRubricDraft.value.length <= 4000
-  && challengeOrlaPromptDraft.value.trim().length > 0
-  && challengeOrlaPromptDraft.value.length <= 4000
-))
 const lastWordStories = computed(() => [...game.value.lastWordStories].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
 const selectedLastWordStory = computed(() => game.value.lastWordStories.find((story) => story.id === selectedLastWordStoryId.value) ?? null)
 const lastWordDraftCount = computed(() => countBardwallWords(selectedLastWordStory.value?.draft ?? ''))
@@ -355,130 +306,8 @@ const eatFood = (foodId: BardwallFoodId) => {
   }
 }
 
-const parseChallengeWager = (): BardwallChallengeWager | null => {
-  const [type, value] = challengeWagerChoice.value.split(':')
-  if (type === 'coins') return { type: 'coins', amount: value === 'custom' ? Number(customChallengeWager.value) : Number(value) }
-  if (type === 'item' && BARDWALL_FOOD_ITEMS.some((item) => item.id === value)) return { type: 'item', itemId: value as BardwallFoodId }
-  return null
-}
-
-const chooseAffordableChallengeWager = () => {
-  if (game.value.coins >= 1) {
-    challengeWagerChoice.value = 'coins:1'
-    return
-  }
-
-  const item = BARDWALL_FOOD_ITEMS.find((candidate) => game.value.inventory[candidate.id] > 0)
-  challengeWagerChoice.value = item ? `item:${item.id}` : ''
-}
-
-const beginCoffeehouseChallenge = () => {
-  const wager = parseChallengeWager()
-  if (!wager || !challengeWagerValid.value) {
-    challengeMessage.value = 'Choose a wager you can cover before the cards are dealt.'
-    return
-  }
-  try {
-    game.value = startBardwallChallenge(game.value, challengeGoalChoice.value, wager)
-    saveBardwallState(game.value)
-    challengeMessage.value = null
-  } catch (error) {
-    challengeMessage.value = error instanceof Error ? error.message : 'The wager could not be placed.'
-  }
-}
-
-const toggleChallengeCard = (cardId: typeof BARDWALL_CHALLENGE_CARDS[number]['id']) => {
-  game.value = toggleBardwallChallengeCard(game.value, cardId)
-  saveBardwallState(game.value)
-}
-
-const openChallengeCardPreview = (cardId: typeof BARDWALL_CHALLENGE_CARDS[number]['id']) => {
-  previewChallengeCardId.value = cardId
-}
-
-const closeChallengeCardPreview = () => {
-  previewChallengeCardId.value = null
-}
-
-const advanceChallengeDraft = () => {
-  try {
-    game.value = advanceBardwallChallengeDraft(game.value)
-    saveBardwallState(game.value)
-    challengeMessage.value = null
-  } catch (error) {
-    challengeMessage.value = error instanceof Error ? error.message : 'The cards refuse to settle.'
-  }
-}
-
-const updateChallengeStory = (event: Event) => {
-  const playerStory = (event.target as HTMLTextAreaElement).value
-  game.value = { ...game.value, challenge: { ...game.value.challenge, playerStory } }
-  saveBardwallState(game.value)
-}
-
-const judgeChallenge = async () => {
-  if (!challengeStoryInRange.value) return
-  let apiKey: string | null
-  try {
-    apiKey = await loadOpenAIApiKey()
-  } catch (error) {
-    challengeMessage.value = error instanceof Error ? error.message : 'The saved OpenAI API key could not be loaded.'
-    return
-  }
-  if (!apiKey) {
-    challengeMessage.value = 'Add your OpenAI API key in Settings before the other bards can take their seats.'
-    return
-  }
-  judgingChallenge.value = true
-  challengeMessage.value = null
-  try {
-    const result = await runBardwallStoryChallenge(apiKey, {
-      goal: game.value.challenge.goal,
-      cards: challengeCards.value.map(({ card }) => ({ name: card.name, meaning: card.meaning })),
-      playerStory: game.value.challenge.playerStory,
-      judgeRubric: game.value.challengeRules.judgeRubric,
-      orlaPrompt: game.value.challengeRules.orlaPrompt,
-    })
-    game.value = resolveBardwallChallenge(game.value, result)
-    saveBardwallState(game.value)
-  } catch (error) {
-    challengeMessage.value = error instanceof Error ? error.message : 'The judge could not reach a decision.'
-  } finally {
-    judgingChallenge.value = false
-  }
-}
-
-const beginAnotherChallenge = () => {
-  game.value = resetBardwallChallenge(game.value)
-  saveBardwallState(game.value)
-  chooseAffordableChallengeWager()
-  challengeMessage.value = null
-}
-
-const openChallengeRulesEditor = () => {
-  challengeJudgeRubricDraft.value = game.value.challengeRules.judgeRubric
-  challengeOrlaPromptDraft.value = game.value.challengeRules.orlaPrompt
-  showChallengeRulesEditor.value = true
-}
-
-const closeChallengeRulesEditor = () => {
-  showChallengeRulesEditor.value = false
-}
-
-const restoreDefaultChallengeRules = () => {
-  challengeJudgeRubricDraft.value = DEFAULT_BARDWALL_JUDGE_RUBRIC
-  challengeOrlaPromptDraft.value = DEFAULT_BARDWALL_ORLA_PROMPT
-}
-
-const saveChallengeRules = () => {
-  if (!challengeRulesValid.value) return
-  game.value = updateBardwallChallengeRules(game.value, {
-    judgeRubric: challengeJudgeRubricDraft.value,
-    orlaPrompt: challengeOrlaPromptDraft.value,
-  })
-  saveBardwallState(game.value)
-  showChallengeRulesEditor.value = false
-  challengeMessage.value = 'The table rules have been changed. Tamsin looks troubled; Orla looks even more so.'
+const updateChallengeStoryFromEvent = (event: Event) => {
+  updateChallengeStory((event.target as HTMLTextAreaElement).value)
 }
 
 const beginLastWordStory = () => {
@@ -547,13 +376,6 @@ const formatLastWordDate = (value: string) => {
   if (Number.isNaN(date.getTime())) return 'Date unknown'
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
 }
-
-const wagerLabel = (wager: BardwallChallengeWager | null) => {
-  if (!wager) return 'No wager'
-  if (wager.type === 'coins') return `${wager.amount} ${wager.amount === 1 ? 'coin' : 'coins'}`
-  return BARDWALL_FOOD_ITEMS.find((item) => item.id === wager.itemId)?.name ?? 'one item'
-}
-const scoreTotal = (scores: BardwallChallengeScores, lengthPenalty = 0) => Math.max(0, Object.values(scores).reduce((total, score) => total + score, 0) - lengthPenalty)
 
 const buyFlower = () => {
   try {
@@ -667,13 +489,7 @@ const beginBardwallAgain = async () => {
   heliconiaReturnVisit.value = false
   shrineMessage.value = null
   treatmentMessage.value = null
-  challengeGoalChoice.value = 250
-  challengeWagerChoice.value = 'item:bread'
-  customChallengeWager.value = ''
-  challengeMessage.value = null
-  challengeJudgeRubricDraft.value = DEFAULT_BARDWALL_JUDGE_RUBRIC
-  challengeOrlaPromptDraft.value = DEFAULT_BARDWALL_ORLA_PROMPT
-  showChallengeRulesEditor.value = false
+  resetChallengeUi()
   selectedLastWordStoryId.value = null
   lastWordMessage.value = null
   vesperSpeaking.value = false
@@ -1095,7 +911,7 @@ watch(() => [route.params.location, route.params.activity], () => {
                   </div>
                 </section>
                 <div class="mt-5 flex flex-wrap items-center justify-between gap-2 text-sm"><label for="challenge-story" class="font-semibold">Your telling</label><span :class="challengeStoryInRange ? 'text-emerald-300' : 'text-stone-400'">{{ challengeStoryWordCount.toLocaleString() }} words · required {{ challengeWordRange.minimum.toLocaleString() }}–{{ challengeWordRange.maximum.toLocaleString() }}</span></div>
-                <textarea id="challenge-story" data-testid="challenge-story" :value="game.challenge.playerStory" class="mt-2 min-h-80 w-full rounded-xl border border-stone-600 bg-[#110f0e] p-4 font-serif leading-7 text-stone-100 outline-none focus:border-orange-200" placeholder="Begin the story…" @input="updateChallengeStory"></textarea>
+                <textarea id="challenge-story" data-testid="challenge-story" :value="game.challenge.playerStory" class="mt-2 min-h-80 w-full rounded-xl border border-stone-600 bg-[#110f0e] p-4 font-serif leading-7 text-stone-100 outline-none focus:border-orange-200" placeholder="Begin the story…" @input="updateChallengeStoryFromEvent"></textarea>
                 <p data-testid="challenge-word-guidance" class="mt-2 text-sm font-medium" :class="challengeStoryInRange ? 'text-emerald-300' : challengeStoryWordCount > challengeWordRange.maximum ? 'text-rose-300' : 'text-stone-400'">{{ challengeWordGuidance }}</p>
                 <p class="mt-3 text-xs text-stone-500">Your draft is saved locally as you write. Concrete events, character choices, and meaningful card use matter more than polished abstraction.</p>
                 <button data-testid="submit-challenge-story" class="mt-5 w-full rounded-lg bg-orange-200 px-5 py-3 font-semibold text-[#302018] hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40" :disabled="!challengeStoryInRange || judgingChallenge" @click="judgeChallenge">{{ judgingChallenge ? 'Orla tells her story; Tamsin deliberates…' : 'Tell the story at the table' }}</button>
