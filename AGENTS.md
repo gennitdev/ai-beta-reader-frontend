@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This Vue 3 + TypeScript app bootstraps from `src/main.ts`, wiring Pinia, Vue Router, and Vue Query. Route-level views live in `src/views/`, shared UI in `src/components/` (PascalCase `.vue` files), and feature logic in `src/composables/`, `src/services/`, `src/lib/`, and `src/utils/`. Pinia stores belong in `src/stores/` with `useXxxStore` exports. Static assets stay under `public/` or `src/assets/`, while Vite builds output to `dist/`. Tailwind configuration lives in `tailwind.config.js` alongside global styles in `src/style.css`.
+This Vue 3 + TypeScript app bootstraps from `src/main.ts` and wires Vue Router. Route-level views live in `src/views/`, shared UI in `src/components/` (PascalCase `.vue` files), and shared state and feature logic live in `src/composables/`, `src/services/`, `src/lib/`, and `src/utils/`. Static assets stay under `public/` or `src/assets/`, while Vite builds output to `dist/`. Tailwind configuration lives in `tailwind.config.js` alongside global styles in `src/style.css`.
 
 ## Build, Test, and Development Commands
 Install dependencies with `npm install`. `npm run dev` starts the Vite dev server at http://localhost:5173 with hot module replacement. `npm run build` runs type-checking and emits the production bundle into `dist/`; use `npm run preview` to serve the build locally. Run `npm run lint` for ESLint autofix and `npm run type-check` for standalone TypeScript verification.

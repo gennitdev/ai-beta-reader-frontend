@@ -17,7 +17,7 @@ This repository contains the complete application code for the browser, Electron
 
 - **Application:** Vue 3 (Composition API) + TypeScript + Vite
 - **Styling:** Tailwind CSS + Headless UI + Heroicons
-- **State & Data:** Pinia, @tanstack/vue-query
+- **State & Data:** Vue composables backed by local SQLite repositories
 - **Local Database:** `sql.js` + IndexedDB persistence (browser and Electron) / `@capacitor-community/sqlite` (Android)
 - **Cloud Sync:** Google Drive via OAuth 2.0 (GIS for web, PKCE + App Links for native)
 - **AI Services:** OpenAI (GPT‑4o Mini) for summaries & reviews
@@ -27,7 +27,7 @@ This repository contains the complete application code for the browser, Electron
 
 ```mermaid
 flowchart TB
-  app["Shared Vue 3 + TypeScript application<br/>UI · Pinia · composables · services"]
+  app["Shared Vue 3 + TypeScript application<br/>UI · composables · services"]
 
   app --> web["Browser<br/>Vite web app"]
   app --> electron["Desktop<br/>Electron shell"]
@@ -266,7 +266,7 @@ See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secre
 - Summary generation can optionally create or update detected character and location pages, then link them to the source chapter.
 - Cross-document search covers chapters + wiki entries.
 - Find/replace spans every chapter to keep continuity.
-- Chapters can be grouped into parts; reorder via drag & drop (Pinia stores keep UI state in sync).
+- Chapters can be grouped into parts and reordered via drag & drop.
 
 ## Development Workflow
 
