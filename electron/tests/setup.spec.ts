@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  app as electronApp,
   BrowserWindow,
   emitHeadersReceived,
   getLastTray,
@@ -214,6 +215,20 @@ describe('Electron application setup', () => {
 
       expect(app.getCustomURLScheme()).toBe('capacitor-electron')
       expect(nativeImage.createFromPath).toHaveBeenCalledWith(expect.stringContaining('appIcon.ico'))
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform })
+    }
+  })
+
+  it('sets the application Dock icon on macOS', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+
+    try {
+      const app = new ElectronCapacitorApp({ electron: {} } as never)
+      await app.init()
+
+      expect(electronApp.dock.setIcon).toHaveBeenCalledWith({ image: 'app-icon' })
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform })
     }
