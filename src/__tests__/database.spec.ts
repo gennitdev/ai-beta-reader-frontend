@@ -79,6 +79,77 @@ describe('books', () => {
   })
 })
 
+describe('database import safety', () => {
+  it('rejects a structurally invalid backup without changing existing data', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+
+    await expect(
+      db.importDatabase(new TextEncoder().encode('{}')),
+    ).rejects.toThrow(/missing the books or chapters collection/)
+
+    expect(await db.getBooks()).toEqual([expect.objectContaining({ id: 'book-1' })])
+    expect(await db.getChapters('book-1')).toEqual([
+      expect.objectContaining({ id: 'ch-1', text: 'Once upon a time.' }),
+    ])
+  })
+
+  it('rolls back a failed replacement and leaves foreign keys enabled', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+
+    const invalidBackup = {
+      version: 5,
+      books: [book({ id: 'replacement-book', title: 'Replacement' })],
+      chapters: [chapter({ id: 'orphan', book_id: 'missing-book' })],
+    }
+
+    await expect(
+      db.importDatabase(new TextEncoder().encode(JSON.stringify(invalidBackup))),
+    ).rejects.toThrow()
+
+    expect(await db.getBooks()).toEqual([expect.objectContaining({ id: 'book-1' })])
+    expect(await db.getChapters('book-1')).toEqual([
+      expect.objectContaining({ id: 'ch-1', text: 'Once upon a time.' }),
+    ])
+    expect(await db.getChapters('replacement-book')).toEqual([])
+
+    const connection = (db as unknown as {
+      db: { exec: (sql: string) => Array<{ values: unknown[][] }> }
+    }).db
+    expect(connection.exec('PRAGMA foreign_keys')[0].values[0][0]).toBe(1)
+    expect((db as unknown as { isImporting: boolean }).isImporting).toBe(false)
+  })
+
+  it('can atomically replace related live data with a valid empty backup', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+    await db.saveImageAsset({
+      id: 'img-1',
+      book_id: 'book-1',
+      chapter_id: 'ch-1',
+      asset_type: 'chapter',
+      file_name: 'scene.png',
+      file_path: 'web/img-1/scene.png',
+      mime_type: 'image/png',
+      image_data: null,
+      notes: '',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    })
+
+    await db.importDatabase(new TextEncoder().encode(JSON.stringify({
+      version: 5,
+      books: [],
+      chapters: [],
+    })))
+
+    expect(await db.getBooks()).toEqual([])
+    expect(await db.getChapters('book-1')).toEqual([])
+    expect(await db.getBookImages('book-1')).toEqual([])
+  })
+})
+
 describe('chapters', () => {
   beforeEach(async () => {
     await db.saveBook(book())

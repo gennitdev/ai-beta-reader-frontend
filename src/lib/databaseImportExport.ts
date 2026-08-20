@@ -171,6 +171,54 @@ export function normalizeDatabaseImportData(raw: unknown): DatabaseImportData {
   }
 }
 
+/**
+ * Parse an app database backup without turning arbitrary JSON into an empty
+ * database. Normalization remains intentionally permissive for the legacy
+ * Capacitor and Neon adapters, but destructive restore/import paths must call
+ * this stricter entry point before clearing any live data.
+ */
+export function parseDatabaseImportData(raw: unknown): DatabaseImportData {
+  if (!isRecord(raw) || Array.isArray(raw)) {
+    throw new Error('Backup payload must be a JSON object.')
+  }
+
+  const capacitorTables: unknown[] | null = isRecord(raw.export) && Array.isArray(raw.export.tables)
+    ? raw.export.tables
+    : Array.isArray(raw.tables)
+      ? raw.tables
+      : null
+
+  if (capacitorTables) {
+    const tableNames = new Set(
+      capacitorTables
+        .filter(isRecord)
+        .map((table) => table.name)
+        .filter((name): name is string => typeof name === 'string'),
+    )
+    if (!tableNames.has('books') || !tableNames.has('chapters')) {
+      throw new Error('Backup payload is missing the books or chapters table.')
+    }
+  } else {
+    if (!Array.isArray(raw.books) || !Array.isArray(raw.chapters)) {
+      throw new Error('Backup payload is missing the books or chapters collection.')
+    }
+
+    if (
+      raw.version !== undefined
+      && (!Number.isInteger(raw.version) || Number(raw.version) < 1)
+    ) {
+      throw new Error('Backup payload has an invalid database version.')
+    }
+    if (typeof raw.version === 'number' && raw.version > DATABASE_EXPORT_VERSION) {
+      throw new Error(
+        `Backup database version ${raw.version} is newer than supported version ${DATABASE_EXPORT_VERSION}.`,
+      )
+    }
+  }
+
+  return normalizeDatabaseImportData(raw)
+}
+
 export function normalizeImageAssetImportRows(rows: unknown[] | undefined) {
   if (!rows) return []
 

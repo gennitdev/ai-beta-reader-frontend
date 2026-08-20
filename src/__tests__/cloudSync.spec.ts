@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CloudProvider } from '@/lib/cloudSync'
+import { Encryption } from '@/lib/encryption'
+import { IndexedDbImageContentStore } from '@/lib/imageContentStore'
 
 const dbMock = vi.hoisted(() => ({
   exportDatabase: vi.fn(),
@@ -101,6 +103,50 @@ describe('CloudSync backup + restore', () => {
     const cs = new CloudSync(provider)
     await cs.backup('right-password')
     await expect(cs.restore('wrong-password')).rejects.toThrow(/Incorrect password/)
+  })
+
+  it('rolls back staged image content when the database import fails', async () => {
+    const blobs = new Map<string, Blob>([
+      ['existing', new Blob([new Uint8Array([9, 8, 7])], { type: 'image/png' })],
+    ])
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'read').mockImplementation(
+      async (asset) => blobs.get(asset.id) ?? null,
+    )
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'write').mockImplementation(
+      async (asset, blob) => { blobs.set(asset.id, blob) },
+    )
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'delete').mockImplementation(
+      async (asset) => { blobs.delete(asset.id) },
+    )
+
+    const payload = {
+      ...EXPORT,
+      image_assets: [
+        {
+          id: 'existing', book_id: 'b1', chapter_id: null, asset_type: 'cover',
+          file_name: 'existing.png', file_path: 'web/existing.png', mime_type: 'image/png',
+          image_data: 'data:image/png;base64,AQID', notes: '', created_at: '', updated_at: '',
+        },
+        {
+          id: 'new', book_id: 'b1', chapter_id: null, asset_type: 'cover',
+          file_name: 'new.png', file_path: 'web/new.png', mime_type: 'image/png',
+          image_data: 'data:image/png;base64,BAUG', notes: '', created_at: '', updated_at: '',
+        },
+      ],
+    }
+    const encrypted = await Encryption.encrypt(
+      new TextEncoder().encode(JSON.stringify(payload)),
+      'pw',
+    )
+    const provider = fakeProvider({ download: vi.fn(async () => encrypted) })
+    dbMock.importDatabase.mockRejectedValueOnce(new Error('database import failed'))
+
+    await expect(new CloudSync(provider).restore('pw')).rejects.toThrow('database import failed')
+
+    expect(new Uint8Array(await blobs.get('existing')!.arrayBuffer())).toEqual(
+      new Uint8Array([9, 8, 7]),
+    )
+    expect(blobs.has('new')).toBe(false)
   })
 })
 

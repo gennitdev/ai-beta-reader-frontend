@@ -31,6 +31,9 @@ export interface AppDatabaseConnection {
   export(): Uint8Array
   exportToJson(mode?: string): Promise<unknown>
   prepare(sql: string): QueryResultRowStatement
+  beginTransaction?(): Promise<unknown>
+  commitTransaction?(): Promise<unknown>
+  rollbackTransaction?(): Promise<unknown>
 }
 
 /**

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  captureImageContentSnapshot,
   enrichImageRowsForBackup,
+  restoreImageContentSnapshot,
   restoreImageRows,
   stripImageDataFromRows,
 } from '@/lib/cloudSyncImageAssets'
@@ -78,6 +80,24 @@ describe('cloud sync image processing', () => {
     await expect(restoreImageRows([
       imageRow('failed', 'data:image/png;base64,AQID'),
     ], store)).rejects.toThrow('Failed to restore image failed.png (failed): quota exceeded')
+  })
+
+  it('restores overwritten content and removes newly written content after a failed restore', async () => {
+    const original = new Blob([new Uint8Array([9, 8, 7])], { type: 'image/png' })
+    const { blobs, store } = memoryStore({ existing: original })
+    const rows = [
+      imageRow('existing', 'data:image/png;base64,AQID'),
+      imageRow('new', 'data:image/png;base64,BAUG'),
+    ]
+    const snapshot = await captureImageContentSnapshot(rows, store)
+
+    await restoreImageRows(rows, store)
+    await restoreImageContentSnapshot(snapshot, store)
+
+    expect(new Uint8Array(await blobs.get('existing')!.arrayBuffer())).toEqual(
+      new Uint8Array([9, 8, 7]),
+    )
+    expect(blobs.has('new')).toBe(false)
   })
 
   it('normalizes legacy positional rows before stripping mobile image data', () => {

@@ -12,6 +12,11 @@ export interface BackupImageProcessingResult {
   missingImageIds: string[]
 }
 
+export interface ImageContentSnapshot {
+  asset: ImageAsset
+  blob: Blob | null
+}
+
 function toNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
@@ -102,6 +107,37 @@ export async function restoreImageRows(
   }
 
   return { rows: normalizedRows, assets, missingImageIds }
+}
+
+/** Capture content that a restore may overwrite so a later database failure can undo it. */
+export async function captureImageContentSnapshot(
+  rows: ImportRow[],
+  store: ImageContentStore,
+): Promise<ImageContentSnapshot[]> {
+  const assets = normalizeRows(rows).map(toImageAsset)
+  return Promise.all(assets.map(async (asset) => ({
+    asset,
+    blob: await store.read(asset),
+  })))
+}
+
+/** Best-effort all entries before reporting rollback failures to the caller. */
+export async function restoreImageContentSnapshot(
+  snapshot: ImageContentSnapshot[],
+  store: ImageContentStore,
+): Promise<void> {
+  const failures: string[] = []
+  for (const { asset, blob } of snapshot) {
+    try {
+      if (blob) await store.write(asset, blob)
+      else await store.delete(asset)
+    } catch (error) {
+      failures.push(`${asset.id}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(`Failed to roll back restored image content (${failures.join('; ')})`)
+  }
 }
 
 export function stripImageDataFromRows(rows: ImportRow[]): BackupImageProcessingResult {
