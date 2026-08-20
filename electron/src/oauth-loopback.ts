@@ -227,12 +227,6 @@ async function exchangeCodeForTokens(
     params.append('client_secret', clientSecret);
   }
 
-  console.log('[OAuth] Exchanging code for tokens...');
-  console.log('[OAuth] Client ID:', clientId);
-  console.log('[OAuth] Redirect URI:', redirectUri);
-  console.log('[OAuth] Code verifier length:', codeVerifier.length);
-  console.log('[OAuth] Client secret provided:', !!clientSecret);
-
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: {
@@ -256,8 +250,6 @@ async function exchangeCodeForTokens(
   }
 
   const data = await response.json();
-  console.log('[OAuth] Token exchange successful');
-
   if (!data.access_token) {
     throw new Error('No access token in response');
   }

@@ -85,7 +85,7 @@ export class ElectronCapacitorApp {
   }
 
   // Helper function to load in the app.
-  private async loadMainWindow(thisRef: any) {
+  private async loadMainWindow(thisRef: ElectronCapacitorApp) {
     await thisRef.loadWebApp(thisRef.MainWindow);
   }
 
