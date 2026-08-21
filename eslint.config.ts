@@ -67,4 +67,13 @@ export default defineConfigWithVueTs(
       'no-console': 'off',
     },
   },
+
+  {
+    // Command-line tools intentionally report diagnostics to stdout/stderr.
+    name: 'app/cli-console-allowed',
+    files: ['scripts/**/*.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
 )

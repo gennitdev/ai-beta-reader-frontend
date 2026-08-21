@@ -3,6 +3,11 @@ import JSZip from 'jszip'
 import packageInfo from '../../package.json'
 import type { Book, Chapter, ChapterNote, BookPart, ImageAsset } from '@/lib/database'
 import { createFullLibraryBundleExport } from '@/lib/libraryBundle/export'
+import { createAgentWorkspaceScaffold } from '@/lib/libraryBundle/agentWorkspace'
+import {
+  writeBundleDirectory,
+  type BundleDirectoryHandle,
+} from '@/lib/libraryBundle/adapters/directory'
 import { createPortableId } from '@/lib/portableIds'
 import {
   buildMarkdownExportFiles,
@@ -25,6 +30,11 @@ interface UseDataExportDeps {
   fetchChapterImages: (chapterId: string) => Promise<ImageAsset[]>
   getImageBlob: (image: ImageAsset) => Promise<Blob>
   exportDatabase: () => Promise<Uint8Array>
+  chooseBundleDirectory?: () => Promise<BundleDirectoryHandle>
+}
+
+interface DirectoryPickerWindow extends Window {
+  showDirectoryPicker?: (options: { mode: 'readwrite' }) => Promise<BundleDirectoryHandle>
 }
 
 function triggerZipDownload(content: Blob, fileName: string) {
@@ -57,6 +67,7 @@ export function useDataExport(deps: UseDataExportDeps) {
     fetchChapterImages,
     getImageBlob,
     exportDatabase,
+    chooseBundleDirectory,
   } = deps
 
   const isExporting = ref(false)
@@ -65,6 +76,27 @@ export function useDataExport(deps: UseDataExportDeps) {
   const exportFormat = ref<'bundle' | 'zip' | 'markdown'>('bundle')
   const markdownGranularity = ref<'book' | 'part'>('book')
   const includeNotes = ref(true)
+  const runtimeDirectoryPicker = typeof window === 'undefined'
+    ? undefined
+    : (window as DirectoryPickerWindow).showDirectoryPicker
+  const canExportBundleDirectory = ref(Boolean(chooseBundleDirectory || runtimeDirectoryPicker))
+
+  const createCanonicalBundle = async () => {
+    exportProgress.value = 'Creating a consistent library snapshot...'
+    const databaseBackup = await exportDatabase()
+    exportProgress.value = 'Writing canonical bundle files and verifying images...'
+    const exportedAt = new Date().toISOString()
+    const bundle = await createFullLibraryBundleExport(databaseBackup, {
+      bundleId: createPortableId('bundle'),
+      exportedAt,
+      appVersion: packageInfo.version,
+      readAssetBytes: async (asset) => {
+        const blob = await getImageBlob(asset)
+        return new Uint8Array(await blob.arrayBuffer())
+      },
+    })
+    return { bundle, exportedAt }
+  }
 
   const stripFileExtension = (fileName: string): string => {
     const lastDot = fileName.lastIndexOf('.')
@@ -94,19 +126,7 @@ export function useDataExport(deps: UseDataExportDeps) {
     exportError.value = ''
     try {
       isExporting.value = true
-      exportProgress.value = 'Creating a consistent library snapshot...'
-      const databaseBackup = await exportDatabase()
-      exportProgress.value = 'Writing canonical bundle files and verifying images...'
-      const exportedAt = new Date().toISOString()
-      const bundle = await createFullLibraryBundleExport(databaseBackup, {
-        bundleId: createPortableId('bundle'),
-        exportedAt,
-        appVersion: packageInfo.version,
-        readAssetBytes: async (asset) => {
-          const blob = await getImageBlob(asset)
-          return new Uint8Array(await blob.arrayBuffer())
-        },
-      })
+      const { bundle, exportedAt } = await createCanonicalBundle()
 
       exportProgress.value = 'Creating backup ZIP...'
       triggerZipDownload(
@@ -119,6 +139,34 @@ export function useDataExport(deps: UseDataExportDeps) {
       console.error('Full library export failed:', err)
       exportError.value = 'Export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
       exportProgress.value = ''
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  const exportFullLibraryDirectory = async () => {
+    if (isExporting.value) return
+    exportError.value = ''
+    isExporting.value = true
+    try {
+      const choose = chooseBundleDirectory
+        ?? (runtimeDirectoryPicker ? () => runtimeDirectoryPicker.call(window, { mode: 'readwrite' }) : undefined)
+      if (!choose) throw new Error('Folder export is not supported by this browser.')
+      exportProgress.value = 'Choose an empty folder or an existing Beta Bot bundle...'
+      const directory = await choose()
+      const { bundle } = await createCanonicalBundle()
+      exportProgress.value = 'Updating managed bundle files and preserving your other files...'
+      const result = await writeBundleDirectory(directory, bundle.files, createAgentWorkspaceScaffold())
+      exportProgress.value = `Folder updated: ${result.writtenFiles} managed files written, ${result.deletedFiles} obsolete files removed.`
+      setTimeout(() => { exportProgress.value = '' }, 5000)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        exportProgress.value = ''
+      } else {
+        console.error('Full library folder export failed:', err)
+        exportError.value = 'Folder export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
+        exportProgress.value = ''
+      }
     } finally {
       isExporting.value = false
     }
@@ -402,7 +450,9 @@ export function useDataExport(deps: UseDataExportDeps) {
     exportFormat,
     markdownGranularity,
     includeNotes,
+    canExportBundleDirectory,
     handleExport,
     exportFullLibraryBundle,
+    exportFullLibraryDirectory,
   }
 }

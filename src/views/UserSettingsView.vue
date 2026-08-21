@@ -97,7 +97,9 @@ const {
   exportFormat,
   markdownGranularity,
   includeNotes,
+  canExportBundleDirectory,
   handleExport,
+  exportFullLibraryDirectory,
 } = useDataExport({
   books,
   chapters,
@@ -602,14 +604,26 @@ onMounted(async () => {
                 Download all your books, chapters, and character data in a structured format.
               </p>
             </div>
-            <button
-              @click="handleExport"
-              :disabled="isExporting"
-              class="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap w-full sm:w-auto"
-            >
-              <DocumentArrowDownIcon class="w-5 h-5 mr-2" />
-              {{ isExporting ? 'Exporting...' : exportFormat === 'bundle' ? 'Export full library backup' : 'Export Data' }}
-            </button>
+            <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <button
+                @click="handleExport"
+                :disabled="isExporting"
+                class="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap w-full sm:w-auto"
+              >
+                <DocumentArrowDownIcon class="w-5 h-5 mr-2" />
+                {{ isExporting ? 'Exporting...' : exportFormat === 'bundle' ? 'Export full library backup' : 'Export Data' }}
+              </button>
+              <button
+                v-if="canExportBundleDirectory && exportFormat === 'bundle'"
+                type="button"
+                :disabled="isExporting"
+                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-lg border border-green-600 px-4 py-2 font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20 sm:w-auto"
+                @click="exportFullLibraryDirectory"
+              >
+                <DocumentArrowDownIcon class="mr-2 h-5 w-5" />
+                Export Git workspace to folder
+              </button>
+            </div>
           </div>
         </div>
 
@@ -631,6 +645,9 @@ onMounted(async () => {
                   <span class="block text-sm text-gray-900 dark:text-white">Full library backup (recommended)</span>
                   <span class="block text-xs text-gray-500 dark:text-gray-400">
                     Creates a complete canonical Beta Bot bundle with images, history, profiles, and audit records
+                  </span>
+                  <span v-if="canExportBundleDirectory" class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                    Folder export can safely update an existing bundle, preserves unknown files, and creates starter AGENTS.md and .gitattributes files once.
                   </span>
                 </span>
               </label>

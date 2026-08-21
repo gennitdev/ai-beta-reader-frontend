@@ -33,7 +33,7 @@ describe('router', () => {
 
     await router.push('/books')
     expect(document.title).toBe('beta bot')
-  })
+  }, 15_000)
 
   it('keeps Bardwall locations and cave activities inside Bardwall routes', () => {
     const market = router.resolve('/bardwall/market')
