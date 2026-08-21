@@ -106,7 +106,7 @@ See [docs/desktop-images.md](docs/desktop-images.md) for the current storage con
 - OpenAI calls use the user-provided API key directly from `src/lib/openai.ts`.
 - Browser Drive OAuth uses Google Identity Services.
 - Electron Drive OAuth uses the desktop client and a loopback callback through the Electron bridge.
-- Android Drive OAuth uses Authorization Code + PKCE and an app redirect.
+- Android Drive OAuth uses Google Play services `AuthorizationClient` through a Capacitor bridge and has no redirect URI.
 - The `drive.file` scope limits the app to files it creates or the user explicitly shares with it.
 
 There is no backend process to start. `src/services/api.ts` remains only as unused legacy compatibility code and should not be used for new features.

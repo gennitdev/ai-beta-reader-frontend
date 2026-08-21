@@ -19,7 +19,7 @@ This repository contains the complete application code for the browser, Electron
 - **Styling:** Tailwind CSS + Headless UI + Heroicons
 - **State & Data:** Vue composables backed by local SQLite repositories
 - **Local Database:** `sql.js` + IndexedDB persistence (browser and Electron) / `@capacitor-community/sqlite` (Android)
-- **Cloud Sync:** Google Drive via OAuth 2.0 (GIS for web, PKCE + App Links for native)
+- **Cloud Sync:** Google Drive via OAuth 2.0 (GIS for web, Google Identity Services authorization for Android)
 - **AI Services:** OpenAI (GPT‑4o Mini) for summaries & reviews
 - **Native Platforms:** Capacitor for Android; Electron for desktop (packaging currently configured for macOS and Windows)
 
@@ -85,7 +85,7 @@ OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron 
 
 - **Local-first data**: Every project lives in a local SQLite database. Backups are user-initiated; AI features send the selected manuscript context to the configured AI service when invoked.
 - **Encrypted backups**: The complete canonical library ZIP is encrypted with a password-derived AES-GCM key and uploaded to Google Drive as a new immutable generation. The three newest successful generations are retained.
-- **Cross-platform restore**: Browser, Electron, and Android use the same canonical bundle format. Restore also retains permanent compatibility with older WC1, WC2, and CryptoJS-encrypted JSON backups. Android uses PKCE OAuth and App Links to re-enter the app after Google consent.
+- **Cross-platform restore**: Browser, Electron, and Android use the same canonical bundle format. Restore also retains permanent compatibility with older WC1, WC2, and CryptoJS-encrypted JSON backups. Android uses Google Play services authorization without a browser redirect.
 - **Git-ready workspaces**: Chromium-class browsers can safely update canonical bundle folders without overwriting unknown files. New workspaces include maintained agent instructions and a conservative `.gitattributes` policy.
 - **Story bible**: Character sheets and wiki pages can record human-edited alternate names, helping AI updates resolve nicknames and titles to one canonical page.
 - **Find & replace**: Rename characters/places everywhere in one shot.
@@ -208,12 +208,8 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 |----------|-------------|---------|
 | `VITE_GOOGLE_CLIENT_ID` | Google OAuth *web* client ID (used for browser GIS flow) | `302250506015-du7cd7e5g469dd74cs2fnq8luksiuutb.apps.googleusercontent.com` |
 | `VITE_GOOGLE_CLIENT_ID_WEB` | Optional alias for the web client (defaults to `VITE_GOOGLE_CLIENT_ID`) | same as above |
-| `VITE_GOOGLE_REDIRECT_URI` | Hosted redirect used by the web build | `https://www.beta-bot.net/oauth2redirect` |
 | `VITE_GOOGLE_CLIENT_ID_DESKTOP` | OAuth desktop client used by Electron's loopback flow | `…apps.googleusercontent.com` |
 | `VITE_GOOGLE_CLIENT_SECRET_DESKTOP` | Optional desktop-client secret, when required by the configured OAuth client | |
-| `VITE_GOOGLE_CLIENT_ID_NATIVE` | Android OAuth client ID (PKCE/native flow) | `…hmm4hpdloehtuodde00pu2irqkpm1inp.apps.googleusercontent.com` |
-| `VITE_GOOGLE_REDIRECT_URI_NATIVE` | Custom redirect scheme from the Android client | `com.googleusercontent.apps.…:/oauth2redirect` |
-| `VITE_GOOGLE_CLIENT_SECRET` | **Optional** – only required if you re-use the web client in native builds (not recommended) | |
 
 ### Notes
 
@@ -244,7 +240,7 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
    - Auth flow differs by platform:
      - **Web**: Google Identity Services token client (`response_type=token`).
      - **Electron**: Desktop OAuth client with a loopback callback handled by the preload bridge.
-     - **Android**: Custom PKCE helper opens Chrome via App Launcher, listens for the app redirect (`com.googleusercontent.apps...:/oauth2redirect`), and exchanges the code for tokens stored through secure storage.
+     - **Android**: A Capacitor bridge calls Google Play services `AuthorizationClient`. Google identifies the OAuth client from the application package and signing certificate, and returns a short-lived access token without a redirect URI.
    - Downloads the selected (or newest) encrypted generation, verifies its recorded integrity, decrypts it, and validates the complete bundle.
    - Creates and verifies an external recovery bundle before replacing the local library, with automatic rollback if replacement fails.
    - If no versioned generation exists, restore falls back to the legacy `ai-beta-reader-backup.enc` file. WC1, WC2, and CryptoJS-encrypted JSON remain supported.
@@ -320,10 +316,10 @@ Pull request titles follow Conventional Commits so squash merges can drive seman
 
 - **Web (beta-bot.net)**: Vercel builds from `main`. Make sure the env vars above are set in Vercel before deploying.
 - **Android**: Use `npx cap sync android` after every `npm run build`. Launch via Android Studio or the `npx cap run` helper.
-  - The Android OAuth client must include:
+  - The production Android OAuth client must include:
     - Package name `com.betareader.app`
-    - SHA‑1 fingerprint from `./gradlew signingReport`
-    - Custom URI scheme enabled (`com.googleusercontent.apps.<client-id>:/oauth2redirect`)
+    - Google Play **app-signing certificate** SHA‑1 from Play Console → Setup → App integrity. The upload-key SHA‑1 identifies the upload artifact, not the Play-installed production app.
+  - Local debug builds need a separate Android OAuth client entry for `com.betareader.app` and the debug certificate SHA‑1 shown by `./gradlew signingReport`.
   - Status bar height is handled via `@capacitor/status-bar` to avoid UI overlap.
 - **Electron Desktop**: Run `npm run electron:dev` for development or `npm run electron:build` for configured packages.
   - Uses the same `sql.js` + IndexedDB database persistence as the browser build.
@@ -334,9 +330,8 @@ Pull request titles follow Conventional Commits so squash merges can drive seman
 
 | Problem | Fix |
 |---------|-----|
-| `client_secret is missing` on restore | The native build is still using the web OAuth client. Ensure Vercel + local envs define `VITE_GOOGLE_CLIENT_ID_NATIVE` and `VITE_GOOGLE_REDIRECT_URI_NATIVE`; redeploy. |
-| `Access blocked: request invalid` (custom URI scheme) | Enable “Custom URI scheme” on the Android OAuth client. |
-| `Access blocked: invalid_request` after redirect fix | Add the SHA‑1 fingerprint from `./gradlew signingReport` to the Android OAuth client. |
+| Android authorization is denied or unavailable | Confirm Google Play services is current and the OAuth client matches package `com.betareader.app` plus the certificate that signed the installed build. |
+| Internal-test build cannot authorize | Configure the Play app-signing certificate SHA‑1, not only the upload-key SHA‑1, then install the build from the Play internal-testing track. |
 | `No backup found in cloud storage` | No versioned generation or legacy `ai-beta-reader-backup.enc` exists. Run a backup or verify the legacy file still exists. |
 | `Failed to decrypt - wrong password? TypeError: this.db.importFromJson is not a function` | Fixed in native import logic (manual inserts). Update to latest build. |
 | `FOREIGN KEY constraint failed (code 787)` | Latest build disables/re-enables foreign keys during import. Rebuild and redeploy. |

@@ -1,4 +1,5 @@
 import { ref, onMounted } from 'vue'
+import { Capacitor } from '@capacitor/core'
 import { logger } from '@/lib/logger'
 import {
   db,
@@ -48,11 +49,8 @@ export async function initializeDatabase() {
 
     // Initialize Google Drive sync if credentials are available
     const webClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID_WEB ?? import.meta.env.VITE_GOOGLE_CLIENT_ID
-    if (webClientId) {
-      const provider = new GoogleDriveProvider(webClientId, {
-        nativeClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID_NATIVE,
-        nativeRedirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI_NATIVE,
-      })
+    if (webClientId || Capacitor.getPlatform() === 'android') {
+      const provider = new GoogleDriveProvider(webClientId ?? '')
       cloudSync.value = new CloudSync(provider)
       cloudSyncReady.value = cloudSync.value.isWebSdkReady()
       logger.log('[useDatabase] Initial cloudSyncReady:', cloudSyncReady.value)
