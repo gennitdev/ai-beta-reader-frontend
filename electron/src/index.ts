@@ -10,6 +10,7 @@ import { ElectronCapacitorApp, setupContentSecurityPolicy, setupReloadWatcher } 
 import { registerDesktopImageBridge } from './image-bridge';
 import { registerOAuthLoopbackHandlers } from './oauth-loopback';
 import { registerSecureStorageBridge } from './secure-storage-bridge';
+import { registerRecoveryBridge } from './recovery-bridge';
 
 // Increase memory limit for renderer process (needed for large backups with images)
 // 8GB should handle backups with many large images
@@ -353,6 +354,7 @@ if (electronIsDev) {
   // Wait for electron app to be ready.
   await app.whenReady();
   registerDesktopImageBridge();
+  registerRecoveryBridge();
   registerOAuthLoopbackHandlers();
   registerSecureStorageBridge();
 

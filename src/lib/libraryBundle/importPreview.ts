@@ -17,6 +17,7 @@ export interface PreviewBundleImportOptions {
 export interface PreviewedBundleImport {
   plan: LibraryImportPlan
   localModel: Awaited<ReturnType<typeof createCanonicalLibrarySnapshot>>
+  incomingModel: Awaited<ReturnType<typeof createCanonicalLibrarySnapshot>>
   databaseGeneration: string
 }
 
@@ -57,6 +58,7 @@ export async function previewBundleFileMapImport(
   return {
     plan: await createLibraryImportPlan(validated, localModel, databaseGeneration),
     localModel,
+    incomingModel: validated.model ?? localModel,
     databaseGeneration,
   }
 }

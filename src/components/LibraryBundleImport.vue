@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { LibraryImportPlan, ImportConflictResolution } from '@/lib/libraryBundle/plan'
+import type { RecoveryBundleMetadata } from '@/lib/recovery/model'
 
 defineProps<{
   plan: LibraryImportPlan | null
@@ -8,6 +9,11 @@ defineProps<{
   message: string
   isPreviewing: boolean
   isApplying: boolean
+  isPreparingReplace: boolean
+  isReplacing: boolean
+  recoveries: readonly RecoveryBundleMetadata[]
+  preparedRecovery: RecoveryBundleMetadata | null
+  replaceRemovalCounts: { books: number; chapters: number; wikiPages: number }
 }>()
 
 const emit = defineEmits<{
@@ -15,6 +21,10 @@ const emit = defineEmits<{
   selectDirectory: [files: File[]]
   resolve: [key: string, resolution: ImportConflictResolution]
   apply: []
+  prepareReplace: []
+  replace: []
+  previewRecovery: [id: string]
+  downloadRecovery: [id: string]
 }>()
 
 function selectFile(event: Event) {
@@ -44,11 +54,11 @@ function formatValue(value: unknown): string {
     <div class="px-6 py-4 space-y-4">
       <label class="inline-flex cursor-pointer items-center rounded-lg bg-navy-700 px-4 py-2 text-sm font-medium text-white hover:bg-navy-600">
         {{ isPreviewing ? 'Reading bundle…' : 'Choose bundle ZIP' }}
-        <input class="sr-only" type="file" accept=".zip,application/zip" :disabled="isPreviewing || isApplying" @change="selectFile">
+        <input class="sr-only" type="file" accept=".zip,application/zip" :disabled="isPreviewing || isApplying || isPreparingReplace || isReplacing" @change="selectFile">
       </label>
       <label class="ml-2 inline-flex cursor-pointer items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-navy-700">
         Choose bundle folder
-        <input class="sr-only" type="file" webkitdirectory multiple :disabled="isPreviewing || isApplying" @change="selectDirectory">
+        <input class="sr-only" type="file" webkitdirectory multiple :disabled="isPreviewing || isApplying || isPreparingReplace || isReplacing" @change="selectDirectory">
       </label>
       <span v-if="fileName" class="ml-3 text-sm text-gray-600 dark:text-gray-300">{{ fileName }}</span>
 
@@ -104,15 +114,49 @@ function formatValue(value: unknown): string {
         </div>
 
         <div class="flex flex-wrap items-center gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
-          <button class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!plan.canApply || isApplying" @click="emit('apply')">
+          <button class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!plan.canApply || isApplying || isPreparingReplace || isReplacing" @click="emit('apply')">
             {{ isApplying ? 'Applying…' : 'Apply changes' }}
           </button>
-          <button class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700" disabled title="Available after verified recovery storage ships in Phase 4">
-            Replace library (Phase 4)
+          <button
+            v-if="!preparedRecovery"
+            class="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-300"
+            :disabled="!plan.replaceEligible || isPreparingReplace || isApplying || isPreviewing"
+            :title="plan.replaceEligible ? 'Create and verify a recovery before confirmation' : 'Only a complete, validated full-library bundle can replace the library'"
+            @click="emit('prepareReplace')"
+          >
+            {{ isPreparingReplace ? 'Verifying recovery…' : 'Prepare Replace library' }}
+          </button>
+          <button
+            v-else
+            class="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isReplacing || isApplying || isPreviewing"
+            @click="emit('replace')"
+          >
+            {{ isReplacing ? 'Replacing…' : 'Confirm Replace library' }}
           </button>
           <span v-if="plan.unresolvedConflicts" class="text-xs text-amber-700 dark:text-amber-300">Resolve {{ plan.unresolvedConflicts }} conflict(s) before applying.</span>
         </div>
+        <div v-if="preparedRecovery" class="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+          Recovery {{ preparedRecovery.id }} was written and SHA-256 verified outside the main database.
+          Replacing will remove {{ replaceRemovalCounts.books }} book(s), {{ replaceRemovalCounts.chapters }} chapter(s), and {{ replaceRemovalCounts.wikiPages }} wiki page(s) absent from this bundle.
+        </div>
       </template>
+
+      <div v-if="recoveries.length" class="border-t border-gray-200 pt-4 dark:border-gray-700">
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Verified recovery bundles</h3>
+        <div class="mt-2 space-y-2">
+          <div v-for="recovery in recoveries" :key="recovery.id" class="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 p-3 dark:border-gray-700">
+            <div class="text-xs text-gray-600 dark:text-gray-300">
+              <div class="font-medium">{{ new Date(recovery.createdAt).toLocaleString() }}</div>
+              <div>{{ recovery.appVersion }} · {{ recovery.byteLength.toLocaleString() }} bytes · {{ recovery.sourceOperation }}</div>
+            </div>
+            <div class="flex gap-2">
+              <button class="rounded border border-gray-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-gray-600" :disabled="isPreviewing || isApplying || isPreparingReplace || isReplacing" @click="emit('previewRecovery', recovery.id)">Restore…</button>
+              <button class="rounded border border-gray-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-gray-600" :disabled="isPreviewing || isApplying || isPreparingReplace || isReplacing" @click="emit('downloadRecovery', recovery.id)">Download</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>

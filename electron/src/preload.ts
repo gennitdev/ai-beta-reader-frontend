@@ -12,6 +12,13 @@ contextBridge.exposeInMainWorld('desktopImages', {
   deleteImageFile: (payload: { relativePath: string }) => ipcRenderer.invoke('desktop-images:delete', payload),
 });
 
+contextBridge.exposeInMainWorld('desktopRecovery', {
+  write: (payload: unknown) => ipcRenderer.invoke('desktop-recovery:write', payload),
+  read: (id: string) => ipcRenderer.invoke('desktop-recovery:read', id),
+  list: () => ipcRenderer.invoke('desktop-recovery:list'),
+  delete: (id: string) => ipcRenderer.invoke('desktop-recovery:delete', id),
+});
+
 // OAuth loopback for Electron
 contextBridge.exposeInMainWorld('electronOAuth', {
   authenticate: (config: { clientId: string; scope: string }) =>
