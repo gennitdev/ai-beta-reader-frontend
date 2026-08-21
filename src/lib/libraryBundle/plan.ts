@@ -198,8 +198,12 @@ export function resolveImportConflict(
 }
 
 export function assertImportPlanCurrent(plan: LibraryImportPlan, databaseGeneration: string): void {
+  assertImportPlanGeneration(plan, databaseGeneration)
+  if (!plan.canApply) throw new Error('The import plan has validation errors or unresolved conflicts.')
+}
+
+export function assertImportPlanGeneration(plan: LibraryImportPlan, databaseGeneration: string): void {
   if (plan.databaseGeneration !== databaseGeneration) {
     throw new Error('The library changed after this preview was created. Refresh the preview before applying changes.')
   }
-  if (!plan.canApply) throw new Error('The import plan has validation errors or unresolved conflicts.')
 }

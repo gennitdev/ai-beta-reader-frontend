@@ -116,16 +116,27 @@ const {
   importMessage,
   isPreviewing,
   isApplying,
+  isPreparingReplace,
+  isReplacing,
+  recoveries,
+  preparedRecovery,
+  replaceRemovalCounts,
   previewFile,
   previewDirectory,
   resolveConflict,
   applyChanges,
+  prepareReplace,
+  replaceLibrary,
+  refreshRecoveries,
+  previewRecovery,
+  downloadRecovery,
 } = useLibraryBundleImport({ exportDatabase, importDatabaseBackup, getImageBlob })
 
 onMounted(async () => {
   await initializeDatabase()
   await loadApiKey()
   await refreshBrowserStorage()
+  await refreshRecoveries()
   if (!cloudSyncReady.value) {
     try {
       await prepareCloudSync()
@@ -530,10 +541,19 @@ onMounted(async () => {
         :message="importMessage"
         :is-previewing="isPreviewing"
         :is-applying="isApplying"
+        :is-preparing-replace="isPreparingReplace"
+        :is-replacing="isReplacing"
+        :recoveries="recoveries"
+        :prepared-recovery="preparedRecovery"
+        :replace-removal-counts="replaceRemovalCounts"
         @select="previewFile"
         @select-directory="previewDirectory"
         @resolve="resolveConflict"
         @apply="applyChanges"
+        @prepare-replace="prepareReplace"
+        @replace="replaceLibrary"
+        @preview-recovery="previewRecovery"
+        @download-recovery="downloadRecovery"
       />
 
       <!-- Data Export Section -->

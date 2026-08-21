@@ -33,6 +33,10 @@ describe('Electron preload bridge', () => {
     ['electronSecureStorage', 'get', 'secure-storage:get', ['token']],
     ['electronSecureStorage', 'set', 'secure-storage:set', ['token', 'secret']],
     ['electronSecureStorage', 'remove', 'secure-storage:remove', ['token']],
+    ['desktopRecovery', 'write', 'desktop-recovery:write', [{ metadata: { id: 'recovery-1' }, bytesBase64: 'AQ==' }]],
+    ['desktopRecovery', 'read', 'desktop-recovery:read', ['recovery-1']],
+    ['desktopRecovery', 'list', 'desktop-recovery:list', []],
+    ['desktopRecovery', 'delete', 'desktop-recovery:delete', ['recovery-1']],
   ])('exposes %s.%s through the expected IPC channel', async (apiName, method, channel, args) => {
     const api = getExposedApi<InvokeApi>(apiName)
 
