@@ -1,231 +1,119 @@
-# beta bot Vue Frontend - Claude Development Guide
+# beta bot development guide
 
-## Project Overview
-Vue.js 3 frontend for beta bot with local-first SQLite storage, Google Drive backup/restore, rich text editing, AI-powered writing feedback, wiki pages for world-building, and Electron desktop support.
+beta bot is a local-first Vue 3 and TypeScript writing application. One application codebase targets the browser, Electron, and Android. It does not require the deprecated Express backend: SQLite data lives on the user's device, and optional OpenAI and Google Drive requests go directly from the running client to those services.
 
-## Quick Start Commands
+Repository-wide contribution and safety rules live in [AGENTS.md](AGENTS.md). This file summarizes the application architecture and common development commands for coding assistants.
+
+## Quick start
+
+Requires Node.js 22.12+ or 24+.
+
 ```bash
-# Development
-npm run dev
-
-# Build
-npm run build
-
-# Preview production build
-npm run preview
-
-# Install dependencies
 npm install
-
-# Lint code
-npm run lint
-
-# Build and sync for Android
-npm run build && npx cap sync android
-
-# Run Electron desktop app
-cd electron && npm run electron:start
+npm run dev
 ```
 
-## Project Structure
-```
-src/
-├── components/
-│   ├── book/                    # Book view components
-│   │   ├── BookDesktopLayout.vue
-│   │   ├── BookDesktopChapterListItem.vue
-│   │   ├── BookMobileSection.vue
-│   │   └── BookMobileChapterCard.vue
-│   ├── chapter/                 # Chapter view components
-│   │   ├── ChapterHeaderBar.vue
-│   │   ├── ChapterStatusBar.vue
-│   │   ├── ChapterContentSection.vue
-│   │   ├── ChapterSummaryPanel.vue
-│   │   ├── ChapterNotesPanel.vue
-│   │   ├── ChapterReviewsSection.vue
-│   │   ├── ChapterIllustrationsSection.vue
-│   │   ├── ChapterHeroSection.vue
-│   │   └── ConfirmDeleteModal.vue
-│   ├── organize/                # Chapter organization components
-│   │   ├── OrganizeHeader.vue
-│   │   └── OrganizePartsBoard.vue
-│   ├── images/
-│   │   └── ImageLightbox.vue
-│   ├── TextEditor.vue           # Rich markdown editor with toolbar
-│   ├── MarkdownRenderer.vue     # Syntax-highlighted markdown display
-│   ├── SearchModal.vue          # Search and replace across book
-│   ├── CustomProfilesPanel.vue  # AI reviewer profile management
-│   └── CloudSyncSettings.vue    # Google Drive sync UI
-├── composables/
-│   ├── useDatabase.ts           # Local SQLite database operations
-│   ├── useImageLibrary.ts       # Image management (desktop only)
-│   ├── useChapterImages.ts      # Chapter illustration handling
-│   └── useBooks.ts              # Book list management
-├── lib/
-│   ├── database.ts              # SQLite database implementation
-│   ├── openai.ts                # OpenAI API integration
-│   ├── cloudSync.ts             # Google Drive backup/restore
-│   ├── googleOAuth.ts           # OAuth authentication
-│   ├── encryption.ts            # Data encryption utilities
-│   └── tokenStorage.ts          # Auth token management
-├── services/
-│   └── api.ts                   # Backend API client
-├── views/
-│   ├── BooksView.vue            # Books listing and management
-│   ├── BookView.vue             # Book detail with chapters/wiki/images
-│   ├── ChapterView.vue          # Chapter reading and AI review
-│   ├── ChapterEditorView.vue    # Chapter text editing
-│   ├── WikiPageView.vue         # Wiki page viewing and editing
-│   ├── PartView.vue             # Part/volume detail view
-│   ├── OrganizeChaptersView.vue # Drag-and-drop chapter organization
-│   ├── AIProfileView.vue        # Custom AI profile editing
-│   ├── AIProfilesView.vue       # AI profiles listing
-│   ├── UserSettingsView.vue     # User preferences and cloud sync
-│   ├── DocsView.vue             # Documentation/help
-│   └── HomeView.vue             # Landing page
-├── types/
-│   ├── bookView.ts              # Book view type definitions
-│   └── organize.ts              # Organization types
-├── router/
-│   └── index.ts                 # Vue Router setup
-├── App.vue                      # Main shell layout, navigation
-└── main.ts                      # App initialization
-```
+The Vite development server is available at `http://localhost:5173`. Google Drive configuration is optional; copy [.env.example](.env.example) to `.env.local` only when exercising OAuth and backup flows.
 
-## Key Technologies
-- **Vue 3** - Composition API with `<script setup>`
-- **TypeScript** - Type safety throughout
-- **Vue Router** - Client-side routing with nested routes
-- **Vue composables** - Shared application and UI state
-- **Tailwind CSS** - Utility-first styling with dark mode
-- **Headless UI** - Accessible unstyled components
-- **Heroicons** - Icon library
-- **sql.js / @capacitor-community/sqlite** - Local SQLite database
-- **OpenAI SDK** - AI summaries, reviews, and wiki generation
-- **Capacitor** - Native mobile (Android) and desktop (Electron) builds
-- **vuedraggable** - Drag and drop for chapter organization
-- **Axios** - HTTP client for backend API
-- **Markdown-it + Highlight.js** - Markdown parsing and syntax highlighting
-- **crypto-js** - Data encryption for cloud sync
+## Verification commands
 
-## Environment Variables
 ```bash
-# Google Drive sync (web + native)
-VITE_GOOGLE_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
-VITE_GOOGLE_CLIENT_ID_NATIVE=your-google-android-client-id.apps.googleusercontent.com
-VITE_GOOGLE_REDIRECT_URI=https://www.beta-bot.net/oauth2redirect
-VITE_GOOGLE_REDIRECT_URI_NATIVE=com.googleusercontent.apps.your-google-android-client-id:/oauth2redirect
-
-# Optional: backend API base URL (defaults to http://localhost:3001)
-VITE_API_BASE_URL=http://localhost:3001
-
-# Optional: enable wiki history feature
-VITE_ENABLE_WIKI_HISTORY=true
+npm run lint
+npm run type-check
+npm run build
+npm run test:unit
+npm run test:coverage
+npm run test:e2e
+npm run test:electron
+npm run type-check:electron
+npm run validate:bundle -- /absolute/path/to/bundle-or.zip
 ```
 
-## Data Storage
-- **Primary**: Local SQLite database (sql.js in browser, native SQLite on mobile/desktop)
-- **Cloud Backup**: Optional Google Drive sync with encryption
-- **Images**: Stored locally in Electron desktop app only (not synced to cloud)
+CI installs with `--ignore-scripts`, copies the sql.js WASM explicitly, and runs lint, browser and Electron type checks, the production build, coverage, Electron runtime tests, and Playwright.
 
-## Key Features
+## Platform commands
 
-### Book Management
-- Create and manage multiple books
-- Book cover images (desktop only)
-- Organize chapters into parts/volumes
-- Drag-and-drop chapter reordering
-- Search and replace across entire book
+```bash
+# Android
+npm run build
+npx cap sync android
+npx cap run android --target <serial>
 
-### Chapter Editing
-- Rich text editor with markdown support
-- Live preview with syntax highlighting
-- Word count tracking
-- Collapsible summary, notes, and illustrations panels
-
-### AI-Powered Features
-- **Summaries**: Auto-generate chapter summaries with POV, characters, and plot beats
-- **Reviews**: Get AI feedback on chapters with customizable tone
-- **Wiki Generation**: Auto-create character/location/concept pages from summaries
-- **Custom AI Profiles**: Create personalized AI reviewers with specific personalities
-
-### Wiki System
-- Character, location, and concept pages
-- Major/minor classification
-- AI-generated or manually created
-- Edit page names and content
-- Delete pages with confirmation
-
-### Chapter Illustrations (Desktop Only)
-- Add multiple images per chapter
-- Set chapter cover image
-- Image lightbox viewer
-- Download and delete images
-
-### Parts/Volumes
-- Group chapters into parts
-- Part cover images
-- Expand/collapse in sidebar
-- Reorder parts and chapters within parts
-
-## Component Patterns
-
-### Prop-based Communication
-Components receive data via props and emit events for changes:
-```typescript
-defineProps<{
-  chapter: Chapter;
-  isEditing: boolean;
-}>();
-
-const emit = defineEmits<{
-  'save': [content: string];
-  'cancel': [];
-}>();
+# Electron
+npm install --prefix electron
+npm run electron:dev
+npm run electron:build
 ```
 
-### Composables for Shared Logic
-Database and image operations are abstracted into composables:
-```typescript
-const { books, loadBooks, saveBook, deleteWikiPage } = useDatabase();
-const { fetchBookCover, pickNewBookCover } = useImageLibrary();
+## Architecture
+
+```text
+src/
+  components/               shared and feature UI
+  composables/              feature orchestration and reactive state
+  views/                    route-level Vue components
+  lib/
+    db/                     platform-neutral repositories and transactions
+    libraryBundle/          canonical bundle codec, planning, and transports
+    recovery/               verified external recovery stores and Replace flow
+    database.ts             sql.js/native SQLite runtime facade
+    imageContentStore.ts    browser/Electron image-byte abstraction
+    cloudSync.ts            encrypted Drive generations and legacy restore
+    openai.ts               direct OpenAI client and prompt workflows
+  services/api.ts           legacy, currently unused backend client
+  router/                   Vue Router configuration
+  content/                  in-app legal documents
+scripts/
+  validate-bundle.ts        standalone canonical-bundle validator CLI
+electron/
+  src/                      Electron main/preload bridges
+  tests/                    Electron runtime and security tests
+android/                    generated/configured Capacitor Android project
+e2e/                       Playwright browser scenarios
+docs/                      architecture and operational documentation
 ```
 
-## Styling Guidelines
-- Use Tailwind CSS utility classes
-- Support dark mode with `dark:` prefixes
-- Use Heroicons for consistent iconography
-- Follow existing component patterns for consistency
-- Collapsible panels use toggle buttons in status bars
+Use `@/` imports when crossing feature directories. New Vue components use `<script setup lang="ts">`, Composition API patterns, and Tailwind utilities.
 
-## Development Workflow
+## Storage model
 
-### Local Development
-1. Start backend: `cd ../ai-beta-reader-express && npm run dev`
-2. Start frontend: `npm run dev`
-3. Navigate to `http://localhost:5173`
+- Browser and Electron use `sql.js`; serialized SQLite bytes are persisted in the `ai-beta-reader-db` IndexedDB database.
+- Android uses `@capacitor-community/sqlite` in the device sandbox.
+- Browser image bytes are IndexedDB Blobs. Electron image bytes live below the app-data directory through a preload/IPC bridge.
+- Android currently preserves image metadata but has no local image-binary management.
+- Browser/Electron persistence writes are serialized. Use the existing flush boundary before export, import, or another operation that must report durable completion.
+- OpenAI API keys and Google refreshable tokens use secure storage on Electron/Android. Browser credentials remain browser-local and browser OAuth tokens are short-lived.
 
-### Testing Android Build
-1. Connect Android device with USB debugging enabled
-2. Run `npm run build && npx cap sync android`
-3. Open Android Studio and run the app
-4. Test Google Drive backup/restore and AI features
+## Portable data and backups
 
-### Testing Electron Desktop
-1. Run `npm run build`
-2. `cd electron && npm run electron:start`
-3. Test image features (only available in desktop)
+The canonical library bundle under `src/lib/libraryBundle/` is the only current user-facing serialization format. A directory and ZIP contain the same deterministic tree of Markdown, YAML, JSONL history, inventory, and image bytes.
 
-## Error Handling
-- Database errors surface in UI with user-friendly messages
-- API errors show toast notifications
-- Form validation with real-time feedback
-- Loading states for all async operations
-- Confirmation modals for destructive actions (delete chapter, wiki page, etc.)
+- Settings can export a full-library ZIP, import/apply a ZIP or folder, Replace from an eligible full bundle after verified recovery, and write a Git workspace folder where the File System Access API is available.
+- Drive backup encrypts a canonical full-library ZIP with the WC2 AES-GCM envelope and keeps the three newest successful immutable generations.
+- WC1, WC2, and CryptoJS-encrypted legacy JSON backups remain restore-compatible.
+- Never bypass validation, immutable planning, Replace eligibility, or external recovery when changing import/restore behavior.
 
-## Performance Notes
-- Components use `<script setup>` for optimal performance
-- Lazy-loaded routes for code splitting
-- SQLite queries are optimized with proper indexing
-- Images loaded on-demand with thumbnails in lists
-- Large chapter text truncated in previews
+Read [docs/book-folder-format.md](docs/book-folder-format.md) before changing the codec and [docs/agent-workspaces.md](docs/agent-workspaces.md) before changing directory export.
+
+## Images
+
+`useImageLibrary` exposes capabilities instead of platform-name checks. Browser and Electron support image selection, storage, covers, notes/tags, replacement, download, and deletion through the same UI. Keep image metadata transactions and image-byte writes rollback-safe; do not put new browser image bytes back into SQLite `image_data`.
+
+See [docs/desktop-images.md](docs/desktop-images.md) for the current storage contract and [docs/browser-image-parity-plan.md](docs/browser-image-parity-plan.md) for the completed migration record.
+
+## External services
+
+- OpenAI calls use the user-provided API key directly from `src/lib/openai.ts`.
+- Browser Drive OAuth uses Google Identity Services.
+- Electron Drive OAuth uses the desktop client and a loopback callback through the Electron bridge.
+- Android Drive OAuth uses Authorization Code + PKCE and an app redirect.
+- The `drive.file` scope limits the app to files it creates or the user explicitly shares with it.
+
+There is no backend process to start. `src/services/api.ts` remains only as unused legacy compatibility code and should not be used for new features.
+
+## Related documentation
+
+- [README.md](README.md): product overview, setup, and deployment
+- [docs/cloud-sync.md](docs/cloud-sync.md): Google OAuth and Drive troubleshooting
+- [docs/releases.md](docs/releases.md): Conventional PR titles and Release Please
+- [docs/developer/electron-macos-packaging.md](docs/developer/electron-macos-packaging.md): macOS distribution limitations

@@ -1,17 +1,18 @@
-# Browser Image Parity and IndexedDB Blob Storage Plan
+# Browser Image Parity and IndexedDB Blob Storage Design Record
 
-> Status: Phases 1–6 were implemented in July 2026. Deferred follow-ups are tracked as GitHub issues.
+> **Status:** Core implementation completed in July 2026. The current behavior is summarized below; the original phased plan is retained as an implementation record. Deferred image-storage work is tracked in [GitHub issues #4–#10](https://github.com/gennitdev/ai-beta-reader-frontend/issues), and broader platform acceptance testing is tracked in [#132](https://github.com/gennitdev/ai-beta-reader-frontend/issues/132).
 
 ## Summary
 
-The browser and Electron builds already run `sql.js` and persist the exported SQLite database in IndexedDB. The remaining parity problem is image-binary storage and UI capability:
+The browser and Electron builds run `sql.js` and persist the exported SQLite database in IndexedDB. Image metadata remains in SQLite, while image bytes use a platform content store:
 
 - Electron stores image files in its app-data directory and keeps their metadata in SQLite.
-- The browser can display images restored from backup because their base64 data is stored in the SQLite `image_assets.image_data` column.
-- A browser file-to-base64 helper exists, but the upload capability remains disabled and is not connected to a browser file picker.
-- Every browser database mutation currently exports and writes the entire sql.js database. Keeping base64 images in that snapshot makes routine saves increasingly expensive.
+- The browser stores `Blob` records in the IndexedDB `imageBlobs` store, keyed by stable image ID.
+- Browser and Electron users share the image-management UI for upload, covers, notes, tags, replacement, download, and deletion.
+- A serialized persistence coordinator prevents overlapping `sql.js` snapshot writes, and callers can flush pending persistence before export or other durability boundaries.
+- Legacy SQLite `image_data` values migrate to verified Blob records in restartable batches and remain readable as a compatibility fallback.
 
-The target design keeps the existing SQLite metadata model and backup compatibility, but stores browser image bytes as `Blob` records in a dedicated IndexedDB object store.
+Android still keeps image metadata only and does not provide local image-binary management. That work is tracked separately in [#4](https://github.com/gennitdev/ai-beta-reader-frontend/issues/4).
 
 ## Goals
 
@@ -26,32 +27,28 @@ The target design keeps the existing SQLite metadata model and backup compatibil
 
 - Replacing sql.js with SQLite OPFS or another WASM SQLite distribution.
 - Changing Android to support image binaries. That can use the same image-store contract later.
-- Splitting a Drive backup into one file per image. The existing single encrypted snapshot remains the compatibility format for this project.
+- Splitting a Drive backup into one Drive object per image. New backups remain one encrypted canonical ZIP generation.
 - Removing `image_assets.image_data` immediately. It remains available for old backup import and compatibility during rollout.
 
-## Current State
+## Implemented State
 
 ### Database persistence
 
-`AppDatabase` uses native SQLite only on iOS/Android. Browser and Electron initialize sql.js, load an exported database from IndexedDB, and fall back to the legacy `localStorage.sqliteDb` value when IndexedDB is empty.
-
-The current save method calls `db.export()` and starts an IndexedDB write without awaiting it from the mutation that triggered the save. This has three consequences:
-
-- A caller can report success before the durable write finishes.
-- Multiple saves may overlap without an explicit latest-write-wins guarantee.
-- Closing or navigating immediately after a mutation may leave the most recent state unpersisted.
+`AppDatabase` uses native SQLite on iOS/Android. Browser and Electron initialize `sql.js`, load an exported database from IndexedDB, and migrate the legacy `localStorage.sqliteDb` value when necessary. The persistence coordinator serializes snapshot writes and exposes `flushPersistence()` for imports, exports, and user-visible durability boundaries.
 
 ### Image storage
 
 The existing `image_assets` schema is already platform-neutral enough for this work. It includes a generated image ID, ownership and asset type, filename, relative/virtual path, MIME type, notes, timestamps, and the compatibility `image_data` column. Cover relationships point to image IDs.
 
-Electron stores bytes on disk through `window.desktopImages`. Browser-restored images use base64 data URLs from `image_data`. `addImagesFromFiles()` also creates base64 data URLs, but `canUploadImages()` currently enables upload only when the Electron bridge is available.
+Electron stores bytes on disk through `window.desktopImages`. The browser uses `IndexedDbImageContentStore`. Both implement the shared `ImageContentStore` contract, and `useImageLibrary` exposes storage/selection capabilities instead of hard-coded platform gates.
+
+New browser records keep `image_data = NULL`. Startup migration copies valid legacy data URLs into Blob storage, verifies them before clearing compatibility data, and reports invalid or missing content without discarding it.
 
 ### Backup and restore
 
-The Drive backup is a versioned JSON database export that is gzip-compressed and encrypted. On Electron, backup reads image files and embeds data URLs into the exported `image_assets` rows. Restore writes those files back to Electron storage and clears their live `image_data` values. On the browser, restored data URLs currently stay in SQLite.
+New Drive backups use the canonical full-library ZIP. Export flushes database persistence, reads image bytes through the active content store, verifies their length and SHA-256 metadata, and encrypts the ZIP before upload. Restore verifies the encrypted generation and bundle, creates an external recovery, writes image content through the active store, and then replaces database metadata. Legacy JSON/gzip backups remain restore-compatible.
 
-## Target Architecture
+## Implemented Architecture
 
 ### Shared IndexedDB module
 
@@ -102,7 +99,9 @@ For newly added browser images:
 
 The `image_data` column remains an import/export compatibility field. Normal live browser records should not retain base64 content after migration.
 
-## Implementation Phases
+## Historical Implementation Phases
+
+The following sections preserve the plan that guided the completed migration. Future-tense language describes the intended work at the time; the implemented behavior above and [Image Library Storage](desktop-images.md) are authoritative for the current application.
 
 ### Phase 1: Baseline tests and persistence hardening
 
