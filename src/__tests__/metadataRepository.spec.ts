@@ -65,10 +65,11 @@ describe('metadataRepository (web path)', () => {
       spoilers_ok: true,
     })
 
-    expect(runCalls).toHaveLength(1)
-    expect(runCalls[0].sql).toContain('INSERT OR REPLACE INTO chapter_summaries')
+    expect(runCalls).toHaveLength(4)
+    expect(runCalls[0].sql).toBe('BEGIN TRANSACTION')
+    expect(runCalls[1].sql).toContain('INSERT OR REPLACE INTO chapter_summaries')
     // characters/beats are JSON-encoded; spoilers_ok maps to 1
-    expect(runCalls[0].params).toEqual(
+    expect(runCalls[1].params).toEqual(
       expect.arrayContaining([
         'ch-1',
         'A tense confrontation.',
@@ -78,6 +79,11 @@ describe('metadataRepository (web path)', () => {
         1,
       ]),
     )
+    expect(runCalls[2]).toEqual({
+      sql: expect.stringContaining('DELETE FROM chapter_summaries'),
+      params: ['ch-1', expect.stringMatching(/^summary-ch-1-/)],
+    })
+    expect(runCalls[3].sql).toBe('COMMIT')
     expect(requestPersistence).toHaveBeenCalledOnce()
   })
 
@@ -100,6 +106,69 @@ describe('metadataRepository (web path)', () => {
       generated_by: null,
       model: null,
     })
+  })
+
+  it('orders chapter and part summary reads by recency with a deterministic id tie-break', async () => {
+    const chapterRow = ['sum-z', 'ch-1', 'current', null, '[]', '[]', 0, 'created', 'updated']
+    const partRow = ['part-sum-z', 'part-1', 'current', '[]', '[]', 'created', 'updated']
+    const { ctx, execCalls } = makeContext([
+      [{ columns: [], values: [chapterRow] }],
+      [{ columns: [], values: [partRow] }],
+    ])
+
+    await metadataRepo.getSummary(ctx, 'ch-1')
+    await metadataRepo.getPartSummary(ctx, 'part-1')
+
+    for (const call of execCalls) {
+      expect(call.sql).toContain("ORDER BY COALESCE(updated_at, created_at, '') DESC")
+      expect(call.sql).toContain("COALESCE(created_at, '') DESC")
+      expect(call.sql).toContain('id DESC')
+    }
+  })
+
+  it('updates the current chapter summary and removes stale duplicates atomically', async () => {
+    const existing = [
+      'summary-current', 'ch-1', 'old', 'Mara', '[]', '[]', 1,
+      '2026-08-20T12:00:00.000Z', '2026-08-21T12:00:00.000Z', 'ai', 'old-model',
+    ]
+    const { ctx, runCalls, requestPersistence } = makeContext([
+      [{ columns: [], values: [existing] }],
+    ])
+
+    await metadataRepo.saveSummary(ctx, {
+      chapter_id: 'ch-1', summary: 'edited', pov: 'Mara', characters: [], beats: [],
+      spoilers_ok: true,
+    })
+
+    expect(runCalls[1].params?.[0]).toBe('summary-current')
+    expect(runCalls[1].params?.[7]).toBe('2026-08-20T12:00:00.000Z')
+    expect(runCalls[1].params?.slice(-2)).toEqual(['ai', 'old-model'])
+    expect(runCalls[2]).toEqual({
+      sql: expect.stringContaining('DELETE FROM chapter_summaries'),
+      params: ['ch-1', 'summary-current'],
+    })
+    expect(requestPersistence).toHaveBeenCalledOnce()
+  })
+
+  it('updates the current part summary and removes stale duplicates atomically', async () => {
+    const existing = [
+      'legacy-current', 'part-1', 'old', '[]', '[]',
+      '2026-08-20T12:00:00.000Z', '2026-08-21T12:00:00.000Z', 'user', null,
+    ]
+    const { ctx, runCalls, requestPersistence } = makeContext([
+      [{ columns: [], values: [existing] }],
+    ])
+
+    await metadataRepo.savePartSummary(ctx, {
+      part_id: 'part-1', summary: 'edited', characters: [], beats: [],
+    })
+
+    expect(runCalls[1].params?.[0]).toBe('legacy-current')
+    expect(runCalls[2]).toEqual({
+      sql: expect.stringContaining('DELETE FROM part_summaries'),
+      params: ['part-1', 'legacy-current'],
+    })
+    expect(requestPersistence).toHaveBeenCalledOnce()
   })
 
   it('getSummary returns null when no rows match', async () => {

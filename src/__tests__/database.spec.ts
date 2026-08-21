@@ -354,6 +354,19 @@ describe('chapter summaries', () => {
       generated_by: 'ai',
       model: 'test-model',
     })
+    rawDatabase(db).run(
+      `INSERT INTO chapter_summaries
+         (id, chapter_id, summary, pov, characters, beats, spoilers_ok, created_at, updated_at,
+          generated_by, model)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'legacy-newer-summary', 'ch-1', 'A newer duplicate.', 'Alice', '[]', '[]', 1,
+        '2099-01-01T00:00:00.000Z', '2099-01-02T00:00:00.000Z', 'user', null,
+      ],
+    )
+    expect(await db.getSummary('ch-1')).toMatchObject({
+      id: 'legacy-newer-summary', summary: 'A newer duplicate.',
+    })
     await db.saveSummary({
       chapter_id: 'ch-1', summary: 'A manually revised recap.', pov: 'Alice',
       characters: ['Alice', 'Bob'], beats: ['Opening'], spoilers_ok: true,
@@ -394,6 +407,29 @@ describe('part summaries', () => {
       characters: '["Alice"]',
       generated_by: 'ai',
       model: 'test-model',
+    })
+
+    rawDatabase(db).run(
+      `INSERT INTO part_summaries
+         (id, part_id, summary, characters, beats, created_at, updated_at, generated_by, model)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'legacy-newer-part-summary', partId, 'A newer duplicate.', '[]', '[]',
+        '2099-01-01T00:00:00.000Z', '2099-01-02T00:00:00.000Z', 'user', null,
+      ],
+    )
+    expect(await db.getPartSummary(partId)).toMatchObject({
+      id: 'legacy-newer-part-summary', summary: 'A newer duplicate.',
+    })
+
+    await db.savePartSummary({
+      part_id: partId, summary: 'Part recap revised.', characters: ['Alice'], beats: ['Beat'],
+    })
+    expect(rawDatabase(db).exec(
+      `SELECT COUNT(*) FROM part_summaries WHERE part_id = '${partId}'`,
+    )[0].values[0][0]).toBe(1)
+    expect(await db.getPartSummary(partId)).toMatchObject({
+      id: 'legacy-newer-part-summary', summary: 'Part recap revised.',
     })
 
     await db.deletePartSummary(partId)
