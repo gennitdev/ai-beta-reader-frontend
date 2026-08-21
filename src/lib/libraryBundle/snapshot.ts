@@ -83,6 +83,27 @@ function groupRows(rows: LogicalRow[], key: string): Map<string, LogicalRow[]> {
   return grouped
 }
 
+/**
+ * Legacy databases can contain more than one summary for the same parent.
+ * Choose the same logical current row as the metadata repository so a backup
+ * remains deterministic without mutating the user's live database.
+ */
+function selectCurrentRows(rows: LogicalRow[], parentKey: string): LogicalRow[] {
+  const selected = new Map<string, LogicalRow>()
+  for (const row of rows) {
+    const parentId = stringValue(row, parentKey)
+    const current = selected.get(parentId)
+    if (!current || compareSummaryRecency(row, current) > 0) selected.set(parentId, row)
+  }
+  return [...selected.values()]
+}
+
+function compareSummaryRecency(left: LogicalRow, right: LogicalRow): number {
+  return stringValue(left, 'updated_at').localeCompare(stringValue(right, 'updated_at'))
+    || stringValue(left, 'created_at').localeCompare(stringValue(right, 'created_at'))
+    || stringValue(left, 'id').localeCompare(stringValue(right, 'id'))
+}
+
 function toImageAsset(row: LogicalRow): ImageAsset {
   return {
     id: stringValue(row, 'id'),
@@ -121,6 +142,8 @@ export async function createCanonicalLibrarySnapshot(
   const { tables } = createLogicalDatabaseDump(data)
   const mentionsByChapter = groupRows(tables.chapter_wiki_mentions, 'chapter_id')
   const tagsByImage = groupRows(tables.image_wiki_tags, 'image_id')
+  const chapterSummaries = selectCurrentRows(tables.chapter_summaries, 'chapter_id')
+  const partSummaries = selectCurrentRows(tables.part_summaries, 'part_id')
 
   const assets = await Promise.all(tables.image_assets.map(async (row) => {
     const bytes = await readAssetBytes(row, options.readAssetBytes)
@@ -175,7 +198,7 @@ export async function createCanonicalLibrarySnapshot(
       body: stringValue(row, 'notes'), created_at: stringValue(row, 'created_at'),
       updated_at: stringValue(row, 'updated_at'),
     })),
-    chapter_summaries: tables.chapter_summaries.map((row) => ({
+    chapter_summaries: chapterSummaries.map((row) => ({
       id: stringValue(row, 'id'), chapter_id: stringValue(row, 'chapter_id'),
       body: nullableString(row, 'summary'), pov: nullableString(row, 'pov'),
       characters: summaryCharacters(row, 'chapter_summaries'), beats: stringArray(row, 'beats'),
@@ -184,7 +207,7 @@ export async function createCanonicalLibrarySnapshot(
       model: nullableString(row, 'model'), created_at: stringValue(row, 'created_at'),
       updated_at: stringValue(row, 'updated_at'),
     })),
-    part_summaries: tables.part_summaries.map((row) => ({
+    part_summaries: partSummaries.map((row) => ({
       id: stringValue(row, 'id'), part_id: stringValue(row, 'part_id'),
       body: nullableString(row, 'summary'), characters: summaryCharacters(row, 'part_summaries'),
       beats: stringArray(row, 'beats'),

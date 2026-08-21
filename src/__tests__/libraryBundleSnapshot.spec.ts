@@ -4,6 +4,7 @@ import {
   completeDatabaseExportFixture,
 } from '@/__tests__/fixtures/libraryBundle'
 import { createCanonicalLibrarySnapshot } from '@/lib/libraryBundle/snapshot'
+import { writeLibraryBundle } from '@/lib/libraryBundle/write'
 
 describe('createCanonicalLibrarySnapshot', () => {
   it('maps every current backup table to its canonical entity without losing metadata', async () => {
@@ -78,6 +79,52 @@ describe('createCanonicalLibrarySnapshot', () => {
 
     expect(snapshot.chapter_summaries[0].characters).toEqual(['Alice', 'Bob'])
     expect(snapshot.part_summaries[0].characters).toEqual(['Carol', 'Dan'])
+  })
+
+  it('selects one deterministic current summary per chapter and part', async () => {
+    const database = completeDatabaseExportFixture()
+    database.chapter_summaries.push(
+      {
+        ...(database.chapter_summaries[0] as Record<string, unknown>),
+        id: 'summary-newer',
+        summary: 'The current chapter summary.',
+        created_at: '2026-08-21T12:00:00.000Z',
+        updated_at: '2026-08-21T13:00:00.000Z',
+      },
+      {
+        ...(database.chapter_summaries[0] as Record<string, unknown>),
+        id: 'summary-newer-z',
+        summary: 'The deterministic tie winner.',
+        created_at: '2026-08-21T12:00:00.000Z',
+        updated_at: '2026-08-21T13:00:00.000Z',
+      },
+    )
+    database.part_summaries.push({
+      ...(database.part_summaries[0] as Record<string, unknown>),
+      id: 'part-summary-newer',
+      summary: 'The current part summary.',
+      updated_at: '2026-08-21T13:00:00.000Z',
+    })
+
+    const snapshot = await createCanonicalLibrarySnapshot(database, {
+      readAssetBytes: async () => new Uint8Array([1, 2, 3]),
+    })
+
+    expect(snapshot.chapter_summaries).toHaveLength(1)
+    expect(snapshot.chapter_summaries[0]).toMatchObject({
+      id: 'summary-newer-z', body: 'The deterministic tie winner.',
+    })
+    expect(snapshot.part_summaries).toHaveLength(1)
+    expect(snapshot.part_summaries[0]).toMatchObject({
+      id: 'part-summary-newer', body: 'The current part summary.',
+    })
+
+    const bundle = await writeLibraryBundle(snapshot, {
+      bundleId: 'bundle:duplicate-summary-regression',
+      exportedAt: '2026-08-21T14:00:00.000Z',
+      appVersion: 'test',
+    })
+    expect([...bundle.files.keys()].filter((path) => path.endsWith('/summary.md'))).toHaveLength(2)
   })
 
   it('rejects corrupt structured database fields instead of producing a lossy backup', async () => {

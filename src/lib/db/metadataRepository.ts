@@ -168,6 +168,10 @@ function toNativeCustomProfile(row: QueryRow): CustomReviewerProfile {
 
 // --- Chapter summaries ------------------------------------------------------
 
+const CURRENT_SUMMARY_ORDER = `ORDER BY COALESCE(updated_at, created_at, '') DESC,
+                                        COALESCE(created_at, '') DESC,
+                                        id DESC`
+
 export async function saveSummary(ctx: DatabaseContext, summary: {
   chapter_id: string
   summary: string
@@ -179,41 +183,48 @@ export async function saveSummary(ctx: DatabaseContext, summary: {
   model?: string | null
 }): Promise<void> {
   const now = new Date().toISOString()
-  const existing = await getSummary(ctx, summary.chapter_id)
-  const id = existing?.id ?? `summary-${summary.chapter_id}-${Date.now()}`
-  const createdAt = existing?.created_at ?? now
-  const generatedBy = summary.generated_by === undefined
-    ? existing?.generated_by ?? null : summary.generated_by
-  const model = summary.model === undefined ? existing?.model ?? null : summary.model
   const query = `INSERT OR REPLACE INTO chapter_summaries
                    (id, chapter_id, summary, pov, characters, beats, spoilers_ok, created_at,
                     updated_at, generated_by, model)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-  const params = [
-    id,
-    summary.chapter_id,
-    summary.summary,
-    summary.pov,
-    JSON.stringify(summary.characters),
-    JSON.stringify(summary.beats),
-    summary.spoilers_ok ? 1 : 0,
-    createdAt,
-    now,
-    generatedBy,
-    model,
-  ]
+  const deleteDuplicatesQuery = `DELETE FROM chapter_summaries
+                                 WHERE chapter_id = ? AND id <> ?`
 
-  if (ctx.isNative) {
-    await ctx.connection.run(query, params)
-  } else {
-    ctx.connection.run(query, params)
+  await runInTransaction(ctx, async (txCtx) => {
+    const existing = await getSummary(txCtx, summary.chapter_id)
+    const id = existing?.id ?? `summary-${summary.chapter_id}-${Date.now()}`
+    const params = [
+      id,
+      summary.chapter_id,
+      summary.summary,
+      summary.pov,
+      JSON.stringify(summary.characters),
+      JSON.stringify(summary.beats),
+      summary.spoilers_ok ? 1 : 0,
+      existing?.created_at ?? now,
+      now,
+      summary.generated_by === undefined
+        ? existing?.generated_by ?? null : summary.generated_by,
+      summary.model === undefined ? existing?.model ?? null : summary.model,
+    ]
+
+    if (txCtx.isNative) {
+      await txCtx.connection.run(query, params)
+      await txCtx.connection.run(deleteDuplicatesQuery, [summary.chapter_id, id])
+    } else {
+      txCtx.connection.run(query, params)
+      txCtx.connection.run(deleteDuplicatesQuery, [summary.chapter_id, id])
+    }
+  })
+  if (!ctx.isNative) {
     ctx.requestPersistence()
   }
 }
 
 export async function getSummary(ctx: DatabaseContext, chapterId: string): Promise<ChapterSummary | null> {
-  const query = `SELECT * FROM chapter_summaries WHERE chapter_id = ? LIMIT 1`
+  const query = `SELECT * FROM chapter_summaries WHERE chapter_id = ?
+                 ${CURRENT_SUMMARY_ORDER} LIMIT 1`
 
   if (ctx.isNative) {
     const result = await ctx.connection.query(query, [chapterId])
@@ -236,40 +247,47 @@ export async function savePartSummary(ctx: DatabaseContext, summary: {
   generated_by?: 'ai' | 'user' | null
   model?: string | null
 }): Promise<void> {
-  const id = `part-summary-${summary.part_id}`
   const now = new Date().toISOString()
-  const existing = await getPartSummary(ctx, summary.part_id)
-  const createdAt = existing?.created_at ?? now
-  const generatedBy = summary.generated_by === undefined
-    ? existing?.generated_by ?? null : summary.generated_by
-  const model = summary.model === undefined ? existing?.model ?? null : summary.model
   const query = `INSERT OR REPLACE INTO part_summaries
                    (id, part_id, summary, characters, beats, created_at, updated_at,
                     generated_by, model)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-  const params = [
-    id,
-    summary.part_id,
-    summary.summary,
-    JSON.stringify(summary.characters),
-    JSON.stringify(summary.beats),
-    createdAt,
-    now,
-    generatedBy,
-    model,
-  ]
+  const deleteDuplicatesQuery = `DELETE FROM part_summaries
+                                 WHERE part_id = ? AND id <> ?`
 
-  if (ctx.isNative) {
-    await ctx.connection.run(query, params)
-  } else {
-    ctx.connection.run(query, params)
+  await runInTransaction(ctx, async (txCtx) => {
+    const existing = await getPartSummary(txCtx, summary.part_id)
+    const id = existing?.id ?? `part-summary-${summary.part_id}`
+    const params = [
+      id,
+      summary.part_id,
+      summary.summary,
+      JSON.stringify(summary.characters),
+      JSON.stringify(summary.beats),
+      existing?.created_at ?? now,
+      now,
+      summary.generated_by === undefined
+        ? existing?.generated_by ?? null : summary.generated_by,
+      summary.model === undefined ? existing?.model ?? null : summary.model,
+    ]
+
+    if (txCtx.isNative) {
+      await txCtx.connection.run(query, params)
+      await txCtx.connection.run(deleteDuplicatesQuery, [summary.part_id, id])
+    } else {
+      txCtx.connection.run(query, params)
+      txCtx.connection.run(deleteDuplicatesQuery, [summary.part_id, id])
+    }
+  })
+  if (!ctx.isNative) {
     ctx.requestPersistence()
   }
 }
 
 export async function getPartSummary(ctx: DatabaseContext, partId: string): Promise<PartSummary | null> {
-  const query = `SELECT * FROM part_summaries WHERE part_id = ? LIMIT 1`
+  const query = `SELECT * FROM part_summaries WHERE part_id = ?
+                 ${CURRENT_SUMMARY_ORDER} LIMIT 1`
 
   if (ctx.isNative) {
     const result = await ctx.connection.query(query, [partId])
