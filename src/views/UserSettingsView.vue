@@ -7,6 +7,8 @@ import { useApiKey } from '@/composables/useApiKey'
 import { useCloudSync } from '@/composables/useCloudSync'
 import { useBrowserStorage } from '@/composables/useBrowserStorage'
 import { useDataExport } from '@/composables/useDataExport'
+import { useLibraryBundleImport } from '@/composables/useLibraryBundleImport'
+import LibraryBundleImport from '@/components/LibraryBundleImport.vue'
 import { useBardwallSettings } from '@/composables/useBardwallSettings'
 import { useTheme } from '@/composables/useTheme'
 import { formatStorageBytes } from '@/lib/browserStorage'
@@ -28,6 +30,7 @@ const {
   prepareCloudSync,
   cloudSyncReady,
   exportDatabase,
+  importDatabaseBackup,
 } = useDatabase()
 
 const {
@@ -105,6 +108,19 @@ const {
   getImageBlob,
   exportDatabase,
 })
+
+const {
+  plan: importPlan,
+  importFileName,
+  importError,
+  importMessage,
+  isPreviewing,
+  isApplying,
+  previewFile,
+  previewDirectory,
+  resolveConflict,
+  applyChanges,
+} = useLibraryBundleImport({ exportDatabase, importDatabaseBackup, getImageBlob })
 
 onMounted(async () => {
   await initializeDatabase()
@@ -507,6 +523,19 @@ onMounted(async () => {
         </div>
       </div>
 
+      <LibraryBundleImport
+        :plan="importPlan"
+        :file-name="importFileName"
+        :error="importError"
+        :message="importMessage"
+        :is-previewing="isPreviewing"
+        :is-applying="isApplying"
+        @select="previewFile"
+        @select-directory="previewDirectory"
+        @resolve="resolveConflict"
+        @apply="applyChanges"
+      />
+
       <!-- Data Export Section -->
       <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-8">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -668,7 +697,7 @@ onMounted(async () => {
             </ul>
             <p class="mt-4 text-xs text-gray-500 dark:text-gray-500">
               <template v-if="exportFormat === 'bundle'">
-                This full backup is the canonical portable format. Import and restore support will be added in a later phase.
+                This full backup is the canonical portable format and can be previewed above before applying changes.
               </template>
               <template v-else-if="exportFormat === 'zip'">
                 Your data will be downloaded as a ZIP file containing folders for each book, with subfolders for chapters and characters.

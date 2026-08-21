@@ -306,6 +306,21 @@ export function useDatabase() {
     }
   }
 
+  async function importDatabaseBackup(data: Uint8Array) {
+    try {
+      loading.value = true
+      error.value = null
+      await initializeDatabase()
+      await db.importDatabase(data)
+      await loadBooks()
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Import failed'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   // Summary operations
   async function saveSummary(summary: {
     chapter_id: string;
@@ -1101,6 +1116,7 @@ export function useDatabase() {
     hasCloudSync: () => cloudSync.value !== null,
 
     // Import/Export
-    importFromJSON
+    importFromJSON,
+    importDatabaseBackup,
   }
 }
