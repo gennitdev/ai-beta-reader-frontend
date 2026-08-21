@@ -22,7 +22,7 @@ When you choose an AI feature, beta bot sends the necessary content directly to 
 
 ## 5. Backups and data loss
 
-You are responsible for maintaining backups of your work. Local browser or device storage can be cleared, corrupted, or lost. Google Drive backup is optional and each new backup may replace the prior beta bot backup. You must remember your encryption password; beta bot does not store it and cannot recover an encrypted backup without it.
+You are responsible for maintaining backups of your work. Local browser or device storage can be cleared, corrupted, or lost. Google Drive backup is optional; beta bot retains the three newest successful backup generations, so it is not an unlimited archive. You must remember the password used for each generation because beta bot does not store it and cannot recover an encrypted backup without it.
 
 ## 6. Acceptable use
 

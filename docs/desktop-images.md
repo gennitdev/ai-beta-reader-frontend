@@ -28,14 +28,14 @@ Browser uploads accept PNG, JPEG, GIF, and WebP files up to 20 MB. Files must be
 
 ## Backup and restore
 
-The live Blob/file store remains separate from SQLite, but encrypted Drive backups retain the existing portable single-snapshot format:
+The live Blob/file store remains separate from SQLite, while encrypted Drive backups use the canonical full-library bundle:
 
 1. Flush SQLite persistence.
 2. Read each image through `ImageContentStore`.
-3. Add a temporary data URL to the exported image row.
-4. Compress and encrypt the complete snapshot.
+3. Add the verified bytes to the bundle ZIP and its inventory.
+4. Encrypt the ZIP and upload it as a new immutable Drive generation.
 
-Restore reverses that process, verifies binary writes, imports metadata, and clears compatibility `image_data` values from live browser and Electron rows. This allows browser-to-Electron and Electron-to-browser restores.
+Restore verifies the encrypted generation and bundle, creates an external recovery, writes and verifies binary content, then replaces the database. This allows browser-to-Electron and Electron-to-browser restores. The three newest successful Drive generations are retained; older JSON snapshots remain restoreable.
 
 ## Browser storage diagnostics
 

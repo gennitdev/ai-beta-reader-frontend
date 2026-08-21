@@ -1,8 +1,10 @@
 import { computed, ref, type Ref } from 'vue'
+import type { DriveBackupGeneration } from '@/lib/libraryBundle/adapters/drive'
 
 interface UseCloudSyncDeps {
   backupToCloud: (password: string) => Promise<void>
-  restoreFromCloud: (password: string) => Promise<void>
+  restoreFromCloud: (password: string, generationId?: string) => Promise<void>
+  listCloudBackups: () => Promise<DriveBackupGeneration[]>
   hasCloudSync: () => boolean
   cloudSyncReady: Ref<boolean>
 }
@@ -12,12 +14,14 @@ interface UseCloudSyncDeps {
  * availability/readiness gating, and status messaging.
  */
 export function useCloudSync(deps: UseCloudSyncDeps) {
-  const { backupToCloud, restoreFromCloud, hasCloudSync, cloudSyncReady } = deps
+  const { backupToCloud, restoreFromCloud, listCloudBackups, hasCloudSync, cloudSyncReady } = deps
 
   const cloudPassword = ref('')
   const showCloudPassword = ref(false)
   const isBackingUp = ref(false)
   const isRestoring = ref(false)
+  const isLoadingGenerations = ref(false)
+  const cloudGenerations = ref<DriveBackupGeneration[]>([])
   const cloudMessage = ref('')
   const cloudMessageType = ref<'success' | 'error' | ''>('')
   const cloudSyncAvailable = computed(() => hasCloudSync())
@@ -47,6 +51,23 @@ export function useCloudSync(deps: UseCloudSyncDeps) {
     return true
   }
 
+  const refreshCloudGenerations = async () => {
+    if (!ensureCloudReady()) return
+    isLoadingGenerations.value = true
+    cloudMessage.value = ''
+    try {
+      cloudGenerations.value = await listCloudBackups()
+      if (cloudGenerations.value.length === 0) {
+        showCloudMessage('No versioned backups found. Legacy backup restore remains available.', 'success')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      showCloudMessage(`Could not list backups: ${message}`, 'error')
+    } finally {
+      isLoadingGenerations.value = false
+    }
+  }
+
   const handleCloudBackup = async () => {
     if (!cloudPassword.value.trim()) {
       showCloudMessage('Enter an encryption password before backing up.', 'error')
@@ -58,6 +79,7 @@ export function useCloudSync(deps: UseCloudSyncDeps) {
       isBackingUp.value = true
       cloudMessage.value = ''
       await backupToCloud(cloudPassword.value)
+      await refreshCloudGenerations()
       showCloudMessage('Backup saved to Google Drive.', 'success')
     } catch (error) {
       console.error('[CloudSync] handleCloudBackup failed:', error)
@@ -68,7 +90,7 @@ export function useCloudSync(deps: UseCloudSyncDeps) {
     }
   }
 
-  const handleCloudRestore = async () => {
+  const handleCloudRestore = async (generationId?: string) => {
     if (!cloudPassword.value.trim()) {
       showCloudMessage('Enter your encryption password before restoring.', 'error')
       return
@@ -82,7 +104,8 @@ export function useCloudSync(deps: UseCloudSyncDeps) {
     try {
       isRestoring.value = true
       cloudMessage.value = ''
-      await restoreFromCloud(cloudPassword.value)
+      if (generationId) await restoreFromCloud(cloudPassword.value, generationId)
+      else await restoreFromCloud(cloudPassword.value)
       showCloudMessage('Backup restored from Google Drive.', 'success')
     } catch (error) {
       console.error('[CloudSync] handleCloudRestore error:', error)
@@ -98,10 +121,13 @@ export function useCloudSync(deps: UseCloudSyncDeps) {
     showCloudPassword,
     isBackingUp,
     isRestoring,
+    isLoadingGenerations,
+    cloudGenerations,
     cloudMessage,
     cloudMessageType,
     cloudSyncAvailable,
     handleCloudBackup,
     handleCloudRestore,
+    refreshCloudGenerations,
   }
 }

@@ -19,7 +19,8 @@ This doc captures how the new Google Drive sync workflow works across the browse
 | PKCE OAuth helper | `src/lib/googleOAuth.ts` | Uses Google Identity Services token client | Generates PKCE verifier/challenge, launches system browser via `@capacitor/browser` (iOS) or `@capacitor/app-launcher` (Android), listens for AppLink redirect |
 | Token persistence | `src/lib/tokenStorage.ts` | N/A (handled by GIS) | Saves `{accessToken, refreshToken, expiresAt}` with `@capacitor/preferences` |
 | Cloud provider | `src/lib/cloudSync.ts` | Requests GIS token client (`google.accounts.oauth2.initTokenClient`) | Reuses cached tokens, refreshes via `https://oauth2.googleapis.com/token`, launches PKCE flow when needed |
-| Database interface | `src/lib/database.ts` | Uses `sql.js` in the browser | Uses `@capacitor-community/sqlite`; restores now import raw JSON exports (no `importFromJson`) |
+| Bundle codec | `src/lib/libraryBundle/` | Creates and validates the same canonical full-library ZIP on every platform | Same |
+| Database interface | `src/lib/database.ts` | Uses `sql.js` in the browser | Uses `@capacitor-community/sqlite`; restore applies the canonical model through the shared importer |
 | Image content | `src/lib/imageContentStore.ts` | Reads/writes IndexedDB Blob records | Electron uses its app-data filesystem; Android keeps metadata only |
 
 Key differences:
@@ -27,7 +28,9 @@ Key differences:
 - Web keeps the existing GIS flow (`response_type=token`). Android requires Authorization Code + PKCE and **must** run in the system browser to satisfy Google’s “Use secure browsers” policy.
 - Native needs several Capacitor plugins: `@capacitor/browser`, `@capacitor/app-launcher`, `@capacitor/preferences`, `@capacitor/status-bar`.
 - OAuth tokens are cached locally on native so repeated restores/upgrades are instant.
-- Browser and Electron backups embed image data into the temporary encrypted snapshot. Live browser SQLite rows do not retain base64 image content.
+- New backups encrypt a canonical full-library ZIP with the WC2 Web Crypto envelope. Drive keeps the three newest successful generations and records integrity metadata in `appProperties`.
+- Browser and Electron backups read image bytes through the platform image store. Live browser SQLite rows do not retain base64 image content.
+- Restore continues to recognize WC1, WC2, and CryptoJS-encrypted legacy JSON backups. Legacy restore support is not retired with the old writer.
 
 ---
 
@@ -98,7 +101,7 @@ Status bar tweaks (`@capacitor/status-bar`) ensure the web view sits below the s
 | `Access blocked: request invalid` with “custom URI scheme not enabled” | Android OAuth client wasn’t marked for custom schemes | Edit the OAuth client, tick “Enable custom URI scheme” |
 | `Access blocked` with `redirect_uri_mismatch` | Web client missing `https://www.beta-bot.net/oauth2redirect` | Add the redirect to the Web OAuth client |
 | `invalid_request` even after custom scheme | SHA‑1 fingerprint missing or mismatched | Run `./gradlew signingReport`, add SHA‑1 under Android client |
-| `No backup found in cloud storage` | `ai-beta-reader-backup.enc` not yet uploaded | Perform a backup from the web app (or ensure Drive contains the file) |
+| `No backup found in cloud storage` | No versioned bundle generation or legacy `ai-beta-reader-backup.enc` exists | Perform a backup from the app or verify the legacy file still exists |
 | `Failed to decrypt - wrong password? TypeError: this.db.importFromJson is not a function` | Native attempted Capacitor’s `importFromJson` | Fixed by manual import logic in `src/lib/database.ts` |
 | `Failed to decrypt... FOREIGN KEY constraint failed (code 787)` | Inserts executed while FK enforcement was on | Fix: toggle `PRAGMA foreign_keys` off while bulk importing, then back on |
 | Pixel phone not visible to `adb` | Wrong USB mode / cable / trust prompt dismissed | Set USB to “File transfer”, unlock phone, replug, accept RSA prompt, confirm `Settings → System Report → USB` |
@@ -120,66 +123,20 @@ adb logcat | grep "using OAuth config"
 
 ## Database Import Notes
 
-- Both **web** and **native** now produce the same normalized JSON payload (`{ version: 2, books: [], chapters: [], ... }`). Native first calls `CapacitorSQLite.exportToJson('full')`, then the app flattens the plugin’s `tables` array into the shared structure. Web builds continue to assemble the object directly.
-- Restores always run through the same importer (`src/lib/database.ts`):
-  1. Decrypt blob → JSON
-  2. Detect Capacitor-style exports (presence of `tables` or `export.tables`) and normalize them
-  3. Disable foreign keys
-  4. Delete existing rows (children before parents)
-  5. Insert rows table-by-table, using the live schema via `PRAGMA table_info` so constraint definitions aren’t mistaken for real columns
-  6. Re-enable foreign keys
+- Both **web** and **native** serialize new backups through the same canonical library model and ZIP writer. The encrypted plaintext starts with a ZIP signature and contains `beta-bot.yaml`.
+- Bundle restores create and verify an external recovery ZIP before replacing the database. Legacy JSON restores continue through the compatibility importer.
+- Restores always run through the same database importer (`src/lib/database.ts`):
+  1. Verify recorded encrypted length and SHA-256 metadata, then decrypt the envelope.
+  2. Detect a canonical ZIP signature or strictly parse legacy JSON (including an optional BOM).
+  3. For a bundle, validate it and write/read/checksum a recovery ZIP outside the main database.
+  4. Replace rows in one database transaction, using the live schema via `PRAGMA table_info`.
+  5. Roll back from the verified recovery if database or persistence work fails.
 - Because we emit the exact same snapshot everywhere, a backup made on Android can be restored verbatim on web, and vice versa. If a restore fails, the DB stays untouched; re-running with the correct password/file is safe.
 - Browser and Electron restores write image binaries to their active content store before importing metadata. A failed binary write aborts the restore instead of reporting incomplete success. Android imports metadata without local image binaries.
 
-### Verifying a Backup Locally
+### Verifying a Backup
 
-If you want to double-check a `.enc` file before restoring:
-
-```bash
-node inspect-backup.mjs          # sample script below
-```
-
-```js
-// inspect-backup.mjs
-import fs from 'node:fs'
-import CryptoJS from 'crypto-js'
-
-const encrypted = fs.readFileSync('./ai-beta-reader-backup.enc', 'utf8')
-const password = process.env.BACKUP_PASSWORD ?? 'your-password'
-
-const decrypted = CryptoJS.AES.decrypt(encrypted, password).toString(CryptoJS.enc.Utf8)
-if (!decrypted) throw new Error('Wrong password or corrupted file')
-
-const raw = JSON.parse(decrypted)
-const payload = raw.export?.tables ? normalize(raw.export) : raw.tables ? normalize(raw) : raw
-
-function normalize(exportData) {
-  const toObjects = name => {
-    const table = exportData.tables.find(t => t.name === name)
-    if (!table) return []
-    const columns = table.schema?.map(col => col?.column).filter(Boolean) ?? []
-    return (table.values ?? []).map(row =>
-      columns.reduce((acc, column, idx) => ({ ...acc, [column]: row[idx] ?? null }), {})
-    )
-  }
-
-  return {
-    books: toObjects('books'),
-    chapters: toObjects('chapters'),
-    book_parts: toObjects('book_parts'),
-    wiki_pages: toObjects('wiki_pages'),
-  }
-}
-
-console.log({
-  books: payload.books?.length ?? 0,
-  chapters: payload.chapters?.length ?? 0,
-  book_parts: payload.book_parts?.length ?? 0,
-  wiki_pages: payload.wiki_pages?.length ?? 0,
-})
-```
-
-You should see non-zero counts when data is present. If everything is zero, the backup was taken from an empty DB (or the wrong password was supplied).
+Use **Show Available Backups** in Settings to inspect generation time, app version, bundle format, and encrypted size. Restore rechecks ciphertext integrity and the complete canonical bundle before any database write. The standalone offline bundle validator is planned for Phase 6.
 
 ---
 

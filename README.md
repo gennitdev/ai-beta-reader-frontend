@@ -84,8 +84,8 @@ OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron 
 ### Continuity Management & Storage
 
 - **Local-first data**: Every project lives in a local SQLite database. Backups are user-initiated; AI features send the selected manuscript context to the configured AI service when invoked.
-- **Encrypted backups**: The database snapshot is compressed, encrypted with a password-derived AES-GCM key, and uploaded to Google Drive as `ai-beta-reader-backup.enc`.
-- **Cross-platform restore**: Browser, Electron, and Android use the same versioned JSON snapshot format. Android uses PKCE OAuth and App Links to re-enter the app after Google consent.
+- **Encrypted backups**: The complete canonical library ZIP is encrypted with a password-derived AES-GCM key and uploaded to Google Drive as a new immutable generation. The three newest successful generations are retained.
+- **Cross-platform restore**: Browser, Electron, and Android use the same canonical bundle format. Restore also retains permanent compatibility with older WC1, WC2, and CryptoJS-encrypted JSON backups. Android uses PKCE OAuth and App Links to re-enter the app after Google consent.
 - **Story bible**: Character sheets and wiki pages can record human-edited alternate names, helping AI updates resolve nicknames and titles to one canonical page.
 - **Find & replace**: Rename characters/places everywhere in one shot.
 - **Drag & drop parts**: Reorder chapters and group them into parts.
@@ -96,7 +96,7 @@ OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron 
 - **Local binary storage**: Browser images are stored as IndexedDB `Blob` records; Electron images live in the app-data directory
 - **Chapter covers**: Set any illustration as the chapter's cover image for visual navigation
 - **Lightbox viewer**: View images full-screen with download option
-- **Storage and backup**: Drive backup embeds image data in the encrypted snapshot so browser and Electron restores preserve the image library.
+- **Storage and backup**: Drive backup includes verified image bytes in the encrypted canonical bundle so browser and Electron restores preserve the image library.
 
 ### Bardwall — a game that rewards writing
 
@@ -231,17 +231,19 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 ### Google Drive Backup & Restore
 
 1. **Backup** (`User Settings → Back up to Drive`)
-   - Prompts for a password. The app gzip-compresses the JSON snapshot, derives a key with PBKDF2, and encrypts it with AES-GCM through the Web Crypto API. Restore retains compatibility with older CryptoJS-encrypted backups.
-   - Uploads `ai-beta-reader-backup.enc` with Drive scope `drive.file`.
-   - Re-running backup overwrites the same file id (Drive `files.update`).
-   - Browser, Electron, and Android emit the same database snapshot format. Browser and Electron add local image data to the encrypted snapshot; Android currently preserves image metadata but does not provide local image-binary storage.
-   - Want to sanity-check a backup before restoring? See `docs/cloud-sync.md#verifying-a-backup-locally` for a tiny Node script that prints record counts.
+   - Prompts for a password, builds the canonical full-library ZIP, derives a key with PBKDF2, and encrypts the ZIP with AES-GCM through the Web Crypto API.
+   - Uploads a new `ai-beta-reader-library-<timestamp>.enc` generation with Drive scope `drive.file`, then retains the three newest successful generations.
+   - Records ciphertext length, SHA-256, app version, and bundle format in Drive metadata. Older generations are removed only after the new upload is complete and verified.
+   - Browser, Electron, and Android emit the same canonical bundle format. Browser and Electron include local image bytes; Android currently preserves image metadata but does not provide local image-binary storage.
+   - Use **Show Available Backups** in Settings to inspect the retained generation metadata.
 
 2. **Restore** (`User Settings → Restore from Drive`)
    - Auth flow differs by platform:
      - **Web**: Google Identity Services token client (`response_type=token`).
      - **Android**: Custom PKCE helper opens Chrome via App Launcher, listens for App Link redirect (`com.googleusercontent.apps...:/oauth2redirect`), exchanges code for tokens, caches refresh token with `@capacitor/preferences`.
-   - Downloads the encrypted blob, decrypts with the password you provide, and hydrates the local DB.
+   - Downloads the selected (or newest) encrypted generation, verifies its recorded integrity, decrypts it, and validates the complete bundle.
+   - Creates and verifies an external recovery bundle before replacing the local library, with automatic rollback if replacement fails.
+   - If no versioned generation exists, restore falls back to the legacy `ai-beta-reader-backup.enc` file. WC1, WC2, and CryptoJS-encrypted JSON remain supported.
    - Electron writes restored image data to its filesystem. The browser writes it to IndexedDB Blob storage. Android strips image binary data during restore and keeps the metadata.
    - Foreign key constraints are disabled temporarily during import to avoid ordering errors.
    - Nothing gets uploaded automatically—restore only reads from Drive. You decide when to back up.
@@ -312,7 +314,7 @@ Pull request titles follow Conventional Commits so squash merges can drive seman
 | `client_secret is missing` on restore | The native build is still using the web OAuth client. Ensure Vercel + local envs define `VITE_GOOGLE_CLIENT_ID_NATIVE` and `VITE_GOOGLE_REDIRECT_URI_NATIVE`; redeploy. |
 | `Access blocked: request invalid` (custom URI scheme) | Enable “Custom URI scheme” on the Android OAuth client. |
 | `Access blocked: invalid_request` after redirect fix | Add the SHA‑1 fingerprint from `./gradlew signingReport` to the Android OAuth client. |
-| `No backup found in cloud storage` | The Drive file doesn’t exist. Run a backup from the browser or ensure the file name matches `ai-beta-reader-backup.enc`. |
+| `No backup found in cloud storage` | No versioned generation or legacy `ai-beta-reader-backup.enc` exists. Run a backup or verify the legacy file still exists. |
 | `Failed to decrypt - wrong password? TypeError: this.db.importFromJson is not a function` | Fixed in native import logic (manual inserts). Update to latest build. |
 | `FOREIGN KEY constraint failed (code 787)` | Latest build disables/re-enables foreign keys during import. Rebuild and redeploy. |
 | `adb` can’t find the device | Reconnect cable, enable File Transfer mode, rerun `adb kill-server && adb start-server`, accept the trust prompt. |

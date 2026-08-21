@@ -38,7 +38,9 @@ export async function createBookWithChapter(
   // has a stable, known id we can navigate to directly.
   await page.locator('#title').fill(input.bookTitle)
   await page.locator('#id').fill(input.bookId)
-  await page.getByRole('button', { name: 'Create Book' }).click()
+  const createBookButton = page.getByRole('button', { name: 'Create Book' })
+  await createBookButton.click()
+  await expect(createBookButton).toBeHidden()
 
   // --- Author the chapter in the editor ---
   await page.goto(`/books/${input.bookId}/chapter-editor`)

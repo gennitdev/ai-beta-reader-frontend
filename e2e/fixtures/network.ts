@@ -28,7 +28,10 @@ const FAKE_ACCESS_TOKEN = 'e2e-fake-access-token'
 
 interface DriveEntry {
   id: string
+  name: string
   content: string
+  createdTime: string
+  appProperties?: Record<string, string>
 }
 
 /** In-memory stand-in for the user's Google Drive, backed by the Node process. */
@@ -71,9 +74,21 @@ function extractMultipartFilePart(body: string, contentType: string): string | n
 }
 
 /** Extract the `name` field from the JSON metadata part of a Drive upload. */
-function extractMetadataName(body: string): string | null {
-  const match = /"name"\s*:\s*"([^"]+)"/.exec(body)
-  return match ? match[1] : null
+function extractMetadata(body: string, contentType: string): Record<string, unknown> {
+  const boundaryMatch = /boundary=(.+)$/.exec(contentType)
+  if (!boundaryMatch) return {}
+  const boundary = `--${boundaryMatch[1]}`
+  for (const segment of body.split(boundary)) {
+    if (!/name="metadata"/.test(segment)) continue
+    const headerEnd = segment.indexOf('\r\n\r\n')
+    if (headerEnd === -1) continue
+    try {
+      return JSON.parse(segment.slice(headerEnd + 4).replace(/\r\n$/, '')) as Record<string, unknown>
+    } catch {
+      return {}
+    }
+  }
+  return {}
 }
 
 function makeDriveHandler(files: Map<string, DriveEntry>) {
@@ -88,20 +103,41 @@ function makeDriveHandler(files: Map<string, DriveEntry>) {
       const contentType = request.headers()['content-type'] ?? ''
       const body = request.postData() ?? ''
       const content = extractMultipartFilePart(body, contentType) ?? ''
-      const name = extractMetadataName(body) ?? BACKUP_FILE_NAME
+      const metadata = extractMetadata(body, contentType)
+      const name = typeof metadata.name === 'string' ? metadata.name : BACKUP_FILE_NAME
       const existing = files.get(name)
       const id = existing?.id ?? `drive-file-${files.size + 1}`
-      files.set(name, { id, content })
-      return json({ id, name })
+      const entry: DriveEntry = {
+        id, name, content,
+        createdTime: existing?.createdTime ?? new Date().toISOString(),
+        appProperties: metadata.appProperties as Record<string, string> | undefined,
+      }
+      files.set(name, entry)
+      return json({
+        id, name, createdTime: entry.createdTime,
+        size: String(new TextEncoder().encode(content).byteLength),
+        appProperties: entry.appProperties,
+      })
     }
 
     // Search by name: GET /drive/v3/files?q=name='...'
     if (url.pathname === '/drive/v3/files') {
       const q = url.searchParams.get('q') ?? ''
+      if (q.includes('betaBotLibraryBackup')) {
+        const generations = [...files.values()]
+          .filter((entry) => entry.appProperties?.betaBotLibraryBackup === 'true')
+          .sort((left, right) => right.createdTime.localeCompare(left.createdTime))
+          .map((entry) => ({
+            id: entry.id, name: entry.name, createdTime: entry.createdTime,
+            size: String(new TextEncoder().encode(entry.content).byteLength),
+            appProperties: entry.appProperties,
+          }))
+        return json({ files: generations })
+      }
       const nameMatch = /name='([^']+)'/.exec(q)
       const name = nameMatch?.[1]
       const entry = name ? files.get(name) : undefined
-      return json({ files: entry ? [{ id: entry.id, name }] : [] })
+      return json({ files: entry ? [{ id: entry.id, name: entry.name }] : [] })
     }
 
     // Download media: GET /drive/v3/files/{id}?alt=media
@@ -111,6 +147,11 @@ function makeDriveHandler(files: Map<string, DriveEntry>) {
       const entry = [...files.values()].find((f) => f.id === id)
       if (!entry) return route.fulfill({ status: 404, body: 'Not found' })
       return route.fulfill({ status: 200, contentType: 'application/octet-stream', body: entry.content })
+    }
+    if (mediaMatch && request.method() === 'DELETE') {
+      const entry = [...files.values()].find((file) => file.id === mediaMatch[1])
+      if (entry) files.delete(entry.name)
+      return route.fulfill({ status: entry ? 204 : 404, body: '' })
     }
 
     // Any other Drive call is unexpected — surface it rather than hit the network.
@@ -231,10 +272,16 @@ export const test = base.extend<NetFixtures>({
     )
 
     await use({
-      getBackup: () => files.get(BACKUP_FILE_NAME)?.content,
-      hasBackup: () => files.has(BACKUP_FILE_NAME),
+      getBackup: () => [...files.values()]
+        .filter((entry) => entry.appProperties?.betaBotLibraryBackup === 'true')
+        .sort((left, right) => right.createdTime.localeCompare(left.createdTime))[0]?.content
+        ?? files.get(BACKUP_FILE_NAME)?.content,
+      hasBackup: () => [...files.values()].some((entry) => entry.appProperties?.betaBotLibraryBackup === 'true')
+        || files.has(BACKUP_FILE_NAME),
       fileCount: () => files.size,
-      setFile: (name, content) => files.set(name, { id: `drive-file-${files.size + 1}`, content }),
+      setFile: (name, content) => files.set(name, {
+        id: `drive-file-${files.size + 1}`, name, content, createdTime: new Date().toISOString(),
+      }),
       clear: () => files.clear(),
     })
   },

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import CryptoJS from 'crypto-js'
 import type { CloudProvider } from '@/lib/cloudSync'
 import { Encryption } from '@/lib/encryption'
 import { IndexedDbImageContentStore } from '@/lib/imageContentStore'
@@ -21,6 +22,7 @@ const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 const EXPORT = {
   version: 5,
   books: [{ id: 'b1', title: 'My Book' }],
+  chapters: [],
   wiki_pages: [{
     id: 'wiki-1',
     book_id: 'b1',
@@ -46,6 +48,27 @@ function fakeProvider(overrides: Partial<CloudProvider> = {}) {
   return provider
 }
 
+async function wc1Backup(plaintext: string, password: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const baseKey = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey'])
+  const key = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, baseKey,
+    { name: 'AES-GCM', length: 256 }, false, ['encrypt'],
+  )
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv }, key, encoder.encode(plaintext),
+  ))
+  const combined = new Uint8Array(28 + ciphertext.byteLength)
+  combined.set(salt)
+  combined.set(iv, 16)
+  combined.set(ciphertext, 28)
+  let binary = ''
+  combined.forEach((byte) => { binary += String.fromCharCode(byte) })
+  return `WC1:${btoa(binary)}`
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   dbMock.exportDatabase.mockResolvedValue(new TextEncoder().encode(JSON.stringify(EXPORT)))
@@ -66,7 +89,7 @@ describe('CloudSync backup + restore', () => {
     const provider = fakeProvider()
     const cs = new CloudSync(provider)
 
-    await cs.backup('pw')
+    await cs.backupLegacyJson('pw')
     expect(provider.upload).toHaveBeenCalledOnce()
     expect(provider.stored()?.startsWith('GZ1:')).toBe(true)
 
@@ -80,7 +103,7 @@ describe('CloudSync backup + restore', () => {
   it('authenticates before backup when not already authenticated', async () => {
     const provider = fakeProvider({ isAuthenticated: vi.fn(() => false) })
     const cs = new CloudSync(provider)
-    await cs.backup('pw')
+    await cs.backupLegacyJson('pw')
     expect(provider.authenticate).toHaveBeenCalled()
   })
 
@@ -90,7 +113,7 @@ describe('CloudSync backup + restore', () => {
       authenticate: vi.fn(async () => { throw new Error('sign-in cancelled') }),
     })
 
-    await expect(new CloudSync(provider).backup('pw')).rejects.toThrow('sign-in cancelled')
+    await expect(new CloudSync(provider).backupLegacyJson('pw')).rejects.toThrow('sign-in cancelled')
 
     expect(dbMock.exportDatabase).not.toHaveBeenCalled()
     expect(provider.upload).not.toHaveBeenCalled()
@@ -103,7 +126,7 @@ describe('CloudSync backup + restore', () => {
       }),
     })
     const cs = new CloudSync(provider)
-    await expect(cs.backup('pw')).rejects.toThrow(/Failed to upload backup: network down/)
+    await expect(cs.backupLegacyJson('pw')).rejects.toThrow(/Failed to upload backup: network down/)
   })
 
   it('throws when there is no backup to restore', async () => {
@@ -115,7 +138,7 @@ describe('CloudSync backup + restore', () => {
   it('throws an incorrect-password error when decryption fails', async () => {
     const provider = fakeProvider()
     const cs = new CloudSync(provider)
-    await cs.backup('right-password')
+    await cs.backupLegacyJson('right-password')
     await expect(cs.restore('wrong-password')).rejects.toThrow(/Incorrect password/)
   })
 
@@ -137,6 +160,17 @@ describe('CloudSync backup + restore', () => {
     await expect(new CloudSync(provider).restore('pw')).rejects.toThrow()
 
     expect(dbMock.importDatabase).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['WC1', (text: string) => wc1Backup(text, 'pw')],
+    ['CryptoJS', async (text: string) => CryptoJS.AES.encrypt(text, 'pw').toString()],
+  ])('restores %s legacy JSON with an optional UTF-8 BOM', async (_format, encrypt) => {
+    const plaintext = `\uFEFF${JSON.stringify(EXPORT)}`
+    const provider = fakeProvider({ download: vi.fn(async () => encrypt(plaintext)) })
+    await expect(new CloudSync(provider).restore('pw')).resolves.toBe(true)
+    const imported = JSON.parse(new TextDecoder().decode(dbMock.importDatabase.mock.calls[0][0]))
+    expect(imported).toEqual(EXPORT)
   })
 
   it('rolls back earlier image writes when a later image cannot be restored', async () => {
@@ -439,5 +473,59 @@ describe('GoogleDriveProvider basics', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: 'drive-file-3' }] }) })
       .mockResolvedValueOnce({ ok: false, statusText: 'Unavailable' }))
     await expect(provider.download('backup.enc')).rejects.toThrow('Download failed: Unavailable')
+  })
+
+  it('creates, lists, downloads, and deletes immutable backup generations', async () => {
+    const provider = new GoogleDriveProvider('web-client')
+    ;(provider as unknown as { accessToken: string }).accessToken = 'token-123'
+    const metadata = {
+      createdAt: '2026-08-20T00:00:00.000Z', appVersion: '2.0.0', bundleFormatVersion: 1,
+      encryptedByteLength: 4, ciphertextSha256: 'a'.repeat(64),
+    }
+    const resource = {
+      id: 'generation-1', name: 'generation.enc', createdTime: metadata.createdAt, size: '4',
+      appProperties: {
+        betaBotLibraryBackup: 'true', createdAt: metadata.createdAt, appVersion: metadata.appVersion,
+        bundleFormatVersion: '1', encryptedByteLength: '4', ciphertextSha256: metadata.ciphertextSha256,
+      },
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => resource })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [resource] }) })
+      .mockResolvedValueOnce({ ok: true, text: async () => 'data' })
+      .mockResolvedValueOnce({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(provider.uploadGeneration({
+      name: resource.name, encryptedData: 'data', metadata,
+    })).resolves.toEqual({ id: resource.id, name: resource.name, ...metadata })
+    await expect(provider.listGenerations()).resolves.toEqual([{ id: resource.id, name: resource.name, ...metadata }])
+    await expect(provider.downloadGeneration(resource.id)).resolves.toBe('data')
+    await expect(provider.deleteGeneration(resource.id)).resolves.toBeUndefined()
+    expect(fetchMock.mock.calls[0][0]).toContain('uploadType=multipart')
+    expect(fetchMock.mock.calls[1][0]).toContain('appProperties')
+    expect(fetchMock.mock.calls[3][1]).toEqual(expect.objectContaining({ method: 'DELETE' }))
+  })
+
+  it('rejects generation metadata that does not match the uploaded ciphertext size', async () => {
+    const provider = new GoogleDriveProvider('web-client')
+    ;(provider as unknown as { accessToken: string }).accessToken = 'token-123'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'generation-1', name: 'generation.enc', size: '99',
+        appProperties: {
+          betaBotLibraryBackup: 'true', createdAt: '2026-08-20T00:00:00.000Z', appVersion: '2',
+          bundleFormatVersion: '1', encryptedByteLength: '4', ciphertextSha256: 'a'.repeat(64),
+        },
+      }),
+    }))
+    await expect(provider.uploadGeneration({
+      name: 'generation.enc', encryptedData: 'data',
+      metadata: {
+        createdAt: '2026-08-20T00:00:00.000Z', appVersion: '2', bundleFormatVersion: 1,
+        encryptedByteLength: 4, ciphertextSha256: 'a'.repeat(64),
+      },
+    })).rejects.toThrow('invalid backup generation metadata')
   })
 })
