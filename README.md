@@ -86,6 +86,7 @@ OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron 
 - **Local-first data**: Every project lives in a local SQLite database. Backups are user-initiated; AI features send the selected manuscript context to the configured AI service when invoked.
 - **Encrypted backups**: The complete canonical library ZIP is encrypted with a password-derived AES-GCM key and uploaded to Google Drive as a new immutable generation. The three newest successful generations are retained.
 - **Cross-platform restore**: Browser, Electron, and Android use the same canonical bundle format. Restore also retains permanent compatibility with older WC1, WC2, and CryptoJS-encrypted JSON backups. Android uses PKCE OAuth and App Links to re-enter the app after Google consent.
+- **Git-ready workspaces**: Chromium-class browsers can safely update canonical bundle folders without overwriting unknown files. New workspaces include maintained agent instructions and a conservative `.gitattributes` policy.
 - **Story bible**: Character sheets and wiki pages can record human-edited alternate names, helping AI updates resolve nicknames and titles to one canonical page.
 - **Find & replace**: Rename characters/places everywhere in one shot.
 - **Drag & drop parts**: Reorder chapters and group them into parts.
@@ -255,6 +256,18 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 
 See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secrets, SHA‑1 mismatches, status bar overlays, etc.).
 
+### Folder export and validation
+
+- **Export Git workspace to folder** writes the same canonical files as full ZIP and Drive backup.
+- Existing bundles are updated from their prior inventory: unknown files and customized workspace guidance are preserved, and obsolete managed files are removed only after verified writes.
+- Validate either transport without opening the app or database:
+
+  ```bash
+  npm run validate:bundle -- /path/to/library-folder-or.zip
+  ```
+
+See [`docs/agent-workspaces.md`](docs/agent-workspaces.md) for the rollback model, generated `AGENTS.md`, and recommended Git attributes.
+
 ### AI Summaries & Reviews
 
 - Every chapter can generate a “structured summary” capturing POV, characters, beats, spoilers.
@@ -281,6 +294,7 @@ npm run build        # type-check + production bundle (outputs to dist/)
 npm run preview      # serve production bundle locally
 npm run lint         # eslint --fix
 npm run type-check   # vue-tsc --build
+npm run validate:bundle -- /path/to/bundle  # offline directory/ZIP validation
 
 # Android
 npx cap sync android # sync Capacitor plugins & web assets (run after build)

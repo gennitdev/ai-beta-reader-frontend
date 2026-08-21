@@ -13,8 +13,16 @@ const bundleState = vi.hoisted(() => ({
   create: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]) })),
 }))
 
+const directoryState = vi.hoisted(() => ({
+  write: vi.fn(async () => ({ writtenFiles: 2, deletedFiles: 1, scaffoldedFiles: 2 })),
+}))
+
 vi.mock('@/lib/libraryBundle/export', () => ({
   createFullLibraryBundleExport: bundleState.create,
+}))
+
+vi.mock('@/lib/libraryBundle/adapters/directory', () => ({
+  writeBundleDirectory: directoryState.write,
 }))
 
 vi.mock('jszip', () => {
@@ -202,6 +210,29 @@ describe('useDataExport', () => {
 
     expect(state.exportError.value).toBe('Export failed: Image image-1 is missing required bytes.')
     expect(state.exportProgress.value).toBe('')
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('exports a canonical Git workspace through a user-selected directory', async () => {
+    const deps = createDeps()
+    const directory = { kind: 'directory' as const }
+    const chooseBundleDirectory = vi.fn(async () => directory)
+    bundleState.create.mockResolvedValueOnce({
+      zipBytes: new Uint8Array([80, 75, 3, 4]),
+      files: new Map([['beta-bot.yaml', new TextEncoder().encode('format: beta-bot-library')]]),
+    })
+    const state = useDataExport({ ...deps, chooseBundleDirectory } as Parameters<typeof useDataExport>[0])
+
+    expect(state.canExportBundleDirectory.value).toBe(true)
+    await state.exportFullLibraryDirectory()
+
+    expect(chooseBundleDirectory).toHaveBeenCalledOnce()
+    expect(directoryState.write).toHaveBeenCalledWith(
+      directory,
+      expect.any(Map),
+      expect.any(Map),
+    )
+    expect(state.exportProgress.value).toContain('2 managed files written, 1 obsolete files removed')
     expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 

@@ -136,7 +136,7 @@ adb logcat | grep "using OAuth config"
 
 ### Verifying a Backup
 
-Use **Show Available Backups** in Settings to inspect generation time, app version, bundle format, and encrypted size. Restore rechecks ciphertext integrity and the complete canonical bundle before any database write. The standalone offline bundle validator is planned for Phase 6.
+Use **Show Available Backups** in Settings to inspect generation time, app version, bundle format, and encrypted size. Restore rechecks ciphertext integrity and the complete canonical bundle before any database write. Decrypted ZIPs and directory exports can be checked independently with `npm run validate:bundle -- <path>`; see [Git and agent workspaces](agent-workspaces.md).
 
 ---
 

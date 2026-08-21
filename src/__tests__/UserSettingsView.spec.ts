@@ -345,4 +345,13 @@ describe('UserSettingsView', () => {
     expect(h.exportDatabase).toHaveBeenCalled()
     expect(wrapper.text()).toContain('Full library backup (recommended)')
   })
+
+  it('offers Git workspace folder export when the browser supports directory access', async () => {
+    vi.stubGlobal('showDirectoryPicker', vi.fn())
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(button(wrapper, 'Export Git workspace to folder').exists()).toBe(true)
+    expect(wrapper.text()).toContain('preserves unknown files')
+  })
 })

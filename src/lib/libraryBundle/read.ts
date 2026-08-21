@@ -186,7 +186,11 @@ function pushEntity<T extends { id: string }>(
 export function readLibraryBundle(files: ReadonlyBundleFileMap): ReadLibraryBundleResult {
   const diagnostics: BundleDiagnostic[] = []
   const sources: ParsedEntitySource[] = []
-  const knownFiles = new Set(['beta-bot.yaml', '_beta-bot/inventory.json'])
+  const knownFiles = new Set([
+    'beta-bot.yaml', '_beta-bot/inventory.json',
+    // Optional Git-workspace scaffolding lives outside the managed bundle tree.
+    'AGENTS.md', 'CLAUDE.md', '.gitattributes',
+  ])
   const rawManifest = yamlFile(files, 'beta-bot.yaml', z.record(z.string(), z.unknown()), diagnostics)
   if (rawManifest) {
     Object.keys(rawManifest).filter((key) => !bundleManifestKnownKeys.has(key)).forEach((key) => {
