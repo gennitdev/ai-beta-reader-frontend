@@ -4,6 +4,8 @@ Beta Bot can export the canonical library bundle directly to a folder in browser
 
 ZIP remains available on every supported platform. Folder export is progressive enhancement for Chromium-class browsers and compatible desktop builds.
 
+The current folder action writes a complete full-library bundle, including image bytes and app-owned history. A smaller `text-only` workspace export is planned in [#129](https://github.com/gennitdev/ai-beta-reader-frontend/issues/129); until then, do not describe folder export as text-only.
+
 ## Safe folder updates
 
 Folder export treats the prior `_beta-bot/inventory.json` as the ownership boundary:

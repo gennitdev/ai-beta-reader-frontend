@@ -21,7 +21,7 @@ This repository contains the complete application code for the browser, Electron
 - **Local Database:** `sql.js` + IndexedDB persistence (browser and Electron) / `@capacitor-community/sqlite` (Android)
 - **Cloud Sync:** Google Drive via OAuth 2.0 (GIS for web, PKCE + App Links for native)
 - **AI Services:** OpenAI (GPT‑4o Mini) for summaries & reviews
-- **Native Platforms:** Capacitor for Android, Electron for desktop (macOS/Windows/Linux)
+- **Native Platforms:** Capacitor for Android; Electron for desktop (packaging currently configured for macOS and Windows)
 
 ## Architecture
 
@@ -47,7 +47,7 @@ flowchart TB
 
   app -->|"AI features only; user-supplied key"| openai["OpenAI API"]
 
-  webDb --> backup["User-initiated backup / restore<br/>versioned JSON · gzip · AES-GCM"]
+  webDb --> backup["User-initiated backup / restore<br/>canonical ZIP · AES-GCM"]
   electronDb --> backup
   electronImages --> backup
   androidDb --> backup
@@ -175,7 +175,7 @@ Review individual matches before replacing text across your entire manuscript, o
 
 ## Prerequisites for Self Hosting beta bot
 
-- Node.js 20.19+ or 22.12+
+- Node.js 22.12+ or 24+
 - An OpenAI API key, entered in the app, to use AI summaries and reviews
 - Optional: a Google Cloud project with the Drive API enabled and appropriate OAuth clients if you want Google Drive backup and restore
 
@@ -209,6 +209,8 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 | `VITE_GOOGLE_CLIENT_ID` | Google OAuth *web* client ID (used for browser GIS flow) | `302250506015-du7cd7e5g469dd74cs2fnq8luksiuutb.apps.googleusercontent.com` |
 | `VITE_GOOGLE_CLIENT_ID_WEB` | Optional alias for the web client (defaults to `VITE_GOOGLE_CLIENT_ID`) | same as above |
 | `VITE_GOOGLE_REDIRECT_URI` | Hosted redirect used by the web build | `https://www.beta-bot.net/oauth2redirect` |
+| `VITE_GOOGLE_CLIENT_ID_DESKTOP` | OAuth desktop client used by Electron's loopback flow | `…apps.googleusercontent.com` |
+| `VITE_GOOGLE_CLIENT_SECRET_DESKTOP` | Optional desktop-client secret, when required by the configured OAuth client | |
 | `VITE_GOOGLE_CLIENT_ID_NATIVE` | Android OAuth client ID (PKCE/native flow) | `…hmm4hpdloehtuodde00pu2irqkpm1inp.apps.googleusercontent.com` |
 | `VITE_GOOGLE_REDIRECT_URI_NATIVE` | Custom redirect scheme from the Android client | `com.googleusercontent.apps.…:/oauth2redirect` |
 | `VITE_GOOGLE_CLIENT_SECRET` | **Optional** – only required if you re-use the web client in native builds (not recommended) | |
@@ -226,7 +228,7 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 - **Browser and Electron builds** run `sql.js` (SQLite compiled to WebAssembly). The exported SQLite bytes are persisted in IndexedDB under the `ai-beta-reader-db` database. Existing installs with the legacy `localStorage.sqliteDb` value migrate it to IndexedDB during startup.
 - **Android builds** use `@capacitor-community/sqlite`. Data lives in the device sandbox in the `ai-beta-reader` database.
 - All user actions (adding books, editing chapters, creating wiki entries) mutate the local DB immediately.
-- Export/import serializes the database tables to a versioned JSON snapshot for portability between storage engines.
+- User-facing export/import uses the versioned canonical library bundle. Internally, named database snapshots bridge the platform storage engines to the shared bundle codec.
 - Browser image bytes live in the IndexedDB `imageBlobs` object store. SQLite keeps only image metadata during normal use; legacy base64 rows migrate automatically in restartable batches.
 
 ### Google Drive Backup & Restore
@@ -235,13 +237,14 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
    - Prompts for a password, builds the canonical full-library ZIP, derives a key with PBKDF2, and encrypts the ZIP with AES-GCM through the Web Crypto API.
    - Uploads a new `ai-beta-reader-library-<timestamp>.enc` generation with Drive scope `drive.file`, then retains the three newest successful generations.
    - Records ciphertext length, SHA-256, app version, and bundle format in Drive metadata. Older generations are removed only after the new upload is complete and verified.
-   - Browser, Electron, and Android emit the same canonical bundle format. Browser and Electron include local image bytes; Android currently preserves image metadata but does not provide local image-binary storage.
+   - Every platform uses the same canonical bundle codec. Browser and Electron include local image bytes. Android has no local image-binary store, so a backup fails clearly if image metadata refers to bytes that are unavailable on that device.
    - Use **Show Available Backups** in Settings to inspect the retained generation metadata.
 
 2. **Restore** (`User Settings → Restore from Drive`)
    - Auth flow differs by platform:
      - **Web**: Google Identity Services token client (`response_type=token`).
-     - **Android**: Custom PKCE helper opens Chrome via App Launcher, listens for App Link redirect (`com.googleusercontent.apps...:/oauth2redirect`), exchanges code for tokens, caches refresh token with `@capacitor/preferences`.
+     - **Electron**: Desktop OAuth client with a loopback callback handled by the preload bridge.
+     - **Android**: Custom PKCE helper opens Chrome via App Launcher, listens for the app redirect (`com.googleusercontent.apps...:/oauth2redirect`), and exchanges the code for tokens stored through secure storage.
    - Downloads the selected (or newest) encrypted generation, verifies its recorded integrity, decrypts it, and validates the complete bundle.
    - Creates and verifies an external recovery bundle before replacing the local library, with automatic rollback if replacement fails.
    - If no versioned generation exists, restore falls back to the legacy `ai-beta-reader-backup.enc` file. WC1, WC2, and CryptoJS-encrypted JSON remain supported.
@@ -252,7 +255,7 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 3. **Security**
    - Backups stay in your Google Drive. Only the authenticated account (or anyone you explicitly share the file with) can download it.
    - The encryption password is never stored; losing it makes the backup unreadable.
-   - Native access tokens are stored using Capacitor Preferences; revoke them via Android’s Developer Options if needed.
+   - Electron and Android store OAuth tokens through OS-backed secure storage. Browser GIS tokens are short-lived and browser-local.
 
 See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secrets, SHA‑1 mismatches, status bar overlays, etc.).
 
@@ -292,8 +295,13 @@ npm install          # install deps
 npm run dev          # local dev server (Vite)
 npm run build        # type-check + production bundle (outputs to dist/)
 npm run preview      # serve production bundle locally
-npm run lint         # eslint --fix
+npm run lint         # ESLint check
+npm run lint:fix     # ESLint autofix
 npm run type-check   # vue-tsc --build
+npm run test:unit    # Vitest unit suite
+npm run test:coverage # Vitest with coverage
+npm run test:e2e     # Playwright browser suite
+npm run test:electron # Electron runtime unit suite
 npm run validate:bundle -- /path/to/bundle  # offline directory/ZIP validation
 
 # Android
@@ -301,8 +309,9 @@ npx cap sync android # sync Capacitor plugins & web assets (run after build)
 npx cap run android --target <serial>  # deploy to device/emulator
 
 # Electron Desktop
-cd electron && npm install   # first time only
-cd electron && npm run electron:start  # run desktop app (after npm run build)
+npm install --prefix electron # first time only
+npm run electron:dev          # build and launch with the live runner
+npm run electron:build        # create configured distributable packages
 ```
 
 Pull request titles follow Conventional Commits so squash merges can drive semantic versioning. See [Releases](docs/releases.md) for title examples and the automated GitHub release process.
@@ -316,7 +325,7 @@ Pull request titles follow Conventional Commits so squash merges can drive seman
     - SHA‑1 fingerprint from `./gradlew signingReport`
     - Custom URI scheme enabled (`com.googleusercontent.apps.<client-id>:/oauth2redirect`)
   - Status bar height is handled via `@capacitor/status-bar` to avoid UI overlap.
-- **Electron Desktop**: Run `npm run build` then `cd electron && npm run electron:start`.
+- **Electron Desktop**: Run `npm run electron:dev` for development or `npm run electron:build` for configured packages.
   - Uses the same `sql.js` + IndexedDB database persistence as the browser build.
   - Uses an Electron preload/IPC bridge for native file selection and image filesystem access.
   - Image files live in the Electron app-data directory and are embedded in user-initiated encrypted Drive backups.
@@ -335,6 +344,11 @@ Pull request titles follow Conventional Commits so squash merges can drive seman
 
 ## Need More Detail?
 
-- [docs/cloud-sync.md](docs/cloud-sync.md) – end-to-end Google Drive setup, OAuth nuances, debugging steps.
+- [Canonical library bundle](docs/book-folder-format.md) – format contract, import safety, and implementation status.
+- [Git and agent workspaces](docs/agent-workspaces.md) – folder updates, validation, and generated workspace files.
+- [Google Drive backup and restore](docs/cloud-sync.md) – OAuth setup, platform behavior, and troubleshooting.
+- [Image library storage](docs/desktop-images.md) – browser/Electron image persistence and backup behavior.
+- [Browser image parity design record](docs/browser-image-parity-plan.md) – completed migration design and deferred work.
+- [Releases](docs/releases.md) – Conventional Commit titles and automated releases.
 
 Happy writing! ✍️📚

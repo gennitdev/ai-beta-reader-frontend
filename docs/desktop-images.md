@@ -1,6 +1,6 @@
 # Image Library Storage
 
-The image library supports the browser and Electron builds. Android retains image metadata during backup and restore but does not yet provide local image-binary storage.
+The image library supports the browser and Electron builds. Android retains image metadata during restore but does not yet provide local image-binary storage; Android parity is tracked in [#4](https://github.com/gennitdev/ai-beta-reader-frontend/issues/4).
 
 ## Storage architecture
 
@@ -36,6 +36,8 @@ The live Blob/file store remains separate from SQLite, while encrypted Drive bac
 4. Encrypt the ZIP and upload it as a new immutable Drive generation.
 
 Restore verifies the encrypted generation and bundle, creates an external recovery, writes and verifies binary content, then replaces the database. This allows browser-to-Electron and Electron-to-browser restores. The three newest successful Drive generations are retained; older JSON snapshots remain restoreable.
+
+A full bundle never silently omits required image bytes. On a platform without an image content store, backup/export fails clearly if image metadata exists but its bytes are unavailable.
 
 ## Browser storage diagnostics
 

@@ -1,6 +1,6 @@
 # Design: Beta Bot Library Bundle as Canonical Format
 
-**Status:** Implemented through Phase 6
+**Status:** Core rollout implemented through Phase 6; follow-ups tracked
 
 **Primary repo:** `ai-beta-reader-frontend`
 
@@ -28,6 +28,20 @@ This design deliberately distinguishes three concepts:
 3. **Transport:** ZIP download, directory access, or encrypted Google Drive storage.
 
 No transport implements its own serialization rules.
+
+### Implementation status
+
+Phases 1–6 are implemented. The application ships the canonical model and schema migrations, deterministic writer and ZIP export, validation and three-way Apply planning, verified recovery and Replace, encrypted Drive generations, directory updates, workspace scaffolding, and the standalone validator.
+
+Remaining product and release-hardening work is tracked separately:
+
+- [#128](https://github.com/gennitdev/ai-beta-reader-frontend/issues/128): selected-book export;
+- [#129](https://github.com/gennitdev/ai-beta-reader-frontend/issues/129): text-only workspace export;
+- [#130](https://github.com/gennitdev/ai-beta-reader-frontend/issues/130): additional import-preview detail;
+- [#131](https://github.com/gennitdev/ai-beta-reader-frontend/issues/131): optional Import as copy;
+- [#132](https://github.com/gennitdev/ai-beta-reader-frontend/issues/132): fuzz, stress, and cross-platform acceptance validation.
+
+The current export UI creates full-library bundles. `selection` and `text-only` are already recognized by the schemas, validator, planner, and Replace-eligibility boundary, but their dedicated export flows are follow-up work.
 
 ## Decision summary
 
@@ -853,39 +867,39 @@ The UI never calls Apply changes “sync” and never describes a text-only bund
 
 ## Rollout
 
-### Phase 1: schema and canonical model
+### Phase 1: schema and canonical model — complete
 
 - Add schema migrations and backfills.
 - Define runtime schemas and typed canonical entities.
 - Add logical database dump helpers and fixtures.
 - Ship without changing export or Drive behavior.
 
-### Phase 2: writer and local full export
+### Phase 2: writer and local full export — complete
 
 - Implement deterministic file-map writer, inventory, ZIP adapter, and full round-trip tests.
 - Add full bundle export beside the existing exporter.
 - Compare bundle contents with the current JSON backup in automated fixtures.
 
-### Phase 3: parser, validation, and import planning
+### Phase 3: parser, validation, and import planning — complete
 
 - Implement ZIP/directory readers, migrations, exhaustive validation, semantic hashing, and three-way planning.
 - Add preview and Apply changes UI.
 - Keep Replace disabled until recovery storage and failure-injection tests pass.
 
-### Phase 4: recovery and Replace
+### Phase 4: recovery and Replace — complete
 
 - Implement verified external recovery storage and retention.
 - Enable Replace only for eligible bundles.
 - Exercise browser and native rollback and persistence paths.
 
-### Phase 5: Drive generations
+### Phase 5: Drive generations — complete
 
 - Upload encrypted bundle ZIPs as new Drive generations.
 - Keep existing JSON backup creation available behind an internal fallback for one release.
 - Restore both bundle and every legacy JSON/encryption format.
 - Switch the default only after cross-platform restore tests pass.
 
-### Phase 6: directory and agent tooling
+### Phase 6: directory and agent tooling — complete
 
 - Add directory write/update where supported.
 - Publish the standalone validator and sample agent instructions.
