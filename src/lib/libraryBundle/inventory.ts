@@ -1,19 +1,23 @@
 import { semanticHash } from './semanticHash'
+import { z } from 'zod'
 
 export const BUNDLE_INVENTORY_VERSION = 1 as const
 
-export interface BundleInventoryEntity {
-  entity_type: string
-  id: string
-  path: string
-  semantic_sha256: string
-}
+export const bundleInventoryEntitySchema = z.strictObject({
+  entity_type: z.string().min(1),
+  id: z.string().min(1),
+  path: z.string().min(1),
+  semantic_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+})
 
-export interface BundleInventory {
-  inventory_version: typeof BUNDLE_INVENTORY_VERSION
-  bundle_id: string
-  entities: BundleInventoryEntity[]
-}
+export const bundleInventorySchema = z.strictObject({
+  inventory_version: z.literal(BUNDLE_INVENTORY_VERSION),
+  bundle_id: z.string().min(1),
+  entities: z.array(bundleInventoryEntitySchema),
+})
+
+export type BundleInventoryEntity = z.infer<typeof bundleInventoryEntitySchema>
+export type BundleInventory = z.infer<typeof bundleInventorySchema>
 
 export interface InventorySourceEntity {
   entityType: string
