@@ -61,6 +61,25 @@ describe('createCanonicalLibrarySnapshot', () => {
     expect(snapshot.assets[0]).toMatchObject({ notes: '', wiki_page_ids: [] })
   })
 
+  it('normalizes legacy character objects in chapter and part summaries', async () => {
+    const database = completeDatabaseExportFixture()
+    database.chapter_summaries[0] = {
+      ...(database.chapter_summaries[0] as Record<string, unknown>),
+      characters: JSON.stringify(['Alice', { name: 'Bob' }]),
+    }
+    database.part_summaries[0] = {
+      ...(database.part_summaries[0] as Record<string, unknown>),
+      characters: [{ name: 'Carol' }, 'Dan'],
+    }
+
+    const snapshot = await createCanonicalLibrarySnapshot(database, {
+      readAssetBytes: async () => new Uint8Array([1, 2, 3]),
+    })
+
+    expect(snapshot.chapter_summaries[0].characters).toEqual(['Alice', 'Bob'])
+    expect(snapshot.part_summaries[0].characters).toEqual(['Carol', 'Dan'])
+  })
+
   it('rejects corrupt structured database fields instead of producing a lossy backup', async () => {
     const invalidJson = completeDatabaseExportFixture()
     invalidJson.books[0] = {
@@ -76,7 +95,9 @@ describe('createCanonicalLibrarySnapshot', () => {
     }
     await expect(createCanonicalLibrarySnapshot(invalidEntry, {
       readAssetBytes: async () => new Uint8Array([1, 2, 3]),
-    })).rejects.toThrow(/characters must contain only strings/)
+    })).rejects.toThrow(
+      /chapter_summaries\.characters for record summary-1 must contain only strings or legacy character objects/,
+    )
   })
 
   it('serializes both system and user-defined AI profiles with stable identities', async () => {

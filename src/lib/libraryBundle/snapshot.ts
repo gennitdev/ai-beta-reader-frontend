@@ -28,7 +28,7 @@ function booleanValue(row: LogicalRow, key: string): boolean {
   return Boolean(row[key])
 }
 
-function stringArray(row: LogicalRow, key: string): string[] {
+function arrayField(row: LogicalRow, key: string, label = key): unknown[] {
   const value = row[key]
   if (value === null || value === undefined) return []
   let parsed: unknown = value
@@ -36,13 +36,42 @@ function stringArray(row: LogicalRow, key: string): string[] {
     try {
       parsed = JSON.parse(value)
     } catch {
-      throw new Error(`Database field ${key} does not contain a valid JSON array.`)
+      throw new Error(`Database field ${label} does not contain a valid JSON array.`)
     }
   }
-  if (!Array.isArray(parsed) || parsed.some((entry) => typeof entry !== 'string')) {
-    throw new Error(`Database field ${key} must contain only strings.`)
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Database field ${label} must contain an array.`)
   }
-  return [...parsed]
+  return parsed
+}
+
+function stringArray(row: LogicalRow, key: string, label = key): string[] {
+  const parsed = arrayField(row, key, label)
+  if (parsed.some((entry) => typeof entry !== 'string')) {
+    throw new Error(`Database field ${label} must contain only strings.`)
+  }
+  return [...parsed] as string[]
+}
+
+/** Older summaries stored character entries as `{ name }` objects. */
+function summaryCharacters(
+  row: LogicalRow,
+  table: 'chapter_summaries' | 'part_summaries',
+): string[] {
+  const recordId = stringValue(row, 'id', '(unknown id)')
+  const label = `${table}.characters for record ${recordId}`
+  return arrayField(row, 'characters', label).map((entry) => {
+    if (typeof entry === 'string') return entry
+    if (
+      entry !== null
+      && typeof entry === 'object'
+      && 'name' in entry
+      && typeof entry.name === 'string'
+    ) return entry.name
+    throw new Error(
+      `Database field ${label} must contain only strings or legacy character objects with a string name.`,
+    )
+  })
 }
 
 function groupRows(rows: LogicalRow[], key: string): Map<string, LogicalRow[]> {
@@ -149,7 +178,7 @@ export async function createCanonicalLibrarySnapshot(
     chapter_summaries: tables.chapter_summaries.map((row) => ({
       id: stringValue(row, 'id'), chapter_id: stringValue(row, 'chapter_id'),
       body: nullableString(row, 'summary'), pov: nullableString(row, 'pov'),
-      characters: stringArray(row, 'characters'), beats: stringArray(row, 'beats'),
+      characters: summaryCharacters(row, 'chapter_summaries'), beats: stringArray(row, 'beats'),
       spoilers_ok: row.spoilers_ok === null ? null : booleanValue(row, 'spoilers_ok'),
       generated_by: nullableString(row, 'generated_by') as 'ai' | 'user' | null,
       model: nullableString(row, 'model'), created_at: stringValue(row, 'created_at'),
@@ -157,7 +186,7 @@ export async function createCanonicalLibrarySnapshot(
     })),
     part_summaries: tables.part_summaries.map((row) => ({
       id: stringValue(row, 'id'), part_id: stringValue(row, 'part_id'),
-      body: nullableString(row, 'summary'), characters: stringArray(row, 'characters'),
+      body: nullableString(row, 'summary'), characters: summaryCharacters(row, 'part_summaries'),
       beats: stringArray(row, 'beats'),
       generated_by: nullableString(row, 'generated_by') as 'ai' | 'user' | null,
       model: nullableString(row, 'model'), created_at: stringValue(row, 'created_at'),
