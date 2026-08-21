@@ -3,8 +3,10 @@ import { logger } from '@/lib/logger'
 import { gzipSync, gunzipSync } from 'fflate';
 import { Encryption } from './encryption';
 import { db, type ImageAsset } from './database';
-import { performNativeGoogleOAuth } from './googleOAuth';
-import type { GoogleOAuthTokens } from './googleOAuth';
+import {
+  authorizeGoogleDriveOnAndroid,
+  clearGoogleDriveTokenOnAndroid,
+} from './nativeGoogleDriveAuthorization';
 import { loadTokens, saveTokens, clearTokens } from './tokenStorage';
 import {
   ElectronImageContentStore,
@@ -56,11 +58,11 @@ interface BackupPayload {
 }
 
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
-const DEFAULT_REDIRECT_URI = 'https://www.beta-bot.net/oauth2redirect';
 
-export interface GoogleDriveProviderOptions {
-  nativeClientId?: string | null;
-  nativeRedirectUri?: string | null;
+interface GoogleOAuthTokens {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
 }
 
 /**
@@ -142,37 +144,24 @@ export class GoogleDriveProvider implements CloudProvider {
   private refreshToken: string | null = null;
   private accessTokenExpiresAt: number | null = null;
   private CLIENT_ID = ''; // Set this in your app
-  private readonly nativeClientId: string | null;
   private SCOPES = 'https://www.googleapis.com/auth/drive.file';
   private tokenClient: GoogleTokenClient | null = null;
   private gisLoadingPromise: Promise<void> | null = null;
   private debugLog: string[] = [];
-  private readonly webRedirectUri: string;
-  private readonly nativeRedirectUri: string;
   private readonly tokenExpiryLeewayMs = 60 * 1000;
   // On Electron, we use web auth which requires GIS SDK, so webSdkReady starts as false
   private webSdkReady = Capacitor.isNativePlatform() && Capacitor.getPlatform() !== 'electron';
 
   private readonly desktopClientId: string | null;
 
-  constructor(clientId: string, options?: GoogleDriveProviderOptions) {
+  constructor(clientId: string) {
     this.CLIENT_ID = clientId;
-    const envNativeClientId =
-      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_ID_NATIVE ?? null : null;
-    this.nativeClientId = options?.nativeClientId ?? envNativeClientId;
 
     // Desktop (Electron) client ID - separate from web and mobile
     const envDesktopClientId =
       typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_ID_DESKTOP ?? null : null;
     this.desktopClientId = envDesktopClientId;
 
-    const envWebRedirect =
-      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_REDIRECT_URI ?? DEFAULT_REDIRECT_URI : DEFAULT_REDIRECT_URI;
-    const envNativeRedirect =
-      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_REDIRECT_URI_NATIVE ?? null : null;
-
-    this.webRedirectUri = envWebRedirect;
-    this.nativeRedirectUri = options?.nativeRedirectUri ?? envNativeRedirect ?? envWebRedirect;
   }
 
   private debug(message: string, extra?: unknown) {
@@ -194,10 +183,6 @@ export class GoogleDriveProvider implements CloudProvider {
   async authenticate(): Promise<void> {
     this.debug('authenticate() called');
 
-    if (!this.CLIENT_ID) {
-      throw new Error('Google Drive client ID is not configured.');
-    }
-
     // Check for Electron by looking for the electronOAuth bridge
     const isElectron = !!getCloudSyncWindow()?.electronOAuth;
 
@@ -209,6 +194,10 @@ export class GoogleDriveProvider implements CloudProvider {
     if (Capacitor.isNativePlatform()) {
       await this.authenticateNative();
       return;
+    }
+
+    if (!this.CLIENT_ID) {
+      throw new Error('Google Drive client ID is not configured.');
     }
 
     await this.authenticateWeb();
@@ -329,7 +318,7 @@ export class GoogleDriveProvider implements CloudProvider {
     this.debug(`upload() starting ${method} to Google Drive (${(data.length / 1024 / 1024).toFixed(1)} MB)...`);
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchDrive(url, {
         method,
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -366,7 +355,7 @@ export class GoogleDriveProvider implements CloudProvider {
       return null;
     }
 
-    const response = await fetch(
+    const response = await this.fetchDrive(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
       {
         headers: {
@@ -425,7 +414,7 @@ export class GoogleDriveProvider implements CloudProvider {
       appProperties,
     })], { type: 'application/json' }));
     form.append('file', new Blob([request.encryptedData], { type: 'application/octet-stream' }));
-    const response = await fetch(
+    const response = await this.fetchDrive(
       'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,createdTime,size,appProperties',
       { method: 'POST', headers: { Authorization: `Bearer ${this.accessToken}` }, body: form },
     );
@@ -438,7 +427,7 @@ export class GoogleDriveProvider implements CloudProvider {
     if (!this.accessToken) throw new Error('Not authenticated');
     const query = `appProperties has { key='${DRIVE_BACKUP_APP_PROPERTY}' and value='true' } and trashed=false`;
     const fields = 'files(id,name,createdTime,size,appProperties)';
-    const response = await fetch(
+    const response = await this.fetchDrive(
       `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&orderBy=createdTime%20desc&fields=${encodeURIComponent(fields)}`,
       { headers: { Authorization: `Bearer ${this.accessToken}` } },
     );
@@ -450,7 +439,7 @@ export class GoogleDriveProvider implements CloudProvider {
   async downloadGeneration(id: string): Promise<string> {
     await this.ensureValidAccessToken();
     if (!this.accessToken) throw new Error('Not authenticated');
-    const response = await fetch(
+    const response = await this.fetchDrive(
       `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`,
       { headers: { Authorization: `Bearer ${this.accessToken}` } },
     );
@@ -461,7 +450,7 @@ export class GoogleDriveProvider implements CloudProvider {
   async deleteGeneration(id: string): Promise<void> {
     await this.ensureValidAccessToken();
     if (!this.accessToken) throw new Error('Not authenticated');
-    const response = await fetch(
+    const response = await this.fetchDrive(
       `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`,
       { method: 'DELETE', headers: { Authorization: `Bearer ${this.accessToken}` } },
     );
@@ -477,7 +466,7 @@ export class GoogleDriveProvider implements CloudProvider {
     }
 
     this.debug(`findFile() searching for ${fileName}`);
-    const response = await fetch(
+    const response = await this.fetchDrive(
       `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false&fields=files(id,name)`,
       {
         headers: {
@@ -560,53 +549,17 @@ export class GoogleDriveProvider implements CloudProvider {
     this.debug('authenticateNative() invoked');
 
     try {
-      const cached = await loadTokens();
-      if (cached) {
-        this.debug('authenticateNative() found cached tokens');
-        this.accessToken = cached.accessToken;
-        this.refreshToken = cached.refreshToken ?? null;
-        this.accessTokenExpiresAt = cached.expiresAt;
-
-        if (this.accessTokenExpiresAt && this.accessTokenExpiresAt > Date.now() + this.tokenExpiryLeewayMs) {
-          this.debug('authenticateNative() using cached access token');
-          return;
-        }
-
-        if (this.refreshToken) {
-          this.debug('authenticateNative() refreshing expired token');
-          try {
-            await this.refreshAccessToken();
-            return;
-          } catch (error) {
-            console.warn('[CloudSync] Failed to refresh cached Google token', error);
-            this.debug('authenticateNative() refresh failed, clearing cache');
-            await this.wipeStoredTokens();
-          }
-        } else {
-          this.debug('authenticateNative() cached token expired with no refresh token');
-          await this.wipeStoredTokens();
-        }
-      }
-
-      this.debug('authenticateNative() starting OAuth flow');
-      const clientId = this.getNativeClientId();
-      const redirectUri = this.getNativeRedirectUri();
-      this.debug('authenticateNative() using OAuth config', {
-        clientId,
-        redirectUri,
-      });
-      const tokens = await performNativeGoogleOAuth({
-        clientId,
-        redirectUri,
-        scope: this.SCOPES,
-        prompt: 'consent',
-      });
-      this.debug('authenticateNative() token response received', { hasRefresh: Boolean(tokens.refresh_token), clientId });
-      await this.applyNativeTokenResponse(tokens);
+      this.debug('authenticateNative() requesting an Android authorization token');
+      const token = await authorizeGoogleDriveOnAndroid();
+      this.accessToken = token.accessToken;
+      this.refreshToken = null;
+      this.accessTokenExpiresAt = Date.now() + token.expiresIn * 1000;
       this.debug('authenticateNative() obtained new tokens');
     } catch (error) {
       console.error('[CloudSync] Native authentication failed', error);
-      await this.wipeStoredTokens();
+      this.accessToken = null;
+      this.refreshToken = null;
+      this.accessTokenExpiresAt = null;
       throw error instanceof Error ? error : new Error(String(error));
     }
   }
@@ -621,7 +574,7 @@ export class GoogleDriveProvider implements CloudProvider {
     }
 
     const params = new URLSearchParams({
-      client_id: this.getNativeClientId(),
+      client_id: this.desktopClientId || this.CLIENT_ID,
       grant_type: 'refresh_token',
       refresh_token: this.refreshToken,
     });
@@ -665,6 +618,19 @@ export class GoogleDriveProvider implements CloudProvider {
       return;
     }
 
+    if (Capacitor.getPlatform() === 'android') {
+      const expiredToken = this.accessToken;
+      this.accessToken = null;
+      this.accessTokenExpiresAt = null;
+      if (expiredToken) {
+        await clearGoogleDriveTokenOnAndroid(expiredToken).catch((error) => {
+          console.warn('[CloudSync] Failed to clear expired Android Google token', error);
+        });
+      }
+      await this.authenticateNative();
+      return;
+    }
+
     if (this.refreshToken) {
       try {
         this.debug('ensureValidAccessToken(): refreshing token');
@@ -680,6 +646,35 @@ export class GoogleDriveProvider implements CloudProvider {
     }
 
     throw new Error('Access token expired; please sign in again.');
+  }
+
+  private async fetchDrive(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+    await this.ensureValidAccessToken();
+    const request = () => fetch(input, {
+      ...init,
+      headers: {
+        ...init.headers,
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+    });
+
+    let response = await request();
+    if (response.status !== 401 || Capacitor.getPlatform() !== 'android') {
+      return response;
+    }
+
+    this.debug('Drive rejected the Android access token; clearing it and retrying once');
+    const rejectedToken = this.accessToken;
+    this.accessToken = null;
+    this.accessTokenExpiresAt = null;
+    if (rejectedToken) {
+      await clearGoogleDriveTokenOnAndroid(rejectedToken).catch((error) => {
+        console.warn('[CloudSync] Failed to clear rejected Android Google token', error);
+      });
+    }
+    await this.authenticateNative();
+    response = await request();
+    return response;
   }
 
   private async applyNativeTokenResponse(tokens: GoogleOAuthTokens): Promise<void> {
@@ -707,20 +702,9 @@ export class GoogleDriveProvider implements CloudProvider {
     await clearTokens();
   }
 
-  private getNativeClientId(): string {
-    if (this.nativeClientId && this.nativeClientId.length > 0) {
-      return this.nativeClientId;
-    }
-    return this.CLIENT_ID;
-  }
-
-  private getNativeRedirectUri(): string {
-    return this.nativeRedirectUri;
-  }
-
   private appendClientSecret(params: URLSearchParams): void {
     const clientSecret =
-      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_SECRET ?? undefined : undefined;
+      typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_CLIENT_SECRET_DESKTOP ?? undefined : undefined;
     if (clientSecret && clientSecret.length > 0) {
       params.append('client_secret', clientSecret);
     }

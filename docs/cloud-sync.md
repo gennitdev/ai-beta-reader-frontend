@@ -18,15 +18,15 @@ This guide describes the current Google Drive backup and restore workflow for th
 |-------|----------|---------------|------------------|
 | Browser | Google Identity Services token client | `sql.js` snapshot in IndexedDB | IndexedDB Blob store |
 | Electron | Desktop OAuth client with a loopback callback through the preload bridge | `sql.js` snapshot in IndexedDB | Files below the Electron app-data directory |
-| Android | Authorization Code + PKCE in the system browser with an app redirect | `@capacitor-community/sqlite` | Metadata only; no local image-binary store yet |
+| Android | Google Play services `AuthorizationClient` through a Capacitor bridge | `@capacitor-community/sqlite` | Metadata only; no local image-binary store yet |
 
 All platforms use `src/lib/cloudSync.ts` and the codec under `src/lib/libraryBundle/`. New backups are canonical full-library ZIPs encrypted with the WC2 Web Crypto envelope. Drive stores each backup as an immutable generation and retains the three newest successful generations.
 
 Key differences:
 
-- Web keeps the existing GIS flow (`response_type=token`). Android requires Authorization Code + PKCE and **must** run in the system browser to satisfy Google’s “Use secure browsers” policy.
-- Android needs several Capacitor plugins: `@capacitor/browser`, `@capacitor/app-launcher`, `@capacitor/preferences`, `@capacitor/status-bar`, and the secure-storage adapter.
-- Electron and Android cache refreshable OAuth credentials through OS-backed secure storage. The browser retains only short-lived GIS credentials in browser-local storage.
+- Web keeps the existing GIS flow (`response_type=token`). Android requests a short-lived token from Google Play services and never handles an OAuth redirect URI.
+- Android's native bridge requests only `https://www.googleapis.com/auth/drive.file`. It clears and reacquires expired tokens through `AuthorizationClient`; it does not receive or store a refresh token.
+- Electron caches refreshable OAuth credentials through OS-backed secure storage. Browser GIS and Android authorization use short-lived access tokens.
 - New backups encrypt a canonical full-library ZIP with the WC2 Web Crypto envelope. Drive keeps the three newest successful generations and records integrity metadata in `appProperties`.
 - Browser and Electron backups read image bytes through the platform image store. Live browser SQLite rows do not retain base64 image content.
 - Restore continues to recognize WC1, WC2, and CryptoJS-encrypted legacy JSON backups. Legacy restore support is not retired with the old writer.
@@ -41,14 +41,10 @@ Set the variables needed by each target in `.env.local` for local builds. Config
 |----------|---------|---------|
 | `VITE_GOOGLE_CLIENT_ID` | Web OAuth client (GIS token client) | `302250506015-du7cd7e5g469dd74cs2fnq8luksiuutb.apps.googleusercontent.com` |
 | `VITE_GOOGLE_CLIENT_ID_WEB` | Optional alias for the web client. Defaults to `VITE_GOOGLE_CLIENT_ID`. | same as above |
-| `VITE_GOOGLE_REDIRECT_URI` | Hosted redirect used by the web flow | `https://www.beta-bot.net/oauth2redirect` |
 | `VITE_GOOGLE_CLIENT_ID_DESKTOP` | Desktop OAuth client used by Electron's loopback flow | `…apps.googleusercontent.com` |
 | `VITE_GOOGLE_CLIENT_SECRET_DESKTOP` | Optional secret if required by the configured desktop client | |
-| `VITE_GOOGLE_CLIENT_ID_NATIVE` | **Android** OAuth client id (public, no secret) | `302250506015-hmm4hpdloehtuodde00pu2irqkpm1inp.apps.googleusercontent.com` |
-| `VITE_GOOGLE_REDIRECT_URI_NATIVE` | Custom redirect scheme derived from the Android client id | `com.googleusercontent.apps.302250506015-hmm4hpdloehtuodde00pu2irqkpm1inp:/oauth2redirect` |
-| `VITE_GOOGLE_CLIENT_SECRET` | Only required if you deliberately reuse a Web client on native (not recommended). Leave blank otherwise. | |
 
-> **Tip:** After deploying to Vercel, you can confirm the values landed by downloading the compiled bundle and running `rg "com.googleusercontent.apps" dist/assets`.
+Android authorization has no Vite environment variables. Google Play services resolves the Android OAuth client from the installed package name and the signing-certificate SHA-1.
 
 ---
 
@@ -57,16 +53,16 @@ Set the variables needed by each target in `.env.local` for local builds. Config
 1. **Enable the Drive API** for the project.
 2. **Create/confirm the Web OAuth Client**:
    - Authorized JavaScript origin: `https://www.beta-bot.net`
-   - Authorized redirect URI: `https://www.beta-bot.net/oauth2redirect`
 3. **Create/confirm the Desktop OAuth Client** for Electron and place its client ID in `VITE_GOOGLE_CLIENT_ID_DESKTOP`. Electron receives the authorization response on a loopback callback managed by its OAuth bridge.
-4. **Create/confirm the Android OAuth Client**:
+4. **Create/confirm the production Android OAuth Client**:
    - Package name: `com.betareader.app`
-   - SHA‑1 certificate fingerprint: output of `./gradlew signingReport` (debug build) and, if applicable, the release keystore SHA‑1.
-   - Tick **“Enable custom URI scheme”**; Google auto-derives `com.googleusercontent.apps.<client-id>:/oauth2redirect`.
-5. **Digital Asset Links**:
-   - `android/app/src/main/AndroidManifest.xml` already declares the HTTPS App Link and the custom scheme.
-   - Ensure `https://www.beta-bot.net/.well-known/assetlinks.json` includes the Android client sha1 + package so the browser redirect is trusted.
-6. **OAuth consent screen**:
+   - SHA‑1 certificate fingerprint: the Google Play **app-signing certificate** shown at Play Console → Setup → App integrity.
+   - Do not use the upload-key SHA‑1 for the Play-installed production build. Play re-signs distributed artifacts with the app-signing key.
+5. **Create a separate Android OAuth client entry for local debug installs**, using package `com.betareader.app` and the debug SHA‑1 from `./gradlew signingReport`.
+6. **Remove obsolete redirect configuration**:
+   - Android does not need a custom URI scheme or an HTTPS App Link for authorization.
+   - The app manifest intentionally contains neither OAuth intent filter. Digital Asset Links configuration for `/oauth2redirect` can be removed if no other application feature uses it.
+7. **OAuth consent screen**:
    - If still in “Testing” mode, add the Google accounts you’re using on devices to the “Test Users” list.
 
 ---
@@ -88,7 +84,8 @@ Set the variables needed by each target in `.env.local` for local builds. Config
    npx cap sync android
    npx cap run android --target <serial>   # or open in Android Studio
    ```
-5. On first launch the app opens Chrome for OAuth. Accept the “Allow beta bot to connect to your Google Drive” prompt; the App Link (`com.googleusercontent.apps.…:/oauth2redirect`) brings you back into the app.
+5. For local verification, accept the native Google authorization prompt. For production verification, upload a release bundle and install it from a Play internal-testing track so the app-signing certificate—not the upload certificate—is exercised.
+6. Verify backup, backup listing, and restore on a physical device. Cancel the account/consent UI once and retry to confirm the recoverable error path. Leave the app idle long enough for a token to expire (or use a test build with a shortened expiry) and confirm the next operation reacquires authorization without changing backup data.
 
 Status bar tweaks (`@capacitor/status-bar`) ensure the web view sits below the system status area.
 
@@ -98,10 +95,9 @@ Status bar tweaks (`@capacitor/status-bar`) ensure the web view sits below the s
 
 | Symptom | Root cause | Fix |
 |---------|------------|-----|
-| `client_secret is missing` | Native build still using the Web client | Set native env vars in Vercel + local, redeploy, confirm `CloudSync` logs show the native client id (`…1inp`) |
-| `Access blocked: request invalid` with “custom URI scheme not enabled” | Android OAuth client wasn’t marked for custom schemes | Edit the OAuth client, tick “Enable custom URI scheme” |
-| `Access blocked` with `redirect_uri_mismatch` | Web client missing `https://www.beta-bot.net/oauth2redirect` | Add the redirect to the Web OAuth client |
-| `invalid_request` even after custom scheme | SHA‑1 fingerprint missing or mismatched | Run `./gradlew signingReport`, add SHA‑1 under Android client |
+| Android authorization is denied or unavailable | Package/signing certificate is not registered, or Google Play services is unavailable | Match `com.betareader.app` and the installed build's signing SHA‑1 in the Android OAuth client; update Google Play services |
+| Local debug build authorizes but internal-test build does not | Only the debug or upload certificate is registered | Add the Play app-signing certificate SHA‑1 from Play Console |
+| Internal-test build authorizes but local debug does not | Only the Play app-signing certificate is registered | Add a separate Android OAuth client entry using the debug SHA‑1 from `./gradlew signingReport` |
 | `No backup found in cloud storage` | No versioned bundle generation or legacy `ai-beta-reader-backup.enc` exists | Perform a backup from the app or verify the legacy file still exists |
 | `Failed to decrypt - wrong password? TypeError: this.db.importFromJson is not a function` | Native attempted Capacitor’s `importFromJson` | Fixed by manual import logic in `src/lib/database.ts` |
 | `Failed to decrypt... FOREIGN KEY constraint failed (code 787)` | Inserts executed while FK enforcement was on | Fix: toggle `PRAGMA foreign_keys` off while bulk importing, then back on |
@@ -116,8 +112,8 @@ adb logcat | grep CloudSync
 # View errors during decrypt/import
 adb logcat | grep "Failed to decrypt"
 
-# Confirm which OAuth config is in use
-adb logcat | grep "using OAuth config"
+# Observe native authorization and token renewal
+adb logcat | grep "authenticateNative"
 ```
 
 ---
@@ -153,9 +149,6 @@ npm run build
 # Type safety
 npm run type-check
 
-# Search compiled bundle to confirm env values landed
-rg "com.googleusercontent.apps" dist/assets
-
 # Signing report for SHA-1
 cd android
 ./gradlew signingReport
@@ -170,8 +163,8 @@ sudo adb start-server
 ### Quick Restore Checklist (Android)
 
 1. Device online, USB debugging enabled, `adb devices` shows `device`.
-2. Vercel env vars set for both web & native client ids/redirects.
-3. Android OAuth client has package name, SHA‑1, custom scheme enabled.
+2. Android OAuth client has package `com.betareader.app` and the installed build's signing SHA‑1.
+3. For Play internal testing, confirm that SHA‑1 is the Play app-signing certificate, not the upload key.
 4. `npm run build` → `npx cap sync android` → deploy to device.
 5. Trigger **Restore** in-app, approve Google consent, watch `adb logcat | grep CloudSync`.
 6. Success message: `✅ Database restored successfully!`
