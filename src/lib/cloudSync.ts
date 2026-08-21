@@ -9,6 +9,7 @@ import { loadTokens, saveTokens, clearTokens } from './tokenStorage';
 import {
   ElectronImageContentStore,
   IndexedDbImageContentStore,
+  dataUrlToBlob,
   inspectImageContent,
   type ImageContentStore,
 } from './imageContentStore';
@@ -20,10 +21,34 @@ import {
   stripImageDataFromRows,
   type ImageContentSnapshot,
 } from './cloudSyncImageAssets';
-import type { ImportRow } from './databaseImportExport';
+import { parseDatabaseImportData, type ImportRow } from './databaseImportExport';
+import packageInfo from '../../package.json';
+import { createFullLibraryBundleExport } from './libraryBundle/export';
+import { LIBRARY_BUNDLE_FORMAT_VERSION } from './libraryBundle/schemas';
+import { createPortableId } from './portableIds';
+import {
+  DRIVE_BACKUP_APP_PROPERTY,
+  createDriveBackupGeneration,
+  encryptedGenerationIntegrity,
+  type DriveBackupGeneration,
+  type DriveGenerationStore,
+  type UploadDriveGenerationRequest,
+} from './libraryBundle/adapters/drive';
+import { previewBundleZipImport } from './libraryBundle/importPreview';
+import { sha256Hex } from './libraryBundle/semanticHash';
+import { prepareLibraryReplacement, replaceLibraryWithRecovery } from './recovery/replacement';
+import { createRuntimeRecoveryStore } from './recovery/runtime';
+import type { RecoveryStore } from './recovery/model';
 
 // Prefix to identify compressed backups
 const COMPRESSED_PREFIX = 'GZ1:';
+
+function hasZipSignature(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) return false;
+  return (bytes[2] === 0x03 && bytes[3] === 0x04)
+    || (bytes[2] === 0x05 && bytes[3] === 0x06)
+    || (bytes[2] === 0x07 && bytes[3] === 0x08);
+}
 
 interface BackupPayload {
   image_assets?: ImportRow[];
@@ -41,7 +66,7 @@ export interface GoogleDriveProviderOptions {
 /**
  * Cloud sync interface - can be implemented for Google Drive, Dropbox, etc.
  */
-export interface CloudProvider {
+export interface CloudProvider extends Partial<DriveGenerationStore> {
   name: string;
   authenticate(): Promise<void>;
   upload(fileName: string, data: string): Promise<void>;
@@ -49,6 +74,14 @@ export interface CloudProvider {
   isAuthenticated(): boolean;
   ensureWebSdkReady?(): Promise<void>;
   isWebSdkReady?(): boolean;
+}
+
+interface DriveFileResource {
+  id?: string;
+  name?: string;
+  createdTime?: string;
+  size?: string;
+  appProperties?: Record<string, string>;
 }
 
 interface GoogleTokenClient {
@@ -347,6 +380,92 @@ export class GoogleDriveProvider implements CloudProvider {
     }
 
     return await response.text();
+  }
+
+  private generationFromDriveFile(file: DriveFileResource): DriveBackupGeneration {
+    const properties = file.appProperties ?? {};
+    const createdAt = properties.createdAt;
+    const encryptedByteLength = Number(properties.encryptedByteLength);
+    const bundleFormatVersion = Number(properties.bundleFormatVersion);
+    if (
+      !file.id || !file.name || !createdAt || Number.isNaN(Date.parse(createdAt))
+      || properties[DRIVE_BACKUP_APP_PROPERTY] !== 'true'
+      || !properties.appVersion
+      || !Number.isSafeInteger(bundleFormatVersion) || bundleFormatVersion < 1
+      || !Number.isSafeInteger(encryptedByteLength) || encryptedByteLength < 1
+      || !/^[a-f0-9]{64}$/.test(properties.ciphertextSha256 ?? '')
+      || file.size !== undefined && Number(file.size) !== encryptedByteLength
+    ) throw new Error('Google Drive returned invalid backup generation metadata.');
+    return {
+      id: file.id,
+      name: file.name,
+      createdAt,
+      appVersion: properties.appVersion,
+      bundleFormatVersion,
+      encryptedByteLength,
+      ciphertextSha256: properties.ciphertextSha256,
+    };
+  }
+
+  async uploadGeneration(request: UploadDriveGenerationRequest): Promise<DriveBackupGeneration> {
+    await this.ensureValidAccessToken();
+    if (!this.accessToken) throw new Error('Not authenticated');
+    const appProperties = {
+      [DRIVE_BACKUP_APP_PROPERTY]: 'true',
+      createdAt: request.metadata.createdAt,
+      appVersion: request.metadata.appVersion,
+      bundleFormatVersion: String(request.metadata.bundleFormatVersion),
+      encryptedByteLength: String(request.metadata.encryptedByteLength),
+      ciphertextSha256: request.metadata.ciphertextSha256,
+    };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({
+      name: request.name,
+      mimeType: 'application/octet-stream',
+      appProperties,
+    })], { type: 'application/json' }));
+    form.append('file', new Blob([request.encryptedData], { type: 'application/octet-stream' }));
+    const response = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,createdTime,size,appProperties',
+      { method: 'POST', headers: { Authorization: `Bearer ${this.accessToken}` }, body: form },
+    );
+    if (!response.ok) throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+    return this.generationFromDriveFile(await response.json() as DriveFileResource);
+  }
+
+  async listGenerations(): Promise<DriveBackupGeneration[]> {
+    await this.ensureValidAccessToken();
+    if (!this.accessToken) throw new Error('Not authenticated');
+    const query = `appProperties has { key='${DRIVE_BACKUP_APP_PROPERTY}' and value='true' } and trashed=false`;
+    const fields = 'files(id,name,createdTime,size,appProperties)';
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&orderBy=createdTime%20desc&fields=${encodeURIComponent(fields)}`,
+      { headers: { Authorization: `Bearer ${this.accessToken}` } },
+    );
+    if (!response.ok) throw new Error(`Backup generation search failed: ${response.statusText}`);
+    const data = await response.json() as { files?: DriveFileResource[] };
+    return (data.files ?? []).map((file) => this.generationFromDriveFile(file));
+  }
+
+  async downloadGeneration(id: string): Promise<string> {
+    await this.ensureValidAccessToken();
+    if (!this.accessToken) throw new Error('Not authenticated');
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`,
+      { headers: { Authorization: `Bearer ${this.accessToken}` } },
+    );
+    if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+    return response.text();
+  }
+
+  async deleteGeneration(id: string): Promise<void> {
+    await this.ensureValidAccessToken();
+    if (!this.accessToken) throw new Error('Not authenticated');
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${this.accessToken}` } },
+    );
+    if (!response.ok && response.status !== 404) throw new Error(`Delete failed: ${response.statusText}`);
   }
 
   private async findFile(fileName: string): Promise<string | null> {
@@ -811,16 +930,83 @@ export class GoogleDriveProvider implements CloudProvider {
 export class CloudSync {
   private provider: CloudProvider;
   private backupFileName = 'ai-beta-reader-backup.enc';
+  private readonly recoveryStore?: RecoveryStore;
+  private readonly now: () => Date;
+  private readonly appVersion: string;
 
-  constructor(provider: CloudProvider) {
+  constructor(provider: CloudProvider, options: {
+    recoveryStore?: RecoveryStore;
+    now?: () => Date;
+    appVersion?: string;
+  } = {}) {
     this.provider = provider;
+    this.recoveryStore = options.recoveryStore;
+    this.now = options.now ?? (() => new Date());
+    this.appVersion = options.appVersion ?? packageInfo.version;
+  }
+
+  private generationStore(): DriveGenerationStore {
+    if (
+      !this.provider.uploadGeneration || !this.provider.listGenerations
+      || !this.provider.downloadGeneration || !this.provider.deleteGeneration
+    ) throw new Error('This cloud provider does not support versioned library backups.');
+    return this.provider as DriveGenerationStore;
+  }
+
+  private hasGenerationStore(): boolean {
+    return Boolean(
+      this.provider.uploadGeneration && this.provider.listGenerations
+      && this.provider.downloadGeneration && this.provider.deleteGeneration,
+    );
+  }
+
+  private async ensureAuthenticated(): Promise<void> {
+    if (!this.provider.isAuthenticated()) await this.provider.authenticate();
+  }
+
+  async listBackupGenerations(): Promise<DriveBackupGeneration[]> {
+    await this.ensureAuthenticated();
+    return (await this.generationStore().listGenerations())
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
+  }
+
+  private async assetBytes(asset: ImageAsset, store: ImageContentStore | null): Promise<Uint8Array> {
+    let stored: Blob | null = null;
+    try {
+      stored = store ? await store.read(asset) : null;
+    } catch (error) {
+      if (!asset.image_data) throw error;
+    }
+    if (stored) return new Uint8Array(await stored.arrayBuffer());
+    if (asset.image_data) return new Uint8Array(await dataUrlToBlob(asset.image_data).arrayBuffer());
+    throw new Error(`Image ${asset.id} is missing required bytes.`);
+  }
+
+  /** Create an encrypted canonical ZIP as a new immutable Drive generation. */
+  async backup(password: string): Promise<DriveBackupGeneration> {
+    await this.ensureAuthenticated();
+    const createdAt = this.now().toISOString();
+    const databaseBackup = await db.exportDatabase();
+    const imageStore = createRuntimeImageContentStore();
+    const bundle = await createFullLibraryBundleExport(databaseBackup, {
+      bundleId: createPortableId('bundle'),
+      exportedAt: createdAt,
+      appVersion: this.appVersion,
+      readAssetBytes: (asset) => this.assetBytes(asset, imageStore),
+    });
+    const encrypted = await Encryption.encrypt(bundle.zipBytes, password);
+    return createDriveBackupGeneration(this.generationStore(), encrypted, {
+      createdAt,
+      appVersion: this.appVersion,
+      bundleFormatVersion: LIBRARY_BUNDLE_FORMAT_VERSION,
+    });
   }
 
   /**
-   * Backup database to cloud storage (encrypted)
-   * Includes image data from desktop filesystem or web database
+   * Internal one-release fallback for creating the pre-bundle JSON backup.
+   * This is intentionally not exposed in Settings; restore support is permanent.
    */
-  async backup(password: string): Promise<void> {
+  async backupLegacyJson(password: string): Promise<void> {
     if (!this.provider.isAuthenticated()) {
       await this.provider.authenticate();
     }
@@ -896,22 +1082,96 @@ export class CloudSync {
     }
   }
 
+  private async importCanonicalDatabase(data: Uint8Array): Promise<void> {
+    const importJson = JSON.parse(new TextDecoder().decode(data)) as BackupPayload;
+    const imageStore = createRuntimeImageContentStore();
+    if (Array.isArray(importJson.image_assets) && importJson.image_assets.length > 0 && !imageStore) {
+      importJson.image_assets = importJson.image_assets.map((row) => (
+        Array.isArray(row) ? row : { ...row, image_data: null }
+      ));
+      await db.importDatabase(new TextEncoder().encode(JSON.stringify(importJson)));
+      return;
+    }
+    if (imageStore && Array.isArray(importJson.image_assets) && importJson.image_assets.length > 0) {
+      importJson.image_assets = importJson.image_assets.map((row) => {
+        if (Array.isArray(row) || typeof row !== 'object' || row === null) return row;
+        const id = String(row.id ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        return { ...row, file_path: row.file_path || `images/library/${id}/${String(row.file_name ?? 'image')}` };
+      });
+      const restored = await restoreImageRows(importJson.image_assets, imageStore);
+      importJson.image_assets = restored.rows;
+      await db.importDatabase(new TextEncoder().encode(JSON.stringify(importJson)));
+      return;
+    }
+    await db.importDatabase(data);
+  }
+
+  private async restoreBundle(zipBytes: Uint8Array): Promise<boolean> {
+    const currentBackup = await db.exportDatabase();
+    const imageStore = createRuntimeImageContentStore();
+    const preview = await previewBundleZipImport(zipBytes, currentBackup, {
+      readLocalAssetBytes: (asset) => this.assetBytes(asset, imageStore),
+    });
+    if (!preview.plan.replaceEligible) {
+      throw new Error('The Drive backup is not a complete, validated full-library bundle.');
+    }
+    const createdAt = this.now().toISOString();
+    const recoveryStore = this.recoveryStore ?? createRuntimeRecoveryStore();
+    const recovery = await prepareLibraryReplacement(
+      recoveryStore,
+      preview.plan,
+      preview.localModel,
+      preview.databaseGeneration,
+      {
+        recoveryId: createPortableId('recovery').replace(/:/g, '-'),
+        recoveryBundleId: createPortableId('bundle'),
+        createdAt,
+        appVersion: this.appVersion,
+      },
+    );
+    await replaceLibraryWithRecovery(
+      recoveryStore,
+      preview.plan,
+      preview.incomingModel,
+      recovery,
+      await sha256Hex(currentBackup),
+      (data) => this.importCanonicalDatabase(data),
+    );
+    return true;
+  }
+
   /**
    * Restore database from cloud storage (decrypt)
    * Writes image files to desktop filesystem if available
    */
-  async restore(password: string): Promise<boolean> {
-    if (!this.provider.isAuthenticated()) {
-      await this.provider.authenticate();
-    }
+  async restore(password: string, generationId?: string): Promise<boolean> {
+    await this.ensureAuthenticated();
 
     logger.log('[CloudSync] Starting restore workflow');
     logger.log(`Downloading from ${this.provider.name}...`);
-    let downloaded = await this.provider.download(this.backupFileName);
+    let downloaded: string | null = null;
+    let selectedGeneration: DriveBackupGeneration | undefined;
+    if (this.hasGenerationStore()) {
+      const generations = await this.listBackupGenerations();
+      selectedGeneration = generationId
+        ? generations.find((generation) => generation.id === generationId)
+        : generations[0];
+      if (generationId && !selectedGeneration) throw new Error('The selected Drive backup generation was not found.');
+      if (selectedGeneration) downloaded = await this.generationStore().downloadGeneration(selectedGeneration.id);
+    }
+    if (downloaded === null) downloaded = await this.provider.download(this.backupFileName);
 
     if (!downloaded) {
       logger.log('No backup found in cloud storage');
       throw new Error('No backup found in your Google Drive. Please create a backup first.');
+    }
+
+    if (selectedGeneration) {
+      const integrity = await encryptedGenerationIntegrity(downloaded);
+      if (
+        integrity.encryptedByteLength !== selectedGeneration.encryptedByteLength
+        || integrity.ciphertextSha256 !== selectedGeneration.ciphertextSha256
+      ) throw new Error('The downloaded Drive backup generation failed its integrity check.');
     }
 
     // Check if the backup is compressed (has GZ1: prefix)
@@ -955,11 +1215,21 @@ export class CloudSync {
       }
     }
 
+    if (hasZipSignature(decrypted)) return this.restoreBundle(decrypted);
+
     let restoreStoreForRollback: ImageContentStore | null = null;
     let imageContentSnapshot: ImageContentSnapshot[] = [];
     try {
-      let dataToImport = decrypted;
-      const importJson = JSON.parse(new TextDecoder().decode(decrypted)) as BackupPayload;
+      let parsedLegacy: unknown;
+      try {
+        const legacyText = new TextDecoder('utf-8', { fatal: true }).decode(decrypted).replace(/^\uFEFF/, '');
+        parsedLegacy = JSON.parse(legacyText);
+        parseDatabaseImportData(parsedLegacy);
+      } catch (error) {
+        throw new Error('The decrypted backup is corrupt or uses an unsupported format.', { cause: error });
+      }
+      const importJson = parsedLegacy as BackupPayload;
+      let dataToImport = new TextEncoder().encode(JSON.stringify(importJson));
 
       // Free the decrypted buffer now that we've parsed it
       decrypted = new Uint8Array(0);

@@ -16,6 +16,7 @@ import {
   type WikiPageChapterLink,
 } from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
+import type { DriveBackupGeneration } from '@/lib/libraryBundle/adapters/drive'
 import type {
   FindReplaceSearchRequest,
   ReplaceFindReplaceMatchesRequest,
@@ -268,7 +269,12 @@ export function useDatabase() {
     }
   }
 
-  async function restoreFromCloud(password: string) {
+  async function listCloudBackups(): Promise<DriveBackupGeneration[]> {
+    if (!cloudSync.value) throw new Error('Cloud sync not initialized')
+    return cloudSync.value.listBackupGenerations()
+  }
+
+  async function restoreFromCloud(password: string, generationId?: string) {
     if (!cloudSync.value) {
       throw new Error('Cloud sync not initialized')
     }
@@ -277,7 +283,8 @@ export function useDatabase() {
       loading.value = true
       error.value = null
       logger.log('[CloudSync] restoreFromCloud invoked')
-      await cloudSync.value.restore(password)
+      if (generationId) await cloudSync.value.restore(password, generationId)
+      else await cloudSync.value.restore(password)
       logger.log('[CloudSync] restoreFromCloud finished successfully')
       await loadBooks() // Refresh after restore
     } catch (e) {
@@ -1039,6 +1046,7 @@ export function useDatabase() {
     cloudSyncReady,
     prepareCloudSync,
     backupToCloud,
+    listCloudBackups,
     restoreFromCloud,
 
     // Summary operations

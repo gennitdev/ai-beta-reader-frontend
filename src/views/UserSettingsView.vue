@@ -25,6 +25,7 @@ const {
   getParts,
   getNotes,
   backupToCloud,
+  listCloudBackups,
   restoreFromCloud,
   hasCloudSync,
   prepareCloudSync,
@@ -78,12 +79,15 @@ const {
   showCloudPassword,
   isBackingUp,
   isRestoring,
+  isLoadingGenerations,
+  cloudGenerations,
   cloudMessage,
   cloudMessageType,
   cloudSyncAvailable,
   handleCloudBackup,
   handleCloudRestore,
-} = useCloudSync({ backupToCloud, restoreFromCloud, hasCloudSync, cloudSyncReady })
+  refreshCloudGenerations,
+} = useCloudSync({ backupToCloud, restoreFromCloud, listCloudBackups, hasCloudSync, cloudSyncReady })
 
 // Library export (structured ZIP or Markdown)
 const {
@@ -482,7 +486,7 @@ onMounted(async () => {
             </button>
 
             <button
-              @click="handleCloudRestore"
+              @click="handleCloudRestore()"
               :disabled="isRestoring || !cloudPassword || !cloudSyncAvailable || !cloudSyncReady"
               class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -501,6 +505,37 @@ onMounted(async () => {
                 {{ isRestoring ? 'Restoring...' : 'Restore from Backup' }}
               </span>
             </button>
+
+            <button
+              type="button"
+              :disabled="isLoadingGenerations || isBackingUp || isRestoring || !cloudSyncAvailable || !cloudSyncReady"
+              class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="refreshCloudGenerations"
+            >
+              {{ isLoadingGenerations ? 'Loading Backups...' : 'Show Available Backups' }}
+            </button>
+          </div>
+
+          <div v-if="cloudGenerations.length" class="space-y-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Available backup generations</h3>
+            <div
+              v-for="generation in cloudGenerations"
+              :key="generation.id"
+              class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-2 text-xs dark:border-gray-700"
+            >
+              <div class="text-gray-600 dark:text-gray-300">
+                <div class="font-medium">{{ new Date(generation.createdAt).toLocaleString() }}</div>
+                <div>App {{ generation.appVersion }} · bundle format {{ generation.bundleFormatVersion }} · {{ generation.encryptedByteLength.toLocaleString() }} encrypted bytes</div>
+              </div>
+              <button
+                type="button"
+                :disabled="isRestoring || isBackingUp || !cloudPassword"
+                class="rounded border border-gray-300 px-3 py-1.5 font-medium text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200"
+                @click="handleCloudRestore(generation.id)"
+              >
+                Restore this backup
+              </button>
+            </div>
           </div>
 
           <p
@@ -524,12 +559,13 @@ onMounted(async () => {
 
           <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
             <p>✓ Data is encrypted client-side before upload</p>
-            <p>✓ Backups are stored in your Google Drive as <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">ai-beta-reader-backup.enc</code></p>
+            <p>✓ Each backup is stored as a new encrypted generation in your Google Drive</p>
             <p>✓ Restoring requires the same password used for backup</p>
-            <p>⚠️ Each backup overwrites the previous one - use the same password each time</p>
+            <p>✓ The three newest successful generations are retained</p>
+            <p>✓ Legacy <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">ai-beta-reader-backup.enc</code> files remain restorable</p>
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            To find your backup: Open <a href="https://drive.google.com" target="_blank" rel="noopener noreferrer" class="text-gold-600 dark:text-gold-400 hover:underline">Google Drive</a> and search for <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">ai-beta-reader-backup.enc</code>
+            To find your backups, open <a href="https://drive.google.com" target="_blank" rel="noopener noreferrer" class="text-gold-600 dark:text-gold-400 hover:underline">Google Drive</a> and search for <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">ai-beta-reader-library-</code>.
           </p>
         </div>
       </div>

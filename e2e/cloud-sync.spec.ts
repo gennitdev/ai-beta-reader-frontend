@@ -17,6 +17,10 @@ const PASSWORD = 'correct horse battery staple'
 // MUST reappear after restore.
 const MARKER = 'ZEPHYR-ROUNDTRIP-MARKER-8571'
 
+// Canonical backup/restore builds and validates two complete ZIP bundles. Leave
+// enough headroom for that work when the full E2E suite runs in parallel.
+test.describe.configure({ timeout: 60_000 })
+
 test('backup → wipe → restore preserves book and chapter data', async ({ page, drive }) => {
   // --- Seed: author a book + chapter through the UI ---
   const { chapterUrl } = await createBookWithChapter(page, {
@@ -36,10 +40,10 @@ test('backup → wipe → restore preserves book and chapter data', async ({ pag
   // plaintext marker. This is what makes "encrypted backup" a verified claim.
   const blob = drive.getBackup()
   expect(blob, 'a backup file should have been uploaded').toBeTruthy()
-  // Compressed (GZ1:) then Web Crypto encrypted. The format version is
+  // The canonical ZIP is encrypted directly. The format version is
   // deliberately matched loosely (WC1:, WC2:, …) so the test tracks the app's
   // real ciphertext prefix rather than pinning one crypto revision.
-  expect(blob).toMatch(/^GZ1:WC\d+:/)
+  expect(blob).toMatch(/^WC\d+:/)
   expect(blob, 'plaintext must not leak into the backup').not.toContain(MARKER)
 
   // --- Wipe all local data so any restored content must come from the backup ---

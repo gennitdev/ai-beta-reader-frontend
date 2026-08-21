@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   getParts: vi.fn(async () => [] as unknown[]),
   getNotes: vi.fn(async () => null as unknown),
   backupToCloud: vi.fn(async () => {}),
+  listCloudBackups: vi.fn(async () => []),
   restoreFromCloud: vi.fn(async () => {}),
   hasCloudSync: vi.fn(() => true),
   prepareCloudSync: vi.fn(async () => {}),
@@ -40,6 +41,7 @@ vi.mock('@/composables/useDatabase', async () => {
       getParts: h.getParts,
       getNotes: h.getNotes,
       backupToCloud: h.backupToCloud,
+      listCloudBackups: h.listCloudBackups,
       restoreFromCloud: h.restoreFromCloud,
       hasCloudSync: h.hasCloudSync,
       prepareCloudSync: h.prepareCloudSync,
@@ -111,6 +113,7 @@ beforeEach(() => {
   h.chapters = []
   h.cloudSyncReady = true
   h.hasCloudSync.mockReturnValue(true)
+  h.listCloudBackups.mockResolvedValue([])
   h.canStoreImages = false
   vi.stubGlobal('confirm', vi.fn(() => true))
   vi.stubGlobal('alert', vi.fn())
@@ -308,6 +311,23 @@ describe('UserSettingsView', () => {
       await flushPromises()
 
       expect(h.restoreFromCloud).not.toHaveBeenCalled()
+    })
+
+    it('lists Drive generations and restores the selected backup', async () => {
+      h.listCloudBackups.mockResolvedValueOnce([{
+        id: 'generation-1', name: 'generation.enc', createdAt: '2026-08-20T00:00:00.000Z',
+        appVersion: '2.0.0', bundleFormatVersion: 1, encryptedByteLength: 123,
+        ciphertextSha256: 'a'.repeat(64),
+      }])
+      const wrapper = mountView()
+      await flushPromises()
+      await button(wrapper, 'Show Available Backups').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('App 2.0.0 · bundle format 1')
+      await wrapper.get('#cloud-password').setValue('hunter2')
+      await button(wrapper, 'Restore this backup').trigger('click')
+      await flushPromises()
+      expect(h.restoreFromCloud).toHaveBeenCalledWith('hunter2', 'generation-1')
     })
   })
 

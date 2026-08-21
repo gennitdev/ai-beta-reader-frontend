@@ -29,7 +29,7 @@ OpenAI processes that information under the terms and privacy choices associated
 
 beta bot asks for Google Drive access only when you choose the backup or restore feature. The app requests the narrow `https://www.googleapis.com/auth/drive.file` permission. This permits beta bot to create, find, update, and read files it created or that you explicitly shared with it; it does not grant access to unrelated files in your Drive.
 
-beta bot uses this permission to create, locate, update, and restore the encrypted backup file named `ai-beta-reader-backup.enc`. The backup may contain the local app data listed above. It is compressed and encrypted on your device before upload using the password you provide. The password is not stored by beta bot or sent to Google, and the app operator cannot decrypt or access your backup.
+beta bot uses this permission to create, list, delete, and restore encrypted backup generations that it created. Each new backup is a full library ZIP encrypted on your device before upload using the password you provide. The app retains the three newest successful generations. Older backups named `ai-beta-reader-backup.enc` remain supported for restore. The password is not stored by beta bot or sent to Google, and the app operator cannot decrypt or access your backup.
 
 Google OAuth tokens are stored locally on your device and are used only to perform the backup and restore actions you request. beta bot does not sell Google user data, use it for advertising, or use it to train generalized AI or machine-learning models.
 
@@ -49,7 +49,7 @@ The beta-bot.net hosting and network providers may process standard technical re
 ## 6. Retention, deletion, and revoking access
 
 - Delete local data by using available app controls, clearing beta bot's browser/site storage, or uninstalling the app.
-- Delete the cloud backup by deleting `ai-beta-reader-backup.enc` from your Google Drive trash and emptying the trash if you want immediate permanent deletion.
+- Delete cloud backups by deleting the `ai-beta-reader-library-…` generation files, and any legacy `ai-beta-reader-backup.enc`, from Google Drive and emptying the trash if you want immediate permanent deletion.
 - Revoke beta bot's Google access from the third-party connections page in your Google Account. You may also clear beta bot's local app or site data to remove locally stored tokens.
 
 Because the app operator does not hold a server-side copy of your app content or backup, there is ordinarily no operator-held manuscript data to delete. For help with these steps, email [gennitdev@gmail.com](mailto:gennitdev@gmail.com).
