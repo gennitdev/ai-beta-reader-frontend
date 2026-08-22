@@ -252,4 +252,62 @@ describe('useChapterSummaryContext — additional coverage', () => {
     )
     expect(summaries).toEqual([])
   })
+
+  it('treats missing books and non-array JSON orders as empty', async () => {
+    const missingBook = ctx({ getCurrentBook: () => null })
+    expect(missingBook.getPartNumber('part-1')).toBeNull()
+    expect(await missingBook.buildPriorPartSummaries('part-2')).toEqual([])
+    expect(await missingBook.buildPriorChapterSummariesInBook('chapter-3')).toEqual([])
+
+    const objectOrder: Book = { ...createBook(), chapter_order: '{}', part_order: '{}' }
+    const nonArray = ctx({ getCurrentBook: () => objectOrder })
+    expect(nonArray.getPartNumber('part-1')).toBeNull()
+    expect(await nonArray.buildPriorPartSummaries('part-2')).toEqual([])
+  })
+
+  it('caches null summaries and omits chapters without summary text', async () => {
+    const getSummary = vi.fn(async () => null)
+    const c = ctx({ getSummary })
+    c.primeChapterSummary('chapter-1', null)
+
+    expect(await c.buildPriorChapterSummariesInBook('chapter-2')).toEqual([])
+    expect(getSummary).not.toHaveBeenCalled()
+
+    c.invalidateChapterSummary('chapter-1')
+    expect(await c.buildPriorChapterSummariesInBook('chapter-2')).toEqual([])
+    expect(getSummary).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles first, unknown, and missing parts without inventing summaries', async () => {
+    const c = ctx({ getParts: () => [], getPartSummary: vi.fn(async () => null) })
+
+    expect(await c.buildPriorPartSummaries('part-1')).toEqual([])
+    expect(await c.buildPriorPartSummaries('unknown')).toEqual([])
+    expect(await c.buildPriorChapterSummariesInPart(null, 'chapter-2')).toEqual([])
+    expect(await c.buildPriorChapterSummariesInPart(createParts()[0], 'chapter-1')).toEqual([])
+  })
+
+  it('omits blank part summaries when no chapter fallback exists', async () => {
+    const getPartSummary = vi.fn(async () => ({
+      id: 'part-summary',
+      part_id: 'part-1',
+      summary: '   ',
+      characters: null,
+      beats: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    })) as unknown as Parameters<typeof useChapterSummaryContext>[0]['getPartSummary']
+    const c = ctx({ getSummary: vi.fn(async () => null), getPartSummary })
+
+    expect(await c.buildPriorPartSummaries('part-2')).toEqual([])
+  })
+
+  it('uses ids as titles when chapter metadata is unavailable', async () => {
+    const summaries = await ctx({ getChapters: () => [] }).buildPriorChapterSummariesInBook('chapter-2')
+    expect(summaries).toEqual([{
+      id: 'chapter-1',
+      title: 'chapter-1',
+      summary: 'chapter-1 summary',
+    }])
+  })
 })

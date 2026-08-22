@@ -48,6 +48,9 @@ jobs:
       - name: Run unit tests
         run: npm run test:coverage
 
+      - name: Enforce strict line coverage ratchet
+        run: npm run test:coverage:strict
+
       - name: Run deterministic bundle fuzz tests
         env:
           BUNDLE_FUZZ_SEED: 132202608

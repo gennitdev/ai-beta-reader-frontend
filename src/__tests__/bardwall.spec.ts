@@ -287,4 +287,196 @@ describe('Bardwall game helpers', () => {
     expect(nextDay).toMatchObject({ day: 2, hunger: 50, energy: 50 })
     expect(() => resolveBardwallNight(createDefaultBardwallState(), 'inn', {})).toThrow('Not enough coins for the inn')
   })
+
+  it('normalizes malformed persisted progress without trusting stored shapes', () => {
+    localStorage.setItem(BARDWALL_STORAGE_KEY, JSON.stringify({
+      coins: -4,
+      day: 0,
+      energy: 999,
+      hunger: -20,
+      inventory: { bread: -2, cheese: 2.8, tent: 'unknown' },
+      dailyGoal: { date: null, wordCount: '5', wordsTold: -2, coinsEarned: 'unknown', locked: 0 },
+      toldPassageIds: [1, 'kept'],
+      lastNight: { day: 0, lodging: 'road', nourishment: -2, hunger: -1, energy: 'unknown' },
+      heliconiaMet: true,
+      heliconiaVisits: 0,
+      ailment: { potionId: 'unknown' },
+      triedPotionIds: ['gold', 'unknown'],
+      challenge: {
+        phase: 'write',
+        goal: 999,
+        cards: [null, { cardId: 'unknown' }, { cardId: BARDWALL_CHALLENGE_CARDS[0].id }],
+        drawNumber: -2,
+        playerStory: 5,
+        result: { outcome: 'unknown' },
+      },
+      challengeRules: { judgeRubric: ' ', orlaPrompt: null },
+      lastWordStories: [
+        null,
+        { id: '' },
+        {
+          id: 'legacy-story',
+          title: ' ',
+          turns: [
+            null,
+            { speaker: 'cave', text: 'old roots answer', createdAt: 42 },
+            { speaker: 'unknown', text: 'ignored' },
+            { speaker: 'bard', text: ' ' },
+          ],
+        },
+      ],
+    }))
+
+    const state = loadBardwallState()
+
+    expect(state).toMatchObject({
+      coins: 0,
+      day: 1,
+      energy: 100,
+      hunger: 0,
+      inventory: { bread: 0, cheese: 2, tent: 0 },
+      dailyGoal: { date: '', wordCount: 5, wordsTold: 0, coinsEarned: 0, locked: false },
+      toldPassageIds: ['kept'],
+      lastNight: { day: 1, lodging: 'tent', nourishment: 0, hunger: 0, energy: 100 },
+      heliconiaVisits: 1,
+      ailment: null,
+      triedPotionIds: ['gold'],
+      challenge: {
+        phase: 'setup',
+        goal: 250,
+        cards: [{ cardId: BARDWALL_CHALLENGE_CARDS[0].id, held: false }],
+        drawNumber: 0,
+        playerStory: '',
+        result: null,
+      },
+    })
+    expect(state.lastWordStories).toEqual([expect.objectContaining({
+      id: 'legacy-story',
+      title: 'An Unfinished Story',
+      createdAt: '',
+      updatedAt: '',
+      draft: '',
+      turns: [expect.objectContaining({ speaker: 'vesper', wordCount: 3, createdAt: '' })],
+    })])
+  })
+
+  it('restores current challenge, ailment, rules, and Last Word formats', () => {
+    const cards = BARDWALL_CHALLENGE_CARDS.slice(0, 3).map((card) => ({ cardId: card.id, held: false }))
+    localStorage.setItem(BARDWALL_STORAGE_KEY, JSON.stringify({
+      ailment: { potionId: 'blue' },
+      challenge: {
+        phase: 'result',
+        goal: 500,
+        wager: { type: 'coins', amount: 2 },
+        cards,
+        drawNumber: 2,
+        playerStory: 'A finished story.',
+        result: {
+          outcome: 'draw',
+          rivalStory: 7,
+          explanation: null,
+          playerScores: { sceneSpecificity: 12, characterAgency: -2, narrativeMovement: 4, craftCoherence: 8, promptIntegration: 6 },
+          rivalScores: null,
+          playerLengthPenalty: -1,
+          rivalLengthPenalty: 2.9,
+        },
+      },
+      challengeRules: { judgeRubric: '  Judge this.  ', orlaPrompt: '  Tell this.  ' },
+      lastWordStories: [{
+        id: 'current-story',
+        title: 'Current title',
+        createdAt: 'created',
+        updatedAt: 'updated',
+        draft: 'draft',
+        turns: [{ speaker: 'bard', text: 'the bard speaks', createdAt: 'now' }],
+      }],
+    }))
+
+    expect(loadBardwallState()).toMatchObject({
+      ailment: { potionId: 'blue' },
+      challenge: {
+        phase: 'result',
+        goal: 500,
+        playerStory: 'A finished story.',
+        result: {
+          outcome: 'draw',
+          rivalStory: '',
+          explanation: '',
+          playerScores: { sceneSpecificity: 10, characterAgency: 0, craftCoherence: 8 },
+          playerLengthPenalty: 0,
+          rivalLengthPenalty: 2,
+        },
+      },
+      challengeRules: { judgeRubric: 'Judge this.', orlaPrompt: 'Tell this.' },
+      lastWordStories: [{ title: 'Current title', turns: [{ speaker: 'bard', createdAt: 'now' }] }],
+    })
+  })
+
+  it('covers rejected purchases, rules, potions, and food selections', () => {
+    const state = createDefaultBardwallState()
+
+    expect(() => purchaseBardwallFood(state, 'unknown' as never)).toThrow('Food not found')
+    expect(() => eatBardwallFood(state, 'unknown' as never)).toThrow('Food not found')
+    expect(() => purchaseBardwallFlower(state)).toThrow('Not enough coins')
+    expect(() => updateBardwallChallengeRules(state, { judgeRubric: '', orlaPrompt: 'prompt' })).toThrow('required')
+    expect(() => updateBardwallChallengeRules(state, { judgeRubric: 'x'.repeat(4001), orlaPrompt: 'prompt' })).toThrow('4,000')
+    expect(() => startBardwallChallenge(state, 100, { type: 'item', itemId: 'flower' as never }, () => 0)).toThrow('not available')
+    expect(() => drinkWyrmPotion(state, 'unknown' as never)).toThrow('Potion not found')
+    expect(healBardAtApothecary(state)).toBe(state)
+    expect(() => resolveBardwallNight(state, 'tent', { bread: 2 })).toThrow('Not enough Brown bread')
+    expect(calculateBardwallPay(100, 0)).toBe(0)
+    expect(getBardwallPassages('', '!!!')).toEqual([])
+  })
+
+  it('covers challenge no-ops, redraws, item draws, and losses', () => {
+    const result = {
+      outcome: 'draw' as const,
+      rivalStory: 'Rival.',
+      explanation: 'Even.',
+      playerScores: { sceneSpecificity: 5, characterAgency: 5, narrativeMovement: 5, craftCoherence: 5, promptIntegration: 5 },
+      rivalScores: { sceneSpecificity: 5, characterAgency: 5, narrativeMovement: 5, craftCoherence: 5, promptIntegration: 5 },
+      playerLengthPenalty: 0,
+      rivalLengthPenalty: 0,
+    }
+    const initial = createDefaultBardwallState()
+    expect(toggleBardwallChallengeCard(initial, BARDWALL_CHALLENGE_CARDS[0].id)).toBe(initial)
+    expect(advanceBardwallChallengeDraft(initial)).toBe(initial)
+    expect(() => resolveBardwallChallenge(initial, result)).toThrow('wager not found')
+
+    let challenge = startBardwallChallenge(initial, 100, { type: 'item', itemId: 'bread' }, () => 0)
+    expect(() => advanceBardwallChallengeDraft(challenge, () => 0)).toThrow('Keep at least one card')
+    challenge = toggleBardwallChallengeCard(challenge, challenge.challenge.cards[0].cardId)
+    challenge = advanceBardwallChallengeDraft(challenge, () => 0)
+    expect(challenge.challenge.drawNumber).toBe(2)
+
+    const drawn = resolveBardwallChallenge(challenge, result)
+    expect(drawn.inventory.bread).toBe(1)
+
+    const lost = resolveBardwallChallenge(
+      { ...challenge, challenge: { ...challenge.challenge, wager: { type: 'coins', amount: 3 } } },
+      { ...result, outcome: 'lose' },
+    )
+    expect(lost.challengesLost).toBe(1)
+    expect(lost.coins).toBe(challenge.coins)
+  })
+
+  it('covers Last Word validation, generated ids, long titles, and later exchanges', () => {
+    const created = startBardwallLastWordStory(createDefaultBardwallState())
+    expect(created.storyId).toBeTruthy()
+    expect(updateBardwallLastWordDraft(created.state, 'missing', 'draft')).toEqual(created.state)
+    expect(() => appendBardwallLastWordExchange(created.state, created.storyId, '', 'reply')).toThrow('Both voices')
+
+    const first = appendBardwallLastWordExchange(
+      created.state,
+      created.storyId,
+      'one two three four five six seven',
+      'reply from Vesper',
+      'first',
+    )
+    expect(first.lastWordStories[0].title).toBe('one two three four five six…')
+
+    const second = appendBardwallLastWordExchange(first, created.storyId, 'another line', 'another reply', 'second')
+    expect(second.lastWordStories[0].title).toBe(first.lastWordStories[0].title)
+    expect(second.lastWordStories[0].turns).toHaveLength(4)
+  })
 })
