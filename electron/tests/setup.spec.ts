@@ -97,11 +97,11 @@ describe('Electron application setup', () => {
     expect(responseHeaders['Content-Security-Policy'][0]).not.toContain("'unsafe-eval'")
   })
 
-  it('builds a development CSP with the required developer sources', () => {
+  it('builds a development CSP without broad eval permission', () => {
     const policy = buildContentSecurityPolicy('beta-reader', true)
 
     expect(policy).toContain("devtools://*")
-    expect(policy).toContain("'unsafe-eval'")
+    expect(policy).not.toContain("'unsafe-eval'")
     expect(policy).toContain("'wasm-unsafe-eval'")
   })
 
