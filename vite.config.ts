@@ -12,7 +12,11 @@ export default defineConfig({
   ],
   test: {
     environment: 'node',
-    include: ['src/**/*.spec.ts', 'electron/tests/**/*.spec.ts'],
+    include: [
+      'src/**/*.spec.ts',
+      'electron/tests/**/*.spec.ts',
+      'scripts/**/*.spec.mjs',
+    ],
     alias: {
       electron: fileURLToPath(new URL('./electron/tests/mocks/electron.ts', import.meta.url)),
     },

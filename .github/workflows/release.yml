@@ -22,8 +22,49 @@ jobs:
 
     steps:
       - name: Update the release PR or publish its release
+        id: release
         uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: Check out the generated release PR
+        if: steps.release.outputs.prs_created == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+
+      - name: Remove duplicate release notes
+        if: steps.release.outputs.prs_created == 'true'
+        id: deduplicate
+        env:
+          RELEASE_PR_JSON: ${{ steps.release.outputs.pr }}
+        run: >-
+          node scripts/deduplicate-release-notes.mjs CHANGELOG.md
+          --pr-env RELEASE_PR_JSON
+          --body-output "$RUNNER_TEMP/release-pr-body.md"
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Commit the cleaned changelog
+        if: steps.release.outputs.prs_created == 'true'
+        run: |
+          if git diff --quiet -- CHANGELOG.md; then
+            exit 0
+          fi
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add CHANGELOG.md
+          git commit -m "chore(release): remove duplicate changelog entries"
+          git push
+
+      - name: Update the release PR description
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          PR_NUMBER: ${{ steps.deduplicate.outputs.pr_number }}
+        run: >-
+          jq -n --rawfile body "$RUNNER_TEMP/release-pr-body.md" '{body: $body}' |
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --input -
