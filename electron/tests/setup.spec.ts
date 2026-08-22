@@ -116,7 +116,7 @@ describe('Electron application setup', () => {
     expect(capacitorMocks.emit).toHaveBeenCalledWith('CAPELECTRON_DeeplinkListenerInitialized', '')
   })
 
-  it('creates an isolated renderer and installs navigation controls', async () => {
+  it('creates a context-isolated renderer with the permissions required by the Capacitor preload', async () => {
     const app = new ElectronCapacitorApp({
       backgroundColor: '#101827',
       electron: { customUrlScheme: 'beta-reader' },
@@ -125,6 +125,14 @@ describe('Electron application setup', () => {
     await app.init()
 
     const mainWindow = app.getMainWindow()
+    expect(mainWindow.options).toMatchObject({
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: false,
+        preload: expect.stringContaining('build/src/preload.js'),
+      },
+    })
     expect(mainWindow.webContents.setWindowOpenHandler).toHaveBeenCalledOnce()
     expect(mainWindow.webContents.on).toHaveBeenCalledWith('will-navigate', expect.any(Function))
     expect(manageWindowMock).toHaveBeenCalledWith(mainWindow)
@@ -137,6 +145,29 @@ describe('Electron application setup', () => {
     await vi.advanceTimersByTimeAsync(400)
     expect(mainWindow.show).toHaveBeenCalledOnce()
     expect(capacitorMocks.emit).toHaveBeenCalledWith('CAPELECTRON_DeeplinkListenerInitialized', '')
+  })
+
+  it('reports preload failures with the failing script path', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      const app = new ElectronCapacitorApp({ electron: {} } as never)
+
+      await app.init()
+      const preloadError = new Error('Cannot load preload dependency')
+      app.getMainWindow().webContents.emit(
+        'preload-error',
+        { sender: 'renderer' },
+        '/tmp/beta-bot/preload.js',
+        preloadError,
+      )
+
+      expect(consoleError).toHaveBeenCalledWith(
+        '[Electron] Preload script failed: /tmp/beta-bot/preload.js',
+        preloadError,
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 
   it('manages tray, splash, custom menus, and hidden-on-launch behavior', async () => {
