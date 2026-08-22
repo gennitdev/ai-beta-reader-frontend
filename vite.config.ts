@@ -16,6 +16,7 @@ export default defineConfig({
       'src/**/*.spec.ts',
       'electron/tests/**/*.spec.ts',
       'scripts/**/*.spec.mjs',
+      'scripts/**/*.spec.ts',
     ],
     exclude: ['src/__tests__/fuzz/**'],
     alias: {

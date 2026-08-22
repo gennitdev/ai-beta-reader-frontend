@@ -146,6 +146,7 @@ cypress/screenshots/
 test-results/
 playwright-report/
 blob-report/
+artifacts/
 
 # Auto-generated files
 auto-imports.d.ts

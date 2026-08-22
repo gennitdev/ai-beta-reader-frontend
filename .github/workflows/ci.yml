@@ -66,6 +66,18 @@ jobs:
       - name: Run Electron runtime tests
         run: npm run test:electron
 
+      - name: Run deterministic bundle stress benchmark
+        run: npm run benchmark:bundle:ci
+
+      - name: Upload bundle stress report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-stress-report
+          path: artifacts/bundle-stress.json
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:

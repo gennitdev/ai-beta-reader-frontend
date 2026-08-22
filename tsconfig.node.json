@@ -9,6 +9,7 @@
     "eslint.config.*",
     "scripts/**/*.ts"
   ],
+  "exclude": ["scripts/benchmarks/**"],
   "compilerOptions": {
     "noEmit": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
