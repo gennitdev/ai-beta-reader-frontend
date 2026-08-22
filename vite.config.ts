@@ -17,6 +17,7 @@ export default defineConfig({
       'electron/tests/**/*.spec.ts',
       'scripts/**/*.spec.mjs',
     ],
+    exclude: ['src/__tests__/fuzz/**'],
     alias: {
       electron: fileURLToPath(new URL('./electron/tests/mocks/electron.ts', import.meta.url)),
     },

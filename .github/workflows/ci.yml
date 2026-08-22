@@ -48,6 +48,21 @@ jobs:
       - name: Run unit tests
         run: npm run test:coverage
 
+      - name: Run deterministic bundle fuzz tests
+        env:
+          BUNDLE_FUZZ_SEED: 132202608
+          BUNDLE_FUZZ_RUNS: 1000
+        run: npm run test:fuzz
+
+      - name: Retain bundle fuzz counterexamples
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-fuzz-counterexamples
+          path: test-results/fuzz/
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Run Electron runtime tests
         run: npm run test:electron
 
