@@ -15,6 +15,8 @@ Issue [#132](https://github.com/gennitdev/ai-beta-reader-frontend/issues/132) is
 
 Results remain **not run** until executed on the named environment; unit tests with mocked adapters do not qualify.
 
+`.github/workflows/bundle-platform.yml` runs the real Chromium IndexedDB recovery/Replace scenario plus focused portable-path and transport suites on hosted macOS, Windows and Linux runners. Those results qualify the browser rows only; they do not qualify Electron, Android or real directory-filesystem rows.
+
 | Runtime | OS | Database | Recovery/image persistence | ZIP | Directory | Duplicate case/Unicode | Restart/rollback | Status |
 |---|---|---|---|---|---|---|---|---|
 | Browser Chromium | Linux | IndexedDB/sql.js | IndexedDB / browser image store | Required | Read required | Required | Required | Not run |
