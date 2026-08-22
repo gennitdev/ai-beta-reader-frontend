@@ -66,3 +66,54 @@ test('full bundle Replace persists across restart with verified recovery outside
   await page.goto(original.chapterUrl)
   await expect(page.getByText(marker).filter({ visible: true })).toBeVisible()
 })
+
+test('failed browser persistence during Replace rolls back the prior library and survives restart', async ({ page }) => {
+  await createBookWithChapter(page, {
+    bookTitle: 'Rollback Baseline',
+    bookId: 'rollback-baseline',
+    chapterTitle: 'Baseline Chapter',
+    chapterText: 'ROLLBACK-BASELINE-132 — present in the incoming and local libraries.',
+  })
+
+  await page.goto('/settings')
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export full library backup' }).click()
+  const bundlePath = await (await downloadPromise).path()
+  expect(bundlePath).toBeTruthy()
+
+  const localOnly = await createBookWithChapter(page, {
+    bookTitle: 'Rollback Must Restore Me',
+    bookId: 'rollback-must-restore-me',
+    chapterTitle: 'Local Only Chapter',
+    chapterText: 'ROLLBACK-LOCAL-ONLY-132 — must return after the failed Replace.',
+  })
+
+  await page.goto('/settings')
+  await page.locator('input[type="file"][accept*=".zip"]').setInputFiles(bundlePath as string)
+  await expect(page.getByRole('button', { name: 'Prepare Replace library' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Prepare Replace library' }).click()
+  await expect(page.getByText('Recovery bundle verified. Replace confirmation is now enabled.')).toBeVisible()
+
+  await page.evaluate(() => {
+    const originalPut = IDBObjectStore.prototype.put
+    let injected = false
+    IDBObjectStore.prototype.put = function (...args: Parameters<IDBObjectStore['put']>) {
+      if (!injected && this.name === 'database' && args[1] === 'sqliteDb') {
+        injected = true
+        throw new DOMException('Injected persistence failure', 'QuotaExceededError')
+      }
+      return originalPut.apply(this, args)
+    }
+  })
+
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Confirm Replace library' }).click()
+  await expect(page.getByText(/prior library was restored from verified recovery/)).toBeVisible()
+
+  await page.reload()
+  await page.goto('/books')
+  await expect(page.getByText('Rollback Baseline')).toBeVisible()
+  await expect(page.getByText('Rollback Must Restore Me')).toBeVisible()
+  await page.goto(localOnly.chapterUrl)
+  await expect(page.getByText('ROLLBACK-LOCAL-ONLY-132').filter({ visible: true })).toBeVisible()
+})

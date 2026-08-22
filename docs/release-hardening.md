@@ -43,11 +43,11 @@ Browser ZIP selection is limited to 256 MiB of compressed archive data before ma
 | BFF-AC-06 | Duplicate titles do not collide | `libraryBundleWriter.spec.ts`, `libraryBundleTransport.spec.ts` | Every platform-matrix row and ZIP extraction |
 | BFF-AC-07 | Hostile archives fail before database writes | `libraryBundleTransport.spec.ts`, deterministic fuzz suite | Forged ZIP metadata and UI pre-materialization limits |
 | BFF-AC-08 | Replace waits for verified external recovery | `libraryReplacement.spec.ts`, `e2e/bundle-persistence.spec.ts` | Real recovery store on Electron and Android |
-| BFF-AC-09 | Transactional failure leaves prior library usable | `libraryReplacement.spec.ts`, `transaction.spec.ts` | Fault injection plus restart on real persistence |
+| BFF-AC-09 | Transactional failure leaves prior library usable | `libraryReplacement.spec.ts`, `transaction.spec.ts`, `e2e/bundle-persistence.spec.ts` | Fault injection plus restart on Electron and Android persistence |
 | BFF-AC-10 | Every supported legacy encryption generation restores | Generated WC1/CryptoJS tests | Checked-in golden WC1, WC2 and CryptoJS ciphertext fixtures |
 
 ## Repeatable real-persistence scenario
 
 Seed all mapped tables and nontrivial image bytes, export a full backup, mutate or wipe the library, restore, and compare the versioned logical dump. Verify revisions, activity, images, wiki links, summaries, reviews, profiles and audit records through the application; confirm the recovery exists outside the main database; restart; and compare again. Repeat with injected failures at image write, database import, commit, persistence snapshot and rollback boundaries.
 
-The browser acceptance test automates the first real-persistence slice: it downloads a full bundle, creates post-backup data, prepares and verifies recovery in the separate `beta-bot-recovery` IndexedDB database, performs Replace, reloads the application, and proves both restoration and deletion persisted. Broader entity coverage and fault injection remain required before BFF-AC-01, BFF-AC-02 and BFF-AC-09 are complete.
+The browser acceptance tests automate two real-persistence slices. The success path downloads a full bundle, creates post-backup data, prepares and verifies recovery in the separate `beta-bot-recovery` IndexedDB database, performs Replace, reloads the application, and proves both restoration and deletion persisted. The rollback path injects a one-shot IndexedDB snapshot failure during Replace, permits recovery import to proceed, reloads, and proves the complete pre-Replace library remains usable. Broader entity coverage remains required before BFF-AC-01 and BFF-AC-02 are complete.
