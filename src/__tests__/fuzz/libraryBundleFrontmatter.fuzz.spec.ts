@@ -68,4 +68,38 @@ describe('library bundle YAML and Markdown fuzz boundaries', () => {
       },
     ))
   })
+
+  it('handles generated bounded YAML nesting without escaping diagnostics', () => {
+    checkFuzzProperty('yaml-bounded-nesting', fc.property(
+      fc.integer({ min: 1, max: 200 }),
+      fc.integer({ min: 1, max: 16 }),
+      (depth, width) => {
+        const nested = Array.from({ length: depth }, (_, index) => (
+          `${'  '.repeat(index + 1)}level_${index}:\n`
+        )).join('')
+        const leaves = Array.from({ length: width }, (_, index) => (
+          `${'  '.repeat(depth + 1)}leaf_${index}: value\n`
+        )).join('')
+        const files = copyBaseline()
+        files.set(bookPath, encodeBundleText(`id: book-1\ntitle: Nested\nunknown:\n${nested}${leaves}`))
+        expect(() => readLibraryBundle(files)).not.toThrow()
+      },
+    ))
+  })
+
+  it('rejects generated bounded anchor and alias fanout without expansion', () => {
+    checkFuzzProperty('yaml-bounded-alias-fanout', fc.property(
+      fc.integer({ min: 1, max: 256 }),
+      (fanout) => {
+        const aliases = Array.from({ length: fanout }, () => '  - *shared\n').join('')
+        const files = copyBaseline()
+        files.set(bookPath, encodeBundleText(`id: book-1\nshared: &shared [value]\naliases:\n${aliases}`))
+        const parsed = readLibraryBundle(files)
+        expect(parsed.model).toBeNull()
+        expect(parsed.diagnostics.some((diagnostic) => (
+          diagnostic.code === 'yaml.anchor' || diagnostic.code === 'yaml.alias'
+        ))).toBe(true)
+      },
+    ))
+  })
 })

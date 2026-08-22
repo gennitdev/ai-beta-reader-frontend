@@ -17,13 +17,7 @@ export const fuzzParameters = Object.freeze({
   endOnFailure: true,
 })
 
-export function checkFuzzProperty<Ts extends [unknown, ...unknown[]]>(
-  name: string,
-  property: fc.IProperty<Ts>,
-): void {
-  const result = fc.check(property, fuzzParameters)
-  if (!result.failed) return
-
+function reportFailure(name: string, result: fc.RunDetails<unknown[]>): never {
   const artifactPath = resolve('test-results/fuzz', `${name.replace(/[^a-z0-9_-]+/gi, '-')}.json`)
   mkdirSync(dirname(artifactPath), { recursive: true })
   writeFileSync(artifactPath, `${JSON.stringify({
@@ -39,4 +33,22 @@ export function checkFuzzProperty<Ts extends [unknown, ...unknown[]]>(
     + `and path ${result.counterexamplePath}. Counterexample saved to ${artifactPath}.`,
     { cause: result.errorInstance },
   )
+}
+
+export function checkFuzzProperty<Ts extends [unknown, ...unknown[]]>(
+  name: string,
+  property: fc.IProperty<Ts>,
+): void {
+  const result = fc.check(property, fuzzParameters)
+  if (!result.failed) return
+  reportFailure(name, result)
+}
+
+export async function checkAsyncFuzzProperty<Ts extends [unknown, ...unknown[]]>(
+  name: string,
+  property: fc.IAsyncProperty<Ts>,
+): Promise<void> {
+  const result = await fc.check(property, fuzzParameters)
+  if (!result.failed) return
+  reportFailure(name, result)
 }

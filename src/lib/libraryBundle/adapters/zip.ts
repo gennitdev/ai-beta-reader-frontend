@@ -68,9 +68,54 @@ export function readZipCentralDirectory(zipBytes: Uint8Array): BundleEntryMetada
     const extraLength = view.getUint16(offset + 30, true)
     const commentLength = view.getUint16(offset + 32, true)
     const externalAttributes = view.getUint32(offset + 38, true)
+    const localOffset = view.getUint32(offset + 42, true)
     const recordLength = 46 + nameLength + extraLength + commentLength
     if (offset + recordLength > endOffset) throw new Error('ZIP central directory entry is truncated.')
     const nameBytes = zipBytes.subarray(offset + 46, offset + 46 + nameLength)
+    if (localOffset + 30 > centralOffset || view.getUint32(localOffset, true) !== 0x04034b50) {
+      throw new Error('ZIP central directory points to an invalid local file header.')
+    }
+    const localFlags = view.getUint16(localOffset + 6, true)
+    const localCompression = view.getUint16(localOffset + 8, true)
+    const localCrc32 = view.getUint32(localOffset + 14, true)
+    const localCompressedBytes = view.getUint32(localOffset + 18, true)
+    const localUncompressedBytes = view.getUint32(localOffset + 22, true)
+    const localNameLength = view.getUint16(localOffset + 26, true)
+    const localExtraLength = view.getUint16(localOffset + 28, true)
+    const localNameStart = localOffset + 30
+    const localDataStart = localNameStart + localNameLength + localExtraLength
+    if (localDataStart > centralOffset || localDataStart + compressedBytes > centralOffset) {
+      throw new Error('ZIP local file data points outside the archive.')
+    }
+    const centralCompression = view.getUint16(offset + 10, true)
+    const centralCrc32 = view.getUint32(offset + 16, true)
+    const localNameBytes = zipBytes.subarray(localNameStart, localNameStart + localNameLength)
+    if (localFlags !== flags || localCompression !== centralCompression
+      || localNameLength !== nameLength || !localNameBytes.every((value, index) => value === nameBytes[index])) {
+      throw new Error('ZIP local and central directory metadata do not match.')
+    }
+    const usesDataDescriptor = (flags & 0x0008) !== 0
+    if (!usesDataDescriptor && (localCrc32 !== centralCrc32
+      || localCompressedBytes !== compressedBytes || localUncompressedBytes !== uncompressedBytes)) {
+      throw new Error('ZIP local and central directory sizes do not match.')
+    }
+    if (usesDataDescriptor) {
+      if ((localCrc32 !== 0 && localCrc32 !== centralCrc32)
+        || (localCompressedBytes !== 0 && localCompressedBytes !== compressedBytes)
+        || (localUncompressedBytes !== 0 && localUncompressedBytes !== uncompressedBytes)) {
+        throw new Error('ZIP local and central directory sizes do not match.')
+      }
+      let descriptorOffset = localDataStart + compressedBytes
+      const hasDescriptorSignature = descriptorOffset + 4 <= centralOffset
+        && view.getUint32(descriptorOffset, true) === 0x08074b50
+      if (hasDescriptorSignature) descriptorOffset += 4
+      if (descriptorOffset + 12 > centralOffset
+        || view.getUint32(descriptorOffset, true) !== centralCrc32
+        || view.getUint32(descriptorOffset + 4, true) !== compressedBytes
+        || view.getUint32(descriptorOffset + 8, true) !== uncompressedBytes) {
+        throw new Error('ZIP data descriptor and central directory sizes do not match.')
+      }
+    }
     const path = new TextDecoder((flags & 0x0800) ? 'utf-8' : 'windows-1252', { fatal: true }).decode(nameBytes)
     const unixMode = externalAttributes >>> 16
     entries.push({
