@@ -1,8 +1,11 @@
-import { ref, type Ref } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 import JSZip from 'jszip'
 import packageInfo from '../../package.json'
 import type { Book, Chapter, ChapterNote, BookPart, ImageAsset } from '@/lib/database'
-import { createFullLibraryBundleExport } from '@/lib/libraryBundle/export'
+import {
+  createFullLibraryBundleExport,
+  createSelectedBooksBundleExport,
+} from '@/lib/libraryBundle/export'
 import { createAgentWorkspaceScaffold } from '@/lib/libraryBundle/agentWorkspace'
 import {
   writeBundleDirectory,
@@ -74,27 +77,39 @@ export function useDataExport(deps: UseDataExportDeps) {
   const exportProgress = ref('')
   const exportError = ref('')
   const exportFormat = ref<'bundle' | 'zip' | 'markdown'>('bundle')
+  const bundleScope = ref<'library' | 'selection'>('library')
+  const selectedBookIds = ref<string[]>([])
   const markdownGranularity = ref<'book' | 'part'>('book')
   const includeNotes = ref(true)
   const runtimeDirectoryPicker = typeof window === 'undefined'
     ? undefined
     : (window as DirectoryPickerWindow).showDirectoryPicker
   const canExportBundleDirectory = ref(Boolean(chooseBundleDirectory || runtimeDirectoryPicker))
+  const selectedBooksAreValid = computed(() => {
+    if (selectedBookIds.value.length === 0) return false
+    const available = new Set(books.value.map((book) => book.id))
+    return selectedBookIds.value.every((id) => available.has(id))
+  })
 
-  const createCanonicalBundle = async () => {
-    exportProgress.value = 'Creating a consistent library snapshot...'
+  const createCanonicalBundle = async (bookIds?: readonly string[]) => {
+    exportProgress.value = bookIds
+      ? 'Creating a consistent snapshot of the selected books...'
+      : 'Creating a consistent library snapshot...'
     const databaseBackup = await exportDatabase()
     exportProgress.value = 'Writing canonical bundle files and verifying images...'
     const exportedAt = new Date().toISOString()
-    const bundle = await createFullLibraryBundleExport(databaseBackup, {
+    const options = {
       bundleId: createPortableId('bundle'),
       exportedAt,
       appVersion: packageInfo.version,
-      readAssetBytes: async (asset) => {
+      readAssetBytes: async (asset: ImageAsset) => {
         const blob = await getImageBlob(asset)
         return new Uint8Array(await blob.arrayBuffer())
       },
-    })
+    }
+    const bundle = bookIds
+      ? await createSelectedBooksBundleExport(databaseBackup, bookIds, options)
+      : await createFullLibraryBundleExport(databaseBackup, options)
     return { bundle, exportedAt }
   }
 
@@ -144,17 +159,51 @@ export function useDataExport(deps: UseDataExportDeps) {
     }
   }
 
-  const exportFullLibraryDirectory = async () => {
+  const exportSelectedBooksBundle = async () => {
+    if (isExporting.value) return
+    exportError.value = ''
+    if (!selectedBooksAreValid.value) {
+      exportError.value = selectedBookIds.value.length
+        ? 'Selected books changed or are no longer available. Review your selection and try again.'
+        : 'Select at least one book to export.'
+      return
+    }
+    try {
+      isExporting.value = true
+      const { bundle, exportedAt } = await createCanonicalBundle([...selectedBookIds.value])
+      exportProgress.value = 'Creating selected-books ZIP...'
+      triggerZipDownload(
+        new Blob([bundle.zipBytes.slice().buffer], { type: 'application/zip' }),
+        `beta-bot-selected-books-${exportedAt.slice(0, 10)}.zip`,
+      )
+      exportProgress.value = 'Selected books exported!'
+      setTimeout(() => { exportProgress.value = '' }, 3000)
+    } catch (err) {
+      console.error('Selected books export failed:', err)
+      exportError.value = 'Export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
+      exportProgress.value = ''
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  const exportBundleDirectory = async () => {
     if (isExporting.value) return
     exportError.value = ''
     isExporting.value = true
     try {
+      const selection = bundleScope.value === 'selection' ? [...selectedBookIds.value] : undefined
+      if (bundleScope.value === 'selection' && !selectedBooksAreValid.value) {
+        throw new Error(selectedBookIds.value.length
+          ? 'Selected books changed or are no longer available. Review your selection and try again.'
+          : 'Select at least one book to export.')
+      }
       const choose = chooseBundleDirectory
         ?? (runtimeDirectoryPicker ? () => runtimeDirectoryPicker.call(window, { mode: 'readwrite' }) : undefined)
       if (!choose) throw new Error('Folder export is not supported by this browser.')
       exportProgress.value = 'Choose an empty folder or an existing Beta Bot bundle...'
       const directory = await choose()
-      const { bundle } = await createCanonicalBundle()
+      const { bundle } = await createCanonicalBundle(selection)
       exportProgress.value = 'Updating managed bundle files and preserving your other files...'
       const result = await writeBundleDirectory(directory, bundle.files, createAgentWorkspaceScaffold())
       exportProgress.value = `Folder updated: ${result.writtenFiles} managed files written, ${result.deletedFiles} obsolete files removed.`
@@ -163,7 +212,7 @@ export function useDataExport(deps: UseDataExportDeps) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         exportProgress.value = ''
       } else {
-        console.error('Full library folder export failed:', err)
+        console.error('Canonical folder export failed:', err)
         exportError.value = 'Folder export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
         exportProgress.value = ''
       }
@@ -171,6 +220,8 @@ export function useDataExport(deps: UseDataExportDeps) {
       isExporting.value = false
     }
   }
+
+  const exportFullLibraryDirectory = exportBundleDirectory
 
   const exportUserData = async () => {
     if (isExporting.value) return
@@ -435,7 +486,8 @@ export function useDataExport(deps: UseDataExportDeps) {
 
   const handleExport = () => {
     if (exportFormat.value === 'bundle') {
-      exportFullLibraryBundle()
+      if (bundleScope.value === 'selection') exportSelectedBooksBundle()
+      else exportFullLibraryBundle()
     } else if (exportFormat.value === 'markdown') {
       exportAsMarkdown()
     } else {
@@ -448,11 +500,16 @@ export function useDataExport(deps: UseDataExportDeps) {
     exportProgress,
     exportError,
     exportFormat,
+    bundleScope,
+    selectedBookIds,
+    selectedBooksAreValid,
     markdownGranularity,
     includeNotes,
     canExportBundleDirectory,
     handleExport,
     exportFullLibraryBundle,
+    exportSelectedBooksBundle,
+    exportBundleDirectory,
     exportFullLibraryDirectory,
   }
 }

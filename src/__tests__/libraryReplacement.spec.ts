@@ -87,6 +87,11 @@ describe('Replace library with verified recovery', () => {
 
     const recovery = await prepared(store)
     const importDatabase = vi.fn()
+    const selection = completeCanonicalLibraryFixture()
+    selection.bundle_kind = 'selection'
+    await expect(replaceLibraryWithRecovery(
+      store, plan(), selection, recovery, plan().databaseGeneration, importDatabase,
+    )).rejects.toThrow('Selection bundles cannot replace')
     await expect(replaceLibraryWithRecovery(
       store, plan(), completeCanonicalLibraryFixture(), { ...recovery, databaseGeneration: 'b'.repeat(64) },
       plan().databaseGeneration, importDatabase,
