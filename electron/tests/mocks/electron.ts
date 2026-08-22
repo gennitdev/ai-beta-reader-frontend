@@ -152,8 +152,14 @@ export const dialog = {
 
 export const safeStorage = {
   isEncryptionAvailable: vi.fn(() => true),
+  isAsyncEncryptionAvailable: vi.fn(async () => true),
   encryptString: vi.fn((value: string) => Buffer.from(`encrypted:${value}`)),
+  encryptStringAsync: vi.fn(async (value: string) => Buffer.from(`encrypted:${value}`)),
   decryptString: vi.fn((value: Buffer) => value.toString().replace(/^encrypted:/, '')),
+  decryptStringAsync: vi.fn(async (value: Buffer) => ({
+    result: value.toString().replace(/^encrypted:/, ''),
+    shouldReEncrypt: false,
+  })),
 }
 
 export const shell = {
@@ -207,5 +213,6 @@ export const resetElectronMock = () => {
   vi.clearAllMocks()
   app.getPath.mockReturnValue('/tmp/beta-bot-user-data')
   safeStorage.isEncryptionAvailable.mockReturnValue(true)
+  safeStorage.isAsyncEncryptionAvailable.mockResolvedValue(true)
   shell.openExternal.mockResolvedValue(undefined)
 }

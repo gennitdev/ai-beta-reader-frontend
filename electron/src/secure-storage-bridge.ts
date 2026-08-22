@@ -16,6 +16,31 @@ import {
  * rest and localStorage is not used.
  */
 
+const SECURE_STORAGE_TIMEOUT_MS = 30_000;
+
+class SecureStorageTimeoutError extends Error {
+  constructor() {
+    super('Timed out waiting for OS secure storage. Unlock the system credential store and try again.');
+    this.name = 'SecureStorageTimeoutError';
+  }
+}
+
+async function withSecureStorageTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timeoutId: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new SecureStorageTimeoutError()), SECURE_STORAGE_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function asyncEncryptionAvailable(): Promise<boolean> {
+  return withSecureStorageTimeout(safeStorage.isAsyncEncryptionAvailable());
+}
+
 function secureDir(): string {
   return path.join(app.getPath('userData'), 'secure');
 }
@@ -26,14 +51,22 @@ function securePath(key: string): string {
 }
 
 async function handleGet(key: string): Promise<string | null> {
-  if (!safeStorage.isEncryptionAvailable()) {
+  let encrypted: Buffer;
+  try {
+    encrypted = await readFile(securePath(key));
+  } catch {
+    // Missing file or undecryptable payload — treat as "no value".
+    return null;
+  }
+  if (!(await asyncEncryptionAvailable())) {
     return null;
   }
   try {
-    const encrypted = await readFile(securePath(key));
-    return safeStorage.decryptString(encrypted);
-  } catch {
-    // Missing file or undecryptable payload — treat as "no value".
+    const decrypted = await withSecureStorageTimeout(safeStorage.decryptStringAsync(encrypted));
+    return decrypted.result;
+  } catch (error) {
+    if (error instanceof SecureStorageTimeoutError) throw error;
+    // Preserve the existing behavior for unreadable or obsolete payloads.
     return null;
   }
 }
@@ -41,11 +74,11 @@ async function handleGet(key: string): Promise<string | null> {
 async function handleSet(key: string, value: string): Promise<void> {
   assertAllowedSecureStorageKey(key);
   assertSecureStorageValue(value);
-  if (!safeStorage.isEncryptionAvailable()) {
+  if (!(await asyncEncryptionAvailable())) {
     throw new Error('OS-level encryption is not available on this system.');
   }
   await mkdir(secureDir(), { recursive: true });
-  const encrypted = safeStorage.encryptString(value);
+  const encrypted = await withSecureStorageTimeout(safeStorage.encryptStringAsync(value));
   await writeFile(securePath(key), encrypted, { mode: 0o600 });
 }
 
