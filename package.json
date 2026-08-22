@@ -26,7 +26,7 @@
     "test:e2e:report": "playwright show-report",
     "validate:bundle": "tsx scripts/validate-bundle.ts",
     "type-check:e2e": "tsc -p e2e/tsconfig.json",
-    "type-check:electron": "npm --prefix electron exec tsc -- --noEmit",
+    "type-check:electron": "npm --prefix electron exec tsc -- --noEmit -p electron/tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "copy:wasm": "cp node_modules/sql.js/dist/sql-wasm.wasm public/",
