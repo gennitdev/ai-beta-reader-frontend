@@ -21,6 +21,11 @@ function plan(generation = 'a'.repeat(64), replaceEligible = true): LibraryImpor
     bookIds: ['book-1'], operations: [],
     counts: { create: 0, update: 0, delete: 0, keep_local: 0, unchanged: 0, conflict: 0 },
     countsByEntityType: {}, unresolvedConflicts: 0, canApply: false, replaceEligible, diagnostics: [],
+    previewSummary: {
+      images: { includedCount: 0, includedBytes: 0, omittedCount: 0, omittedBytes: 0 },
+      wikiReview: { currentCount: 0, stale: [], missing: [] },
+      ambiguousAliases: [], warnings: { unknownProfiles: [], ignoredFiles: [] },
+    },
   }
 }
 

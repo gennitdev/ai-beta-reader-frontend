@@ -106,6 +106,39 @@ describe('three-way library import planning', () => {
     expect(() => assertImportPlanCurrent(plan, 'generation-1')).toThrow('unresolved conflicts')
   })
 
+  it('captures all decision-support summaries in the immutable plan', async () => {
+    const original = completeCanonicalLibraryFixture()
+    const written = await writeLibraryBundle(original, options)
+    written.files.set('draft.tmp', new TextEncoder().encode('ignored'))
+    const parsed = readLibraryBundle(written.files)
+    const model = parsed.model!
+    model.content_mode = 'text-only'
+    model.includes.image_bytes = false
+    parsed.manifest!.content_mode = 'text-only'
+    parsed.manifest!.includes.image_bytes = false
+    model.assets[0].bytes = null
+    model.reviews[0].profile_ref = 'profile:missing'
+    model.wiki_pages.push({ ...model.wiki_pages[0], id: 'wiki-2', page_name: 'Alison', aliases: ['al'] })
+    model.chapters[0].wiki_mentions.push({ ...model.chapters[0].wiki_mentions[0], id: 'mention-2', wiki_page_id: 'wiki-2' })
+    const validated = await validateLibraryBundle(parsed, written.files)
+    const plan = await createLibraryImportPlan(validated, structuredClone(original), 'g')
+
+    expect(plan.previewSummary.images).toEqual({ includedCount: 0, includedBytes: 0, omittedCount: 1, omittedBytes: 3 })
+    expect(plan.previewSummary.wikiReview).toEqual(expect.objectContaining({ currentCount: 0 }))
+    expect(plan.previewSummary.wikiReview.stale).toHaveLength(1)
+    expect(plan.previewSummary.wikiReview.missing).toEqual([
+      expect.objectContaining({ wikiPageTitle: 'Alison', chapterTitle: 'Opening' }),
+    ])
+    expect(plan.previewSummary.ambiguousAliases).toEqual([
+      expect.objectContaining({ alias: 'Al', pages: expect.arrayContaining([
+        expect.objectContaining({ title: 'Alice' }), expect.objectContaining({ title: 'Alison' }),
+      ]) }),
+    ])
+    expect(plan.previewSummary.warnings.unknownProfiles[0]).toEqual(expect.objectContaining({ entityId: 'review-1' }))
+    expect(plan.previewSummary.warnings.ignoredFiles[0]).toEqual(expect.objectContaining({ path: 'draft.tmp' }))
+    expect(Object.isFrozen(plan.previewSummary.ambiguousAliases[0].pages)).toBe(true)
+  })
+
   it('converts an applied canonical model back to a complete database contract', async () => {
     const model = completeCanonicalLibraryFixture()
     model.profiles.push({
@@ -147,6 +180,11 @@ describe('three-way library import planning', () => {
       counts: { create: 1, update: 0, delete: 0, keep_local: 0, unchanged: 0, conflict: 0 },
       countsByEntityType: { unknown: { create: 1, update: 0, delete: 0, keep_local: 0, unchanged: 0, conflict: 0 } },
       unresolvedConflicts: 0, canApply: true, replaceEligible: false, diagnostics: [],
+      previewSummary: {
+        images: { includedCount: 0, includedBytes: 0, omittedCount: 0, omittedBytes: 0 },
+        wikiReview: { currentCount: 0, stale: [], missing: [] },
+        ambiguousAliases: [], warnings: { unknownProfiles: [], ignoredFiles: [] },
+      },
     }
     expect(() => applyImportPlanToModel(plan, completeCanonicalLibraryFixture(), 'g')).toThrow('Unsupported import entity type')
   })
@@ -158,5 +196,10 @@ describe('three-way library import planning', () => {
     }
     const plan = await createLibraryImportPlan(invalid, completeCanonicalLibraryFixture(), 'g')
     expect(plan).toEqual(expect.objectContaining({ bundleId: 'invalid', canApply: false, operations: [] }))
+    expect(plan.previewSummary).toEqual({
+      images: { includedCount: 0, includedBytes: 0, omittedCount: 0, omittedBytes: 0 },
+      wikiReview: { currentCount: 0, stale: [], missing: [] },
+      ambiguousAliases: [], warnings: { unknownProfiles: [], ignoredFiles: [] },
+    })
   })
 })

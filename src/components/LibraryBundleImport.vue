@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { LibraryImportPlan, ImportConflictResolution } from '@/lib/libraryBundle/plan'
+import { computed } from 'vue'
+import type { LibraryImportPlan, ImportConflictResolution, ImportPlanOperation } from '@/lib/libraryBundle/plan'
 import type { RecoveryBundleMetadata } from '@/lib/recovery/model'
 
-defineProps<{
+const props = defineProps<{
   plan: LibraryImportPlan | null
   fileName: string
   error: string
@@ -41,6 +42,58 @@ function formatValue(value: unknown): string {
   if (typeof value === 'string') return value
   return JSON.stringify(value, null, 2) ?? 'absent'
 }
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toLocaleString()} bytes`
+  const units = ['KB', 'MB', 'GB']
+  let value = bytes / 1024
+  let unit = units[0]
+  for (let index = 1; value >= 1024 && index < units.length; index++) {
+    value /= 1024
+    unit = units[index]
+  }
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`
+}
+
+const dedicatedDiagnosticCodes = new Set([
+  'asset.bytes_omitted', 'review_state.stale', 'wiki.ambiguous_alias', 'review.unknown_profile', 'file.unknown',
+])
+
+const otherDiagnostics = computed(() => props.plan?.diagnostics
+  .filter((diagnostic) => !dedicatedDiagnosticCodes.has(diagnostic.code)) ?? [])
+
+interface OperationTypeGroup {
+  entityType: string
+  operations: ImportPlanOperation[]
+}
+
+interface OperationBookGroup {
+  bookId: string
+  title: string
+  entityTypes: OperationTypeGroup[]
+}
+
+const operationGroups = computed<OperationBookGroup[]>(() => {
+  if (!props.plan) return []
+  const bookTitles = new Map(props.plan.operations
+    .filter((operation) => operation.bookId)
+    .map((operation) => [operation.bookId!, operation.bookTitle ?? operation.bookId!]))
+  const groups = new Map<string, Map<string, ImportPlanOperation[]>>()
+  for (const operation of props.plan.operations) {
+    if (operation.kind === 'unchanged') continue
+    const bookId = operation.bookId ?? 'library-wide'
+    const byType = groups.get(bookId) ?? new Map<string, ImportPlanOperation[]>()
+    const operations = byType.get(operation.entityType) ?? []
+    operations.push(operation)
+    byType.set(operation.entityType, operations)
+    groups.set(bookId, byType)
+  }
+  return [...groups.entries()].map(([bookId, byType]) => ({
+    bookId,
+    title: bookId === 'library-wide' ? 'Library-wide' : (bookTitles.get(bookId) ?? `Book ${bookId}`),
+    entityTypes: [...byType.entries()].map(([entityType, operations]) => ({ entityType, operations })),
+  }))
+})
 </script>
 
 <template>
@@ -83,34 +136,99 @@ function formatValue(value: unknown): string {
           </table>
         </div>
 
-        <div v-if="plan.diagnostics.length" class="space-y-1">
-          <div v-for="(diagnostic, index) in plan.diagnostics" :key="`${diagnostic.code}-${index}`" class="text-sm" :class="diagnostic.severity === 'error' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'">
+        <section aria-labelledby="image-impact-heading" class="rounded border border-gray-200 p-3 dark:border-gray-700">
+          <h3 id="image-impact-heading" class="text-sm font-semibold text-gray-900 dark:text-white">Image impact</h3>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <div class="rounded bg-gray-50 p-2 text-sm dark:bg-navy-900">
+              <strong>{{ formatBytes(plan.previewSummary.images.includedBytes) }}</strong>
+              included across {{ plan.previewSummary.images.includedCount }} image(s)
+            </div>
+            <div class="rounded bg-gray-50 p-2 text-sm dark:bg-navy-900">
+              <strong>{{ formatBytes(plan.previewSummary.images.omittedBytes) }}</strong>
+              omitted across {{ plan.previewSummary.images.omittedCount }} image(s)
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="wiki-review-heading" class="rounded border border-gray-200 p-3 dark:border-gray-700">
+          <h3 id="wiki-review-heading" class="text-sm font-semibold text-gray-900 dark:text-white">Wiki review impact</h3>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+            {{ plan.previewSummary.wikiReview.currentCount }} current ·
+            {{ plan.previewSummary.wikiReview.stale.length }} stale ·
+            {{ plan.previewSummary.wikiReview.missing.length }} missing
+          </p>
+          <div v-if="plan.previewSummary.wikiReview.stale.length || plan.previewSummary.wikiReview.missing.length" class="mt-2 space-y-2 text-xs">
+            <div v-for="item in plan.previewSummary.wikiReview.stale" :key="`stale-${item.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>Stale:</strong> {{ item.wikiPageTitle }} for {{ item.chapterTitle }}<template v-if="item.path"> · {{ item.path }}</template>
+            </div>
+            <div v-for="item in plan.previewSummary.wikiReview.missing" :key="`missing-${item.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>Missing:</strong> {{ item.wikiPageTitle }} for {{ item.chapterTitle }}<template v-if="item.path"> · {{ item.path }}</template>
+            </div>
+          </div>
+          <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400">No stale or missing wiki review state.</p>
+        </section>
+
+        <section aria-labelledby="alias-heading" class="rounded border border-gray-200 p-3 dark:border-gray-700">
+          <h3 id="alias-heading" class="text-sm font-semibold text-gray-900 dark:text-white">Ambiguous wiki aliases</h3>
+          <div v-if="plan.previewSummary.ambiguousAliases.length" class="mt-2 space-y-2">
+            <div v-for="item in plan.previewSummary.ambiguousAliases" :key="item.alias" class="rounded bg-amber-50 p-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>“{{ item.alias }}”</strong> is shared by
+              {{ item.pages.map(page => page.title || page.entityId).join(', ') }}.
+              <div class="mt-1 text-xs opacity-80">{{ item.pages.map(page => page.path || page.entityId).join(' · ') }}</div>
+            </div>
+          </div>
+          <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400">No ambiguous aliases.</p>
+        </section>
+
+        <section aria-labelledby="content-warnings-heading" class="rounded border border-gray-200 p-3 dark:border-gray-700">
+          <h3 id="content-warnings-heading" class="text-sm font-semibold text-gray-900 dark:text-white">Content warnings</h3>
+          <div v-if="plan.previewSummary.warnings.unknownProfiles.length || plan.previewSummary.warnings.ignoredFiles.length" class="mt-2 space-y-2 text-sm">
+            <div v-for="warning in plan.previewSummary.warnings.unknownProfiles" :key="`profile-${warning.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>Unknown review profile:</strong> {{ warning.title || warning.entityId }}<template v-if="warning.path"> · {{ warning.path }}</template>
+              <div class="text-xs">{{ warning.message }}</div>
+            </div>
+            <div v-for="warning in plan.previewSummary.warnings.ignoredFiles" :key="`file-${warning.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>Ignored file:</strong> {{ warning.path || warning.entityId }}
+              <div class="text-xs">{{ warning.message }}</div>
+            </div>
+          </div>
+          <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400">No unknown profiles or ignored files.</p>
+        </section>
+
+        <div v-if="otherDiagnostics.length" class="space-y-1">
+          <div v-for="(diagnostic, index) in otherDiagnostics" :key="`${diagnostic.code}-${index}`" class="text-sm" :class="diagnostic.severity === 'error' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'">
             <strong>{{ diagnostic.severity === 'error' ? 'Error' : 'Warning' }}:</strong>
             {{ diagnostic.path ? `${diagnostic.path}: ` : '' }}{{ diagnostic.message }}
           </div>
         </div>
 
-        <div v-if="plan.operations.some(operation => operation.kind !== 'unchanged')" class="max-h-80 space-y-2 overflow-auto">
-          <div v-for="operation in plan.operations.filter(value => value.kind !== 'unchanged')" :key="operation.key" class="rounded border border-gray-200 p-3 dark:border-gray-700">
-            <div class="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ operation.title || operation.entityId }}</div>
-                <div class="text-xs text-gray-500">{{ operation.entityType }} · {{ operation.kind.replace('_', ' ') }}<template v-if="operation.path"> · {{ operation.path }}</template></div>
-                <div v-if="operation.changedFields.length" class="mt-1 text-xs text-gray-500">Changed: {{ operation.changedFields.join(', ') }}</div>
-                <details v-if="operation.changedFields.length" class="mt-2 text-xs">
-                  <summary class="cursor-pointer text-gray-600 dark:text-gray-300">Show field differences</summary>
-                  <div v-for="field in operation.changedFields" :key="field" class="mt-2 grid gap-2 sm:grid-cols-2">
-                    <div><strong>Local {{ field }}</strong><pre class="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 dark:bg-navy-900">{{ formatValue((operation.localValue as Record<string, unknown> | undefined)?.[field]) }}</pre></div>
-                    <div><strong>Incoming {{ field }}</strong><pre class="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 dark:bg-navy-900">{{ formatValue((operation.incomingValue as Record<string, unknown> | undefined)?.[field]) }}</pre></div>
+        <div v-if="operationGroups.length" class="max-h-96 space-y-3 overflow-auto" aria-label="Planned entity changes">
+          <details v-for="bookGroup in operationGroups" :key="bookGroup.bookId" open class="rounded border border-gray-200 p-3 dark:border-gray-700">
+            <summary class="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">{{ bookGroup.title }}</summary>
+            <section v-for="typeGroup in bookGroup.entityTypes" :key="typeGroup.entityType" class="mt-3 border-t border-gray-100 pt-2 dark:border-gray-700">
+              <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ typeGroup.entityType.replaceAll('_', ' ') }}</h4>
+              <div v-for="operation in typeGroup.operations" :key="operation.key" class="mt-2 rounded border border-gray-200 p-3 dark:border-gray-700">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div class="text-sm font-medium text-gray-900 dark:text-white">{{ operation.title || operation.entityId }}</div>
+                    <div class="text-xs text-gray-500">{{ operation.entityType }} · {{ operation.kind.replace('_', ' ') }}<template v-if="operation.path"> · {{ operation.path }}</template></div>
+                    <div v-if="operation.changedFields.length" class="mt-1 text-xs text-gray-500">Changed: {{ operation.changedFields.join(', ') }}</div>
+                    <details v-if="operation.changedFields.length" class="mt-2 text-xs">
+                      <summary class="cursor-pointer text-gray-600 dark:text-gray-300">Show field differences</summary>
+                      <div v-for="field in operation.changedFields" :key="field" class="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div><strong>Local {{ field }}</strong><pre class="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 dark:bg-navy-900">{{ formatValue((operation.localValue as Record<string, unknown> | undefined)?.[field]) }}</pre></div>
+                        <div><strong>Incoming {{ field }}</strong><pre class="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 dark:bg-navy-900">{{ formatValue((operation.incomingValue as Record<string, unknown> | undefined)?.[field]) }}</pre></div>
+                      </div>
+                    </details>
                   </div>
-                </details>
+                  <div v-if="operation.kind === 'conflict'" class="flex gap-2">
+                    <button class="rounded px-2 py-1 text-xs" :class="operation.resolution === 'keep_local' ? 'bg-navy-700 text-white' : 'bg-gray-100 dark:bg-gray-700'" @click="emit('resolve', operation.key, 'keep_local')">Keep local</button>
+                    <button class="rounded px-2 py-1 text-xs" :class="operation.resolution === 'use_incoming' ? 'bg-green-700 text-white' : 'bg-gray-100 dark:bg-gray-700'" @click="emit('resolve', operation.key, 'use_incoming')">Use incoming</button>
+                  </div>
+                </div>
               </div>
-              <div v-if="operation.kind === 'conflict'" class="flex gap-2">
-                <button class="rounded px-2 py-1 text-xs" :class="operation.resolution === 'keep_local' ? 'bg-navy-700 text-white' : 'bg-gray-100 dark:bg-gray-700'" @click="emit('resolve', operation.key, 'keep_local')">Keep local</button>
-                <button class="rounded px-2 py-1 text-xs" :class="operation.resolution === 'use_incoming' ? 'bg-green-700 text-white' : 'bg-gray-100 dark:bg-gray-700'" @click="emit('resolve', operation.key, 'use_incoming')">Use incoming</button>
-              </div>
-            </div>
-          </div>
+            </section>
+          </details>
         </div>
 
         <div class="flex flex-wrap items-center gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">

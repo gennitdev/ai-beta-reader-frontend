@@ -12,6 +12,7 @@ export interface ImportPlanOperation {
   readonly entityType: string
   readonly entityId: string
   readonly bookId?: string
+  readonly bookTitle?: string
   readonly title?: string
   readonly path?: string
   readonly kind: ImportOperationKind
@@ -34,6 +35,46 @@ export interface ImportPlanCounts {
   readonly conflict: number
 }
 
+export interface ImportPlanEntityReference {
+  readonly entityType: string
+  readonly entityId: string
+  readonly bookId?: string
+  readonly title?: string
+  readonly path?: string
+  readonly message?: string
+}
+
+export interface ImportPlanWikiReviewReference extends ImportPlanEntityReference {
+  readonly wikiPageId: string
+  readonly wikiPageTitle: string
+  readonly chapterId: string
+  readonly chapterTitle: string
+}
+
+export interface ImportPlanAliasSummary {
+  readonly alias: string
+  readonly pages: readonly ImportPlanEntityReference[]
+}
+
+export interface ImportPlanPreviewSummary {
+  readonly images: {
+    readonly includedCount: number
+    readonly includedBytes: number
+    readonly omittedCount: number
+    readonly omittedBytes: number
+  }
+  readonly wikiReview: {
+    readonly currentCount: number
+    readonly stale: readonly ImportPlanWikiReviewReference[]
+    readonly missing: readonly ImportPlanWikiReviewReference[]
+  }
+  readonly ambiguousAliases: readonly ImportPlanAliasSummary[]
+  readonly warnings: {
+    readonly unknownProfiles: readonly ImportPlanEntityReference[]
+    readonly ignoredFiles: readonly ImportPlanEntityReference[]
+  }
+}
+
 export interface LibraryImportPlan {
   readonly planVersion: 1
   readonly bundleId: string
@@ -46,6 +87,107 @@ export interface LibraryImportPlan {
   readonly canApply: boolean
   readonly replaceEligible: boolean
   readonly diagnostics: ValidatedLibraryBundle['diagnostics']
+  readonly previewSummary: ImportPlanPreviewSummary
+}
+
+function emptyPreviewSummary(): ImportPlanPreviewSummary {
+  return {
+    images: { includedCount: 0, includedBytes: 0, omittedCount: 0, omittedBytes: 0 },
+    wikiReview: { currentCount: 0, stale: [], missing: [] },
+    ambiguousAliases: [],
+    warnings: { unknownProfiles: [], ignoredFiles: [] },
+  }
+}
+
+function createPreviewSummary(bundle: ValidatedLibraryBundle): ImportPlanPreviewSummary {
+  if (!bundle.model) return emptyPreviewSummary()
+  const model = bundle.model
+  const sources = new Map(bundle.entitySources.map((source) => [canonicalEntityKey(source.entityType, source.id), source.path]))
+  const entities = new Map(collectCanonicalModelEntities(model)
+    .map((entity) => [canonicalEntityKey(entity.entityType, entity.id), entity]))
+  const chapters = new Map(model.chapters.map((chapter) => [chapter.id, chapter]))
+  const pages = new Map(model.wiki_pages.map((page) => [page.id, page]))
+  const staleIds = new Set(bundle.diagnostics
+    .filter((diagnostic) => diagnostic.code === 'review_state.stale')
+    .map((diagnostic) => diagnostic.entityId))
+  const reviewIds = new Set(model.wiki_review_state.map((state) => `${state.wiki_page_id}:${state.chapter_id}`))
+
+  const wikiReference = (wikiPageId: string, chapterId: string, message?: string): ImportPlanWikiReviewReference => {
+    const page = pages.get(wikiPageId)
+    const chapter = chapters.get(chapterId)
+    return {
+      entityType: 'wiki_review_state', entityId: `${wikiPageId}:${chapterId}`, bookId: page?.book_id ?? chapter?.book_id,
+      title: `${page?.page_name ?? wikiPageId} · ${chapter?.title ?? chapterId}`,
+      path: sources.get(canonicalEntityKey('wiki_review_state', `${wikiPageId}:${chapterId}`))
+        ?? sources.get(canonicalEntityKey('chapter', chapterId)),
+      message,
+      wikiPageId, wikiPageTitle: page?.page_name ?? wikiPageId,
+      chapterId, chapterTitle: chapter?.title ?? 'Untitled chapter',
+    }
+  }
+  const stale = model.wiki_review_state
+    .filter((state) => staleIds.has(`${state.wiki_page_id}:${state.chapter_id}`))
+    .map((state) => wikiReference(state.wiki_page_id, state.chapter_id, 'Chapter content changed after this review.'))
+  const missing = model.chapters.flatMap((chapter) => chapter.wiki_mentions
+    .filter((mention) => !reviewIds.has(`${mention.wiki_page_id}:${chapter.id}`))
+    .map((mention) => wikiReference(mention.wiki_page_id, chapter.id, 'This explicit wiki mention has no review record.')))
+
+  const aliases = new Map<string, { alias: string; pageIds: Set<string> }>()
+  for (const page of model.wiki_pages) for (const alias of page.aliases) {
+    const key = alias.normalize('NFC').toLocaleLowerCase('en-US')
+    const entry = aliases.get(key) ?? { alias, pageIds: new Set<string>() }
+    entry.pageIds.add(page.id)
+    aliases.set(key, entry)
+  }
+  const ambiguousAliases = [...aliases.values()]
+    .filter((entry) => entry.pageIds.size > 1)
+    .sort((left, right) => left.alias.localeCompare(right.alias))
+    .map((entry) => ({
+      alias: entry.alias,
+      pages: [...entry.pageIds].sort().map((id) => {
+        const page = pages.get(id)!
+        return {
+          entityType: 'wiki_page', entityId: id, bookId: page.book_id, title: page.page_name,
+          path: sources.get(canonicalEntityKey('wiki_page', id)),
+        }
+      }),
+    }))
+
+  const warningReference = (code: string): ImportPlanEntityReference[] => bundle.diagnostics
+    .filter((diagnostic) => diagnostic.code === code)
+    .map((diagnostic) => {
+      const entityType = diagnostic.entityType ?? (code === 'file.unknown' ? 'file' : 'unknown')
+      const entityId = diagnostic.entityId ?? diagnostic.path ?? code
+      const entity = entities.get(canonicalEntityKey(entityType, entityId))
+      return {
+        entityType, entityId, bookId: entity?.bookId, title: entity?.title,
+        path: diagnostic.path ?? sources.get(canonicalEntityKey(entityType, entityId)),
+        message: diagnostic.message,
+      }
+    })
+
+  return {
+    images: model.assets.reduce((summary, asset) => {
+      if (asset.bytes) {
+        summary.includedCount++
+        summary.includedBytes += asset.bytes.byteLength
+      } else {
+        summary.omittedCount++
+        summary.omittedBytes += asset.byte_length
+      }
+      return summary
+    }, { includedCount: 0, includedBytes: 0, omittedCount: 0, omittedBytes: 0 }),
+    wikiReview: {
+      currentCount: model.wiki_review_state.length - stale.length,
+      stale,
+      missing,
+    },
+    ambiguousAliases,
+    warnings: {
+      unknownProfiles: warningReference('review.unknown_profile'),
+      ignoredFiles: warningReference('file.unknown'),
+    },
+  }
 }
 
 function deepFreeze<T>(value: T): T {
@@ -130,11 +272,15 @@ export async function createLibraryImportPlan(
     return finishPlan({
       planVersion: 1, bundleId: bundle.manifest?.bundle_id ?? 'invalid', databaseGeneration,
       bookIds: bundle.manifest?.book_ids ?? [], operations: [], replaceEligible: false,
-      diagnostics: bundle.diagnostics,
+      diagnostics: bundle.diagnostics, previewSummary: createPreviewSummary(bundle),
     })
   }
   const incomingEntities = collectCanonicalModelEntities(bundle.model)
   const localEntities = collectCanonicalModelEntities(localModel)
+  const bookTitles = new Map([
+    ...localModel.books.map((book) => [book.id, book.title] as const),
+    ...bundle.model.books.map((book) => [book.id, book.title] as const),
+  ])
   const incoming = new Map(incomingEntities.map((entity) => [canonicalEntityKey(entity.entityType, entity.id), entity]))
   const local = new Map(localEntities.map((entity) => [canonicalEntityKey(entity.entityType, entity.id), entity]))
   const base = new Map(bundle.inventory.entities.map((entity) => [canonicalEntityKey(entity.entity_type, entity.id), entity]))
@@ -169,6 +315,7 @@ export async function createLibraryImportPlan(
     operations.push({
       key, entityType, entityId,
       bookId: incomingEntity?.bookId ?? localEntity?.bookId,
+      bookTitle: bookTitles.get(incomingEntity?.bookId ?? localEntity?.bookId ?? ''),
       title: incomingEntity?.title ?? localEntity?.title,
       path: paths.get(key) ?? baseEntity?.path,
       ...classification,
@@ -180,7 +327,7 @@ export async function createLibraryImportPlan(
   return finishPlan({
     planVersion: 1, bundleId: bundle.manifest.bundle_id, databaseGeneration,
     bookIds: [...bundle.manifest.book_ids], operations, replaceEligible: bundle.replaceEligible,
-    diagnostics: bundle.diagnostics,
+    diagnostics: bundle.diagnostics, previewSummary: createPreviewSummary(bundle),
   })
 }
 
