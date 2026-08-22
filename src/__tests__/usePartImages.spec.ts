@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
   canStoreImages: null as { value: boolean } | null,
   fetchPartImages: vi.fn(),
   getImageSource: vi.fn(),
+  downloadOrShareImage: vi.fn(),
   getWikiPages: vi.fn(),
   getImageWikiTags: vi.fn(),
   setImageWikiTags: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('@/composables/useImageLibrary', async () => {
       canStoreImages,
       fetchPartImages: h.fetchPartImages,
       getImageSource: h.getImageSource,
+      downloadOrShareImage: h.downloadOrShareImage,
     }),
   }
 })
@@ -62,6 +64,7 @@ beforeEach(() => {
   h.getImageWikiTags.mockResolvedValue([])
   h.setImageWikiTags.mockResolvedValue(undefined)
   h.updateImageAssetNotes.mockResolvedValue(undefined)
+  h.downloadOrShareImage.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -236,15 +239,8 @@ describe('warn branches and external-image flows', () => {
     await c.handleSaveActiveImageTags(['w5'])
     expect(c.activeImageTags.value).toEqual([{ wiki_page_id: 'w5' }])
 
-    const click = vi.fn()
-    const realCreate = document.createElement.bind(document)
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      const el = realCreate(tag) as HTMLAnchorElement
-      if (tag === 'a') el.click = click
-      return el
-    })
-    c.handleDownloadImage('ext')
-    expect(click).toHaveBeenCalled()
+    await c.handleDownloadImage('ext')
+    expect(h.downloadOrShareImage).toHaveBeenCalledWith(expect.objectContaining({ id: 'ext' }))
   })
 
   it('does nothing when saving notes/tags with no active image', async () => {
@@ -262,16 +258,8 @@ describe('download + watch', () => {
     const c = setup()
     await c.refreshPartImages()
 
-    const click = vi.fn()
-    const realCreate = document.createElement.bind(document)
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      const el = realCreate(tag) as HTMLAnchorElement
-      if (tag === 'a') el.click = click
-      return el
-    })
-
-    c.handleDownloadImage('a')
-    expect(click).toHaveBeenCalled()
+    await c.handleDownloadImage('a')
+    expect(h.downloadOrShareImage).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }))
   })
 
   it('refreshes when the storage capability changes', async () => {

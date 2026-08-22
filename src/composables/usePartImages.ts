@@ -14,6 +14,7 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
     canStoreImages,
     fetchPartImages,
     getImageSource,
+    downloadOrShareImage,
   } = useImageLibrary();
   const {
     getWikiPages,
@@ -230,22 +231,17 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
     }
   };
 
-  const handleDownloadImage = (imageId: string) => {
+  const handleDownloadImage = async (imageId: string) => {
     const isExternal = externalImage.value?.id === imageId;
-    const imageSrc = isExternal ? externalImageSource.value : partImageSources.value[imageId];
-    if (!imageSrc) return;
-
     const image = isExternal
       ? externalImage.value
       : partImages.value.find((img) => img.id === imageId);
-    const fileName = image?.file_name || `illustration-${imageId}.jpg`;
-
-    const link = document.createElement("a");
-    link.href = imageSrc;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (!image) return;
+    try {
+      await downloadOrShareImage(image);
+    } catch (error) {
+      partImageError.value = error instanceof Error ? error.message : 'Failed to save image';
+    }
   };
 
   // Set up watchers

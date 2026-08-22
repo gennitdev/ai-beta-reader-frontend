@@ -9,12 +9,11 @@ import {
 } from './nativeGoogleDriveAuthorization';
 import { loadTokens, saveTokens, clearTokens } from './tokenStorage';
 import {
-  ElectronImageContentStore,
-  IndexedDbImageContentStore,
   dataUrlToBlob,
   inspectImageContent,
   type ImageContentStore,
 } from './imageContentStore';
+import { createRuntimeImageContentStore } from './runtimeImageContentStore';
 import {
   captureImageContentSnapshot,
   enrichImageRowsForBackup,
@@ -122,16 +121,6 @@ interface CloudSyncWindow extends Window {
 
 function getCloudSyncWindow(): CloudSyncWindow | null {
   return typeof window === 'undefined' ? null : window as CloudSyncWindow;
-}
-
-function createRuntimeImageContentStore(): ImageContentStore | null {
-  if (typeof window !== 'undefined' && window.desktopImages) {
-    return new ElectronImageContentStore(window.desktopImages);
-  }
-  if (!Capacitor.isNativePlatform()) {
-    return new IndexedDbImageContentStore();
-  }
-  return null;
 }
 
 /**
@@ -1082,10 +1071,20 @@ export class CloudSync {
         const id = String(row.id ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
         return { ...row, file_path: row.file_path || `images/library/${id}/${String(row.file_name ?? 'image')}` };
       });
-      const restored = await restoreImageRows(importJson.image_assets, imageStore);
-      importJson.image_assets = restored.rows;
-      await db.importDatabase(new TextEncoder().encode(JSON.stringify(importJson)));
-      return;
+      const snapshot = await captureImageContentSnapshot(importJson.image_assets, imageStore);
+      try {
+        const restored = await restoreImageRows(importJson.image_assets, imageStore);
+        importJson.image_assets = restored.rows;
+        await db.importDatabase(new TextEncoder().encode(JSON.stringify(importJson)));
+        return;
+      } catch (error) {
+        try {
+          await restoreImageContentSnapshot(snapshot, imageStore);
+        } catch (rollbackError) {
+          console.error('[CloudSync] Failed to roll back canonical image content:', rollbackError);
+        }
+        throw error;
+      }
     }
     await db.importDatabase(data);
   }

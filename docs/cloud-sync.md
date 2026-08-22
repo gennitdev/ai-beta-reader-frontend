@@ -18,7 +18,7 @@ This guide describes the current Google Drive backup and restore workflow for th
 |-------|----------|---------------|------------------|
 | Browser | Google Identity Services token client | `sql.js` snapshot in IndexedDB | IndexedDB Blob store |
 | Electron | Desktop OAuth client with a loopback callback through the preload bridge | `sql.js` snapshot in IndexedDB | Files below the Electron app-data directory |
-| Android | Google Play services `AuthorizationClient` through a Capacitor bridge | `@capacitor-community/sqlite` | Metadata only; no local image-binary store yet |
+| Android | Google Play services `AuthorizationClient` through a Capacitor bridge | `@capacitor-community/sqlite` | App-private files keyed by platform-neutral image ID |
 
 All platforms use `src/lib/cloudSync.ts` and the codec under `src/lib/libraryBundle/`. New backups are canonical full-library ZIPs encrypted with the WC2 Web Crypto envelope. Drive stores each backup as an immutable generation and retains the three newest successful generations.
 
@@ -28,7 +28,7 @@ Key differences:
 - Android's native bridge requests only `https://www.googleapis.com/auth/drive.file`. It clears and reacquires expired tokens through `AuthorizationClient`; it does not receive or store a refresh token.
 - Electron caches refreshable OAuth credentials through OS-backed secure storage. Browser GIS and Android authorization use short-lived access tokens.
 - New backups encrypt a canonical full-library ZIP with the WC2 Web Crypto envelope. Drive keeps the three newest successful generations and records integrity metadata in `appProperties`.
-- Browser and Electron backups read image bytes through the platform image store. Live browser SQLite rows do not retain base64 image content.
+- Every platform reads backup image bytes through its platform image store. Browser and Android SQLite rows do not retain base64 image content after migration.
 - Restore continues to recognize WC1, WC2, and CryptoJS-encrypted legacy JSON backups. Legacy restore support is not retired with the old writer.
 
 ---
@@ -128,8 +128,8 @@ adb logcat | grep "authenticateNative"
   3. For a bundle, validate it and write/read/checksum a recovery ZIP outside the main database.
   4. Replace rows in one database transaction, using the live schema via `PRAGMA table_info`.
   5. Roll back from the verified recovery if database or persistence work fails.
-- All platforms emit the same canonical format. A bundle containing image records requires the corresponding bytes; because Android has no image-binary store, an Android backup fails clearly if its local metadata refers to unavailable image content. If a restore fails, the prior library remains available or is restored from the verified recovery.
-- Browser and Electron restores write image binaries to their active content store before importing metadata. A failed binary write aborts the restore instead of reporting incomplete success. Android imports metadata without local image binaries.
+- All platforms emit the same canonical format. A bundle containing image records requires the corresponding bytes. If a restore fails, the prior library remains available or is restored from the verified recovery.
+- Browser, Electron, and Android restores write image binaries to their active content store before importing metadata. A failed binary write aborts the restore and rolls back staged content instead of reporting incomplete success.
 
 ### Verifying a Backup
 
