@@ -136,10 +136,18 @@ export class ElectronCapacitorApp {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        // The generated Capacitor preload loads local CommonJS modules and the
+        // native SQLite plugin. Electron's default renderer sandbox only allows
+        // a small built-in module subset, so it aborts before exposing any IPC
+        // bridges unless this window's preload has full Node module access.
+        sandbox: false,
         // Use preload to inject the electron varriant overrides for capacitor plugins.
         // preload: join(app.getAppPath(), "node_modules", "@capacitor-community", "electron", "dist", "runtime", "electron-rt.js"),
         preload: preloadPath,
       },
+    });
+    this.MainWindow.webContents.on('preload-error', (_event, failedPreloadPath, error) => {
+      console.error(`[Electron] Preload script failed: ${failedPreloadPath}`, error);
     });
     this.mainWindowState.manage(this.MainWindow);
 
