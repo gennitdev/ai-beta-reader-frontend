@@ -43,15 +43,17 @@ describe('Electron secure-storage bridge runtime', () => {
       'secure',
       'openai_api_key.bin',
     ))
-    expect(safeStorage.decryptString).toHaveBeenCalledWith(Buffer.from('encrypted:secret-value'))
+    expect(safeStorage.decryptStringAsync).toHaveBeenCalledWith(Buffer.from('encrypted:secret-value'))
+    expect(safeStorage.decryptString).not.toHaveBeenCalled()
   })
 
   it('treats unavailable encryption and unreadable payloads as missing values', async () => {
-    safeStorage.isEncryptionAvailable.mockReturnValue(false)
+    fsMocks.readFile.mockResolvedValue(Buffer.from('encrypted:secret-value'))
+    safeStorage.isAsyncEncryptionAvailable.mockResolvedValue(false)
     await expect(getIpcHandler('secure-storage:get')(null, 'googleOAuthTokens')).resolves.toBeNull()
-    expect(fsMocks.readFile).not.toHaveBeenCalled()
+    expect(safeStorage.decryptStringAsync).not.toHaveBeenCalled()
 
-    safeStorage.isEncryptionAvailable.mockReturnValue(true)
+    safeStorage.isAsyncEncryptionAvailable.mockResolvedValue(true)
     fsMocks.readFile.mockRejectedValueOnce(new Error('missing'))
     await expect(getIpcHandler('secure-storage:get')(null, 'googleOAuthTokens')).resolves.toBeNull()
   })
@@ -65,7 +67,8 @@ describe('Electron secure-storage bridge runtime', () => {
 
     const secureDirectory = path.join('/tmp/beta-bot-user-data', 'secure')
     expect(fsMocks.mkdir).toHaveBeenCalledWith(secureDirectory, { recursive: true })
-    expect(safeStorage.encryptString).toHaveBeenCalledWith('secret-value')
+    expect(safeStorage.encryptStringAsync).toHaveBeenCalledWith('secret-value')
+    expect(safeStorage.encryptString).not.toHaveBeenCalled()
     expect(fsMocks.writeFile).toHaveBeenCalledWith(
       path.join(secureDirectory, 'openai_api_key.bin'),
       Buffer.from('encrypted:secret-value'),
@@ -74,7 +77,7 @@ describe('Electron secure-storage bridge runtime', () => {
   })
 
   it('rejects writes when OS encryption is unavailable', async () => {
-    safeStorage.isEncryptionAvailable.mockReturnValue(false)
+    safeStorage.isAsyncEncryptionAvailable.mockResolvedValue(false)
 
     await expect(getIpcHandler('secure-storage:set')(
       null,
@@ -83,6 +86,73 @@ describe('Electron secure-storage bridge runtime', () => {
     )).rejects.toThrow('OS-level encryption is not available')
     expect(fsMocks.mkdir).not.toHaveBeenCalled()
     expect(fsMocks.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('times out instead of hanging when the OS credential store does not respond', async () => {
+    vi.useFakeTimers()
+    safeStorage.isAsyncEncryptionAvailable.mockReturnValue(new Promise(() => {}))
+
+    try {
+      const write = getIpcHandler('secure-storage:set')(
+        null,
+        'googleOAuthTokens',
+        'secret-value',
+      ) as Promise<void>
+      const rejection = expect(write).rejects.toThrow(
+        'Timed out waiting for OS secure storage',
+      )
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      await rejection
+      expect(fsMocks.mkdir).not.toHaveBeenCalled()
+      expect(fsMocks.writeFile).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('times out instead of hanging when asynchronous encryption does not respond', async () => {
+    vi.useFakeTimers()
+    safeStorage.encryptStringAsync.mockReturnValue(new Promise(() => {}))
+
+    try {
+      const write = getIpcHandler('secure-storage:set')(
+        null,
+        'googleOAuthTokens',
+        'secret-value',
+      ) as Promise<void>
+      const rejection = expect(write).rejects.toThrow(
+        'Timed out waiting for OS secure storage',
+      )
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      await rejection
+      expect(fsMocks.mkdir).toHaveBeenCalled()
+      expect(fsMocks.writeFile).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('times out instead of hanging when asynchronous decryption does not respond', async () => {
+    vi.useFakeTimers()
+    fsMocks.readFile.mockResolvedValue(Buffer.from('encrypted:secret-value'))
+    safeStorage.decryptStringAsync.mockReturnValue(new Promise(() => {}))
+
+    try {
+      const read = getIpcHandler('secure-storage:get')(
+        null,
+        'googleOAuthTokens',
+      ) as Promise<string | null>
+      const rejection = expect(read).rejects.toThrow(
+        'Timed out waiting for OS secure storage',
+      )
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      await rejection
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('rejects unowned keys and oversized values at the IPC boundary', async () => {
