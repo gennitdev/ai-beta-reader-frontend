@@ -9,6 +9,7 @@ export type AssetByteReader = (asset: ImageAsset) => Promise<Uint8Array>
 
 export interface CanonicalSnapshotOptions {
   readAssetBytes?: AssetByteReader
+  contentMode?: 'full' | 'text-only'
 }
 
 function stringValue(row: LogicalRow, key: string, fallback = ''): string {
@@ -144,9 +145,20 @@ export async function createCanonicalLibrarySnapshot(
   const tagsByImage = groupRows(tables.image_wiki_tags, 'image_id')
   const chapterSummaries = selectCurrentRows(tables.chapter_summaries, 'chapter_id')
   const partSummaries = selectCurrentRows(tables.part_summaries, 'part_id')
+  const contentMode = options.contentMode ?? 'full'
 
   const assets = await Promise.all(tables.image_assets.map(async (row) => {
-    const bytes = await readAssetBytes(row, options.readAssetBytes)
+    const storedHash = nullableString(row, 'content_hash')
+    const storedAlgorithm = nullableString(row, 'content_hash_algorithm')
+    const storedByteLength = row.content_byte_length
+    const hasStoredIntegrity = storedAlgorithm === 'sha256'
+      && Boolean(storedHash?.match(/^[a-f0-9]{64}$/))
+      && typeof storedByteLength === 'number'
+      && Number.isInteger(storedByteLength)
+      && storedByteLength >= 0
+    const loadedBytes = contentMode === 'full' || !hasStoredIntegrity
+      ? await readAssetBytes(row, options.readAssetBytes)
+      : null
     return {
       id: stringValue(row, 'id'),
       book_id: stringValue(row, 'book_id'),
@@ -159,18 +171,20 @@ export async function createCanonicalLibrarySnapshot(
         .map((tag) => stringValue(tag, 'wiki_page_id')).sort(),
       created_at: stringValue(row, 'created_at'),
       updated_at: stringValue(row, 'updated_at'),
-      sha256: await sha256Hex(bytes),
-      byte_length: bytes.byteLength,
-      bytes,
+      sha256: loadedBytes ? await sha256Hex(loadedBytes) : storedHash as string,
+      byte_length: loadedBytes ? loadedBytes.byteLength : storedByteLength as number,
+      bytes: contentMode === 'full' ? loadedBytes : null,
     }
   }))
 
   const model: CanonicalLibraryModel = {
     format_version: 1,
     bundle_kind: 'library',
-    content_mode: 'full',
+    content_mode: contentMode,
     book_ids: tables.books.map((row) => stringValue(row, 'id')).sort(),
-    includes: { image_bytes: true, history: true, audit_records: true },
+    includes: contentMode === 'full'
+      ? { image_bytes: true, history: true, audit_records: true }
+      : { image_bytes: false, history: false, audit_records: false },
     books: tables.books.map((row) => ({
       id: stringValue(row, 'id'), title: stringValue(row, 'title'),
       chapter_order: stringArray(row, 'chapter_order'), part_order: stringArray(row, 'part_order'),
@@ -255,7 +269,7 @@ export async function createCanonicalLibrarySnapshot(
       })),
     ],
     assets,
-    chapter_revisions: tables.chapter_revisions.map((row) => ({
+    chapter_revisions: contentMode === 'text-only' ? [] : tables.chapter_revisions.map((row) => ({
       id: stringValue(row, 'id'), chapter_id: stringValue(row, 'chapter_id'),
       book_id: stringValue(row, 'book_id'), title: nullableString(row, 'title'),
       text: stringValue(row, 'text'), word_count: numberValue(row, 'word_count'),
@@ -263,7 +277,7 @@ export async function createCanonicalLibrarySnapshot(
       revision_kind: stringValue(row, 'revision_kind') as 'save' | 'baseline',
       created_at: stringValue(row, 'created_at'), discarded_at: nullableString(row, 'discarded_at'),
     })),
-    chapter_activity: tables.chapter_activity.map((row) => ({
+    chapter_activity: contentMode === 'text-only' ? [] : tables.chapter_activity.map((row) => ({
       id: stringValue(row, 'id'), book_id: stringValue(row, 'book_id'),
       chapter_id: stringValue(row, 'chapter_id'), chapter_title: nullableString(row, 'chapter_title'),
       activity_type: stringValue(row, 'activity_type') as 'save' | 'delete',
@@ -272,14 +286,14 @@ export async function createCanonicalLibrarySnapshot(
       revision_discarded: booleanValue(row, 'revision_discarded'),
       created_at: stringValue(row, 'created_at'),
     })),
-    wiki_updates: tables.wiki_updates.map((row) => ({
+    wiki_updates: contentMode === 'text-only' ? [] : tables.wiki_updates.map((row) => ({
       id: stringValue(row, 'id'), wiki_page_id: stringValue(row, 'wiki_page_id'),
       chapter_id: nullableString(row, 'chapter_id'), update_type: nullableString(row, 'update_type'),
       change_summary: nullableString(row, 'change_summary'),
       contradiction_notes: nullableString(row, 'contradiction_notes'),
       created_at: stringValue(row, 'created_at'),
     })),
-    wiki_review_state: tables.wiki_review_state.map((row) => ({
+    wiki_review_state: contentMode === 'text-only' ? [] : tables.wiki_review_state.map((row) => ({
       wiki_page_id: stringValue(row, 'wiki_page_id'), chapter_id: stringValue(row, 'chapter_id'),
       chapter_content_sha256: stringValue(row, 'chapter_content_sha256'),
       reviewed_at: stringValue(row, 'reviewed_at'), reviewed_by: stringValue(row, 'reviewed_by'),

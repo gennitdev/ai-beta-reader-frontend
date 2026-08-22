@@ -2,7 +2,10 @@ import { ref, type Ref } from 'vue'
 import JSZip from 'jszip'
 import packageInfo from '../../package.json'
 import type { Book, Chapter, ChapterNote, BookPart, ImageAsset } from '@/lib/database'
-import { createFullLibraryBundleExport } from '@/lib/libraryBundle/export'
+import {
+  createFullLibraryBundleExport,
+  createTextOnlyLibraryBundleExport,
+} from '@/lib/libraryBundle/export'
 import { createAgentWorkspaceScaffold } from '@/lib/libraryBundle/agentWorkspace'
 import {
   writeBundleDirectory,
@@ -73,7 +76,7 @@ export function useDataExport(deps: UseDataExportDeps) {
   const isExporting = ref(false)
   const exportProgress = ref('')
   const exportError = ref('')
-  const exportFormat = ref<'bundle' | 'zip' | 'markdown'>('bundle')
+  const exportFormat = ref<'bundle' | 'text-workspace' | 'zip' | 'markdown'>('bundle')
   const markdownGranularity = ref<'book' | 'part'>('book')
   const includeNotes = ref(true)
   const runtimeDirectoryPicker = typeof window === 'undefined'
@@ -81,12 +84,15 @@ export function useDataExport(deps: UseDataExportDeps) {
     : (window as DirectoryPickerWindow).showDirectoryPicker
   const canExportBundleDirectory = ref(Boolean(chooseBundleDirectory || runtimeDirectoryPicker))
 
-  const createCanonicalBundle = async () => {
+  const createCanonicalBundle = async (contentMode: 'full' | 'text-only' = 'full') => {
     exportProgress.value = 'Creating a consistent library snapshot...'
     const databaseBackup = await exportDatabase()
     exportProgress.value = 'Writing canonical bundle files and verifying images...'
     const exportedAt = new Date().toISOString()
-    const bundle = await createFullLibraryBundleExport(databaseBackup, {
+    const createBundle = contentMode === 'full'
+      ? createFullLibraryBundleExport
+      : createTextOnlyLibraryBundleExport
+    const bundle = await createBundle(databaseBackup, {
       bundleId: createPortableId('bundle'),
       exportedAt,
       appVersion: packageInfo.version,
@@ -165,6 +171,55 @@ export function useDataExport(deps: UseDataExportDeps) {
       } else {
         console.error('Full library folder export failed:', err)
         exportError.value = 'Folder export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
+        exportProgress.value = ''
+      }
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  const exportTextOnlyWorkspaceZip = async () => {
+    if (isExporting.value) return
+    exportError.value = ''
+    isExporting.value = true
+    try {
+      const { bundle, exportedAt } = await createCanonicalBundle('text-only')
+      exportProgress.value = 'Creating text-only workspace ZIP...'
+      triggerZipDownload(
+        new Blob([bundle.zipBytes.slice().buffer], { type: 'application/zip' }),
+        `beta-bot-text-workspace-${exportedAt.slice(0, 10)}.zip`,
+      )
+      exportProgress.value = 'Text-only workspace exported!'
+      setTimeout(() => { exportProgress.value = '' }, 3000)
+    } catch (err) {
+      console.error('Text-only workspace export failed:', err)
+      exportError.value = 'Workspace export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
+      exportProgress.value = ''
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  const exportTextOnlyWorkspaceDirectory = async () => {
+    if (isExporting.value) return
+    exportError.value = ''
+    isExporting.value = true
+    try {
+      const choose = chooseBundleDirectory
+        ?? (runtimeDirectoryPicker ? () => runtimeDirectoryPicker.call(window, { mode: 'readwrite' }) : undefined)
+      if (!choose) throw new Error('Folder export is not supported by this browser.')
+      exportProgress.value = 'Choose an empty folder or an existing Beta Bot bundle...'
+      const directory = await choose()
+      const { bundle } = await createCanonicalBundle('text-only')
+      exportProgress.value = 'Updating text files while preserving omitted image bytes and other files...'
+      const result = await writeBundleDirectory(directory, bundle.files, createAgentWorkspaceScaffold())
+      exportProgress.value = `Text-only workspace updated: ${result.writtenFiles} managed files written, ${result.deletedFiles} obsolete text files removed.`
+      setTimeout(() => { exportProgress.value = '' }, 5000)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') exportProgress.value = ''
+      else {
+        console.error('Text-only workspace folder export failed:', err)
+        exportError.value = 'Workspace folder export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
         exportProgress.value = ''
       }
     } finally {
@@ -436,6 +491,8 @@ export function useDataExport(deps: UseDataExportDeps) {
   const handleExport = () => {
     if (exportFormat.value === 'bundle') {
       exportFullLibraryBundle()
+    } else if (exportFormat.value === 'text-workspace') {
+      exportTextOnlyWorkspaceZip()
     } else if (exportFormat.value === 'markdown') {
       exportAsMarkdown()
     } else {
@@ -454,5 +511,7 @@ export function useDataExport(deps: UseDataExportDeps) {
     handleExport,
     exportFullLibraryBundle,
     exportFullLibraryDirectory,
+    exportTextOnlyWorkspaceZip,
+    exportTextOnlyWorkspaceDirectory,
   }
 }

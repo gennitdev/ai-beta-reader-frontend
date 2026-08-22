@@ -136,10 +136,15 @@ function yamlObject(bytes: Uint8Array, path: string): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
-async function priorManagedPaths(root: BundleDirectoryHandle): Promise<Set<string>> {
+interface PriorManagedPaths {
+  managed: Set<string>
+  assetBinaries: Set<string>
+}
+
+async function priorManagedPaths(root: BundleDirectoryHandle): Promise<PriorManagedPaths> {
   const manifestBytes = await readFileIfPresent(root, 'beta-bot.yaml')
   const inventoryBytes = await readFileIfPresent(root, '_beta-bot/inventory.json')
-  if (!manifestBytes && !inventoryBytes) return new Set()
+  if (!manifestBytes && !inventoryBytes) return { managed: new Set(), assetBinaries: new Set() }
   if (!manifestBytes || !inventoryBytes) {
     throw new Error('The selected folder contains an incomplete Beta Bot bundle; export will not overwrite it.')
   }
@@ -160,6 +165,7 @@ async function priorManagedPaths(root: BundleDirectoryHandle): Promise<Set<strin
   }
 
   const managed = new Set<string>(FIXED_MANAGED_PATHS)
+  const assetBinaries = new Set<string>()
   for (const entry of inventory.data.entities) {
     if (!INVENTORY_PATHS[entry.entity_type]?.test(entry.path)) {
       throw new Error(`Existing inventory claims unsafe managed path ${entry.path}.`)
@@ -172,14 +178,16 @@ async function priorManagedPaths(root: BundleDirectoryHandle): Promise<Set<strin
       const metadata = yamlObject(metadataBytes, entry.path)
       const fileName = metadata.file_name
       if (typeof fileName === 'string' && fileName && !/[\\/\0\r\n]/.test(fileName)) {
-        managed.add(`${entry.path.slice(0, -'asset.yaml'.length)}${fileName.normalize('NFC')}`)
+        const assetPath = `${entry.path.slice(0, -'asset.yaml'.length)}${fileName.normalize('NFC')}`
+        managed.add(assetPath)
+        assetBinaries.add(assetPath)
       }
     } catch {
       // If externally edited asset metadata is no longer canonical, preserve
       // the sibling file rather than guessing what the app owns.
     }
   }
-  return managed
+  return { managed, assetBinaries }
 }
 
 /**
@@ -202,7 +210,10 @@ export async function writeBundleDirectory(
     throw new Error(diagnostics.filter((value) => value.severity === 'error').map((value) => value.message).join('\n'))
   }
 
-  const oldManaged = await priorManagedPaths(root)
+  const { managed: oldManaged, assetBinaries } = await priorManagedPaths(root)
+  const incomingManifest = yamlObject(files.get('beta-bot.yaml') as Uint8Array, 'beta-bot.yaml')
+  const preservesImageBytes = incomingManifest.content_mode === 'text-only'
+    && (incomingManifest.includes as { image_bytes?: unknown } | undefined)?.image_bytes === false
   const originalWrites = new Map<string, Uint8Array | null>()
   for (const path of paths) {
     const existing = await readFileIfPresent(root, path)
@@ -212,7 +223,9 @@ export async function writeBundleDirectory(
     originalWrites.set(path, existing)
   }
 
-  const obsolete = [...oldManaged].filter((path) => !files.has(path)).sort()
+  const obsolete = [...oldManaged]
+    .filter((path) => !files.has(path) && !(preservesImageBytes && assetBinaries.has(path)))
+    .sort()
   const obsoleteBytes = new Map<string, Uint8Array>()
   for (const path of obsolete) {
     const existing = await readFileIfPresent(root, path)

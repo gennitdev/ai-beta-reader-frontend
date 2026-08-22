@@ -50,6 +50,14 @@ export function applyImportPlanToModel(
       if (operation.entityType === 'asset' && Array.isArray(incoming.bytes)) {
         incoming.bytes = new Uint8Array(incoming.bytes)
       }
+      if (operation.entityType === 'asset' && incoming.bytes === null && index >= 0) {
+        const localAsset = values[index] as { sha256?: string; byte_length?: number; bytes?: Uint8Array | null }
+        const incomingAsset = incoming as { sha256?: string; byte_length?: number; bytes?: Uint8Array | null }
+        if (localAsset.bytes && localAsset.sha256 === incomingAsset.sha256
+          && localAsset.byte_length === incomingAsset.byte_length) {
+          incomingAsset.bytes = localAsset.bytes.slice()
+        }
+      }
       if (index >= 0) values[index] = incoming
       else values.push(incoming)
     }

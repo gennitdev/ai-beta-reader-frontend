@@ -351,7 +351,9 @@ describe('UserSettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(button(wrapper, 'Export Git workspace to folder').exists()).toBe(true)
+    expect(button(wrapper, 'Export full bundle to folder').exists()).toBe(true)
     expect(wrapper.text()).toContain('preserves unknown files')
+    expect(wrapper.text()).toContain('Text-only Git workspace (advanced)')
+    expect(wrapper.text()).toContain('Not a complete backup')
   })
 })

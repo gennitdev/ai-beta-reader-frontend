@@ -106,6 +106,32 @@ describe('three-way library import planning', () => {
     expect(() => assertImportPlanCurrent(plan, 'generation-1')).toThrow('unresolved conflicts')
   })
 
+  it('applies text-only changes without deleting omitted history, audit data, or matching image bytes', async () => {
+    const local = completeCanonicalLibraryFixture()
+    const incoming = structuredClone(local)
+    incoming.content_mode = 'text-only'
+    incoming.includes = { image_bytes: false, history: false, audit_records: false }
+    incoming.assets[0].bytes = null
+    incoming.chapter_revisions = []
+    incoming.chapter_activity = []
+    incoming.wiki_updates = []
+    incoming.wiki_review_state = []
+    const written = await writeLibraryBundle(incoming, options)
+    const validated = await validateLibraryBundle(readLibraryBundle(written.files), written.files)
+    validated.model!.assets[0].notes = 'Updated image metadata'
+    validated.model!.chapters[0].body = 'Text-only edit'
+    const plan = await createLibraryImportPlan(validated, local, 'generation')
+    const applied = applyImportPlanToModel(plan, local, 'generation')
+
+    expect(plan.replaceEligible).toBe(false)
+    expect(plan.operations.some((value) => ['chapter_revision', 'chapter_activity', 'wiki_update', 'wiki_review_state'].includes(value.entityType))).toBe(false)
+    expect(applied.chapters[0].body).toBe('Text-only edit')
+    expect(applied.assets[0].notes).toBe('Updated image metadata')
+    expect(applied.assets[0].bytes).toEqual(new Uint8Array([1, 2, 3]))
+    expect(applied.chapter_revisions).toEqual(local.chapter_revisions)
+    expect(applied.wiki_review_state).toEqual(local.wiki_review_state)
+  })
+
   it('captures all decision-support summaries in the immutable plan', async () => {
     const original = completeCanonicalLibraryFixture()
     const written = await writeLibraryBundle(original, options)

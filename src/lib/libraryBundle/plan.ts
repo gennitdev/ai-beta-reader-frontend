@@ -287,7 +287,17 @@ export async function createLibraryImportPlan(
   const paths = new Map(bundle.entitySources.map((source) => [canonicalEntityKey(source.entityType, source.id), source.path]))
   const scope = new Set(bundle.manifest.book_ids)
   const candidateKeys = new Set([...base.keys(), ...incoming.keys()])
+  const includesEntityType = (entityType: string) => {
+    if (entityType === 'chapter_revision' || entityType === 'chapter_activity') {
+      return bundle.manifest!.includes.history
+    }
+    if (entityType === 'wiki_update' || entityType === 'wiki_review_state') {
+      return bundle.manifest!.includes.audit_records
+    }
+    return true
+  }
   for (const [key, entity] of local) {
+    if (!includesEntityType(entity.entityType)) continue
     if (entity.bookId && scope.has(entity.bookId)) candidateKeys.add(key)
     else if (entity.entityType === 'profile' && bundle.manifest.bundle_kind === 'library') candidateKeys.add(key)
   }

@@ -11,6 +11,7 @@ const zipState = vi.hoisted(() => ({
 
 const bundleState = vi.hoisted(() => ({
   create: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]) })),
+  createText: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]), files: new Map() })),
 }))
 
 const directoryState = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ const directoryState = vi.hoisted(() => ({
 
 vi.mock('@/lib/libraryBundle/export', () => ({
   createFullLibraryBundleExport: bundleState.create,
+  createTextOnlyLibraryBundleExport: bundleState.createText,
 }))
 
 vi.mock('@/lib/libraryBundle/adapters/directory', () => ({
@@ -234,6 +236,24 @@ describe('useDataExport', () => {
     )
     expect(state.exportProgress.value).toContain('2 managed files written, 1 obsolete files removed')
     expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('exports the advanced text-only workspace as ZIP or a writable directory', async () => {
+    const deps = createDeps()
+    const directory = { kind: 'directory' as const }
+    const chooseBundleDirectory = vi.fn(async () => directory)
+    const state = useDataExport({ ...deps, chooseBundleDirectory } as Parameters<typeof useDataExport>[0])
+
+    state.exportFormat.value = 'text-workspace'
+    state.handleExport()
+    await finishExport(state)
+    expect(bundleState.createText).toHaveBeenCalledOnce()
+    expect(state.exportProgress.value).toBe('Text-only workspace exported!')
+
+    await state.exportTextOnlyWorkspaceDirectory()
+    expect(bundleState.createText).toHaveBeenCalledTimes(2)
+    expect(directoryState.write).toHaveBeenCalledWith(directory, expect.any(Map), expect.any(Map))
+    expect(state.exportProgress.value).toContain('Text-only workspace updated')
   })
 
   it('reports load and archive-generation failures and resets busy state', async () => {
