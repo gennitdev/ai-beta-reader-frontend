@@ -17,7 +17,7 @@ export const LOGICAL_TABLE_COLUMNS = {
   ai_profiles: ['id', 'name', 'tone_key', 'system_prompt', 'is_system', 'is_default', 'created_at', 'stable_id', 'updated_at'],
   wiki_updates: ['id', 'wiki_page_id', 'chapter_id', 'update_type', 'change_summary', 'contradiction_notes', 'created_at'],
   chapter_wiki_mentions: ['id', 'chapter_id', 'wiki_page_id', 'link_source', 'created_at', 'updated_at'],
-  image_assets: ['id', 'book_id', 'chapter_id', 'asset_type', 'file_name', 'file_path', 'mime_type', 'image_data', 'notes', 'created_at', 'updated_at'],
+  image_assets: ['id', 'book_id', 'chapter_id', 'asset_type', 'file_name', 'file_path', 'mime_type', 'image_data', 'notes', 'created_at', 'updated_at', 'content_hash', 'content_hash_algorithm', 'content_byte_length'],
   image_wiki_tags: ['image_id', 'wiki_page_id', 'created_at'],
   chapter_notes: ['id', 'chapter_id', 'notes', 'created_at', 'updated_at'],
   wiki_review_state: ['wiki_page_id', 'chapter_id', 'chapter_content_sha256', 'reviewed_at', 'reviewed_by'],

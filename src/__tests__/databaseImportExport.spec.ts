@@ -55,7 +55,7 @@ describe('database import/export helpers', () => {
       },
     })
 
-    expect(normalized.version).toBe(6)
+    expect(normalized.version).toBe(7)
     expect(normalized.wiki_pages).toEqual([
       {
         id: 'wiki-1',
@@ -165,10 +165,10 @@ describe('database import/export helpers', () => {
 
   it('rejects backups produced by a newer database version', () => {
     expect(() => parseDatabaseImportData({
-      version: 7,
+      version: 8,
       books: [],
       chapters: [],
-    })).toThrow(/newer than supported version 6/)
+    })).toThrow(/newer than supported version 7/)
   })
 
   it('continues accepting versionless legacy backups with core collections', () => {

@@ -5,6 +5,7 @@ import {
   dataUrlToBlob,
   type ImageContentStore,
 } from '@/lib/imageContentStore'
+import { verifyImageContent } from '@/lib/imageContentHash'
 
 export interface BackupImageProcessingResult {
   rows: Record<string, unknown>[]
@@ -39,6 +40,11 @@ function toImageAsset(row: Record<string, unknown>): ImageAsset {
     file_path: filePath,
     mime_type: toNullableString(row.mime_type),
     image_data: toNullableString(row.image_data),
+    content_hash: toNullableString(row.content_hash),
+    content_hash_algorithm: toNullableString(row.content_hash_algorithm),
+    content_byte_length: typeof row.content_byte_length === 'number'
+      ? row.content_byte_length
+      : null,
     notes: String(row.notes ?? ''),
     created_at: String(row.created_at ?? ''),
     updated_at: String(row.updated_at ?? ''),
@@ -47,6 +53,24 @@ function toImageAsset(row: Record<string, unknown>): ImageAsset {
 
 function normalizeRows(rows: ImportRow[]): Record<string, unknown>[] {
   return normalizeImageAssetImportRows(rows).map((row) => row as Record<string, unknown>)
+}
+
+async function verifyAssetBlob(asset: ImageAsset, blob: Blob): Promise<void> {
+  if (!asset.content_hash) return
+  if (!asset.content_hash_algorithm || asset.content_byte_length == null) {
+    throw new Error(`Image ${asset.file_name} (${asset.id}) has incomplete integrity metadata.`)
+  }
+  try {
+    await verifyImageContent(blob, {
+      content_hash: asset.content_hash,
+      content_hash_algorithm: asset.content_hash_algorithm,
+      content_byte_length: asset.content_byte_length,
+    })
+  } catch (error) {
+    throw new Error(
+      `Image ${asset.file_name} (${asset.id}) ${error instanceof Error ? error.message : String(error)}.`,
+    )
+  }
 }
 
 export async function enrichImageRowsForBackup(
@@ -60,13 +84,17 @@ export async function enrichImageRowsForBackup(
   for (let index = 0; index < normalizedRows.length; index += 1) {
     const row = normalizedRows[index]
     const asset = assets[index]
-    if (asset.image_data) continue
+    if (asset.image_data) {
+      await verifyAssetBlob(asset, dataUrlToBlob(asset.image_data))
+      continue
+    }
 
     const blob = await store.read(asset)
     if (!blob) {
       missingImageIds.push(asset.id)
       continue
     }
+    await verifyAssetBlob(asset, blob)
     row.image_data = await blobToDataUrl(blob)
   }
 
@@ -92,11 +120,13 @@ export async function restoreImageRows(
 
     try {
       const blob = dataUrlToBlob(asset.image_data)
+      await verifyAssetBlob(asset, blob)
       await store.write(asset, blob)
       const verifiedBlob = await store.read(asset)
       if (!verifiedBlob || verifiedBlob.size !== blob.size) {
         throw new Error('the stored image failed verification')
       }
+      await verifyAssetBlob(asset, verifiedBlob)
       row.image_data = null
       asset.image_data = null
     } catch (error) {

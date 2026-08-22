@@ -205,6 +205,9 @@ const SCHEMA = `
     file_path TEXT NOT NULL,
     mime_type TEXT,
     image_data TEXT,
+    content_hash TEXT,
+    content_hash_algorithm TEXT,
+    content_byte_length INTEGER,
     notes TEXT DEFAULT '',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -253,7 +256,7 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_wiki_review_state_chapter ON wiki_review_state(chapter_id);
 `
 
-export const CURRENT_SCHEMA_VERSION = 2
+export const CURRENT_SCHEMA_VERSION = 3
 
 interface ColumnMigration {
   table: string
@@ -526,10 +529,28 @@ async function applyPortableBundleSchemaMigration(ctx: DatabaseContext): Promise
   for (const statement of finalStatements) await execute(ctx, statement)
 }
 
+const IMAGE_CONTENT_HASH_COLUMN_MIGRATIONS: ColumnMigration[] = [
+  { table: 'image_assets', column: 'content_hash', definition: 'TEXT' },
+  { table: 'image_assets', column: 'content_hash_algorithm', definition: 'TEXT' },
+  { table: 'image_assets', column: 'content_byte_length', definition: 'INTEGER' },
+]
+
+async function applyImageContentHashSchemaMigration(ctx: DatabaseContext): Promise<void> {
+  for (const migration of IMAGE_CONTENT_HASH_COLUMN_MIGRATIONS) {
+    if (!await columnExists(ctx, migration.table, migration.column)) {
+      await execute(
+        ctx,
+        `ALTER TABLE ${migration.table} ADD COLUMN ${migration.column} ${migration.definition}`,
+      )
+    }
+  }
+}
+
 /** Append future migrations here; each version is committed and recorded separately. */
 const SCHEMA_MIGRATIONS: SchemaMigration[] = [
   { version: 1, apply: applyLegacySchemaMigration },
   { version: 2, apply: applyPortableBundleSchemaMigration },
+  { version: 3, apply: applyImageContentHashSchemaMigration },
 ]
 
 export async function createTables(ctx: DatabaseContext): Promise<void> {
