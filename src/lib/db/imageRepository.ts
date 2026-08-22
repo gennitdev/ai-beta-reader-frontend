@@ -158,6 +158,33 @@ export async function updateImageAssetIntegrity(
   }
 }
 
+/** Atomically record verified hashes and release their legacy SQLite image bytes. */
+export async function finalizeLegacyImageMigration(
+  ctx: DatabaseContext,
+  images: Array<{ id: string; integrity: ImageContentIntegrity }>,
+): Promise<void> {
+  if (images.length === 0) return
+
+  await runInTransaction(ctx, async (txCtx) => {
+    const query = `UPDATE image_assets
+      SET content_hash = ?, content_hash_algorithm = ?, content_byte_length = ?, image_data = NULL
+      WHERE id = ? AND image_data IS NOT NULL AND image_data <> ''`
+    for (const image of images) {
+      await txCtx.connection.run(query, [
+        image.integrity.content_hash,
+        image.integrity.content_hash_algorithm,
+        image.integrity.content_byte_length,
+        image.id,
+      ])
+    }
+  })
+
+  if (!ctx.isNative) {
+    ctx.requestPersistence()
+    await ctx.flushPersistence()
+  }
+}
+
 // --- Wiki-page tags ---------------------------------------------------------
 
 export async function getImageWikiTags(ctx: DatabaseContext, imageId: string): Promise<ImageWikiTag[]> {

@@ -863,16 +863,7 @@ export class AppDatabase {
           ? result[0].values.map(imageAssetFromSqlRow)
           : [];
       },
-      clearImageData: async (imageIds) => {
-        if (imageIds.length === 0) return;
-        const placeholders = imageIds.map(() => '?').join(', ');
-        this.db.run(
-          `UPDATE image_assets SET image_data = NULL WHERE id IN (${placeholders})`,
-          imageIds,
-        );
-        this.requestPersistence();
-      },
-      flush: () => this.flushPersistence(),
+      finalizeImages: (images) => imageRepo.finalizeLegacyImageMigration(this.context, images),
       saveStatus: (status) => writeIndexedDbValue(
         METADATA_STORE,
         IMAGE_BLOB_MIGRATION_STATUS_KEY,

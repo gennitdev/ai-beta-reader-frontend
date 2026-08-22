@@ -6,6 +6,7 @@ import {
   type ImageDataMigrationStatus,
 } from '@/lib/imageDataMigration'
 import type { ImageContentStore } from '@/lib/imageContentStore'
+import type { ImageContentIntegrity } from '@/lib/imageContentHash'
 
 function createAsset(id: string, imageData = 'data:image/png;base64,AQID'): ImageAsset {
   return {
@@ -27,7 +28,7 @@ function migrationHarness(assets: ImageAsset[]) {
   const rows = new Map(assets.map((asset) => [asset.id, { ...asset }]))
   const blobs = new Map<string, Blob>()
   const statuses: ImageDataMigrationStatus[] = []
-  const clearedBatches: string[][] = []
+  const finalizedBatches: Array<Array<{ id: string; integrity: ImageContentIntegrity }>> = []
   const flush = vi.fn(async () => undefined)
   const repository: ImageDataMigrationRepository = {
     listPendingImageIds: async () => [...rows.values()]
@@ -36,14 +37,17 @@ function migrationHarness(assets: ImageAsset[]) {
     loadImages: async (ids) => ids
       .map((id) => rows.get(id))
       .filter((asset): asset is ImageAsset => Boolean(asset)),
-    clearImageData: async (ids) => {
-      clearedBatches.push([...ids])
-      ids.forEach((id) => {
+    finalizeImages: async (images) => {
+      finalizedBatches.push(images.map((image) => ({
+        id: image.id,
+        integrity: { ...image.integrity },
+      })))
+      images.forEach(({ id, integrity }) => {
         const asset = rows.get(id)
-        if (asset) asset.image_data = null
+        if (asset) Object.assign(asset, integrity, { image_data: null })
       })
+      await flush()
     },
-    flush,
     saveStatus: async (status) => { statuses.push(status) },
   }
   const store: ImageContentStore = {
@@ -53,7 +57,7 @@ function migrationHarness(assets: ImageAsset[]) {
     exists: async (asset) => blobs.has(asset.id),
   }
 
-  return { blobs, clearedBatches, flush, repository, rows, statuses, store }
+  return { blobs, finalizedBatches, flush, repository, rows, statuses, store }
 }
 
 describe('migrateLegacyImageData', () => {
@@ -81,12 +85,18 @@ describe('migrateLegacyImageData', () => {
       now: () => '2026-07-15T00:00:00.000Z',
     })
 
-    expect(harness.clearedBatches).toEqual([['one', 'two'], ['three']])
+    expect(harness.finalizedBatches.map((batch) => batch.map((image) => image.id)))
+      .toEqual([['one', 'two'], ['three']])
     expect(harness.flush).toHaveBeenCalledTimes(2)
     expect([...harness.rows.values()].every((asset) => asset.image_data === null)).toBe(true)
+    expect(harness.rows.get('one')).toEqual(expect.objectContaining({
+      content_hash: '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
+      content_hash_algorithm: 'sha256-v1',
+      content_byte_length: 3,
+    }))
     expect(harness.blobs.size).toBe(3)
     expect(status).toEqual({
-      version: 1,
+      version: 2,
       status: 'complete',
       migratedCount: 3,
       failedImageIds: [],
@@ -109,9 +119,65 @@ describe('migrateLegacyImageData', () => {
 
     expect(harness.rows.get('valid')?.image_data).toBeNull()
     expect(harness.rows.get('invalid')?.image_data).toBe('not-a-data-url')
-    expect(harness.clearedBatches).toEqual([['valid']])
+    expect(harness.finalizedBatches.map((batch) => batch.map((image) => image.id)))
+      .toEqual([['valid']])
     expect(status.status).toBe('partial')
     expect(status.failedImageIds).toEqual(['invalid'])
+  })
+
+  it('detects same-size Blob corruption before clearing legacy bytes', async () => {
+    const harness = migrationHarness([createAsset('corrupted')])
+    harness.store.write = async (asset) => {
+      harness.blobs.set(asset.id, new Blob([new Uint8Array([1, 2, 4])], { type: 'image/png' }))
+    }
+
+    const status = await migrateLegacyImageData({
+      repository: harness.repository,
+      store: harness.store,
+    })
+
+    expect(status).toMatchObject({ status: 'partial', migratedCount: 0 })
+    expect(status.failedImageIds).toEqual(['corrupted'])
+    expect(harness.rows.get('corrupted')).toEqual(expect.objectContaining({
+      image_data: 'data:image/png;base64,AQID',
+    }))
+    expect(harness.finalizedBatches).toEqual([])
+  })
+
+  it('does not replace legacy bytes that disagree with existing integrity metadata', async () => {
+    const mismatched = createAsset('mismatched')
+    Object.assign(mismatched, {
+      content_hash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      content_hash_algorithm: 'sha256-v1',
+      content_byte_length: 3,
+    })
+    const harness = migrationHarness([mismatched])
+
+    const status = await migrateLegacyImageData({
+      repository: harness.repository,
+      store: harness.store,
+    })
+
+    expect(status).toMatchObject({ status: 'partial', migratedCount: 0 })
+    expect(status.failedImageIds).toEqual(['mismatched'])
+    expect(harness.rows.get('mismatched')?.image_data).toBe('data:image/png;base64,AQID')
+    expect(harness.blobs.has('mismatched')).toBe(false)
+  })
+
+  it('retains legacy bytes when atomic metadata finalization fails', async () => {
+    const harness = migrationHarness([createAsset('retryable')])
+    harness.repository.finalizeImages = vi.fn(async () => {
+      throw new Error('database unavailable')
+    })
+
+    await expect(migrateLegacyImageData({
+      repository: harness.repository,
+      store: harness.store,
+    })).rejects.toThrow('database unavailable')
+
+    expect(harness.rows.get('retryable')?.image_data).toBe('data:image/png;base64,AQID')
+    expect(harness.rows.get('retryable')?.content_hash).toBeUndefined()
+    expect(harness.statuses).toEqual([])
   })
 
   it('is safe to rerun after a partial migration', async () => {
