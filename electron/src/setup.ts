@@ -232,12 +232,10 @@ export function buildContentSecurityPolicy(customScheme: string, isDev: boolean)
   // Allow 'wasm-unsafe-eval' for sql.js WebAssembly
   // Allow Google Identity Services for OAuth
   const defaultSrc = isDev
-    ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' 'wasm-unsafe-eval' data: blob:`
+    ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'wasm-unsafe-eval' data: blob:`
     : `default-src ${customScheme}://* 'unsafe-inline' 'wasm-unsafe-eval' data: blob:`;
   // Allow loading Google Identity Services script
-  const scriptSrc = isDev
-    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com`
-    : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com`;
+  const scriptSrc = `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://accounts.google.com https://apis.google.com`;
   const styleSrc = `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com`;
   const fontSrc = `font-src 'self' data: https://fonts.gstatic.com`;
   // Allow connecting to Google APIs for OAuth and Drive, and OpenAI API
