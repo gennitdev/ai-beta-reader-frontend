@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppDatabaseConnection, DatabaseContext } from '@/lib/db/connection'
 import * as wikiRepo from '@/lib/db/wikiRepository'
+import { dispatchChapterWikiLinksChanged } from '@/utils/chapterWikiLinkEvents'
 
 vi.mock('@/utils/chapterWikiLinkEvents', () => ({
   dispatchChapterWikiLinksChanged: vi.fn(),
@@ -30,6 +31,7 @@ function makeContext(options: {
   const execResults = options.execResults ?? []
   const runCalls: Array<{ sql: string; params?: unknown[] }> = []
   const requestPersistence = vi.fn()
+  const flushPersistence = vi.fn(async () => undefined)
   let execIndex = 0
 
   const connection: AppDatabaseConnection = {
@@ -54,8 +56,14 @@ function makeContext(options: {
     },
   }
 
-  const ctx: DatabaseContext = { connection, isNative: false, requestPersistence }
-  return { ctx, runCalls, requestPersistence }
+  const ctx: DatabaseContext = {
+    connection,
+    isNative: false,
+    requestPersistence,
+    flushPersistence,
+    setImporting: vi.fn(),
+  }
+  return { ctx, runCalls, requestPersistence, flushPersistence }
 }
 
 function makeNativeContext(options: {
@@ -258,6 +266,181 @@ describe('wikiRepository (web path)', () => {
       null, null, expect.any(String),
     ])
   })
+
+  it('normalizes aliases during identity-aware page updates', async () => {
+    const current = [
+      'wiki-1', 'book-1', 'Mara', 'character', 'content', 'summary',
+      '["Ranger"]', null, 0, 0, 'created', 'updated', 0, null,
+    ]
+    const { ctx, runCalls, requestPersistence } = makeContext({
+      execResults: [
+        [{ columns: [], values: [current] }],
+        [{ columns: [], values: [current] }],
+      ],
+    })
+
+    await wikiRepo.updateWikiPage(ctx, 'wiki-1', {
+      page_name: 'Mara Vale',
+      aliases: [' Ranger ', 'Mara Vale', 'The Scout'],
+    })
+
+    expect(runCalls[0].sql).toContain('page_name = ?, aliases = ?, updated_at = ?')
+    expect(runCalls[0].params).toEqual([
+      'Mara Vale', JSON.stringify(['Ranger', 'The Scout']), expect.any(String), 'wiki-1',
+    ])
+    expect(requestPersistence).toHaveBeenCalledOnce()
+  })
+
+  it('rejects identity updates for a missing page', async () => {
+    const { ctx, runCalls } = makeContext({ execResults: [[]] })
+
+    await expect(wikiRepo.updateWikiPage(ctx, 'missing', { aliases: ['Alias'] }))
+      .rejects.toThrow('Wiki page not found')
+    expect(runCalls).toEqual([])
+  })
+
+  it('resolves a wiki page by a normalized alias', async () => {
+    const row = [
+      'wiki-1', 'book-1', 'Mara', 'character', '', '', '["The Ranger"]', null,
+      0, 0, 'created', 'updated', 0, null,
+    ]
+    const { ctx } = makeContext({ execResults: [[{ columns: [], values: [row] }]] })
+
+    await expect(wikiRepo.getWikiPage(ctx, 'book-1', ' the ranger '))
+      .resolves.toEqual(expect.objectContaining({ id: 'wiki-1' }))
+  })
+
+  it('deletes a page and all dependent rows in one web transaction', async () => {
+    const { ctx, runCalls, requestPersistence, flushPersistence } = makeContext()
+
+    await wikiRepo.deleteWikiPage(ctx, 'wiki-1')
+
+    expect(runCalls.map(({ sql }) => sql.trim().split(' ')[0])).toEqual([
+      'BEGIN', 'DELETE', 'DELETE', 'DELETE', 'DELETE', 'COMMIT',
+    ])
+    expect(runCalls.filter(({ sql }) => sql.includes('DELETE')).map(({ params }) => params))
+      .toEqual([['wiki-1'], ['wiki-1'], ['wiki-1'], ['wiki-1']])
+    expect(requestPersistence).toHaveBeenCalledOnce()
+    expect(flushPersistence).toHaveBeenCalledOnce()
+  })
+
+  it('adds mentions with and without optional schema columns', async () => {
+    const modern = makeContext()
+    await wikiRepo.addChapterWikiMention(modern.ctx, 'chapter-1', 'wiki-1', 'ai_summary')
+    const modernInsert = modern.runCalls.find(({ sql }) => sql.includes('INSERT OR REPLACE'))
+    expect(modernInsert?.sql).toContain('link_source')
+    expect(modernInsert?.sql).toContain('updated_at')
+    expect(modernInsert?.params).toEqual(expect.arrayContaining(['ai_summary']))
+    expect(modern.requestPersistence).toHaveBeenCalled()
+
+    const legacy = makeContext({
+      mentionColumns: ['id', 'chapter_id', 'wiki_page_id', 'created_at'],
+    })
+    await wikiRepo.addChapterWikiMention(legacy.ctx, 'chapter-2', 'wiki-2')
+    const legacyInsert = legacy.runCalls.find(({ sql }) => sql.includes('INSERT OR REPLACE'))
+    expect(legacyInsert?.sql).not.toContain('link_source')
+    expect(legacyInsert?.sql).not.toContain('updated_at')
+
+    expect(dispatchChapterWikiLinksChanged).toHaveBeenCalledWith({
+      chapterIds: ['chapter-1'], wikiPageIds: ['wiki-1'],
+    })
+    expect(dispatchChapterWikiLinksChanged).toHaveBeenCalledWith({
+      chapterIds: ['chapter-2'], wikiPageIds: ['wiki-2'],
+    })
+  })
+
+  it('sets chapter links by deleting stale rows, deduplicating ids, and preserving creation time', async () => {
+    const existingRows = [
+      ['mention-old', 'chapter-1', 'wiki-old', 'manual', 'created-old', 'updated-old'],
+      ['mention-keep', 'chapter-1', 'wiki-keep', 'manual', 'created-keep', 'updated-keep'],
+    ]
+    const { ctx, runCalls, requestPersistence } = makeContext({
+      execResults: [[{ columns: [], values: existingRows }]],
+    })
+
+    await wikiRepo.setChapterWikiLinks(
+      ctx,
+      'chapter-1',
+      ['wiki-keep', 'wiki-new', 'wiki-new'],
+      'ai_summary',
+    )
+
+    const mutations = runCalls.filter(({ sql }) =>
+      sql.includes('DELETE FROM chapter_wiki_mentions') || sql.includes('INSERT OR REPLACE'),
+    )
+    expect(mutations).toHaveLength(3)
+    expect(mutations[0].params).toEqual(['mention-old'])
+    expect(mutations[1].params).toEqual(expect.arrayContaining(['wiki-keep', 'created-keep']))
+    expect(mutations[2].params).toEqual(expect.arrayContaining(['wiki-new', 'ai_summary']))
+    expect(requestPersistence).toHaveBeenCalled()
+    expect(dispatchChapterWikiLinksChanged).toHaveBeenCalledWith({
+      chapterIds: ['chapter-1'],
+      wikiPageIds: expect.arrayContaining(['wiki-old', 'wiki-keep', 'wiki-new']),
+    })
+  })
+
+  it('ensures only missing chapter links and skips persistence when nothing changes', async () => {
+    const existingRow = ['mention-keep', 'chapter-1', 'wiki-keep', 'manual', 'created', 'updated']
+    const changes = makeContext({
+      execResults: [[{ columns: [], values: [existingRow] }]],
+    })
+    await wikiRepo.ensureChapterWikiLinks(
+      changes.ctx,
+      'chapter-1',
+      ['wiki-keep', 'wiki-new', 'wiki-new'],
+    )
+    const inserts = changes.runCalls.filter(({ sql }) => sql.includes('INSERT OR REPLACE'))
+    expect(inserts).toHaveLength(1)
+    expect(inserts[0].params).toEqual(expect.arrayContaining(['wiki-new']))
+    expect(changes.requestPersistence).toHaveBeenCalled()
+    expect(dispatchChapterWikiLinksChanged).toHaveBeenCalledWith({
+      chapterIds: ['chapter-1'], wikiPageIds: ['wiki-new'],
+    })
+
+    vi.clearAllMocks()
+    const noChanges = makeContext({
+      execResults: [[{ columns: [], values: [existingRow] }]],
+    })
+    await wikiRepo.ensureChapterWikiLinks(noChanges.ctx, 'chapter-1', ['wiki-keep'])
+    expect(noChanges.runCalls.some(({ sql }) => sql.includes('INSERT OR REPLACE'))).toBe(false)
+    // Schema checks schedule persistence on web; the no-op link operation must
+    // not add a third persistence request of its own.
+    expect(noChanges.requestPersistence).toHaveBeenCalledTimes(2)
+    expect(dispatchChapterWikiLinksChanged).not.toHaveBeenCalled()
+
+    await wikiRepo.ensureChapterWikiLinks(noChanges.ctx, 'chapter-1', [])
+    expect(dispatchChapterWikiLinksChanged).not.toHaveBeenCalled()
+  })
+
+  it('sets wiki-page chapter links in the reverse direction', async () => {
+    const existingRows = [
+      ['chapter-old', 'Old', null, 'manual', 'created-old', 'updated-old'],
+      ['chapter-keep', 'Keep', 'part-1', 'manual', 'created-keep', 'updated-keep'],
+    ]
+    const { ctx, runCalls, requestPersistence } = makeContext({
+      execResults: [[{ columns: [], values: existingRows }]],
+    })
+
+    await wikiRepo.setWikiPageChapterLinks(
+      ctx,
+      'wiki-1',
+      ['chapter-keep', 'chapter-new', 'chapter-new'],
+      'ai_summary',
+    )
+
+    const mutations = runCalls.filter(({ sql }) =>
+      sql.includes('DELETE FROM chapter_wiki_mentions') || sql.includes('INSERT OR REPLACE'),
+    )
+    expect(mutations).toHaveLength(3)
+    expect(mutations[0].params).toEqual(['chapter-old', 'wiki-1'])
+    expect(mutations[1].params).toEqual(expect.arrayContaining(['chapter-keep', 'created-keep']))
+    expect(mutations[2].params).toEqual(expect.arrayContaining(['chapter-new', 'wiki-1']))
+    expect(requestPersistence).toHaveBeenCalled()
+    expect(dispatchChapterWikiLinksChanged).toHaveBeenCalledWith({
+      chapterIds: expect.arrayContaining(['chapter-old', 'chapter-keep', 'chapter-new']),
+      wikiPageIds: ['wiki-1'],
+    })
+  })
 })
 
 describe('wikiRepository (native path)', () => {
@@ -341,5 +524,50 @@ describe('wikiRepository (native path)', () => {
 
     expect(native.connection.execute).toHaveBeenCalledTimes(5)
     expect(native.ctx.requestPersistence).not.toHaveBeenCalled()
+  })
+
+  it('runs page and link mutations through native async writes', async () => {
+    const update = makeNativeContext()
+    await wikiRepo.updateWikiPage(update.ctx, 'wiki-1', { content: 'updated' })
+    expect(update.runCalls[0].sql).toContain('UPDATE wiki_pages')
+
+    const deletion = makeNativeContext()
+    await wikiRepo.deleteWikiPage(deletion.ctx, 'wiki-1')
+    expect(deletion.runCalls.filter(({ sql }) => sql.includes('DELETE'))).toHaveLength(4)
+    expect(deletion.ctx.requestPersistence).not.toHaveBeenCalled()
+
+    const addition = makeNativeContext()
+    await wikiRepo.addChapterWikiMention(addition.ctx, 'chapter-1', 'wiki-1')
+    expect(addition.runCalls.some(({ sql }) => sql.includes('INSERT OR REPLACE'))).toBe(true)
+
+    const chapterLinks = makeNativeContext({ queryResults: [[]] })
+    await wikiRepo.setChapterWikiLinks(chapterLinks.ctx, 'chapter-1', ['wiki-1'])
+    expect(chapterLinks.runCalls.some(({ sql }) => sql.includes('INSERT OR REPLACE'))).toBe(true)
+
+    const ensuredLinks = makeNativeContext({ queryResults: [[]] })
+    await wikiRepo.ensureChapterWikiLinks(ensuredLinks.ctx, 'chapter-1', ['wiki-1'])
+    expect(ensuredLinks.runCalls.some(({ sql }) => sql.includes('INSERT OR REPLACE'))).toBe(true)
+
+    const pageLinks = makeNativeContext({ queryResults: [[]] })
+    await wikiRepo.setWikiPageChapterLinks(pageLinks.ctx, 'wiki-1', ['chapter-1'])
+    expect(pageLinks.runCalls.some(({ sql }) => sql.includes('INSERT OR REPLACE'))).toBe(true)
+  })
+
+  it('logs and continues when an individual schema statement fails', async () => {
+    const native = makeNativeContext({ mentionColumns: ['id', 'created_at'] })
+    const failure = new Error('duplicate column')
+    native.connection.execute = vi.fn()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValue(undefined)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(wikiRepo.ensureChapterWikiMentionsSchema(native.ctx)).resolves.toBeUndefined()
+
+    expect(console.warn).toHaveBeenCalledWith(
+      '[AppDatabase] Failed to ensure chapter_wiki_mentions schema:',
+      expect.stringContaining('ADD COLUMN link_source'),
+      failure,
+    )
+    expect(native.connection.execute).toHaveBeenCalledTimes(5)
   })
 })
