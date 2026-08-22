@@ -25,6 +25,11 @@ function emptyPlan(generation: string): LibraryImportPlan {
     planVersion: 1, bundleId: 'bundle:test', databaseGeneration: generation, bookIds: ['book-1'],
     operations: [], counts: { create: 0, update: 0, delete: 0, keep_local: 0, unchanged: 0, conflict: 0 },
     countsByEntityType: {}, unresolvedConflicts: 0, canApply: true, replaceEligible: true, diagnostics: [],
+    previewSummary: {
+      images: { includedCount: 0, includedBytes: 0, omittedCount: 0, omittedBytes: 0 },
+      wikiReview: { currentCount: 0, stale: [], missing: [] },
+      ambiguousAliases: [], warnings: { unknownProfiles: [], ignoredFiles: [] },
+    },
   }
 }
 
@@ -67,6 +72,27 @@ describe('useLibraryBundleImport', () => {
     expect(importDatabaseBackup).toHaveBeenCalledOnce()
     expect(state.importMessage.value).toBe('Bundle changes applied successfully.')
     expect(state.preview.value).toBeNull()
+  })
+
+  it('exposes immutable preview summaries without deriving them from live state', async () => {
+    const model = completeCanonicalLibraryFixture()
+    const backup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
+    const generation = await sha256Hex(backup)
+    const summarizedPlan = {
+      ...emptyPlan(generation),
+      previewSummary: {
+        images: { includedCount: 1, includedBytes: 3, omittedCount: 0, omittedBytes: 0 },
+        wikiReview: { currentCount: 1, stale: [], missing: [] },
+        ambiguousAliases: [], warnings: { unknownProfiles: [], ignoredFiles: [] },
+      },
+    }
+    previewZip.mockResolvedValue({ plan: summarizedPlan, localModel: model, incomingModel: model, databaseGeneration: generation })
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn().mockResolvedValue(backup), importDatabaseBackup: vi.fn(), getImageBlob: vi.fn(),
+      recoveryStore: memoryStore(),
+    })
+    await state.previewFile(new File(['zip'], 'bundle.zip'))
+    expect(state.plan.value?.previewSummary).toEqual(summarizedPlan.previewSummary)
   })
 
   it('surfaces preview and apply failures without throwing from UI handlers', async () => {
