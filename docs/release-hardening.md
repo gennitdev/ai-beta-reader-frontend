@@ -19,9 +19,9 @@ Results remain **not run** until executed on the named environment; unit tests w
 
 | Runtime | OS | Database | Recovery/image persistence | ZIP | Directory | Duplicate case/Unicode | Restart/rollback | Status |
 |---|---|---|---|---|---|---|---|---|
-| Browser Chromium | Linux | IndexedDB/sql.js | IndexedDB / browser image store | Required | Read required | Required | Required | Not run |
-| Browser Chromium | macOS | IndexedDB/sql.js | IndexedDB / browser image store | Required | Read/write where supported | Required | Required | Not run |
-| Browser Chromium | Windows | IndexedDB/sql.js | IndexedDB / browser image store | Required | Read/write where supported | Required | Required | Not run |
+| Browser Chromium | Linux | IndexedDB/sql.js | IndexedDB / browser image store | Required | Read required | Required | Required | Local automated pass, 2026-08-22 |
+| Browser Chromium | macOS | IndexedDB/sql.js | IndexedDB / browser image store | Required | Read/write where supported | Required | Required | CI workflow added; result pending |
+| Browser Chromium | Windows | IndexedDB/sql.js | IndexedDB / browser image store | Required | Read/write where supported | Required | Required | CI workflow added; result pending |
 | Electron | Linux | sql.js | app-data filesystem | Required | Required | Required | Required | Not run |
 | Electron | macOS | sql.js | app-data filesystem | Required | Required | Required | Required | Not run |
 | Electron | Windows | sql.js | app-data filesystem | Required | Required | Required | Required | Not run |
@@ -40,11 +40,11 @@ Browser ZIP selection is limited to 256 MiB of compressed archive data before ma
 | BFF-AC-03 | Partial/text-only bundles cannot Replace | `libraryBundleReader.spec.ts`, `LibraryBundleImport.spec.ts` | Repeatable UI acceptance procedure |
 | BFF-AC-04 | Conflicts block writes until resolution | `libraryBundlePlan.spec.ts`, `useLibraryBundleImport.spec.ts` | Browser UI acceptance procedure |
 | BFF-AC-05 | Path-only renames cause no database change | `libraryBundleReader.spec.ts` | Filesystem acceptance on desktop and Android |
-| BFF-AC-06 | Duplicate titles do not collide | `libraryBundleWriter.spec.ts`, `libraryBundleTransport.spec.ts` | Every platform-matrix row and ZIP extraction |
-| BFF-AC-07 | Hostile archives fail before database writes | `libraryBundleTransport.spec.ts`, deterministic fuzz suite | Forged ZIP metadata and UI pre-materialization limits |
+| BFF-AC-06 | Duplicate titles do not collide | `libraryBundleWriter.spec.ts`, `libraryBundleTransport.spec.ts`, `libraryBundleFilesystemAcceptance.spec.ts` | Hosted macOS/Windows results and Android filesystem |
+| BFF-AC-07 | Hostile archives fail before database writes | Deterministic fuzz suites cross-check ZIP central/local metadata before inflation; browser ZIP size is checked before `arrayBuffer()` or database export | Retain minimized CI failures and complete Android transport evidence |
 | BFF-AC-08 | Replace waits for verified external recovery | `libraryReplacement.spec.ts`, `e2e/bundle-persistence.spec.ts` | Real recovery store on Electron and Android |
 | BFF-AC-09 | Transactional failure leaves prior library usable | `libraryReplacement.spec.ts`, `transaction.spec.ts`, `e2e/bundle-persistence.spec.ts` | Fault injection plus restart on Electron and Android persistence |
-| BFF-AC-10 | Every supported legacy encryption generation restores | Generated WC1/CryptoJS tests | Checked-in golden WC1, WC2 and CryptoJS ciphertext fixtures |
+| BFF-AC-10 | Every supported legacy encryption generation restores | Immutable WC1, WC2 and CryptoJS fixtures with SHA-256 guards, restored through `CloudSync.restore` | Keep fixtures immutable |
 
 ## Repeatable real-persistence scenario
 
