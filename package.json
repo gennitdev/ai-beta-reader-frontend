@@ -19,7 +19,7 @@
     "benchmark:bundle:ci": "tsx scripts/benchmarks/libraryBundleStress.ts --scale=ci --seed=132202608 --enforce",
     "benchmark:bundle:nightly": "tsx scripts/benchmarks/libraryBundleStress.ts --scale=nightly --seed=132202608",
     "test:coverage": "vitest run --coverage",
-    "test:coverage:strict": "node scripts/check-strict-coverage.mjs --minimum=73.5",
+    "test:coverage:strict": "node scripts/check-strict-coverage.mjs --minimum=74.5",
     "test:electron": "vitest run electron/tests",
     "test:electron-security": "vitest run electron/tests/security-boundaries.spec.ts",
     "test:e2e": "playwright test",
