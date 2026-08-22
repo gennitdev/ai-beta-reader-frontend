@@ -27,6 +27,8 @@ Results remain **not run** until executed on the named environment; unit tests w
 
 Android currently restores canonical image metadata without a native image-byte store. This is a known release limitation until native image persistence is implemented and accepted, or the supported behavior is narrowed explicitly.
 
+Browser ZIP selection is limited to 256 MiB of compressed archive data before materialization. Expanded content remains subject to the codec's file-count, total-size, individual-file, path-length and compression-ratio limits. Larger libraries require a supported directory workflow or a platform-specific transport with streaming validation.
+
 ## Acceptance evidence
 
 | ID | Design criterion | Current automated evidence | Remaining release evidence |

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import JSZip from 'jszip'
 import { readBundleDirectoryEntries, readBundleDirectoryFiles } from '@/lib/libraryBundle/adapters/directory'
 import { readBundleZip, readZipCentralDirectory } from '@/lib/libraryBundle/adapters/zip'
@@ -33,9 +33,11 @@ describe('untrusted bundle transports', () => {
 
   it('does not materialize directory bytes when metadata validation fails', async () => {
     const file = new File(['too large'], '../unsafe')
+    const arrayBuffer = vi.spyOn(file, 'arrayBuffer')
     const result = await readBundleDirectoryFiles([file])
     expect(result.files).toBeNull()
     expect(result.diagnostics[0].code).toBe('path.unsafe')
+    expect(arrayBuffer).not.toHaveBeenCalled()
   })
 
   it.each(['', '/root', '../escape', 'a/../b', 'a//b', 'C:/drive', 'a\\b', 'a\0b'])('rejects unsafe path %j', (path) => {

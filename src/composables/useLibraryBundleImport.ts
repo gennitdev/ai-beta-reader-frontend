@@ -5,6 +5,7 @@ import { previewBundleDirectoryImport, previewBundleZipImport, type PreviewedBun
 import { resolveImportConflict, type ImportConflictResolution } from '@/lib/libraryBundle/plan'
 import { applyImportPlanToModel, canonicalModelToDatabaseImport } from '@/lib/libraryBundle/apply'
 import { sha256Hex } from '@/lib/libraryBundle/semanticHash'
+import { MAX_BUNDLE_ARCHIVE_BYTES } from '@/lib/libraryBundle/limits'
 import { createPortableId } from '@/lib/portableIds'
 import type { RecoveryBundleMetadata, RecoveryStore } from '@/lib/recovery/model'
 import { createRuntimeRecoveryStore } from '@/lib/recovery/runtime'
@@ -71,6 +72,11 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
     importFileName.value = file.name
     isPreviewing.value = true
     try {
+      if (file.size > MAX_BUNDLE_ARCHIVE_BYTES) {
+        throw new Error(
+          `Bundle archive is ${file.size} bytes; the browser import limit is ${MAX_BUNDLE_ARCHIVE_BYTES} bytes.`,
+        )
+      }
       const [zipBytes, databaseBackup] = await Promise.all([
         file.arrayBuffer().then((buffer) => new Uint8Array(buffer)),
         deps.exportDatabase(),
