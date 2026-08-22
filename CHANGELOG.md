@@ -1,0 +1,77 @@
+# Changelog
+
+## 1.0.0 (2026-08-22)
+
+
+### Features
+
+* add Bardwall navigation setting ([af8e3f6](https://github.com/gennitdev/ai-beta-reader-frontend/commit/af8e3f68333e546ddbb22d4a63641fe86192a8ad))
+* add light and dark theme switching ([897e319](https://github.com/gennitdev/ai-beta-reader-frontend/commit/897e3194971815dec8f3e06d9f0feb6c9c286cb9))
+* add public legal pages ([53ae6e1](https://github.com/gennitdev/ai-beta-reader-frontend/commit/53ae6e125718eefd734e7a1b898c4ddea06987d1))
+* add verified recovery and replace flow ([ace1e12](https://github.com/gennitdev/ai-beta-reader-frontend/commit/ace1e12510f830095abd3dea9ac739d70ace7386))
+* **android:** add native image storage parity ([#152](https://github.com/gennitdev/ai-beta-reader-frontend/issues/152)) ([2657617](https://github.com/gennitdev/ai-beta-reader-frontend/commit/2657617776e148e45998a70e093844680a712a1a))
+* **android:** migrate Google Drive OAuth to native authorization ([d707736](https://github.com/gennitdev/ai-beta-reader-frontend/commit/d70773683b32cc5fad489d0b70679f86fa467368))
+* **android:** use native Google Drive authorization ([5642ba5](https://github.com/gennitdev/ai-beta-reader-frontend/commit/5642ba54aff0455b1b1f858cb7a10ff0cd6ff6c1))
+* **bardwall:** improve challenge card experience ([d275bf1](https://github.com/gennitdev/ai-beta-reader-frontend/commit/d275bf1789522214994a60b0b96beb5f39a88009))
+* **chapters:** expand reading typography options ([f19dc2d](https://github.com/gennitdev/ai-beta-reader-frontend/commit/f19dc2d94318f3186a1dead29a853b6f2d215e42))
+* **chapters:** redesign chapter detail reading experience ([9764aeb](https://github.com/gennitdev/ai-beta-reader-frontend/commit/9764aeb15004e96417ea39fa5b2047c036502451))
+* **chapters:** redesign chapter reading layout ([ec29050](https://github.com/gennitdev/ai-beta-reader-frontend/commit/ec29050ad0e1b67619c89f17551593cbe6c0daa2))
+* **chapters:** refine chapter detail sidebar ([295e02f](https://github.com/gennitdev/ai-beta-reader-frontend/commit/295e02fb889e32b860b56c07bc6623ade6915548))
+* **chapters:** refine desktop reading workspace ([b801ae1](https://github.com/gennitdev/ai-beta-reader-frontend/commit/b801ae1265253b132e5591e0e16e40c82f721266))
+* **cloud-sync:** add canonical Drive generations ([adf42d5](https://github.com/gennitdev/ai-beta-reader-frontend/commit/adf42d5563f4e06cb97d256d5a48606b0a274948))
+* **docs:** polish screenshot tutorial layout ([42ddb4d](https://github.com/gennitdev/ai-beta-reader-frontend/commit/42ddb4d5b8e67b37bab9d990118e42198265ce91))
+* establish canonical library bundle foundation ([28ffcd6](https://github.com/gennitdev/ai-beta-reader-frontend/commit/28ffcd6e42a342cc167d5cc107da135382880755))
+* **export:** add canonical library bundles ([dfe0367](https://github.com/gennitdev/ai-beta-reader-frontend/commit/dfe03677e4e67a4bcc6ac1fcd0c245d82103ad41))
+* **export:** add Git workspace tooling ([0f02a2c](https://github.com/gennitdev/ai-beta-reader-frontend/commit/0f02a2cd161be178dd84e2fd74ec912b1667b4b4))
+* **export:** add selected-book bundle export ([#150](https://github.com/gennitdev/ai-beta-reader-frontend/issues/150)) ([f1fbaba](https://github.com/gennitdev/ai-beta-reader-frontend/commit/f1fbabadda7d079635911d8ab8698603d07f9a5a))
+* **export:** add text-only Git workspace ([#151](https://github.com/gennitdev/ai-beta-reader-frontend/issues/151)) ([527603b](https://github.com/gennitdev/ai-beta-reader-frontend/commit/527603b95e97b41a6c339a2b3459bcda5d8a24b4))
+* illustrate the Bardwall game with map, place, card, and potion art ([58a92be](https://github.com/gennitdev/ai-beta-reader-frontend/commit/58a92be42093aac49d838acae15b2807a6cdfaf7))
+* **images:** backfill legacy content hashes ([#143](https://github.com/gennitdev/ai-beta-reader-frontend/issues/143)) ([e087dd6](https://github.com/gennitdev/ai-beta-reader-frontend/commit/e087dd6a66248ae5317a9ddaab1fc3bc2eb94ca3))
+* **images:** hash legacy blob migrations ([#144](https://github.com/gennitdev/ai-beta-reader-frontend/issues/144)) ([cecdae8](https://github.com/gennitdev/ai-beta-reader-frontend/commit/cecdae84edecd5cdd2818b24b53e1648ef3dbe65))
+* **images:** persist content integrity hashes ([f2cfb3c](https://github.com/gennitdev/ai-beta-reader-frontend/commit/f2cfb3c77692e083b4a267f432cb0774f671a3e3))
+* **import:** add canonical bundle change planning ([496d16e](https://github.com/gennitdev/ai-beta-reader-frontend/commit/496d16e756a7ed1a75e47f0185e1d24b2df7e83f))
+* **import:** complete canonical bundle preview details ([#149](https://github.com/gennitdev/ai-beta-reader-frontend/issues/149)) ([6cea66a](https://github.com/gennitdev/ai-beta-reader-frontend/commit/6cea66ab03dc58699001fa3ff43728446fbd1122))
+* keep marketing homepage visible on web ([19930f1](https://github.com/gennitdev/ai-beta-reader-frontend/commit/19930f10ad7ce27ac6259796a751ed48c5cbfb5b))
+* reuse cover hero layout ([13f3621](https://github.com/gennitdev/ai-beta-reader-frontend/commit/13f362142dee4798b16d4f2f1b2a7f623db7fd7e))
+* **reviews:** default chapter review tone to Developmental Editor ([2153821](https://github.com/gennitdev/ai-beta-reader-frontend/commit/21538212f9a449cfd6823b7e5029a09e99941c85))
+* surface background persistence failures ([adbdd71](https://github.com/gennitdev/ai-beta-reader-frontend/commit/adbdd71029f331328c4d7d55f4416d8b9220fadf))
+
+
+### Bug Fixes
+
+* **backup:** handle duplicate summary records ([a02376c](https://github.com/gennitdev/ai-beta-reader-frontend/commit/a02376c3252295c4c39777e032c6a7b1fc340c40))
+* backups with duplicate summary records ([281efeb](https://github.com/gennitdev/ai-beta-reader-frontend/commit/281efebfd07335b9dee5d4c9749f2411a0341807))
+* **backup:** support legacy summary characters ([6093d52](https://github.com/gennitdev/ai-beta-reader-frontend/commit/6093d5281394c4f55fb26f130dbd07d09de2914c))
+* **bardwall:** add direct return to books ([6a1d95c](https://github.com/gennitdev/ai-beta-reader-frontend/commit/6a1d95cb569b40488bcfa98c75e00bc9a5e976db))
+* **books:** preserve desktop cover proportions ([0b42130](https://github.com/gennitdev/ai-beta-reader-frontend/commit/0b4213055bb0e1b2a25b3ca4ac427bf711e3abb1))
+* **chapters:** preserve chapter cover artwork ([90faa62](https://github.com/gennitdev/ai-beta-reader-frontend/commit/90faa62c62e0409ed31f9f7f905dcab88261fed5))
+* **database:** harden restore migrations and destructive operations ([64f36ae](https://github.com/gennitdev/ai-beta-reader-frontend/commit/64f36ae65ce5d2c7c7423e3b2eaca51a1b77259e))
+* **database:** make destructive operations atomic ([43d0af1](https://github.com/gennitdev/ai-beta-reader-frontend/commit/43d0af19874c32ce189303674c1fd0da66a0b980))
+* **database:** version schema migrations ([48ea7d2](https://github.com/gennitdev/ai-beta-reader-frontend/commit/48ea7d2a4073111209dc89bcb806a46433f91429))
+* **electron:** align macOS app icon styling ([#156](https://github.com/gennitdev/ai-beta-reader-frontend/issues/156)) ([ff5171b](https://github.com/gennitdev/ai-beta-reader-frontend/commit/ff5171b54cdd12ab8b6aea91f0184b1812bf56d9))
+* **electron:** avoid blocking on secure storage ([bc67095](https://github.com/gennitdev/ai-beta-reader-frontend/commit/bc67095f6709d0784e4a9b4d96867486b29b154a))
+* **electron:** harden capacitor runtime bridge ([a1bffe4](https://github.com/gennitdev/ai-beta-reader-frontend/commit/a1bffe4d8236205a1fb9f7066c4a282ed49cc98d))
+* **electron:** harden development content security policy ([#147](https://github.com/gennitdev/ai-beta-reader-frontend/issues/147)) ([f46147c](https://github.com/gennitdev/ai-beta-reader-frontend/commit/f46147c6edb0b7eeb88ed28b1043e88c6015cd36))
+* **electron:** repair build under TypeScript 7 ([1be7230](https://github.com/gennitdev/ai-beta-reader-frontend/commit/1be7230d33dafd915cf58e117d01cd5e1ecdaae5))
+* **electron:** restore CommonJS error handler compatibility ([3dd0948](https://github.com/gennitdev/ai-beta-reader-frontend/commit/3dd0948791d68d47264a829c07be0bd5b3069bd6))
+* **electron:** restore preload bridges ([13f3a71](https://github.com/gennitdev/ai-beta-reader-frontend/commit/13f3a71584f6c067988a691c467040083a5e9b2d))
+* **images:** reconcile orphaned image content ([d4d90b2](https://github.com/gennitdev/ai-beta-reader-frontend/commit/d4d90b20bb6db21c56694f18073ed2e3d420a517))
+* improve light logo and markdown contrast ([12cf4bc](https://github.com/gennitdev/ai-beta-reader-frontend/commit/12cf4bc4815537ab454a2e810b09135d6c7024c8))
+* preserve wiki alternate names in backups ([81bfddd](https://github.com/gennitdev/ai-beta-reader-frontend/commit/81bfdddf96e47f9463db1ee626763cc1fffbf4e4))
+* **release:** remove duplicate changelog entries ([#142](https://github.com/gennitdev/ai-beta-reader-frontend/issues/142)) ([6fb9029](https://github.com/gennitdev/ai-beta-reader-frontend/commit/6fb9029ba687f084cdaebe3e18b7b0590e3233f6))
+* **restore:** make database replacement atomic ([8d4c102](https://github.com/gennitdev/ai-beta-reader-frontend/commit/8d4c10208e26c092591b9251a0f5b0a0bde36332))
+* reword awkward Bardwall UI copy ([c01aa1a](https://github.com/gennitdev/ai-beta-reader-frontend/commit/c01aa1a30e665c85ee0fd6fa8d7fad7844a59570))
+* **safety:** confirm and persist destructive changes ([f172e17](https://github.com/gennitdev/ai-beta-reader-frontend/commit/f172e175fa34f4384d78d710df04e91e02382f84))
+* **security:** enforce web content security policy ([11d0028](https://github.com/gennitdev/ai-beta-reader-frontend/commit/11d0028097f45935d3e671d222b1430600c1be00))
+* **security:** harden Electron privilege boundaries ([263f327](https://github.com/gennitdev/ai-beta-reader-frontend/commit/263f327d5bb33a712a1ae991ad966737c8dc5bfd))
+* **security:** sanitize rendered markdown html ([9ab548d](https://github.com/gennitdev/ai-beta-reader-frontend/commit/9ab548dd1cdf71c8e62147ffb204581d3091a7b7))
+* **security:** store OpenAI key securely ([3f04eda](https://github.com/gennitdev/ai-beta-reader-frontend/commit/3f04eda418a9eb1a03c070637981daa8a8d27cc3))
+* **test:** lower Electron coverage thresholds ([f3841e7](https://github.com/gennitdev/ai-beta-reader-frontend/commit/f3841e7139e8f1ab2cdce8597eb929fcc5dfe762))
+
+
+### Security
+
+* do not persist a refresh token on the web build ([1b20879](https://github.com/gennitdev/ai-beta-reader-frontend/commit/1b2087989a06df7715e6034b20ec6c13a7bd3c1c))
+* store OAuth tokens in OS-backed secure storage on native and desktop ([8725570](https://github.com/gennitdev/ai-beta-reader-frontend/commit/8725570b66f8582a7654424c148d18e027b6bccd))
+* strengthen backup key derivation and PKCE code verifier ([a19f3fa](https://github.com/gennitdev/ai-beta-reader-frontend/commit/a19f3fac3ff600b310c8b8e2f34239a1a9a9bf8c))
+* tighten native OAuth and cloud-sync internals ([4240bf4](https://github.com/gennitdev/ai-beta-reader-frontend/commit/4240bf4f76134777f0508d9540571c9ad0251b1c))
