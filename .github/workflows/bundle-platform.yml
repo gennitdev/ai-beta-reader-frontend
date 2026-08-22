@@ -57,7 +57,7 @@ jobs:
         run: npm run type-check:e2e
 
       - name: Verify portable paths and transports
-        run: npx vitest run src/__tests__/libraryBundleWriter.spec.ts src/__tests__/libraryBundleTransport.spec.ts src/__tests__/directoryBundleWriter.spec.ts
+        run: npx vitest run src/__tests__/libraryBundleWriter.spec.ts src/__tests__/libraryBundleTransport.spec.ts src/__tests__/directoryBundleWriter.spec.ts src/__tests__/libraryBundleFilesystemAcceptance.spec.ts
 
       - name: Verify real browser persistence and recovery
         run: npx playwright test e2e/bundle-persistence.spec.ts --workers=1
