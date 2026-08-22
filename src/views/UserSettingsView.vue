@@ -95,11 +95,14 @@ const {
   exportProgress,
   exportError,
   exportFormat,
+  bundleScope,
+  selectedBookIds,
+  selectedBooksAreValid,
   markdownGranularity,
   includeNotes,
   canExportBundleDirectory,
   handleExport,
-  exportFullLibraryDirectory,
+  exportBundleDirectory,
 } = useDataExport({
   books,
   chapters,
@@ -140,6 +143,7 @@ const {
 
 onMounted(async () => {
   await initializeDatabase()
+  await loadBooks()
   await loadApiKey()
   await refreshBrowserStorage()
   await refreshRecoveries()
@@ -607,21 +611,25 @@ onMounted(async () => {
             <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <button
                 @click="handleExport"
-                :disabled="isExporting"
+                :disabled="isExporting || (exportFormat === 'bundle' && bundleScope === 'selection' && !selectedBooksAreValid)"
                 class="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap w-full sm:w-auto"
               >
                 <DocumentArrowDownIcon class="w-5 h-5 mr-2" />
-                {{ isExporting ? 'Exporting...' : exportFormat === 'bundle' ? 'Export full library backup' : 'Export Data' }}
+                {{ isExporting
+                  ? 'Exporting...'
+                  : exportFormat === 'bundle'
+                    ? bundleScope === 'selection' ? 'Export selected books' : 'Export full library backup'
+                    : 'Export Data' }}
               </button>
               <button
                 v-if="canExportBundleDirectory && exportFormat === 'bundle'"
                 type="button"
-                :disabled="isExporting"
+                :disabled="isExporting || (bundleScope === 'selection' && !selectedBooksAreValid)"
                 class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-lg border border-green-600 px-4 py-2 font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20 sm:w-auto"
-                @click="exportFullLibraryDirectory"
+                @click="exportBundleDirectory"
               >
                 <DocumentArrowDownIcon class="mr-2 h-5 w-5" />
-                Export Git workspace to folder
+                {{ bundleScope === 'selection' ? 'Export selected books to folder' : 'Export Git workspace to folder' }}
               </button>
             </div>
           </div>
@@ -681,6 +689,41 @@ onMounted(async () => {
               </label>
             </div>
           </div>
+
+          <fieldset v-if="exportFormat === 'bundle'" class="space-y-3 border-l-2 border-gray-200 pl-6 dark:border-gray-700">
+            <legend class="text-sm font-medium text-gray-700 dark:text-gray-300">Bundle contents</legend>
+            <label class="flex cursor-pointer items-start">
+              <input v-model="bundleScope" type="radio" value="library" class="mt-0.5 h-4 w-4 border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-600" />
+              <span class="ml-2">
+                <span class="block text-sm text-gray-900 dark:text-white">Full library</span>
+                <span class="block text-xs text-gray-500 dark:text-gray-400">Includes every book and can be used with Apply changes or Replace library.</span>
+              </span>
+            </label>
+            <label class="flex cursor-pointer items-start">
+              <input v-model="bundleScope" data-testid="bundle-scope-selection" type="radio" value="selection" class="mt-0.5 h-4 w-4 border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-600" />
+              <span class="ml-2">
+                <span class="block text-sm text-gray-900 dark:text-white">Selected books</span>
+                <span class="block text-xs text-gray-500 dark:text-gray-400">Creates a canonical selection bundle for Apply changes. Selection bundles cannot replace a library.</span>
+              </span>
+            </label>
+
+            <div v-if="bundleScope === 'selection'" class="space-y-2 rounded-lg border border-gray-200 p-3 dark:border-gray-600">
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Choose one or more books</p>
+              <p v-if="books.length === 0" class="text-sm text-gray-500 dark:text-gray-400">No books are available to export.</p>
+              <label v-for="book in books" :key="book.id" class="flex cursor-pointer items-center gap-2 text-sm text-gray-900 dark:text-white">
+                <input
+                  v-model="selectedBookIds"
+                  :value="book.id"
+                  :data-testid="`selected-book-${book.id}`"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-600"
+                />
+                <span>{{ book.title }}</span>
+                <span class="font-mono text-xs text-gray-400">{{ book.id }}</span>
+              </label>
+              <p v-if="selectedBookIds.length === 0" class="text-xs text-amber-600 dark:text-amber-400">Select at least one book to export.</p>
+            </div>
+          </fieldset>
 
           <!-- Markdown Options (only for markdown export) -->
           <div v-if="exportFormat === 'markdown'" class="pl-6 border-l-2 border-gray-200 dark:border-gray-700 space-y-4">
