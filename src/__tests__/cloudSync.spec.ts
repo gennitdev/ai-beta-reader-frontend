@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import CryptoJS from 'crypto-js'
 import type { CloudProvider } from '@/lib/cloudSync'
 import { Encryption } from '@/lib/encryption'
 import { IndexedDbImageContentStore } from '@/lib/imageContentStore'
+import { sha256Hex } from '@/lib/libraryBundle/semanticHash'
+import wc1LegacyBackup from './fixtures/legacyBackups/wc1-legacy-json.enc?raw'
+import wc2LegacyBackup from './fixtures/legacyBackups/wc2-legacy-json.enc?raw'
+import cryptoJsLegacyBackup from './fixtures/legacyBackups/cryptojs-legacy-json.enc?raw'
 
 const dbMock = vi.hoisted(() => ({
   exportDatabase: vi.fn(),
@@ -32,6 +35,30 @@ const EXPORT = {
   image_assets: [],
 }
 
+const GOLDEN_LEGACY_EXPORT = {
+  version: 5,
+  books: [{
+    id: 'golden-book', title: 'Golden Legacy Library',
+    chapter_order: '["golden-chapter"]', part_order: '[]', cover_image_id: null,
+    created_at: '2025-01-02T03:04:05.000Z',
+  }],
+  chapters: [{
+    id: 'golden-chapter', book_id: 'golden-book', part_id: null,
+    title: 'Legacy Chapter', text: 'Fixed ciphertext must keep this chapter restorable.',
+    word_count: 7, cover_image_id: null, created_at: '2025-01-02T03:05:00.000Z',
+  }],
+  wiki_pages: [{
+    id: 'golden-wiki', book_id: 'golden-book', page_name: 'Archivist', aliases: '["Keeper"]',
+  }],
+  image_assets: [],
+}
+
+const GOLDEN_LEGACY_BACKUPS = [
+  ['WC1', wc1LegacyBackup, '2f43e86a8dddc03d903aa0bd6c8e4805a3b7caf0f858d821ca6c0b9fb45c5cf6'],
+  ['WC2', wc2LegacyBackup, '290e77502f8df931041d87fda1fe7146798e2df289e1bedf9de7bdbeecc81a6b'],
+  ['CryptoJS', cryptoJsLegacyBackup, 'd86bd51eb2c4ea41b852c19a7d63cc63a287b79219c5cdc53d1ecb1fb263abb4'],
+] as const
+
 function fakeProvider(overrides: Partial<CloudProvider> = {}) {
   let stored: string | null = null
   const provider: CloudProvider & { stored: () => string | null } = {
@@ -46,27 +73,6 @@ function fakeProvider(overrides: Partial<CloudProvider> = {}) {
     ...overrides,
   } as CloudProvider & { stored: () => string | null }
   return provider
-}
-
-async function wc1Backup(plaintext: string, password: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const salt = crypto.getRandomValues(new Uint8Array(16))
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const baseKey = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey'])
-  const key = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, baseKey,
-    { name: 'AES-GCM', length: 256 }, false, ['encrypt'],
-  )
-  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv }, key, encoder.encode(plaintext),
-  ))
-  const combined = new Uint8Array(28 + ciphertext.byteLength)
-  combined.set(salt)
-  combined.set(iv, 16)
-  combined.set(ciphertext, 28)
-  let binary = ''
-  combined.forEach((byte) => { binary += String.fromCharCode(byte) })
-  return `WC1:${btoa(binary)}`
 }
 
 beforeEach(() => {
@@ -162,16 +168,17 @@ describe('CloudSync backup + restore', () => {
     expect(dbMock.importDatabase).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['WC1', (text: string) => wc1Backup(text, 'pw')],
-    ['CryptoJS', async (text: string) => CryptoJS.AES.encrypt(text, 'pw').toString()],
-  ])('restores %s legacy JSON with an optional UTF-8 BOM', async (_format, encrypt) => {
-    const plaintext = `\uFEFF${JSON.stringify(EXPORT)}`
-    const provider = fakeProvider({ download: vi.fn(async () => encrypt(plaintext)) })
-    await expect(new CloudSync(provider).restore('pw')).resolves.toBe(true)
-    const imported = JSON.parse(new TextDecoder().decode(dbMock.importDatabase.mock.calls[0][0]))
-    expect(imported).toEqual(EXPORT)
-  })
+  it.each(GOLDEN_LEGACY_BACKUPS)(
+    'restores immutable %s legacy JSON golden bytes',
+    async (_format, encryptedFixture, expectedSha256) => {
+      const ciphertext = encryptedFixture.trim()
+      expect(await sha256Hex(new TextEncoder().encode(ciphertext))).toBe(expectedSha256)
+      const provider = fakeProvider({ download: vi.fn(async () => ciphertext) })
+      await expect(new CloudSync(provider).restore('golden-backup-password')).resolves.toBe(true)
+      const imported = JSON.parse(new TextDecoder().decode(dbMock.importDatabase.mock.calls[0][0]))
+      expect(imported).toEqual(GOLDEN_LEGACY_EXPORT)
+    },
+  )
 
   it('rolls back earlier image writes when a later image cannot be restored', async () => {
     const original = new Uint8Array([9, 8, 7])
