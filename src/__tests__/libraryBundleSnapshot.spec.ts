@@ -35,6 +35,27 @@ describe('createCanonicalLibrarySnapshot', () => {
     )
   })
 
+  it('creates a text-only snapshot from stored image integrity without loading image bytes', async () => {
+    const database = completeDatabaseExportFixture()
+    database.image_assets[0] = {
+      ...(database.image_assets[0] as Record<string, unknown>),
+      content_hash: completeCanonicalLibraryFixture().assets[0].sha256,
+      content_hash_algorithm: 'sha256', content_byte_length: 3,
+    }
+    const readAssetBytes = vi.fn(async () => new Uint8Array([1, 2, 3]))
+    const snapshot = await createCanonicalLibrarySnapshot(database, {
+      contentMode: 'text-only', readAssetBytes,
+    })
+
+    expect(snapshot).toMatchObject({
+      content_mode: 'text-only',
+      includes: { image_bytes: false, history: false, audit_records: false },
+      chapter_revisions: [], chapter_activity: [], wiki_updates: [], wiki_review_state: [],
+    })
+    expect(snapshot.assets[0]).toMatchObject({ byte_length: 3, bytes: null })
+    expect(readAssetBytes).not.toHaveBeenCalled()
+  })
+
   it('normalizes nullable legacy collection fields without inventing values', async () => {
     const database = completeDatabaseExportFixture()
     database.books[0] = {

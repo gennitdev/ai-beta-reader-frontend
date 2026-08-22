@@ -149,6 +149,33 @@ describe('canonical bundle directory writer', () => {
     expect(snapshot.has('books/renamed-book--book-1/book.yaml')).toBe(true)
   })
 
+  it('preserves image bytes across full-to-text-only and text-only-to-full updates', async () => {
+    const root = new MemoryDirectory()
+    const fullModel = completeCanonicalLibraryFixture()
+    const full = await writeLibraryBundle(fullModel, options('bundle:full'))
+    await writeBundleDirectory(root, full.files)
+    const assetBinary = [...full.files.keys()].find((path) => path.endsWith('/cover.png')) as string
+
+    const textModel = structuredClone(fullModel)
+    textModel.content_mode = 'text-only'
+    textModel.includes = { image_bytes: false, history: false, audit_records: false }
+    textModel.assets[0].bytes = null
+    textModel.chapter_revisions = []
+    textModel.chapter_activity = []
+    textModel.wiki_updates = []
+    textModel.wiki_review_state = []
+    const textOnly = await writeLibraryBundle(textModel, options('bundle:text'))
+    await writeBundleDirectory(root, textOnly.files)
+
+    expect(root.snapshot().get(assetBinary)).toEqual(new Uint8Array([1, 2, 3]))
+    expect(root.snapshot().has('_beta-bot/history/chapter-revisions.jsonl')).toBe(false)
+
+    const fullAgain = await writeLibraryBundle(fullModel, options('bundle:full-again'))
+    await writeBundleDirectory(root, fullAgain.files)
+    expect(root.snapshot().get(assetBinary)).toEqual(new Uint8Array([1, 2, 3]))
+    expect(root.snapshot().has('_beta-bot/history/chapter-revisions.jsonl')).toBe(true)
+  })
+
   it('refuses to overwrite an unknown file at a canonical path', async () => {
     const root = new MemoryDirectory()
     const bundle = await writeLibraryBundle(completeCanonicalLibraryFixture(), options('bundle:first'))

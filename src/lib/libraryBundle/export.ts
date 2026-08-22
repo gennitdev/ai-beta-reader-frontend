@@ -14,12 +14,14 @@ async function createCanonicalBundleExport(
   databaseBackup: Uint8Array,
   options: FullLibraryBundleExportOptions,
   bookIds?: readonly string[],
+  contentMode: 'full' | 'text-only' = 'full',
 ) {
   const raw: unknown = JSON.parse(new TextDecoder().decode(databaseBackup))
   const database = parseDatabaseImportData(raw)
   const model = await createCanonicalLibrarySnapshot(database, {
     readAssetBytes: options.readAssetBytes,
     bookIds,
+    contentMode,
   })
   const written = await writeLibraryBundle(model, options)
   const zipBytes = await createBundleZip(written.files)
@@ -40,4 +42,12 @@ export async function createSelectedBooksBundleExport(
   options: SelectedBooksBundleExportOptions,
 ) {
   return createCanonicalBundleExport(databaseBackup, options, bookIds)
+}
+
+/** Create a Git-friendly workspace without recovery data or image binaries. */
+export async function createTextOnlyLibraryBundleExport(
+  databaseBackup: Uint8Array,
+  options: FullLibraryBundleExportOptions,
+) {
+  return createCanonicalBundleExport(databaseBackup, options, undefined, 'text-only')
 }

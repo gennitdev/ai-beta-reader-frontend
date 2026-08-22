@@ -4,6 +4,7 @@ import packageInfo from '../../package.json'
 import type { Book, Chapter, ChapterNote, BookPart, ImageAsset } from '@/lib/database'
 import {
   createFullLibraryBundleExport,
+  createTextOnlyLibraryBundleExport,
   createSelectedBooksBundleExport,
 } from '@/lib/libraryBundle/export'
 import { createAgentWorkspaceScaffold } from '@/lib/libraryBundle/agentWorkspace'
@@ -76,7 +77,7 @@ export function useDataExport(deps: UseDataExportDeps) {
   const isExporting = ref(false)
   const exportProgress = ref('')
   const exportError = ref('')
-  const exportFormat = ref<'bundle' | 'zip' | 'markdown'>('bundle')
+  const exportFormat = ref<'bundle' | 'text-workspace' | 'zip' | 'markdown'>('bundle')
   const bundleScope = ref<'library' | 'selection'>('library')
   const selectedBookIds = ref<string[]>([])
   const markdownGranularity = ref<'book' | 'part'>('book')
@@ -91,7 +92,10 @@ export function useDataExport(deps: UseDataExportDeps) {
     return selectedBookIds.value.every((id) => available.has(id))
   })
 
-  const createCanonicalBundle = async (bookIds?: readonly string[]) => {
+  const createCanonicalBundle = async (
+    bookIds?: readonly string[],
+    contentMode: 'full' | 'text-only' = 'full',
+  ) => {
     exportProgress.value = bookIds
       ? 'Creating a consistent snapshot of the selected books...'
       : 'Creating a consistent library snapshot...'
@@ -107,7 +111,9 @@ export function useDataExport(deps: UseDataExportDeps) {
         return new Uint8Array(await blob.arrayBuffer())
       },
     }
-    const bundle = bookIds
+    const bundle = contentMode === 'text-only'
+      ? await createTextOnlyLibraryBundleExport(databaseBackup, options)
+      : bookIds
       ? await createSelectedBooksBundleExport(databaseBackup, bookIds, options)
       : await createFullLibraryBundleExport(databaseBackup, options)
     return { bundle, exportedAt }
@@ -214,6 +220,55 @@ export function useDataExport(deps: UseDataExportDeps) {
       } else {
         console.error('Canonical folder export failed:', err)
         exportError.value = 'Folder export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
+        exportProgress.value = ''
+      }
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  const exportTextOnlyWorkspaceZip = async () => {
+    if (isExporting.value) return
+    exportError.value = ''
+    isExporting.value = true
+    try {
+      const { bundle, exportedAt } = await createCanonicalBundle(undefined, 'text-only')
+      exportProgress.value = 'Creating text-only workspace ZIP...'
+      triggerZipDownload(
+        new Blob([bundle.zipBytes.slice().buffer], { type: 'application/zip' }),
+        `beta-bot-text-workspace-${exportedAt.slice(0, 10)}.zip`,
+      )
+      exportProgress.value = 'Text-only workspace exported!'
+      setTimeout(() => { exportProgress.value = '' }, 3000)
+    } catch (err) {
+      console.error('Text-only workspace export failed:', err)
+      exportError.value = 'Workspace export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
+      exportProgress.value = ''
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  const exportTextOnlyWorkspaceDirectory = async () => {
+    if (isExporting.value) return
+    exportError.value = ''
+    isExporting.value = true
+    try {
+      const choose = chooseBundleDirectory
+        ?? (runtimeDirectoryPicker ? () => runtimeDirectoryPicker.call(window, { mode: 'readwrite' }) : undefined)
+      if (!choose) throw new Error('Folder export is not supported by this browser.')
+      exportProgress.value = 'Choose an empty folder or an existing Beta Bot bundle...'
+      const directory = await choose()
+      const { bundle } = await createCanonicalBundle(undefined, 'text-only')
+      exportProgress.value = 'Updating text files while preserving omitted image bytes and other files...'
+      const result = await writeBundleDirectory(directory, bundle.files, createAgentWorkspaceScaffold())
+      exportProgress.value = `Text-only workspace updated: ${result.writtenFiles} managed files written, ${result.deletedFiles} obsolete text files removed.`
+      setTimeout(() => { exportProgress.value = '' }, 5000)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') exportProgress.value = ''
+      else {
+        console.error('Text-only workspace folder export failed:', err)
+        exportError.value = 'Workspace folder export failed: ' + (err instanceof Error ? err.message : 'Unknown error')
         exportProgress.value = ''
       }
     } finally {
@@ -488,6 +543,8 @@ export function useDataExport(deps: UseDataExportDeps) {
     if (exportFormat.value === 'bundle') {
       if (bundleScope.value === 'selection') exportSelectedBooksBundle()
       else exportFullLibraryBundle()
+    } else if (exportFormat.value === 'text-workspace') {
+      exportTextOnlyWorkspaceZip()
     } else if (exportFormat.value === 'markdown') {
       exportAsMarkdown()
     } else {
@@ -511,5 +568,7 @@ export function useDataExport(deps: UseDataExportDeps) {
     exportSelectedBooksBundle,
     exportBundleDirectory,
     exportFullLibraryDirectory,
+    exportTextOnlyWorkspaceZip,
+    exportTextOnlyWorkspaceDirectory,
   }
 }

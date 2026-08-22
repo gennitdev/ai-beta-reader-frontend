@@ -102,6 +102,7 @@ const {
   includeNotes,
   canExportBundleDirectory,
   handleExport,
+  exportTextOnlyWorkspaceDirectory,
   exportBundleDirectory,
 } = useDataExport({
   books,
@@ -619,17 +620,19 @@ onMounted(async () => {
                   ? 'Exporting...'
                   : exportFormat === 'bundle'
                     ? bundleScope === 'selection' ? 'Export selected books' : 'Export full library backup'
-                    : 'Export Data' }}
+                    : exportFormat === 'text-workspace' ? 'Export text-only workspace ZIP' : 'Export Data' }}
               </button>
               <button
-                v-if="canExportBundleDirectory && exportFormat === 'bundle'"
+                v-if="canExportBundleDirectory && (exportFormat === 'bundle' || exportFormat === 'text-workspace')"
                 type="button"
-                :disabled="isExporting || (bundleScope === 'selection' && !selectedBooksAreValid)"
+                :disabled="isExporting || (exportFormat === 'bundle' && bundleScope === 'selection' && !selectedBooksAreValid)"
                 class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-lg border border-green-600 px-4 py-2 font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20 sm:w-auto"
-                @click="exportBundleDirectory"
+                @click="exportFormat === 'bundle' ? exportBundleDirectory() : exportTextOnlyWorkspaceDirectory()"
               >
                 <DocumentArrowDownIcon class="mr-2 h-5 w-5" />
-                {{ bundleScope === 'selection' ? 'Export selected books to folder' : 'Export Git workspace to folder' }}
+                {{ exportFormat === 'text-workspace'
+                  ? 'Export text-only workspace to folder'
+                  : bundleScope === 'selection' ? 'Export selected books to folder' : 'Export full bundle to folder' }}
               </button>
             </div>
           </div>
@@ -656,6 +659,23 @@ onMounted(async () => {
                   </span>
                   <span v-if="canExportBundleDirectory" class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
                     Folder export can safely update an existing bundle, preserves unknown files, and creates starter AGENTS.md and .gitattributes files once.
+                  </span>
+                </span>
+              </label>
+              <label class="flex items-start cursor-pointer">
+                <input
+                  type="radio"
+                  v-model="exportFormat"
+                  value="text-workspace"
+                  class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
+                />
+                <span class="ml-2">
+                  <span class="block text-sm text-gray-900 dark:text-white">Text-only Git workspace (advanced)</span>
+                  <span class="block text-xs text-gray-500 dark:text-gray-400">
+                    For Git and coding agents. Includes editable Markdown/YAML, stable IDs, relationships, image metadata, and inventory hashes.
+                  </span>
+                  <span class="mt-1 block text-xs font-medium text-amber-700 dark:text-amber-300">
+                    Not a complete backup: image bytes, recovery history, and audit data are omitted. It cannot replace your library.
                   </span>
                 </span>
               </label>
