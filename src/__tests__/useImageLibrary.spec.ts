@@ -246,4 +246,163 @@ describe('useImageLibrary browser lifecycle', () => {
     })
     expect(deleteStoredId).toHaveBeenCalledWith('orphan')
   })
+
+  it('delegates image queries and returns the first chapter image when present', async () => {
+    const chapterImage = asset({ id: 'chapter-image' })
+    const partImage = asset({ id: 'part-image', asset_type: 'part' })
+    const bookCover = asset({ id: 'book-cover', asset_type: 'cover' })
+    const partCover = asset({ id: 'part-cover', asset_type: 'part_cover' })
+    const chapterCover = asset({ id: 'chapter-cover', asset_type: 'chapter_cover' })
+    imageMocks.getChapterImageAssets
+      .mockResolvedValueOnce([chapterImage])
+      .mockResolvedValueOnce([])
+    imageMocks.getPartImageAssets.mockResolvedValueOnce([partImage])
+    imageMocks.getBookCoverImageAsset.mockResolvedValueOnce(bookCover)
+    imageMocks.getPartCoverImageAsset.mockResolvedValueOnce(partCover)
+    imageMocks.getChapterCoverImageAsset.mockResolvedValueOnce(chapterCover)
+    const library = useImageLibrary()
+
+    await expect(library.fetchChapterImages('chapter-1')).resolves.toEqual([chapterImage])
+    await expect(library.fetchFirstChapterImage('empty-chapter')).resolves.toBeNull()
+    await expect(library.fetchPartImages('part-1')).resolves.toEqual([partImage])
+    await expect(library.fetchBookCover('book-1')).resolves.toBe(bookCover)
+    await expect(library.fetchPartCover('part-1')).resolves.toBe(partCover)
+    await expect(library.fetchChapterCover('chapter-1')).resolves.toBe(chapterCover)
+    expect(library.canDisplayImages()).toBe(true)
+    expect(library.canDownloadImages.value).toBe(true)
+  })
+
+  it('builds chapter and part thumbnail maps while skipping missing and unreadable images', async () => {
+    const chapterImage = asset({ id: 'chapter-image' })
+    const brokenChapterImage = asset({ id: 'broken-chapter', file_name: 'broken.png' })
+    const partCover = asset({ id: 'part-cover', asset_type: 'part_cover' })
+    const brokenPartCover = asset({ id: 'broken-part', asset_type: 'part_cover', file_name: 'broken.png' })
+    imageMocks.getChapterImageAssets.mockImplementation(async (id: string) => ({
+      good: [chapterImage], broken: [brokenChapterImage], empty: [],
+    })[id] ?? [])
+    imageMocks.getPartCoverImageAsset.mockImplementation(async (id: string) => ({
+      good: partCover, broken: brokenPartCover, empty: null,
+    })[id] ?? null)
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'read').mockImplementation(async (entry) => {
+      if (entry.id.startsWith('broken')) throw new Error('IndexedDB unavailable')
+      return new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const library = useImageLibrary()
+
+    await expect(library.fetchChapterThumbnails(['good', 'broken', 'empty'])).resolves.toEqual({
+      good: 'blob:image-source',
+    })
+    await expect(library.fetchPartThumbnails(['good', 'broken', 'empty'])).resolves.toEqual({
+      good: 'blob:image-source',
+    })
+    expect(console.warn).toHaveBeenCalledWith(
+      '[ImageLibrary] Failed to get image source for chapter',
+      'broken',
+      expect.any(Error),
+    )
+    expect(console.warn).toHaveBeenCalledWith(
+      '[ImageLibrary] Failed to get image source for part',
+      'broken',
+      expect.any(Error),
+    )
+  })
+
+  it('downloads browser images through a temporary anchor using the default filename fallback', async () => {
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'read')
+      .mockResolvedValue(new Blob([new Uint8Array([1])], { type: 'image/png' }))
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const append = vi.spyOn(document.body, 'appendChild')
+    const remove = vi.spyOn(document.body, 'removeChild')
+    const library = useImageLibrary()
+
+    await library.downloadOrShareImage(asset({ file_name: '' }))
+
+    const link = append.mock.calls[0][0] as HTMLAnchorElement
+    expect(link.href).toContain('blob:image-source')
+    expect(link.download).toBe('illustration-image-1.jpg')
+    expect(click).toHaveBeenCalledOnce()
+    expect(remove).toHaveBeenCalledWith(link)
+  })
+
+  it('reports incomplete integrity metadata and browser storage read failures', async () => {
+    const library = useImageLibrary()
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'read')
+      .mockResolvedValueOnce(new Blob([new Uint8Array([1])], { type: 'image/png' }))
+      .mockRejectedValueOnce(new Error('quota database closed'))
+
+    await expect(library.getImageBlob(asset({
+      content_hash: 'a'.repeat(64),
+      content_hash_algorithm: null,
+      content_byte_length: null,
+    }))).rejects.toThrow('integrity metadata for scene.png is incomplete')
+    await expect(library.getImageBlob(asset())).rejects.toThrow(/could not be loaded in browser storage/i)
+  })
+
+  it('inspects image content without deleting orphans when cleanup is disabled', async () => {
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'exists').mockResolvedValue(false)
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'listStoredIds').mockResolvedValue(['orphan'])
+
+    await expect(useImageLibrary().reconcileImageContent([asset()], false)).resolves.toEqual({
+      missingImageIds: ['image-1'],
+      orphanedImageIds: ['orphan'],
+    })
+  })
+
+  it('replaces a browser book cover and removes the previous cover', async () => {
+    const previousCover = asset({ id: 'previous-cover', asset_type: 'cover' })
+    imageMocks.getBookCoverImageAsset.mockResolvedValueOnce(previousCover)
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000010')
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'write').mockResolvedValue(undefined)
+    const removeContent = vi.spyOn(IndexedDbImageContentStore.prototype, 'delete').mockResolvedValue(undefined)
+    const picker = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function () {
+      Object.defineProperty(this, 'files', { configurable: true, value: [file('cover.png')] })
+      this.dispatchEvent(new Event('change'))
+    })
+
+    const result = await useImageLibrary().pickNewBookCover('book-1')
+
+    expect(result).toEqual(expect.objectContaining({
+      id: '00000000-0000-4000-8000-000000000010', asset_type: 'cover',
+    }))
+    expect(imageMocks.setBookCoverImageId).toHaveBeenCalledWith('book-1', result?.id)
+    expect(imageMocks.deleteImageAssetRecord).toHaveBeenCalledWith('previous-cover')
+    expect(removeContent).toHaveBeenCalledWith(previousCover)
+    picker.mockRestore()
+  })
+
+  it('rolls back a newly saved browser part cover when assigning it fails', async () => {
+    imageMocks.getPartCoverImageAsset.mockResolvedValueOnce(null)
+    imageMocks.setPartCoverImageId.mockRejectedValueOnce(new Error('part update failed'))
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000011')
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'write').mockResolvedValue(undefined)
+    const removeContent = vi.spyOn(IndexedDbImageContentStore.prototype, 'delete').mockResolvedValue(undefined)
+    const picker = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function () {
+      Object.defineProperty(this, 'files', { configurable: true, value: [file('part.png')] })
+      this.dispatchEvent(new Event('change'))
+    })
+
+    await expect(useImageLibrary().pickPartCover('book-1', 'part-1'))
+      .rejects.toThrow('part update failed')
+
+    expect(imageMocks.deleteImageAssetRecord).toHaveBeenCalledWith(
+      '00000000-0000-4000-8000-000000000011',
+    )
+    expect(removeContent).toHaveBeenCalledOnce()
+    picker.mockRestore()
+  })
+
+  it('returns null when browser cover selection is canceled', async () => {
+    imageMocks.getBookCoverImageAsset.mockResolvedValueOnce(null)
+    imageMocks.getPartCoverImageAsset.mockResolvedValueOnce(null)
+    const picker = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function () {
+      this.dispatchEvent(new Event('cancel'))
+    })
+    const library = useImageLibrary()
+
+    await expect(library.pickNewBookCover('book-1')).resolves.toBeNull()
+    await expect(library.pickPartCover('book-1', 'part-1')).resolves.toBeNull()
+    expect(imageMocks.saveImageAssetRecord).not.toHaveBeenCalled()
+    picker.mockRestore()
+  })
 })
