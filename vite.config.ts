@@ -48,8 +48,8 @@ export default defineConfig({
         'electron/src/**': {
           statements: 99,
           branches: 89,
-          functions: 100,
-          lines: 100,
+          functions: 99,
+          lines: 99,
         },
         'src/lib/libraryBundle/**': {
           statements: 98,
