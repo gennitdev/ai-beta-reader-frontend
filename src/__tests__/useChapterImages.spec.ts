@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import type { ImageAsset } from '@/lib/database'
 import { useChapterImages } from '@/composables/useChapterImages'
 
@@ -327,5 +328,103 @@ describe('warn and error branches', () => {
     c.deletingIllustration.value = true
     c.cancelDeleteIllustration()
     expect(c.showDeleteIllustrationModal.value).toBe(true)
+  })
+
+  it('uses user-facing fallback messages for non-Error rejections', async () => {
+    h.fetchChapterImages.mockRejectedValue('load failed')
+    const loading = setup()
+    await loading.refreshChapterImages()
+    expect(loading.chapterImageError.value).toBe('Failed to load chapter illustrations')
+
+    h.addImagesToChapter.mockRejectedValue('add failed')
+    const adding = setup()
+    await adding.handleAddIllustrations()
+    expect(adding.chapterImageError.value).toBe('Failed to add illustrations')
+
+    h.fetchChapterImages.mockResolvedValue([img('a')])
+    h.getImageSource.mockResolvedValue('src:a')
+    const actions = setup()
+    await actions.refreshChapterImages()
+    actions.openImageModal('a')
+
+    h.updateImageAssetNotes.mockRejectedValue('notes failed')
+    await actions.handleSaveActiveImageNotes('note')
+    expect(actions.chapterImageError.value).toBe('Failed to save image notes')
+
+    h.setImageWikiTags.mockRejectedValue('tags failed')
+    await actions.handleSaveActiveImageTags(['w1'])
+    expect(actions.chapterImageError.value).toBe('Failed to save image tags')
+
+    h.setChapterCoverImageId.mockRejectedValue('cover failed')
+    await actions.handleSetAsCover('a')
+    expect(actions.chapterImageError.value).toBe('Failed to set cover image')
+
+    h.deleteImage.mockRejectedValue('delete failed')
+    actions.requestDeleteIllustration('a')
+    await actions.handleDeleteIllustration()
+    expect(actions.chapterImageError.value).toBe('Failed to delete illustration')
+  })
+
+  it('covers missing identifiers, images, sources, and inactive-image no-ops', async () => {
+    const missingIds = setup('', '')
+    await missingIds.handleAddIllustrations()
+    await missingIds.handleSetAsCover('a')
+    expect(h.addImagesToChapter).not.toHaveBeenCalled()
+    expect(h.setChapterCoverImageId).not.toHaveBeenCalled()
+
+    const c = setup()
+    await c.refreshChapterImages()
+    await c.handleDeleteIllustration()
+    c.requestDeleteIllustration('missing')
+    await c.handleDeleteIllustration()
+    c.openImageModal('missing')
+    await c.handleSaveActiveImageNotes('note')
+    await c.handleSaveActiveImageTags(['w1'])
+    c.goToNextImage()
+    c.goToPrevImage()
+    c.handleDownloadImage('missing')
+    c.openHeroLightbox()
+
+    expect(c.showImageLightbox.value).toBe(false)
+    expect(h.deleteImage).not.toHaveBeenCalled()
+    expect(h.updateImageAssetNotes).not.toHaveBeenCalled()
+    expect(h.setImageWikiTags).not.toHaveBeenCalled()
+  })
+
+  it('falls back when cover, labels, tags, and navigation sources are missing', async () => {
+    h.fetchChapterImages.mockResolvedValue([
+      img('a', { file_name: '' }),
+      img('b'),
+      img('c'),
+    ])
+    h.fetchChapterCover.mockResolvedValue(img('not-in-list'))
+    h.getImageSource.mockImplementation(async (image: ImageAsset) => image.id === 'b' ? 'src:b' : '')
+    const c = setup('ch-1', '')
+    await c.refreshChapterImages()
+
+    expect(h.getWikiPages).not.toHaveBeenCalled()
+    expect(c.heroImage.value?.id).toBe('a')
+    expect(c.heroImageSrc.value).toBe('')
+
+    c.activeImageId.value = 'a'
+    expect(c.activeImageSource.value).toBe('')
+    expect(c.activeImageTags.value).toEqual([])
+    expect(c.activeImageLabel.value).toBe('')
+    c.goToNextImage()
+    expect(c.activeImageId.value).toBe('b')
+    c.goToNextImage()
+    expect(c.activeImageId.value).toBe('b')
+    c.goToPrevImage()
+    expect(c.activeImageId.value).toBe('b')
+  })
+
+  it('refreshes when image persistence capability changes', async () => {
+    const c = setup()
+    await c.refreshChapterImages()
+    h.fetchChapterImages.mockClear()
+
+    h.canStoreImages!.value = !h.canStoreImages!.value
+    await nextTick()
+    await vi.waitFor(() => expect(h.fetchChapterImages).toHaveBeenCalledWith('ch-1'))
   })
 })

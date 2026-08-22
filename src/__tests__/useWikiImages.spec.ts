@@ -266,4 +266,68 @@ describe('warn and error branches', () => {
     expect(c.heroImage.value).toBeNull()
     expect(h.updateImageAssetNotes).not.toHaveBeenCalled()
   })
+
+  it('uses fallback messages for non-Error rejections', async () => {
+    h.getWikiPageImageAssets.mockRejectedValue('load failed')
+    const loading = setup()
+    await loading.refreshWikiImages()
+    expect(loading.wikiImageError.value).toBe('Failed to load wiki illustrations')
+
+    h.getWikiPageImageAssets.mockResolvedValue([img('a')])
+    h.getImageSource.mockResolvedValue('src:a')
+    const actions = setup()
+    await actions.refreshWikiImages()
+    actions.openImageModal('a')
+
+    h.setWikiPageCoverImageId.mockRejectedValue('cover failed')
+    await actions.handleSetAsCover('a')
+    expect(actions.wikiImageError.value).toBe('Failed to set cover image')
+
+    h.updateImageAssetNotes.mockRejectedValue('notes failed')
+    await actions.handleSaveActiveImageNotes('note')
+    expect(actions.wikiImageError.value).toBe('Failed to save image notes')
+
+    h.setImageWikiTags.mockRejectedValue('tags failed')
+    await actions.handleSaveActiveImageTags(['w1'])
+    expect(actions.wikiImageError.value).toBe('Failed to save image tags')
+  })
+
+  it('covers missing ids, sources, labels, tags, and navigation targets', async () => {
+    h.getWikiPageImageAssets.mockResolvedValue([
+      img('a', { file_name: '' }),
+      img('b'),
+      img('c'),
+    ])
+    h.getWikiPageCoverImageAsset.mockResolvedValue(img('missing-cover'))
+    h.getImageSource.mockImplementation(async (image: ImageAsset) => image.id === 'b' ? 'src:b' : '')
+    const c = setup('wiki-1', '')
+    await c.refreshWikiImages()
+
+    expect(h.getWikiPages).not.toHaveBeenCalled()
+    expect(c.heroImage.value?.id).toBe('a')
+    expect(c.heroImageSrc.value).toBe('')
+    c.openHeroLightbox()
+    c.openImageModal('a')
+    expect(c.showImageLightbox.value).toBe(false)
+
+    c.activeImageId.value = 'a'
+    expect(c.activeImageSource.value).toBe('')
+    expect(c.activeImageTags.value).toEqual([])
+    expect(c.activeImageLabel.value).toBe('')
+    c.goToNextImage()
+    expect(c.activeImageId.value).toBe('b')
+    c.goToNextImage()
+    expect(c.activeImageId.value).toBe('b')
+    c.goToPrevImage()
+    expect(c.activeImageId.value).toBe('b')
+
+    c.handleDownloadImage('missing')
+    expect(c.showImageLightbox.value).toBe(false)
+  })
+
+  it('does not set a cover when the wiki page id is missing', async () => {
+    const c = setup('', 'book-1')
+    await c.handleSetAsCover('a')
+    expect(h.setWikiPageCoverImageId).not.toHaveBeenCalled()
+  })
 })
