@@ -45,6 +45,7 @@ import {
   reportPersistenceFailure,
   reportPersistenceSuccess,
 } from '@/lib/persistenceStatus';
+import type { ImageContentIntegrity } from '@/lib/imageContentHash';
 
 export interface Book {
   id: string;
@@ -741,6 +742,13 @@ export class AppDatabase {
 
   async updateImageAssetNotes(imageId: string, notes: string): Promise<void> {
     return imageRepo.updateImageAssetNotes(this.context, imageId, notes);
+  }
+
+  async updateImageAssetIntegrity(
+    imageId: string,
+    integrity: ImageContentIntegrity,
+  ): Promise<void> {
+    return imageRepo.updateImageAssetIntegrity(this.context, imageId, integrity);
   }
 
   async getImageWikiTags(imageId: string): Promise<ImageWikiTag[]> {

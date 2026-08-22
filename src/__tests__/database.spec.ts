@@ -662,6 +662,23 @@ describe('image assets', () => {
     expect(await db.getChapterCoverImage('ch-1')).toBeNull()
   })
 
+  it('backfills integrity metadata without changing user-visible timestamps', async () => {
+    await db.saveImageAsset(asset())
+
+    await db.updateImageAssetIntegrity('img-1', {
+      content_hash: '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
+      content_hash_algorithm: 'sha256-v1',
+      content_byte_length: 3,
+    })
+
+    expect(await db.getChapterImages('ch-1')).toContainEqual(expect.objectContaining({
+      content_hash: '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
+      content_hash_algorithm: 'sha256-v1',
+      content_byte_length: 3,
+      updated_at: '2026-01-01T00:00:00.000Z',
+    }))
+  })
+
   it('updates notes and manages wiki tags, then deletes', async () => {
     await db.saveImageAsset(asset())
     const wikiId = await db.createWikiPage({

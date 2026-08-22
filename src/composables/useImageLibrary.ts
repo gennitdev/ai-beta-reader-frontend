@@ -135,6 +135,7 @@ export function useImageLibrary() {
     setPartCoverImageId,
     getChapterCoverImageAsset,
     setChapterCoverImageId,
+    updateImageAssetIntegrity,
   } = useDatabase()
 
   const electronImageStorageAvailable = ref(sanitizeBridgeAvailability())
@@ -212,6 +213,20 @@ export function useImageLibrary() {
     }
   }
 
+  async function backfillContentIntegrity(image: ImageAsset, blob: Blob): Promise<void> {
+    if (image.content_hash) return
+    try {
+      const integrity = await hashImageContent(blob)
+      await updateImageAssetIntegrity(image.id, integrity)
+      Object.assign(image, integrity)
+    } catch (error) {
+      logger.warn(
+        `[ImageLibrary] Could not backfill integrity metadata for ${image.id}; it will be retried the next time the image is loaded.`,
+        error,
+      )
+    }
+  }
+
   async function getImageBlob(image: ImageAsset): Promise<Blob> {
     let storedBlob: Blob | null
     try {
@@ -222,11 +237,13 @@ export function useImageLibrary() {
     }
     if (storedBlob) {
       await verifyContentIntegrity(image, storedBlob)
+      await backfillContentIntegrity(image, storedBlob)
       return storedBlob
     }
     if (image.image_data) {
       const embeddedBlob = dataUrlToBlob(image.image_data)
       await verifyContentIntegrity(image, embeddedBlob)
+      await backfillContentIntegrity(image, embeddedBlob)
       return embeddedBlob
     }
     throw new Error(

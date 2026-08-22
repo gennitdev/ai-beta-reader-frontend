@@ -13,6 +13,7 @@ const imageMocks = vi.hoisted(() => ({
   setPartCoverImageId: vi.fn(),
   getChapterCoverImageAsset: vi.fn(),
   setChapterCoverImageId: vi.fn(),
+  updateImageAssetIntegrity: vi.fn(),
   requestPersistentBrowserStorage: vi.fn(),
   loggerWarn: vi.fn(),
 }))
@@ -49,6 +50,7 @@ beforeEach(() => {
   imageMocks.saveImageAssetRecord.mockResolvedValue(undefined)
   imageMocks.deleteImageAssetRecord.mockResolvedValue(undefined)
   imageMocks.requestPersistentBrowserStorage.mockResolvedValue(undefined)
+  imageMocks.updateImageAssetIntegrity.mockResolvedValue(undefined)
   Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: {} })
   vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 10, height: 10, close: vi.fn() })))
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:image-source') })
@@ -127,6 +129,41 @@ describe('useImageLibrary browser lifecycle', () => {
     await expect(library.getImageBlob(asset({ id: 'missing', file_name: 'missing.png' })))
       .rejects.toThrow('image data for missing.png is missing')
     expect(read).toHaveBeenCalledTimes(4)
+  })
+
+  it('progressively backfills integrity metadata when a legacy image is read', async () => {
+    const stored = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'read').mockResolvedValue(stored)
+    const legacyAsset = asset()
+    const library = useImageLibrary()
+
+    await expect(library.getImageBlob(legacyAsset)).resolves.toBe(stored)
+
+    const integrity = {
+      content_hash: '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
+      content_hash_algorithm: 'sha256-v1',
+      content_byte_length: 3,
+    }
+    expect(imageMocks.updateImageAssetIntegrity).toHaveBeenCalledWith('image-1', integrity)
+    expect(legacyAsset).toEqual(expect.objectContaining(integrity))
+  })
+
+  it('keeps legacy images readable and retryable when hash metadata cannot be saved', async () => {
+    const stored = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
+    vi.spyOn(IndexedDbImageContentStore.prototype, 'read').mockResolvedValue(stored)
+    imageMocks.updateImageAssetIntegrity.mockRejectedValue(new Error('database unavailable'))
+    const legacyAsset = asset()
+    const library = useImageLibrary()
+
+    await expect(library.getImageBlob(legacyAsset)).resolves.toBe(stored)
+    await expect(library.getImageBlob(legacyAsset)).resolves.toBe(stored)
+
+    expect(imageMocks.updateImageAssetIntegrity).toHaveBeenCalledTimes(2)
+    expect(legacyAsset.content_hash).toBeUndefined()
+    expect(imageMocks.loggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('will be retried'),
+      expect.any(Error),
+    )
   })
 
   it('rejects stored bytes that do not match persisted integrity metadata', async () => {

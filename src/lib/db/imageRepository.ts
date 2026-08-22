@@ -11,6 +11,7 @@ import { IMAGE_ASSET_COLUMNS } from '@/lib/databaseImportExport'
 import type { DatabaseContext } from './connection'
 import { runInTransaction } from './transaction'
 import type { ImageAsset, ImageAssetType, ImageWikiTag } from '../database'
+import type { ImageContentIntegrity } from '@/lib/imageContentHash'
 
 // --- Row mappers ------------------------------------------------------------
 
@@ -129,6 +130,31 @@ export async function updateImageAssetNotes(ctx: DatabaseContext, imageId: strin
   } else {
     ctx.connection.run(query, params)
     ctx.requestPersistence()
+  }
+}
+
+/** Persist derived content metadata without changing the asset's user-visible modified time. */
+export async function updateImageAssetIntegrity(
+  ctx: DatabaseContext,
+  imageId: string,
+  integrity: ImageContentIntegrity,
+): Promise<void> {
+  const query = `UPDATE image_assets
+    SET content_hash = ?, content_hash_algorithm = ?, content_byte_length = ?
+    WHERE id = ? AND (content_hash IS NULL OR content_hash = '')`
+  const params = [
+    integrity.content_hash,
+    integrity.content_hash_algorithm,
+    integrity.content_byte_length,
+    imageId,
+  ]
+
+  if (ctx.isNative) {
+    await ctx.connection.run(query, params)
+  } else {
+    ctx.connection.run(query, params)
+    ctx.requestPersistence()
+    await ctx.flushPersistence()
   }
 }
 

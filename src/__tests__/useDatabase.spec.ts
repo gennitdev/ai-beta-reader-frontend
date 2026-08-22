@@ -251,6 +251,11 @@ describe('useDatabase — delegation to the database layer', () => {
       ['setWikiPageCoverImageId', ['w', 'i']],
       ['getBookImageAssets', ['b']],
       ['updateImageAssetNotes', ['i', 'notes']],
+      ['updateImageAssetIntegrity', ['i', {
+        content_hash: 'hash',
+        content_hash_algorithm: 'sha256-v1',
+        content_byte_length: 3,
+      }]],
       ['getImageWikiTags', ['i']],
       ['setImageWikiTags', ['i', ['w']]],
       ['getWikiPageImageAssets', ['w']],
