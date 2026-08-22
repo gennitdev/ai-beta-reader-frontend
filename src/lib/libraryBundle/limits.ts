@@ -9,6 +9,11 @@ export interface BundleReadLimits {
   maxCompressionRatio: number
 }
 
+// Browser File inputs must be materialized before ZIP central-directory limits
+// can be inspected. Keep that first allocation bounded independently from the
+// expanded-content limit enforced after the archive metadata is available.
+export const MAX_BUNDLE_ARCHIVE_BYTES = 256 * 1024 * 1024
+
 export const DEFAULT_BUNDLE_READ_LIMITS: Readonly<BundleReadLimits> = Object.freeze({
   maxFiles: 50_000,
   maxTotalBytes: 1024 * 1024 * 1024,

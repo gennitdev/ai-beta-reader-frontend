@@ -56,6 +56,10 @@ describe('Electron secure-storage bridge runtime', () => {
     safeStorage.isAsyncEncryptionAvailable.mockResolvedValue(true)
     fsMocks.readFile.mockRejectedValueOnce(new Error('missing'))
     await expect(getIpcHandler('secure-storage:get')(null, 'googleOAuthTokens')).resolves.toBeNull()
+
+    fsMocks.readFile.mockResolvedValueOnce(Buffer.from('obsolete-payload'))
+    safeStorage.decryptStringAsync.mockRejectedValueOnce(new Error('could not decrypt'))
+    await expect(getIpcHandler('secure-storage:get')(null, 'googleOAuthTokens')).resolves.toBeNull()
   })
 
   it('encrypts and writes secrets with owner-only permissions', async () => {

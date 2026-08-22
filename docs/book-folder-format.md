@@ -41,6 +41,9 @@ Remaining product and release-hardening work is tracked separately:
 - [#131](https://github.com/gennitdev/ai-beta-reader-frontend/issues/131): optional Import as copy;
 - [#132](https://github.com/gennitdev/ai-beta-reader-frontend/issues/132): fuzz, stress, and cross-platform acceptance validation.
 
+Platform and real-persistence results for #132 are recorded in the
+[release-hardening evidence matrix](release-hardening/platform-persistence-acceptance.md).
+
 The current export UI creates full-library bundles. `selection` and `text-only` are already recognized by the schemas, validator, planner, and Replace-eligibility boundary, but their dedicated export flows are follow-up work.
 
 ## Decision summary

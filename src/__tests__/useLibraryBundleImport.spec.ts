@@ -6,6 +6,7 @@ import { canonicalModelToDatabaseImport } from '@/lib/libraryBundle/apply'
 import { sha256Hex } from '@/lib/libraryBundle/semanticHash'
 import type { LibraryImportPlan } from '@/lib/libraryBundle/plan'
 import type { RecoveryStore, StoredRecoveryBundle } from '@/lib/recovery/model'
+import { MAX_BUNDLE_ARCHIVE_BYTES } from '@/lib/libraryBundle/limits'
 
 const previewZip = vi.hoisted(() => vi.fn())
 const previewDirectory = vi.hoisted(() => vi.fn())
@@ -87,6 +88,26 @@ describe('useLibraryBundleImport', () => {
     await state.previewFile(new File(['ok'], 'ok.zip'))
     await state.applyChanges()
     expect(state.importError.value).toBe('Write failed')
+  })
+
+  it('rejects oversized ZIPs before archive materialization or database reads', async () => {
+    const exportDatabase = vi.fn()
+    const file = new File(['small placeholder'], 'oversized.zip')
+    const arrayBuffer = vi.spyOn(file, 'arrayBuffer')
+    Object.defineProperty(file, 'size', { value: MAX_BUNDLE_ARCHIVE_BYTES + 1 })
+    const state = useLibraryBundleImport({
+      exportDatabase,
+      importDatabaseBackup: vi.fn(),
+      getImageBlob: vi.fn(),
+      recoveryStore: memoryStore(),
+    })
+
+    await state.previewFile(file)
+
+    expect(state.importError.value).toContain('browser import limit')
+    expect(arrayBuffer).not.toHaveBeenCalled()
+    expect(exportDatabase).not.toHaveBeenCalled()
+    expect(previewZip).not.toHaveBeenCalled()
   })
 
   it('records conflict choices as a new plan', () => {

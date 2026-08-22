@@ -1,0 +1,71 @@
+name: Bundle platform acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/bundle-platform.yml'
+      - 'e2e/bundle-persistence.spec.ts'
+      - 'src/composables/useLibraryBundleImport.ts'
+      - 'src/lib/libraryBundle/**'
+      - 'src/lib/recovery/**'
+      - 'src/__tests__/**Bundle*.spec.ts'
+      - 'src/__tests__/directoryBundleWriter.spec.ts'
+      - 'src/__tests__/libraryBundleTransport.spec.ts'
+
+concurrency:
+  group: bundle-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-persistence:
+    name: Browser persistence (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Copy sql.js WebAssembly asset
+        run: npm run copy:wasm
+
+      - name: Install Chromium with Linux dependencies
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Chromium
+        if: runner.os != 'Linux'
+        run: npx playwright install chromium
+
+      - name: Type-check browser acceptance sources
+        run: npm run type-check:e2e
+
+      - name: Verify portable paths and transports
+        run: npx vitest run src/__tests__/libraryBundleWriter.spec.ts src/__tests__/libraryBundleTransport.spec.ts src/__tests__/directoryBundleWriter.spec.ts src/__tests__/libraryBundleFilesystemAcceptance.spec.ts
+
+      - name: Verify real browser persistence and recovery
+        run: npx playwright test e2e/bundle-persistence.spec.ts --workers=1
+
+      - name: Retain browser acceptance report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-platform-${{ runner.os }}
+          path: playwright-report/
+          retention-days: 30

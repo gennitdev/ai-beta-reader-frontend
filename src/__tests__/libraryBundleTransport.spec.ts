@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import JSZip from 'jszip'
 import { readBundleDirectoryEntries, readBundleDirectoryFiles } from '@/lib/libraryBundle/adapters/directory'
 import { readBundleZip, readZipCentralDirectory } from '@/lib/libraryBundle/adapters/zip'
@@ -9,7 +9,11 @@ describe('untrusted bundle transports', () => {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     let end = bytes.length - 22
     while (end >= 0 && view.getUint32(end, true) !== 0x06054b50) end--
-    return { view, end, central: view.getUint32(end + 16, true), size: view.getUint32(end + 12, true) }
+    const central = view.getUint32(end + 16, true)
+    return {
+      view, end, central, size: view.getUint32(end + 12, true),
+      local: view.getUint32(central + 42, true),
+    }
   }
 
   function patched(bytes: Uint8Array, patch: (view: DataView, offsets: ReturnType<typeof zipOffsets>) => void) {
@@ -33,9 +37,11 @@ describe('untrusted bundle transports', () => {
 
   it('does not materialize directory bytes when metadata validation fails', async () => {
     const file = new File(['too large'], '../unsafe')
+    const arrayBuffer = vi.spyOn(file, 'arrayBuffer')
     const result = await readBundleDirectoryFiles([file])
     expect(result.files).toBeNull()
     expect(result.diagnostics[0].code).toBe('path.unsafe')
+    expect(arrayBuffer).not.toHaveBeenCalled()
   })
 
   it.each(['', '/root', '../escape', 'a/../b', 'a//b', 'C:/drive', 'a\\b', 'a\0b'])('rejects unsafe path %j', (path) => {
@@ -95,6 +101,48 @@ describe('untrusted bundle transports', () => {
 
     const symlink = patched(zip, (view, { central }) => view.setUint32(central + 38, 0o120777 << 16, true))
     expect((await readBundleZip(symlink)).diagnostics.some((value) => value.code === 'path.symlink')).toBe(true)
+  })
+
+  it('cross-checks local headers and data descriptors before inflation', async () => {
+    const zip = await new JSZip().file('entry.txt', 'repeated-content-'.repeat(64)).generateAsync({
+      type: 'uint8array', compression: 'DEFLATE',
+    })
+    const cases = [
+      patched(zip, (view, { central }) => view.setUint32(central + 42, central, true)),
+      patched(zip, (view, { local }) => view.setUint16(local + 6, view.getUint16(local + 6, true) ^ 1, true)),
+      patched(zip, (view, { local }) => view.setUint32(local + 14, view.getUint32(local + 14, true) ^ 1, true)),
+      patched(zip, (view, { central }) => view.setUint32(central + 20, central, true)),
+    ]
+    cases.forEach((value) => expect(() => readZipCentralDirectory(value)).toThrow(/local/))
+
+    const descriptorZip = await new JSZip().file('entry.txt', 'repeated-content-'.repeat(64)).generateAsync({
+      type: 'uint8array', compression: 'DEFLATE', streamFiles: true,
+    })
+    expect(readZipCentralDirectory(descriptorZip)).toHaveLength(1)
+    const badLocalDescriptor = patched(descriptorZip, (view, { local }) => view.setUint32(local + 14, 1, true))
+    expect(() => readZipCentralDirectory(badLocalDescriptor)).toThrow(/sizes/)
+    const badDescriptor = patched(descriptorZip, (view, { central, local }) => {
+      const nameLength = view.getUint16(local + 26, true)
+      const extraLength = view.getUint16(local + 28, true)
+      const compressedBytes = view.getUint32(central + 20, true)
+      let descriptor = local + 30 + nameLength + extraLength + compressedBytes
+      if (view.getUint32(descriptor, true) === 0x08074b50) descriptor += 4
+      view.setUint32(descriptor, view.getUint32(descriptor, true) ^ 1, true)
+    })
+    expect(() => readZipCentralDirectory(badDescriptor)).toThrow(/data descriptor/)
+  })
+
+  it('reports compressed payload corruption after metadata validation', async () => {
+    const zip = await new JSZip().file('entry.txt', 'repeated-content-'.repeat(64)).generateAsync({
+      type: 'uint8array', compression: 'DEFLATE',
+    })
+    const corrupt = patched(zip, (view, { local }) => {
+      const data = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true)
+      view.setUint8(data, view.getUint8(data) ^ 0xff)
+    })
+    const result = await readBundleZip(corrupt)
+    expect(result.files).toBeNull()
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'zip.read_failed')).toBe(true)
   })
 
   it('decodes UTF-8 entry names and ignores directory records for file limits', async () => {

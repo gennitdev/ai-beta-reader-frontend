@@ -146,6 +146,7 @@ cypress/screenshots/
 test-results/
 playwright-report/
 blob-report/
+artifacts/
 
 # Auto-generated files
 auto-imports.d.ts
@@ -158,6 +159,9 @@ android/app/betabot-release.keystore
 ai-beta-reader-backup.enc
 inspect-backup.mjs
 fixtures/
+# Unit-test golden fixtures are intentionally versioned compatibility evidence.
+!src/__tests__/fixtures/
+!src/__tests__/fixtures/**
 # ...but Playwright test fixtures under e2e/ must stay tracked (the rule above
 # is unanchored and would otherwise match e2e/fixtures/).
 !e2e/fixtures/

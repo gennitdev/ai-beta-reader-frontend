@@ -48,8 +48,35 @@ jobs:
       - name: Run unit tests
         run: npm run test:coverage
 
+      - name: Run deterministic bundle fuzz tests
+        env:
+          BUNDLE_FUZZ_SEED: 132202608
+          BUNDLE_FUZZ_RUNS: 1000
+        run: npm run test:fuzz
+
+      - name: Retain bundle fuzz counterexamples
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-fuzz-counterexamples
+          path: test-results/fuzz/
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Run Electron runtime tests
         run: npm run test:electron
+
+      - name: Run deterministic bundle stress benchmark
+        run: npm run benchmark:bundle:ci
+
+      - name: Upload bundle stress report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-stress-report
+          path: artifacts/bundle-stress.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
