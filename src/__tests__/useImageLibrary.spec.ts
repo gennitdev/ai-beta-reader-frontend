@@ -107,6 +107,35 @@ describe('useImageLibrary browser lifecycle', () => {
     expect(deleteContent).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps duplicate-content assets independently owned while assigning the same hash', async () => {
+    const write = vi.spyOn(IndexedDbImageContentStore.prototype, 'write').mockResolvedValue(undefined)
+    const remove = vi.spyOn(IndexedDbImageContentStore.prototype, 'delete').mockResolvedValue(undefined)
+    const randomUUID = vi.spyOn(globalThis.crypto, 'randomUUID')
+      .mockReturnValueOnce('00000000-0000-4000-8000-000000000001')
+      .mockReturnValueOnce('00000000-0000-4000-8000-000000000002')
+    const library = useImageLibrary()
+
+    const saved = await library.addImagesFromFiles([file('first.png'), file('duplicate.png')], {
+      bookId: 'book-1', chapterId: 'chapter-1', assetType: 'chapter',
+    })
+
+    expect(saved[0].content_hash).toBe(saved[1].content_hash)
+    expect(saved[0].id).not.toBe(saved[1].id)
+    expect(saved[0].file_path).not.toBe(saved[1].file_path)
+    expect(write.mock.calls.map(([storedAsset]) => storedAsset.id)).toEqual([
+      '00000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000002',
+    ])
+
+    await library.deleteImage(saved[0])
+
+    expect(imageMocks.deleteImageAssetRecord).toHaveBeenCalledWith(saved[0].id)
+    expect(remove).toHaveBeenCalledOnce()
+    expect(remove).toHaveBeenCalledWith(saved[0])
+    expect(imageMocks.deleteImageAssetRecord).not.toHaveBeenCalledWith(saved[1].id)
+    randomUUID.mockRestore()
+  })
+
   it('uses stored blobs, falls back to embedded backups, and caches object URLs', async () => {
     const stored = new Blob(['stored'], { type: 'image/png' })
     const read = vi.spyOn(IndexedDbImageContentStore.prototype, 'read')

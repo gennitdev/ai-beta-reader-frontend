@@ -98,6 +98,7 @@ OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron 
 - **Chapter covers**: Set any illustration as the chapter's cover image for visual navigation
 - **Lightbox viewer**: View images full-screen with download option
 - **Storage and backup**: Drive backup includes verified image bytes in the encrypted canonical bundle so browser and Electron restores preserve the image library.
+- **Content integrity**: Image bytes use versioned SHA-256 metadata for migration and restore verification. See [`docs/image-content-integrity.md`](docs/image-content-integrity.md) for the format and deduplication decision.
 
 ### Bardwall — a game that rewards writing
 
