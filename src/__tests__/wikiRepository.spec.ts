@@ -58,6 +58,35 @@ function makeContext(options: {
   return { ctx, runCalls, requestPersistence }
 }
 
+function makeNativeContext(options: {
+  mentionColumns?: string[]
+  queryResults?: Array<Array<Record<string, unknown>> | undefined>
+} = {}) {
+  const mentionColumns = options.mentionColumns
+    ?? ['id', 'chapter_id', 'wiki_page_id', 'link_source', 'created_at', 'updated_at']
+  const queryResults = options.queryResults ?? []
+  const runCalls: Array<{ sql: string; params?: unknown[] }> = []
+  let queryIndex = 0
+  const connection = {
+    query: vi.fn(async (sql: string) => {
+      if (sql.includes('PRAGMA table_info')) {
+        return { values: mentionColumns.map((name) => ({ name })) }
+      }
+      return { values: queryResults[queryIndex++] }
+    }),
+    run: vi.fn(async (sql: string, params?: unknown[]) => runCalls.push({ sql, params })),
+    execute: vi.fn(async () => undefined),
+  } as unknown as AppDatabaseConnection
+  const ctx = {
+    connection,
+    isNative: true,
+    requestPersistence: vi.fn(),
+    flushPersistence: vi.fn(async () => undefined),
+    setImporting: vi.fn(),
+  } satisfies DatabaseContext
+  return { ctx, connection, runCalls }
+}
+
 afterEach(() => {
   vi.clearAllMocks()
 })
@@ -139,5 +168,178 @@ describe('wikiRepository (web path)', () => {
     expect(sql.some((s) => s.includes('ADD COLUMN updated_at'))).toBe(true)
     expect(sql.some((s) => s.includes('CREATE INDEX IF NOT EXISTS idx_chapter_wiki_mentions_chapter'))).toBe(true)
     expect(requestPersistence).toHaveBeenCalled()
+  })
+
+  it('maps invalid and optional web wiki page fields to safe defaults', async () => {
+    const row = [
+      'wiki-1', 'book-1', 'Mara', 'invalid', null, null,
+      false, 42, 0, 0, 'created', 'updated', 1, false,
+    ]
+    const { ctx } = makeContext({ execResults: [[{ columns: [], values: [row] }]] })
+
+    await expect(wikiRepo.getWikiPages(ctx, 'book-1')).resolves.toEqual([{
+      id: 'wiki-1',
+      book_id: 'book-1',
+      page_name: 'Mara',
+      page_type: 'character',
+      content: '',
+      summary: '',
+      aliases: null,
+      tags: null,
+      is_major: false,
+      created_by_ai: false,
+      created_at: 'created',
+      updated_at: 'updated',
+      is_pinned: true,
+      cover_image_id: null,
+    }])
+  })
+
+  it('returns null or empty collections for missing web page and link rows', async () => {
+    await expect(wikiRepo.getWikiPageById(makeContext({ execResults: [[]] }).ctx, 'missing')).resolves.toBeNull()
+    await expect(wikiRepo.getWikiPages(makeContext({ execResults: [[]] }).ctx, 'book-1')).resolves.toEqual([])
+
+    const mentions = makeContext({ execResults: [[]] })
+    await expect(wikiRepo.getChapterWikiMentions(mentions.ctx, 'chapter-1')).resolves.toEqual([])
+    const chapterLinks = makeContext({ execResults: [[]] })
+    await expect(wikiRepo.getChapterWikiLinks(chapterLinks.ctx, 'chapter-1')).resolves.toEqual([])
+    const pageLinks = makeContext({ execResults: [[]] })
+    await expect(wikiRepo.getWikiPageChapterLinks(pageLinks.ctx, 'wiki-1')).resolves.toEqual([])
+  })
+
+  it('maps legacy web mention and link rows without optional columns', async () => {
+    const columns = ['id', 'chapter_id', 'wiki_page_id', 'created_at']
+    const mentions = makeContext({
+      mentionColumns: columns,
+      execResults: [[{ columns: [], values: [['m1', 'c1', 'w1', null, 'created', null]] }]],
+    })
+    await expect(wikiRepo.getChapterWikiMentions(mentions.ctx, 'c1')).resolves.toEqual([{
+      id: 'm1', chapter_id: 'c1', wiki_page_id: 'w1', link_source: null,
+      created_at: 'created', updated_at: null,
+    }])
+
+    const chapterLinks = makeContext({
+      mentionColumns: columns,
+      execResults: [[{ columns: [], values: [['w1', 'Page', 'invalid', 'unknown', 'created', false]] }]],
+    })
+    await expect(wikiRepo.getChapterWikiLinks(chapterLinks.ctx, 'c1')).resolves.toEqual([{
+      wiki_page_id: 'w1', page_name: 'Page', page_type: 'character', link_source: null,
+      created_at: 'created', updated_at: null,
+    }])
+
+    const pageLinks = makeContext({
+      mentionColumns: columns,
+      execResults: [[{ columns: [], values: [['c1', false, 42, 'unknown', 'created', false]] }]],
+    })
+    await expect(wikiRepo.getWikiPageChapterLinks(pageLinks.ctx, 'w1')).resolves.toEqual([{
+      chapter_id: 'c1', chapter_title: null, part_id: null, link_source: null,
+      created_at: 'created', updated_at: null,
+    }])
+  })
+
+  it('writes every optional update and tracking field on the web path', async () => {
+    const update = makeContext()
+    await wikiRepo.updateWikiPage(update.ctx, 'wiki-1', {
+      content: '',
+      summary: '',
+      tags: '',
+      is_pinned: false,
+    })
+    expect(update.runCalls[0].sql).toContain('content = ?, summary = ?, tags = ?, is_pinned = ?')
+    expect(update.runCalls[0].params).toEqual(['', '', '', 0, expect.any(String), 'wiki-1'])
+    expect(update.requestPersistence).toHaveBeenCalledOnce()
+
+    const tracking = makeContext()
+    await wikiRepo.trackWikiUpdate(tracking.ctx, {
+      wiki_page_id: 'wiki-1', chapter_id: 'chapter-1', update_type: 'changed',
+    })
+    expect(tracking.runCalls[0].params).toEqual([
+      expect.stringMatching(/^update-wiki-1-/), 'wiki-1', 'chapter-1', 'changed',
+      null, null, expect.any(String),
+    ])
+  })
+})
+
+describe('wikiRepository (native path)', () => {
+  it('maps keyed and positional wiki page rows with valid and fallback page types', async () => {
+    const keyed = makeNativeContext({ queryResults: [[{
+      id: 'wiki-1', book_id: 'book-1', page_name: 'Mara', page_type: 'location',
+      content: 'Content', summary: 'Summary', aliases: '[]', tags: '[]', is_major: 1,
+      created_by_ai: 1, created_at: 'created', updated_at: 'updated', is_pinned: 0,
+      cover_image_id: 'cover-1',
+    }]] })
+    await expect(wikiRepo.getWikiPages(keyed.ctx, 'book-1')).resolves.toEqual([expect.objectContaining({
+      page_type: 'location', aliases: '[]', tags: '[]', is_major: true,
+      created_by_ai: true, cover_image_id: 'cover-1',
+    })])
+
+    const positionalRow = [
+      'wiki-2', 'book-1', 'Page', false, null, null, null, null,
+      0, 0, 'created', 'updated', 0, null,
+    ] as unknown as Record<string, unknown>
+    const positional = makeNativeContext({ queryResults: [[positionalRow]] })
+    await expect(wikiRepo.getWikiPageById(positional.ctx, 'wiki-2')).resolves.toEqual(expect.objectContaining({
+      id: 'wiki-2', page_type: 'character', content: '', summary: '',
+    }))
+  })
+
+  it('returns native page defaults when queries have no values', async () => {
+    await expect(wikiRepo.getWikiPages(makeNativeContext({ queryResults: [undefined] }).ctx, 'book-1')).resolves.toEqual([])
+    await expect(wikiRepo.getWikiPageById(
+      makeNativeContext({ queryResults: [undefined] }).ctx,
+      'missing',
+    )).resolves.toBeNull()
+  })
+
+  it('maps native mentions and both link directions', async () => {
+    const mentions = makeNativeContext({ queryResults: [[{
+      id: 'm1', chapter_id: 'c1', wiki_page_id: 'w1', link_source: 'ai_summary',
+      created_at: 'created', updated_at: 'updated',
+    }]] })
+    await expect(wikiRepo.getChapterWikiMentions(mentions.ctx, 'c1')).resolves.toEqual([expect.objectContaining({
+      link_source: 'ai_summary', updated_at: 'updated',
+    })])
+
+    const chapterLinks = makeNativeContext({ queryResults: [[{
+      wiki_page_id: 'w1', page_name: 'Page', page_type: 'other', link_source: 'manual',
+      created_at: 'created', updated_at: 42,
+    }]] })
+    await expect(wikiRepo.getChapterWikiLinks(chapterLinks.ctx, 'c1')).resolves.toEqual([expect.objectContaining({
+      page_type: 'other', link_source: 'manual', updated_at: null,
+    })])
+
+    const pageLinks = makeNativeContext({ queryResults: [[{
+      chapter_id: 'c1', title: false, part_id: false, link_source: 'unknown',
+      created_at: 'created', updated_at: 42,
+    }]] })
+    await expect(wikiRepo.getWikiPageChapterLinks(pageLinks.ctx, 'w1')).resolves.toEqual([expect.objectContaining({
+      chapter_title: null, part_id: null, link_source: null, updated_at: null,
+    })])
+  })
+
+  it('creates pages and tracks updates using native writes without web persistence', async () => {
+    const create = makeNativeContext({ queryResults: [[]] })
+    const id = await wikiRepo.createWikiPage(create.ctx, {
+      book_id: 'book-1', page_name: 'Mara', content: '', summary: '',
+      created_by_ai: false, is_pinned: false,
+    })
+    expect(id).toMatch(/^wiki-book-1-/)
+    expect(create.runCalls[0].params).toEqual(expect.arrayContaining(['character', 0]))
+    expect(create.ctx.requestPersistence).not.toHaveBeenCalled()
+
+    const tracking = makeNativeContext()
+    await wikiRepo.trackWikiUpdate(tracking.ctx, {
+      wiki_page_id: 'wiki-1', chapter_id: 'chapter-1', update_type: 'changed',
+      change_summary: 'summary', contradiction_notes: 'notes',
+    })
+    expect(tracking.runCalls[0].params).toEqual(expect.arrayContaining(['summary', 'notes']))
+  })
+
+  it('executes native schema migrations without scheduling web persistence', async () => {
+    const native = makeNativeContext({ mentionColumns: ['id', 'created_at'] })
+    await wikiRepo.ensureChapterWikiMentionsSchema(native.ctx)
+
+    expect(native.connection.execute).toHaveBeenCalledTimes(5)
+    expect(native.ctx.requestPersistence).not.toHaveBeenCalled()
   })
 })
