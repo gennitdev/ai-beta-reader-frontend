@@ -72,6 +72,7 @@ vi.mock('@/lib/browserStorage', () => ({
 
 vi.mock('@/lib/libraryBundle/export', () => ({
   createFullLibraryBundleExport: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]) })),
+  createSelectedBooksBundleExport: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]) })),
 }))
 
 vi.mock('@/utils/platform', () => ({
@@ -355,5 +356,25 @@ describe('UserSettingsView', () => {
     expect(wrapper.text()).toContain('preserves unknown files')
     expect(wrapper.text()).toContain('Text-only Git workspace (advanced)')
     expect(wrapper.text()).toContain('Not a complete backup')
+  })
+
+  it('lets the user choose one or multiple books for selected-book export', async () => {
+    h.books = [
+      { id: 'book-1', title: 'Same Title' },
+      { id: 'book-2', title: 'Same Title' },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="bundle-scope-selection"]').setValue()
+    const exportButton = button(wrapper, 'Export selected books')
+    expect(exportButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Select at least one book to export.')
+
+    await wrapper.get('[data-testid="selected-book-book-1"]').setValue(true)
+    expect(exportButton.attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="selected-book-book-2"]').setValue(true)
+    expect((wrapper.get('[data-testid="selected-book-book-1"]').element as HTMLInputElement).checked).toBe(true)
+    expect((wrapper.get('[data-testid="selected-book-book-2"]').element as HTMLInputElement).checked).toBe(true)
   })
 })

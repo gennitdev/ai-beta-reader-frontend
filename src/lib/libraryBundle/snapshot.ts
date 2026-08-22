@@ -10,6 +10,8 @@ export type AssetByteReader = (asset: ImageAsset) => Promise<Uint8Array>
 export interface CanonicalSnapshotOptions {
   readAssetBytes?: AssetByteReader
   contentMode?: 'full' | 'text-only'
+  /** Omit for a full-library snapshot; provide one or more exact book IDs for a selection. */
+  bookIds?: readonly string[]
 }
 
 function stringValue(row: LogicalRow, key: string, fallback = ''): string {
@@ -84,6 +86,77 @@ function groupRows(rows: LogicalRow[], key: string): Map<string, LogicalRow[]> {
   return grouped
 }
 
+function rowId(row: LogicalRow, key = 'id'): string {
+  return stringValue(row, key)
+}
+
+function rowsWithId(rows: LogicalRow[], ids: ReadonlySet<string>, key = 'id'): LogicalRow[] {
+  return rows.filter((row) => ids.has(rowId(row, key)))
+}
+
+function scopeSelectionTables(
+  tables: ReturnType<typeof createLogicalDatabaseDump>['tables'],
+  requestedBookIds: readonly string[],
+): ReturnType<typeof createLogicalDatabaseDump>['tables'] {
+  if (requestedBookIds.length === 0) throw new Error('Select at least one book to export.')
+  const bookIds = new Set(requestedBookIds)
+  if (bookIds.size !== requestedBookIds.length) {
+    throw new Error('Selected book IDs must not contain duplicates.')
+  }
+  const availableBookIds = new Set(tables.books.map((row) => rowId(row)))
+  const missingBookIds = [...bookIds].filter((id) => !availableBookIds.has(id)).sort()
+  if (missingBookIds.length) {
+    throw new Error(`Selected books are no longer available: ${missingBookIds.join(', ')}.`)
+  }
+
+  const books = tables.books.filter((row) => bookIds.has(rowId(row)))
+  const chapters = tables.chapters.filter((row) => bookIds.has(rowId(row, 'book_id')))
+  const chapterIds = new Set(chapters.map((row) => rowId(row)))
+  const bookParts = tables.book_parts.filter((row) => bookIds.has(rowId(row, 'book_id')))
+  const partIds = new Set(bookParts.map((row) => rowId(row)))
+  const wikiPages = tables.wiki_pages.filter((row) => bookIds.has(rowId(row, 'book_id')))
+  const wikiPageIds = new Set(wikiPages.map((row) => rowId(row)))
+  const imageAssets = tables.image_assets.filter((row) => bookIds.has(rowId(row, 'book_id')))
+  const imageIds = new Set(imageAssets.map((row) => rowId(row)))
+  const chapterReviews = tables.chapter_reviews.filter((row) => chapterIds.has(rowId(row, 'chapter_id')))
+  const profileIds = new Set(chapterReviews.map((row) => rowId(row, 'profile_stable_id')).filter(Boolean))
+
+  return {
+    ...tables,
+    books,
+    chapters,
+    book_parts: bookParts,
+    chapter_revisions: tables.chapter_revisions.filter((row) => (
+      bookIds.has(rowId(row, 'book_id')) && chapterIds.has(rowId(row, 'chapter_id'))
+    )),
+    chapter_activity: tables.chapter_activity.filter((row) => (
+      bookIds.has(rowId(row, 'book_id')) && chapterIds.has(rowId(row, 'chapter_id'))
+    )),
+    chapter_summaries: rowsWithId(tables.chapter_summaries, chapterIds, 'chapter_id'),
+    part_summaries: rowsWithId(tables.part_summaries, partIds, 'part_id'),
+    wiki_pages: wikiPages,
+    book_characters: tables.book_characters.filter((row) => bookIds.has(rowId(row, 'book_id'))),
+    chapter_reviews: chapterReviews,
+    custom_reviewer_profiles: rowsWithId(tables.custom_reviewer_profiles, profileIds, 'stable_id'),
+    ai_profiles: rowsWithId(tables.ai_profiles, profileIds, 'stable_id'),
+    wiki_updates: tables.wiki_updates.filter((row) => (
+      wikiPageIds.has(rowId(row, 'wiki_page_id'))
+      && (!rowId(row, 'chapter_id') || chapterIds.has(rowId(row, 'chapter_id')))
+    )),
+    chapter_wiki_mentions: tables.chapter_wiki_mentions.filter((row) => (
+      chapterIds.has(rowId(row, 'chapter_id')) && wikiPageIds.has(rowId(row, 'wiki_page_id'))
+    )),
+    image_assets: imageAssets,
+    image_wiki_tags: tables.image_wiki_tags.filter((row) => (
+      imageIds.has(rowId(row, 'image_id')) && wikiPageIds.has(rowId(row, 'wiki_page_id'))
+    )),
+    chapter_notes: rowsWithId(tables.chapter_notes, chapterIds, 'chapter_id'),
+    wiki_review_state: tables.wiki_review_state.filter((row) => (
+      wikiPageIds.has(rowId(row, 'wiki_page_id')) && chapterIds.has(rowId(row, 'chapter_id'))
+    )),
+  }
+}
+
 /**
  * Legacy databases can contain more than one summary for the same parent.
  * Choose the same logical current row as the metadata repository so a backup
@@ -140,7 +213,10 @@ export async function createCanonicalLibrarySnapshot(
   data: DatabaseImportData,
   options: CanonicalSnapshotOptions = {},
 ): Promise<CanonicalLibraryModel> {
-  const { tables } = createLogicalDatabaseDump(data)
+  const logicalDump = createLogicalDatabaseDump(data)
+  const tables = options.bookIds === undefined
+    ? logicalDump.tables
+    : scopeSelectionTables(logicalDump.tables, options.bookIds)
   const mentionsByChapter = groupRows(tables.chapter_wiki_mentions, 'chapter_id')
   const tagsByImage = groupRows(tables.image_wiki_tags, 'image_id')
   const chapterSummaries = selectCurrentRows(tables.chapter_summaries, 'chapter_id')
@@ -179,7 +255,7 @@ export async function createCanonicalLibrarySnapshot(
 
   const model: CanonicalLibraryModel = {
     format_version: 1,
-    bundle_kind: 'library',
+    bundle_kind: options.bookIds === undefined ? 'library' : 'selection',
     content_mode: contentMode,
     book_ids: tables.books.map((row) => stringValue(row, 'id')).sort(),
     includes: contentMode === 'full'

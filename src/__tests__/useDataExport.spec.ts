@@ -12,6 +12,7 @@ const zipState = vi.hoisted(() => ({
 const bundleState = vi.hoisted(() => ({
   create: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]) })),
   createText: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]), files: new Map() })),
+  createSelection: vi.fn(async () => ({ zipBytes: new Uint8Array([80, 75, 3, 4]) })),
 }))
 
 const directoryState = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ const directoryState = vi.hoisted(() => ({
 vi.mock('@/lib/libraryBundle/export', () => ({
   createFullLibraryBundleExport: bundleState.create,
   createTextOnlyLibraryBundleExport: bundleState.createText,
+  createSelectedBooksBundleExport: bundleState.createSelection,
 }))
 
 vi.mock('@/lib/libraryBundle/adapters/directory', () => ({
@@ -213,6 +215,33 @@ describe('useDataExport', () => {
     expect(state.exportError.value).toBe('Export failed: Image image-1 is missing required bytes.')
     expect(state.exportProgress.value).toBe('')
     expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('requires a valid selection and exports the exact selected book IDs', async () => {
+    const deps = createDeps()
+    const state = useDataExport(deps)
+    state.bundleScope.value = 'selection'
+    state.handleExport()
+    await finishExport(state)
+    expect(state.exportError.value).toBe('Select at least one book to export.')
+    expect(bundleState.createSelection).not.toHaveBeenCalled()
+
+    state.selectedBookIds.value = ['book-1']
+    state.handleExport()
+    await finishExport(state)
+    const [backup, bookIds, options] = bundleState.createSelection.mock.calls[0]
+    expect(ArrayBuffer.isView(backup)).toBe(true)
+    expect(bookIds).toEqual(['book-1'])
+    expect(options).toEqual(expect.objectContaining({
+      appVersion: expect.any(String), readAssetBytes: expect.any(Function),
+    }))
+    expect(state.exportProgress.value).toBe('Selected books exported!')
+
+    state.selectedBookIds.value = ['stale-book']
+    state.handleExport()
+    await finishExport(state)
+    expect(state.exportError.value).toContain('no longer available')
+    expect(bundleState.createSelection).toHaveBeenCalledOnce()
   })
 
   it('exports a canonical Git workspace through a user-selected directory', async () => {

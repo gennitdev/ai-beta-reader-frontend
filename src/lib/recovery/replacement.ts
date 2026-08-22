@@ -69,6 +69,9 @@ export async function replaceLibraryWithRecovery(
 ): Promise<void> {
   assertImportPlanGeneration(plan, currentDatabaseGeneration)
   if (!plan.replaceEligible) throw new Error('This bundle is not eligible to replace the library.')
+  if (incomingModel.bundle_kind !== 'library') {
+    throw new Error('Selection bundles cannot replace the library.')
+  }
   if (recovery.databaseGeneration !== currentDatabaseGeneration) {
     throw new Error('The prepared recovery does not match the current library generation.')
   }
