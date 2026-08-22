@@ -18,6 +18,7 @@ import {
 } from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
 import type { DriveBackupGeneration } from '@/lib/libraryBundle/adapters/drive'
+import type { ImageContentIntegrity } from '@/lib/imageContentHash'
 import type {
   FindReplaceSearchRequest,
   ReplaceFindReplaceMatchesRequest,
@@ -982,6 +983,14 @@ export function useDatabase() {
     }
   }
 
+  async function updateImageAssetIntegrity(
+    imageId: string,
+    integrity: ImageContentIntegrity,
+  ) {
+    await initializeDatabase()
+    await db.updateImageAssetIntegrity(imageId, integrity)
+  }
+
   async function getImageWikiTags(imageId: string): Promise<ImageWikiTag[]> {
     try {
       await initializeDatabase()
@@ -1115,6 +1124,7 @@ export function useDatabase() {
     setWikiPageCoverImageId,
     getBookImageAssets,
     updateImageAssetNotes,
+    updateImageAssetIntegrity,
     getImageWikiTags,
     setImageWikiTags,
     getWikiPageImageAssets,
