@@ -164,6 +164,22 @@ describe('migrateLegacyImageData', () => {
     expect(harness.blobs.has('mismatched')).toBe(false)
   })
 
+  it('retains legacy bytes when existing integrity metadata is incomplete', async () => {
+    const incomplete = createAsset('incomplete')
+    incomplete.content_hash = '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81'
+    const harness = migrationHarness([incomplete])
+
+    const status = await migrateLegacyImageData({
+      repository: harness.repository,
+      store: harness.store,
+    })
+
+    expect(status).toMatchObject({ status: 'partial', migratedCount: 0 })
+    expect(status.failedImageIds).toEqual(['incomplete'])
+    expect(harness.rows.get('incomplete')?.image_data).toBe('data:image/png;base64,AQID')
+    expect(harness.blobs.has('incomplete')).toBe(false)
+  })
+
   it('retains legacy bytes when atomic metadata finalization fails', async () => {
     const harness = migrationHarness([createAsset('retryable')])
     harness.repository.finalizeImages = vi.fn(async () => {
