@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const imageMocks = vi.hoisted(() => ({
   saveImageAssetRecord: vi.fn(),
@@ -36,9 +36,18 @@ vi.mock('@/lib/logger', () => ({ logger: { log: vi.fn(), warn: vi.fn() } }))
 
 import { useImageLibrary } from '@/composables/useImageLibrary'
 import { CapacitorImageContentStore } from '@/lib/imageContentStore'
+import type { ImageAsset } from '@/lib/database'
 
 function file(name: string): File {
   return new File([new Uint8Array([1, 2, 3])], name, { type: 'image/png' })
+}
+
+function asset(overrides: Partial<ImageAsset> = {}): ImageAsset {
+  return {
+    id: 'image-1', book_id: 'book-1', chapter_id: null, asset_type: 'cover',
+    file_name: 'cover.png', file_path: 'android/image-1', mime_type: 'image/png',
+    image_data: null, notes: '', created_at: '', updated_at: '', ...overrides,
+  }
 }
 
 beforeEach(() => {
@@ -49,6 +58,11 @@ beforeEach(() => {
   nativeMocks.share.mockResolvedValue(undefined)
   nativeMocks.getUri.mockResolvedValue({ uri: 'content://beta-bot/images/image-1' })
   vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 10, height: 10, close: vi.fn() })))
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('useImageLibrary Android lifecycle', () => {
@@ -95,11 +109,7 @@ describe('useImageLibrary Android lifecycle', () => {
       .mockResolvedValue(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }))
     vi.spyOn(CapacitorImageContentStore.prototype, 'exists').mockResolvedValue(true)
     const library = useImageLibrary()
-    const image = {
-      id: 'image-1', book_id: 'book-1', chapter_id: null, asset_type: 'cover' as const,
-      file_name: 'cover.png', file_path: 'android/image-1', mime_type: 'image/png',
-      image_data: null, notes: '', created_at: '', updated_at: '',
-    }
+    const image = asset()
 
     await library.downloadOrShareImage(image)
 
@@ -112,5 +122,40 @@ describe('useImageLibrary Android lifecycle', () => {
       url: 'content://beta-bot/images/image-1',
       dialogTitle: 'Save or share image',
     })
+  })
+
+  it('reports full device storage without writing SQLite metadata', async () => {
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000003')
+    vi.spyOn(CapacitorImageContentStore.prototype, 'write')
+      .mockRejectedValue(new Error('ENOSPC: no space left on device'))
+
+    await expect(useImageLibrary().addImagesFromFiles([file('large.png')], {
+      bookId: 'book-1', assetType: 'cover',
+    })).rejects.toThrow(/storage is full.*Free device space/i)
+
+    expect(imageMocks.saveImageAssetRecord).not.toHaveBeenCalled()
+  })
+
+  it('materializes legacy embedded bytes before opening the native share sheet', async () => {
+    const read = vi.spyOn(CapacitorImageContentStore.prototype, 'read').mockResolvedValue(null)
+    const write = vi.spyOn(CapacitorImageContentStore.prototype, 'write').mockResolvedValue(undefined)
+    const legacy = asset({ image_data: 'data:image/png;base64,AQID' })
+
+    await useImageLibrary().downloadOrShareImage(legacy)
+
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(write).toHaveBeenCalledWith(legacy, expect.any(Blob))
+    const restored = write.mock.calls[0][1]
+    expect(new Uint8Array(await restored.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
+    expect(nativeMocks.share).toHaveBeenCalledOnce()
+  })
+
+  it('surfaces native read permission failures as actionable errors', async () => {
+    vi.spyOn(CapacitorImageContentStore.prototype, 'read')
+      .mockRejectedValue(new Error('Permission denied'))
+
+    await expect(useImageLibrary().downloadOrShareImage(asset()))
+      .rejects.toThrow(/could not access app image storage.*Restart the app/i)
+    expect(nativeMocks.share).not.toHaveBeenCalled()
   })
 })

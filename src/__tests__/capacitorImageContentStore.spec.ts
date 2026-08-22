@@ -7,6 +7,7 @@ const filesystem = vi.hoisted(() => ({
   writeFile: vi.fn(),
   deleteFile: vi.fn(),
   readdir: vi.fn(),
+  getUri: vi.fn(),
 }))
 
 vi.mock('@capacitor/filesystem', () => ({
@@ -16,6 +17,7 @@ vi.mock('@capacitor/filesystem', () => ({
 
 import {
   CapacitorImageContentStore,
+  getNativeImageUri,
   nativeImageStorageError,
 } from '@/lib/imageContentStore'
 
@@ -48,6 +50,7 @@ beforeEach(() => {
       { name: 'nested', type: 'directory' },
     ],
   })
+  filesystem.getUri.mockResolvedValue({ uri: 'content://beta-bot/images/image-1' })
 })
 
 describe('CapacitorImageContentStore', () => {
@@ -95,5 +98,37 @@ describe('CapacitorImageContentStore', () => {
       .toMatch(/storage is full.*Free device space/i)
     expect(nativeImageStorageError(new Error('Permission denied'), 'loaded').message)
       .toMatch(/could not access app image storage.*Restart the app/i)
+  })
+
+  it('tolerates an existing directory but propagates other directory failures', async () => {
+    const store = new CapacitorImageContentStore()
+    filesystem.mkdir.mockRejectedValueOnce(new Error('Directory already exists'))
+    await expect(store.write(asset(), new Blob(['ok']))).resolves.toBeUndefined()
+
+    filesystem.mkdir.mockRejectedValueOnce(new Error('Filesystem unavailable'))
+    await expect(store.write(asset(), new Blob(['nope'])))
+      .rejects.toThrow('Filesystem unavailable')
+    expect(filesystem.writeFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('propagates corrupt reads and non-missing delete failures', async () => {
+    const store = new CapacitorImageContentStore()
+    filesystem.readFile.mockResolvedValue({ data: new Blob(['unexpected']) })
+    await expect(store.read(asset())).rejects.toThrow('did not contain native file data')
+
+    filesystem.deleteFile.mockRejectedValue(new Error('Permission denied'))
+    await expect(store.delete(asset())).rejects.toThrow('Permission denied')
+  })
+
+  it('uses a safe app-private URI and a default MIME type when metadata is absent', async () => {
+    const store = new CapacitorImageContentStore()
+    filesystem.readFile.mockResolvedValue({ data: 'AQID' })
+
+    const restored = await store.read(asset({ mime_type: null }))
+    expect(restored?.type).toBe('application/octet-stream')
+    await expect(getNativeImageUri('image-1')).resolves.toBe('content://beta-bot/images/image-1')
+    expect(filesystem.getUri).toHaveBeenCalledWith({
+      path: 'images/image-1', directory: 'DATA',
+    })
   })
 })
