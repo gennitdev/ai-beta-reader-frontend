@@ -11,6 +11,7 @@ interface UseBookImagesDeps {
   getImageWikiTags: (imageId: string) => Promise<ImageWikiTag[]>
   updateImageAssetNotes: (imageId: string, notes: string) => Promise<void>
   setImageWikiTags: (imageId: string, wikiPageIds: string[]) => Promise<void>
+  downloadOrShareImage: (image: ImageAsset) => Promise<void>
 }
 
 /**
@@ -27,6 +28,7 @@ export function useBookImages(deps: UseBookImagesDeps) {
     getImageWikiTags,
     updateImageAssetNotes,
     setImageWikiTags,
+    downloadOrShareImage,
   } = deps
   const route = useRoute()
 
@@ -132,17 +134,10 @@ export function useBookImages(deps: UseBookImagesDeps) {
     }
   }
 
-  const downloadSelectedImage = (imageId: string) => {
-    const imageSrc = bookImageSources.value[imageId]
-    if (!imageSrc) return
-
+  const downloadSelectedImage = async (imageId: string) => {
     const image = bookImages.value.find((item) => item.id === imageId)
-    const link = document.createElement('a')
-    link.href = imageSrc
-    link.download = image?.file_name || `illustration-${imageId}.jpg`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    if (!image) return
+    await downloadOrShareImage(image)
   }
 
   return {

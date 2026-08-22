@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   fetchChapterCover: vi.fn(),
   setChapterCoverImageId: vi.fn(),
   getImageSource: vi.fn(),
+  downloadOrShareImage: vi.fn(),
   getWikiPages: vi.fn(),
   getImageWikiTags: vi.fn(),
   setImageWikiTags: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('@/composables/useImageLibrary', async () => {
       fetchChapterCover: h.fetchChapterCover,
       setChapterCoverImageId: h.setChapterCoverImageId,
       getImageSource: h.getImageSource,
+      downloadOrShareImage: h.downloadOrShareImage,
     }),
   }
 })
@@ -77,6 +79,7 @@ beforeEach(() => {
   h.setChapterCoverImageId.mockResolvedValue(undefined)
   h.deleteImage.mockResolvedValue(undefined)
   h.addImagesToChapter.mockResolvedValue([])
+  h.downloadOrShareImage.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -236,16 +239,8 @@ describe('cover, modal, notes, tags, download', () => {
     const c = setup()
     await c.refreshChapterImages()
 
-    const click = vi.fn()
-    const realCreate = document.createElement.bind(document)
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      const el = realCreate(tag) as HTMLAnchorElement
-      if (tag === 'a') el.click = click
-      return el
-    })
-
-    c.handleDownloadImage('a')
-    expect(click).toHaveBeenCalled()
+    await c.handleDownloadImage('a')
+    expect(h.downloadOrShareImage).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }))
 
     c.openHeroLightbox()
     expect(c.activeImageId.value).toBe('a')

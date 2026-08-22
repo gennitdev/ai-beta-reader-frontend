@@ -26,6 +26,7 @@ function setup(opts: { images?: ImageAsset[]; wikiCount?: number } = {}) {
     getImageWikiTags: vi.fn(async () => [{ image_id: 'img-1', wiki_page_id: 'w1', page_name: 'Mara', page_type: 'character', created_at: '2026-01-01' }]),
     updateImageAssetNotes: vi.fn(async () => {}),
     setImageWikiTags: vi.fn(async () => {}),
+    downloadOrShareImage: vi.fn(async () => {}),
   }
   return { deps, images: useBookImages(deps) }
 }
@@ -108,19 +109,17 @@ describe('useBookImages', () => {
     expect(deps.setImageWikiTags).toHaveBeenCalledWith('img-1', ['w1', 'w2'])
   })
 
-  it('downloads a known image via an anchor click', async () => {
-    const { images } = setup()
+  it('downloads or shares a known image through the image library', async () => {
+    const { deps, images } = setup()
     await images.loadBookImages()
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 
-    images.downloadSelectedImage('img-1')
-    expect(clickSpy).toHaveBeenCalled()
+    await images.downloadSelectedImage('img-1')
+    expect(deps.downloadOrShareImage).toHaveBeenCalledWith(expect.objectContaining({ id: 'img-1' }))
   })
 
-  it('does nothing when downloading an image with no source', () => {
-    const { images } = setup()
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    images.downloadSelectedImage('missing')
-    expect(clickSpy).not.toHaveBeenCalled()
+  it('does nothing when downloading an image with no source', async () => {
+    const { deps, images } = setup()
+    await images.downloadSelectedImage('missing')
+    expect(deps.downloadOrShareImage).not.toHaveBeenCalled()
   })
 })

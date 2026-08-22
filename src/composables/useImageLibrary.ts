@@ -1,4 +1,5 @@
 import { computed, ref, onBeforeUnmount } from 'vue'
+import { Share } from '@capacitor/share'
 import { logger } from '@/lib/logger'
 import type { ImageAsset, ImageAssetType } from '@/lib/database'
 import type { DesktopImageMetadata } from '@/shims/desktop-images'
@@ -6,13 +7,17 @@ import { useDatabase } from './useDatabase'
 import { isDesktopAppRuntime } from '@/utils/platform'
 import {
   dataUrlToBlob,
+  CapacitorImageContentStore,
   cleanupOrphanedImageContent,
   deleteImageMetadataThenContent,
   ElectronImageContentStore,
+  getNativeImageUri,
   inspectImageContent,
   IndexedDbImageContentStore,
+  nativeImageStorageError,
   type ImageContentStore,
 } from '@/lib/imageContentStore'
+import { getImageStorageRuntime, type ImageStorageRuntime } from '@/lib/runtimeImageContentStore'
 import {
   browserStorageError,
   requestPersistentBrowserStorage,
@@ -88,7 +93,7 @@ export async function validateBrowserImageContents(
 }
 
 function selectBrowserImages(allowMultiple: boolean): Promise<File[]> {
-  if (!browserImageStorageAvailable()) {
+  if (getImageStorageRuntime() !== 'android' && !browserImageStorageAvailable()) {
     throw new Error('Image storage is not available in this browser context.')
   }
 
@@ -139,18 +144,23 @@ export function useImageLibrary() {
   } = useDatabase()
 
   const electronImageStorageAvailable = ref(sanitizeBridgeAvailability())
+  const imageStorageRuntime = ref<ImageStorageRuntime>(getImageStorageRuntime())
   const imageManagementAvailable = computed(
-    () => electronImageStorageAvailable.value || browserImageStorageAvailable(),
+    () => imageStorageRuntime.value === 'android'
+      || (imageStorageRuntime.value === 'electron' && electronImageStorageAvailable.value)
+      || (imageStorageRuntime.value === 'browser' && browserImageStorageAvailable()),
   )
   const canSelectImages = imageManagementAvailable
   const canStoreImages = imageManagementAvailable
   const canDeleteImages = imageManagementAvailable
   const canDownloadImages = computed(() => true)
   const browserImageStore = new IndexedDbImageContentStore()
+  const androidImageStore = new CapacitorImageContentStore()
   const imageSourceCache = new Map<string, { source: string; shouldRevoke: boolean }>()
 
   const refreshAvailability = () => {
     electronImageStorageAvailable.value = sanitizeBridgeAvailability()
+    imageStorageRuntime.value = getImageStorageRuntime()
   }
 
   const availabilityListener = () => refreshAvailability()
@@ -181,6 +191,10 @@ export function useImageLibrary() {
     refreshAvailability()
     if (electronImageStorageAvailable.value) {
       return new ElectronImageContentStore(ensureBridge())
+    }
+    if (imageStorageRuntime.value === 'android') return androidImageStore
+    if (imageStorageRuntime.value !== 'browser') {
+      throw new Error('Image storage is not available on this platform.')
     }
     return browserImageStore
   }
@@ -232,6 +246,7 @@ export function useImageLibrary() {
     try {
       storedBlob = await getContentStore().read(image)
     } catch (error) {
+      if (imageStorageRuntime.value === 'android') throw nativeImageStorageError(error, 'loaded')
       if (!electronImageStorageAvailable.value) throw browserStorageError(error, 'loaded')
       throw error
     }
@@ -259,6 +274,32 @@ export function useImageLibrary() {
     const source = URL.createObjectURL(blob)
     imageSourceCache.set(image.id, { source, shouldRevoke: true })
     return source
+  }
+
+  async function downloadOrShareImage(image: ImageAsset): Promise<void> {
+    refreshAvailability()
+    if (imageStorageRuntime.value === 'android') {
+      try {
+        const blob = await getImageBlob(image)
+        if (!(await androidImageStore.exists(image))) await androidImageStore.write(image, blob)
+        await Share.share({
+          title: image.file_name || 'Beta Bot image',
+          url: await getNativeImageUri(image.id),
+          dialogTitle: 'Save or share image',
+        })
+        return
+      } catch (error) {
+        throw nativeImageStorageError(error, 'shared')
+      }
+    }
+
+    const source = await getImageSource(image)
+    const link = document.createElement('a')
+    link.href = source
+    link.download = image.file_name || `illustration-${image.id}.jpg`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   async function addImagesToChapter(bookId: string, chapterId: string) {
@@ -294,7 +335,9 @@ export function useImageLibrary() {
     const selectedFiles = Array.from(files)
     selectedFiles.forEach(validateBrowserImage)
     await Promise.all(selectedFiles.map((file) => validateBrowserImageContents(file)))
-    await requestPersistentBrowserStorage()
+    refreshAvailability()
+    const contentStore = getContentStore()
+    if (imageStorageRuntime.value === 'browser') await requestPersistentBrowserStorage()
     const saved: ImageAsset[] = []
 
     try {
@@ -307,7 +350,9 @@ export function useImageLibrary() {
           chapter_id: options.chapterId ?? null,
           asset_type: options.assetType,
           file_name: file.name,
-          file_path: `web/${id}/${encodeURIComponent(file.name)}`,
+          file_path: imageStorageRuntime.value === 'android'
+            ? `android/${id}`
+            : `web/${id}/${encodeURIComponent(file.name)}`,
           mime_type: file.type || null,
           image_data: null,
           notes: '',
@@ -318,14 +363,17 @@ export function useImageLibrary() {
         await addContentIntegrity(asset, file)
 
         try {
-          await browserImageStore.write(asset, file)
+          await contentStore.write(asset, file)
         } catch (error) {
+          if (imageStorageRuntime.value === 'android') {
+            throw nativeImageStorageError(error, 'saved')
+          }
           throw browserStorageError(error, 'saved')
         }
         try {
           await saveImageAssetRecord(asset)
         } catch (error) {
-          await browserImageStore.delete(asset).catch(() => undefined)
+          await contentStore.delete(asset).catch(() => undefined)
           throw error
         }
         saved.push(asset)
@@ -333,7 +381,7 @@ export function useImageLibrary() {
     } catch (error) {
       await Promise.all(saved.map(async (asset) => {
         await deleteImageAssetRecord(asset.id).catch(() => undefined)
-        await browserImageStore.delete(asset).catch(() => undefined)
+        await contentStore.delete(asset).catch(() => undefined)
       }))
       throw error
     }
@@ -531,6 +579,7 @@ export function useImageLibrary() {
     setChapterCoverImageId,
     getImageSource,
     getImageBlob,
+    downloadOrShareImage,
     setPartCoverImageId,
   }
 }

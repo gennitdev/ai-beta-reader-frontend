@@ -68,6 +68,7 @@ const {
   fetchChapterThumbnails,
   fetchPartThumbnails,
   deleteImage,
+  downloadOrShareImage,
 } = useImageLibrary();
 
 const book = ref<DatabaseBook | null>(null);
@@ -141,6 +142,7 @@ const {
   getImageWikiTags,
   updateImageAssetNotes,
   setImageWikiTags,
+  downloadOrShareImage,
 });
 
 const chapters = ref<BookChapter[]>([]);

@@ -7,6 +7,7 @@ import {
   writeIndexedDbValue,
 } from '@/lib/indexedDbStorage'
 import type { DesktopImagesBridge } from '@/shims/desktop-images'
+import { Directory, Filesystem } from '@capacitor/filesystem'
 
 export interface ImageContentStore {
   read(asset: ImageAsset): Promise<Blob | null>
@@ -21,6 +22,60 @@ interface IndexedDbImageRecord {
   blob: Blob
   byteSize: number
   updatedAt: string
+}
+
+const NATIVE_IMAGE_DIRECTORY = 'images'
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+  }
+  return btoa(binary)
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
+}
+
+function assertNativeImageId(imageId: string): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(imageId)) {
+    throw new Error('The image ID is not safe for native storage.')
+  }
+}
+
+function nativeImagePath(imageId: string): string {
+  assertNativeImageId(imageId)
+  return `${NATIVE_IMAGE_DIRECTORY}/${imageId}`
+}
+
+export async function getNativeImageUri(imageId: string): Promise<string> {
+  const result = await Filesystem.getUri({
+    path: nativeImagePath(imageId),
+    directory: Directory.Data,
+  })
+  return result.uri
+}
+
+function isMissingNativeFile(error: unknown): boolean {
+  const message = String(error).toLowerCase()
+  return message.includes('not found') || message.includes('does not exist')
+}
+
+export function nativeImageStorageError(error: unknown, action: string): Error {
+  const message = String(error).toLowerCase()
+  if (message.includes('no space') || message.includes('enospc') || message.includes('quota')) {
+    return new Error(
+      `Device storage is full, so the image could not be ${action}. Free device space or remove images, then try again.`,
+    )
+  }
+  if (message.includes('permission') || message.includes('denied')) {
+    return new Error(
+      `Android could not access app image storage, so the image could not be ${action}. Restart the app and try again.`,
+    )
+  }
+  const detail = error instanceof Error ? ` ${error.message}` : ''
+  return new Error(`The image could not be ${action} in Android app storage.${detail}`)
 }
 
 export interface ImageContentReconciliation {
@@ -143,6 +198,75 @@ export class ElectronImageContentStore implements ImageContentStore {
       return (await this.read(asset)) !== null
     } catch {
       return false
+    }
+  }
+}
+
+/** Stores Android image bytes in the app-private data directory, outside SQLite. */
+export class CapacitorImageContentStore implements ImageContentStore {
+  private async ensureDirectory(): Promise<void> {
+    await Filesystem.mkdir({
+      path: NATIVE_IMAGE_DIRECTORY,
+      directory: Directory.Data,
+      recursive: true,
+    }).catch((error) => {
+      if (!String(error).toLowerCase().includes('exist')) throw error
+    })
+  }
+
+  async read(asset: ImageAsset): Promise<Blob | null> {
+    try {
+      const result = await Filesystem.readFile({
+        path: nativeImagePath(asset.id),
+        directory: Directory.Data,
+      })
+      if (typeof result.data !== 'string') {
+        throw new Error(`Stored image ${asset.id} did not contain native file data.`)
+      }
+      return new Blob([base64ToBytes(result.data)], {
+        type: asset.mime_type || 'application/octet-stream',
+      })
+    } catch (error) {
+      if (isMissingNativeFile(error)) return null
+      throw error
+    }
+  }
+
+  async write(asset: ImageAsset, blob: Blob): Promise<void> {
+    await this.ensureDirectory()
+    await Filesystem.writeFile({
+      path: nativeImagePath(asset.id),
+      directory: Directory.Data,
+      data: bytesToBase64(new Uint8Array(await blob.arrayBuffer())),
+      recursive: true,
+    })
+  }
+
+  async delete(asset: ImageAsset): Promise<void> {
+    await this.deleteStoredId(asset.id)
+  }
+
+  async exists(asset: ImageAsset): Promise<boolean> {
+    return (await this.read(asset)) !== null
+  }
+
+  async listStoredIds(): Promise<string[]> {
+    await this.ensureDirectory()
+    const result = await Filesystem.readdir({
+      path: NATIVE_IMAGE_DIRECTORY,
+      directory: Directory.Data,
+    })
+    return result.files.filter((entry) => entry.type !== 'directory').map((entry) => entry.name)
+  }
+
+  async deleteStoredId(imageId: string): Promise<void> {
+    try {
+      await Filesystem.deleteFile({
+        path: nativeImagePath(imageId),
+        directory: Directory.Data,
+      })
+    } catch (error) {
+      if (!isMissingNativeFile(error)) throw error
     }
   }
 }

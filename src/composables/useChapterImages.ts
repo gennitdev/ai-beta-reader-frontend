@@ -19,6 +19,7 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     fetchChapterCover,
     setChapterCoverImageId,
     getImageSource,
+    downloadOrShareImage,
   } = useImageLibrary();
   const {
     getWikiPages,
@@ -324,19 +325,14 @@ export function useChapterImages(chapterIdRef: () => string | undefined, bookIdR
     }
   };
 
-  const handleDownloadImage = (imageId: string) => {
-    const imageSrc = chapterImageSources.value[imageId];
-    if (!imageSrc) return;
-
+  const handleDownloadImage = async (imageId: string) => {
     const image = chapterImages.value.find((img) => img.id === imageId);
-    const fileName = image?.file_name || `illustration-${imageId}.jpg`;
-
-    const link = document.createElement("a");
-    link.href = imageSrc;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (!image) return;
+    try {
+      await downloadOrShareImage(image);
+    } catch (error) {
+      chapterImageError.value = error instanceof Error ? error.message : 'Failed to save image';
+    }
   };
 
   const openHeroLightbox = () => {
