@@ -339,6 +339,79 @@ describe('CloudSync auto-sync and SDK readiness', () => {
   })
 })
 
+describe('CloudSync versioned backups', () => {
+  const generation = (id: string, createdAt: string) => ({
+    id,
+    name: `${id}.enc`,
+    createdAt,
+    appVersion: '2.0.0',
+    bundleFormatVersion: 1,
+    encryptedByteLength: 4,
+    ciphertextSha256: 'a'.repeat(64),
+  })
+
+  it('authenticates and sorts backup generations newest-first with a stable id tie-breaker', async () => {
+    const authenticate = vi.fn(async () => {})
+    const listGenerations = vi.fn(async () => [
+      generation('generation-a', '2026-08-19T00:00:00.000Z'),
+      generation('generation-b', '2026-08-20T00:00:00.000Z'),
+      generation('generation-c', '2026-08-20T00:00:00.000Z'),
+    ])
+    const provider = fakeProvider({
+      isAuthenticated: vi.fn(() => false),
+      authenticate,
+      uploadGeneration: vi.fn(),
+      listGenerations,
+      downloadGeneration: vi.fn(),
+      deleteGeneration: vi.fn(),
+    })
+
+    await expect(new CloudSync(provider).listBackupGenerations()).resolves.toEqual([
+      expect.objectContaining({ id: 'generation-c' }),
+      expect.objectContaining({ id: 'generation-b' }),
+      expect.objectContaining({ id: 'generation-a' }),
+    ])
+    expect(authenticate).toHaveBeenCalledOnce()
+  })
+
+  it('rejects versioned operations when the provider only implements part of the contract', async () => {
+    const provider = fakeProvider({ listGenerations: vi.fn(async () => []) })
+
+    await expect(new CloudSync(provider).listBackupGenerations()).rejects.toThrow(
+      'does not support versioned library backups',
+    )
+  })
+
+  it('rejects a requested generation that no longer exists', async () => {
+    const provider = fakeProvider({
+      uploadGeneration: vi.fn(),
+      listGenerations: vi.fn(async () => []),
+      downloadGeneration: vi.fn(),
+      deleteGeneration: vi.fn(),
+    })
+
+    await expect(new CloudSync(provider).restore('pw', 'missing-generation')).rejects.toThrow(
+      'selected Drive backup generation was not found',
+    )
+  })
+
+  it('checks generation integrity before attempting to decrypt it', async () => {
+    const selected = generation('generation-1', '2026-08-20T00:00:00.000Z')
+    const downloadGeneration = vi.fn(async () => 'tampered-ciphertext')
+    const provider = fakeProvider({
+      uploadGeneration: vi.fn(),
+      listGenerations: vi.fn(async () => [selected]),
+      downloadGeneration,
+      deleteGeneration: vi.fn(),
+    })
+
+    await expect(new CloudSync(provider).restore('pw')).rejects.toThrow(
+      'failed its integrity check',
+    )
+    expect(downloadGeneration).toHaveBeenCalledWith('generation-1')
+  })
+})
+
 describe('GoogleDriveProvider basics', () => {
   it('constructs with explicit options and a name', () => {
     const provider = new GoogleDriveProvider('web-client', {
@@ -534,5 +607,87 @@ describe('GoogleDriveProvider basics', () => {
         encryptedByteLength: 4, ciphertextSha256: 'a'.repeat(64),
       },
     })).rejects.toThrow('invalid backup generation metadata')
+  })
+
+  it('handles empty generation searches and a missing generation during deletion', async () => {
+    const provider = new GoogleDriveProvider('web-client')
+    ;(provider as unknown as { accessToken: string }).accessToken = 'token-123'
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found' }))
+
+    await expect(provider.listGenerations()).resolves.toEqual([])
+    await expect(provider.deleteGeneration('already-deleted')).resolves.toBeUndefined()
+  })
+
+  it.each([
+    ['upload', { ok: false, status: 507, statusText: 'Insufficient Storage' }, 'Upload failed: 507 Insufficient Storage'],
+    ['list', { ok: false, statusText: 'Unavailable' }, 'Backup generation search failed: Unavailable'],
+    ['download', { ok: false, statusText: 'Gone' }, 'Download failed: Gone'],
+    ['delete', { ok: false, status: 403, statusText: 'Forbidden' }, 'Delete failed: Forbidden'],
+  ])('surfaces %s generation request failures', async (operation, response, message) => {
+    const provider = new GoogleDriveProvider('web-client')
+    ;(provider as unknown as { accessToken: string }).accessToken = 'token-123'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response))
+    const metadata = {
+      createdAt: '2026-08-20T00:00:00.000Z', appVersion: '2.0.0', bundleFormatVersion: 1,
+      encryptedByteLength: 4, ciphertextSha256: 'a'.repeat(64),
+    }
+
+    const request = operation === 'upload'
+      ? provider.uploadGeneration({ name: 'generation.enc', encryptedData: 'data', metadata })
+      : operation === 'list'
+        ? provider.listGenerations()
+        : operation === 'download'
+          ? provider.downloadGeneration('generation-1')
+          : provider.deleteGeneration('generation-1')
+
+    await expect(request).rejects.toThrow(message)
+  })
+
+  it.each([
+    ['missing id', { id: undefined }],
+    ['missing name', { name: undefined }],
+    ['invalid date', { appProperties: { createdAt: 'not-a-date' } }],
+    ['missing marker', { appProperties: { betaBotLibraryBackup: undefined } }],
+    ['missing app version', { appProperties: { appVersion: undefined } }],
+    ['invalid bundle version', { appProperties: { bundleFormatVersion: '0' } }],
+    ['invalid byte length', { appProperties: { encryptedByteLength: 'NaN' } }],
+    ['invalid checksum', { appProperties: { ciphertextSha256: 'not-a-checksum' } }],
+  ])('rejects generation responses with %s', async (_label, override) => {
+    const provider = new GoogleDriveProvider('web-client')
+    ;(provider as unknown as { accessToken: string }).accessToken = 'token-123'
+    const appProperties = {
+      betaBotLibraryBackup: 'true', createdAt: '2026-08-20T00:00:00.000Z', appVersion: '2.0.0',
+      bundleFormatVersion: '1', encryptedByteLength: '4', ciphertextSha256: 'a'.repeat(64),
+      ...override.appProperties,
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ files: [{
+        id: 'generation-1', name: 'generation.enc', size: '4', ...override, appProperties,
+      }] }),
+    }))
+
+    await expect(provider.listGenerations()).rejects.toThrow('invalid backup generation metadata')
+  })
+
+  it('accepts valid generation metadata when Drive omits the optional size', async () => {
+    const provider = new GoogleDriveProvider('web-client')
+    ;(provider as unknown as { accessToken: string }).accessToken = 'token-123'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ files: [{
+        id: 'generation-1', name: 'generation.enc',
+        appProperties: {
+          betaBotLibraryBackup: 'true', createdAt: '2026-08-20T00:00:00.000Z', appVersion: '2.0.0',
+          bundleFormatVersion: '1', encryptedByteLength: '4', ciphertextSha256: 'a'.repeat(64),
+        },
+      }] }),
+    }))
+
+    await expect(provider.listGenerations()).resolves.toEqual([expect.objectContaining({
+      id: 'generation-1', encryptedByteLength: 4,
+    })])
   })
 })
