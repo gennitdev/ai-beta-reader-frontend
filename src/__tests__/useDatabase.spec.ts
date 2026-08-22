@@ -20,6 +20,7 @@ const cloudInstance = vi.hoisted(() => ({
   ensureWebSdkReady: vi.fn(async () => {}),
   backup: vi.fn(async () => {}),
   restore: vi.fn(async () => {}),
+  listBackupGenerations: vi.fn(async () => []),
 }))
 
 vi.mock('@/lib/database', () => ({ db: dbProxy }))
@@ -132,10 +133,11 @@ describe('useDatabase — book/chapter state', () => {
 })
 
 describe('useDatabase — cloud sync guards', () => {
-  it('backup and restore throw when cloud sync is not initialized', async () => {
+  it('backup, list, and restore throw when cloud sync is not initialized', async () => {
     const api = useDatabase()
     expect(api.hasCloudSync()).toBe(false)
     await expect(api.backupToCloud('pw')).rejects.toThrow(/not initialized/)
+    await expect(api.listCloudBackups()).rejects.toThrow(/not initialized/)
     await expect(api.restoreFromCloud('pw')).rejects.toThrow(/not initialized/)
   })
 
@@ -260,6 +262,7 @@ describe('useDatabase — delegation to the database layer', () => {
       ['setImageWikiTags', ['i', ['w']]],
       ['getWikiPageImageAssets', ['w']],
       ['importFromJSON', [{}]],
+      ['importDatabaseBackup', [new Uint8Array([1, 2, 3])]],
     ]
 
     for (const [name, args] of calls) {
@@ -283,6 +286,126 @@ describe('useDatabase — delegation to the database layer', () => {
   })
 })
 
+describe('useDatabase — database failure contracts', () => {
+  const rethrowingCases: Array<{
+    apiMethod: string
+    dbMethod: string
+    args: unknown[]
+    fallbackMessage: string
+  }> = [
+    { apiMethod: 'saveBook', dbMethod: 'saveBook', args: [{ id: 'b' }], fallbackMessage: 'Failed to save book' },
+    { apiMethod: 'saveChapter', dbMethod: 'saveChapter', args: [{ id: 'c', book_id: '' }], fallbackMessage: 'Failed to save chapter' },
+    { apiMethod: 'deleteChapter', dbMethod: 'deleteChapter', args: ['c', 'b'], fallbackMessage: 'Failed to delete chapter' },
+    { apiMethod: 'getChapterRevisions', dbMethod: 'getChapterRevisions', args: ['c'], fallbackMessage: 'Failed to load chapter versions' },
+    { apiMethod: 'restoreChapterRevision', dbMethod: 'restoreChapterRevision', args: ['r'], fallbackMessage: 'Failed to restore chapter version' },
+    { apiMethod: 'discardChapterRevision', dbMethod: 'discardChapterRevision', args: ['r'], fallbackMessage: 'Failed to discard chapter version' },
+    { apiMethod: 'getBookRevisionActivity', dbMethod: 'getBookRevisionActivity', args: ['b'], fallbackMessage: 'Failed to load writing activity' },
+    { apiMethod: 'importFromJSON', dbMethod: 'importFromNeonExport', args: [{}], fallbackMessage: 'Import failed' },
+    { apiMethod: 'importDatabaseBackup', dbMethod: 'importDatabase', args: [new Uint8Array()], fallbackMessage: 'Import failed' },
+    { apiMethod: 'saveSummary', dbMethod: 'saveSummary', args: [{ chapter_id: 'c' }], fallbackMessage: 'Failed to save summary' },
+    { apiMethod: 'savePartSummary', dbMethod: 'savePartSummary', args: [{ part_id: 'p' }], fallbackMessage: 'Failed to save part summary' },
+    { apiMethod: 'saveReview', dbMethod: 'saveReview', args: [{ chapter_id: 'c' }], fallbackMessage: 'Failed to save review' },
+    { apiMethod: 'deleteReview', dbMethod: 'deleteReview', args: ['r'], fallbackMessage: 'Failed to delete review' },
+    { apiMethod: 'saveNotes', dbMethod: 'saveNotes', args: ['c', 'notes'], fallbackMessage: 'Failed to save notes' },
+    { apiMethod: 'deleteNotes', dbMethod: 'deleteNotes', args: ['c'], fallbackMessage: 'Failed to delete notes' },
+    { apiMethod: 'createCustomProfile', dbMethod: 'createCustomProfile', args: [{ name: 'n', description: 'd' }], fallbackMessage: 'Failed to create custom profile' },
+    { apiMethod: 'updateCustomProfile', dbMethod: 'updateCustomProfile', args: [1, { name: 'n' }], fallbackMessage: 'Failed to update custom profile' },
+    { apiMethod: 'deleteCustomProfile', dbMethod: 'deleteCustomProfile', args: [1], fallbackMessage: 'Failed to delete custom profile' },
+    { apiMethod: 'createWikiPage', dbMethod: 'createWikiPage', args: [{ book_id: 'b', page_name: 'n' }], fallbackMessage: 'Failed to create wiki page' },
+    { apiMethod: 'updateWikiPage', dbMethod: 'updateWikiPage', args: ['w', {}], fallbackMessage: 'Failed to update wiki page' },
+    { apiMethod: 'deleteWikiPage', dbMethod: 'deleteWikiPage', args: ['w'], fallbackMessage: 'Failed to delete wiki page' },
+    { apiMethod: 'trackWikiUpdate', dbMethod: 'trackWikiUpdate', args: [{ wiki_page_id: 'w' }], fallbackMessage: 'Failed to track wiki update' },
+    { apiMethod: 'addChapterWikiMention', dbMethod: 'addChapterWikiMention', args: ['c', 'w'], fallbackMessage: 'Failed to add wiki mention' },
+    { apiMethod: 'setChapterWikiLinks', dbMethod: 'setChapterWikiLinks', args: ['c', ['w']], fallbackMessage: 'Failed to update chapter wiki links' },
+    { apiMethod: 'ensureChapterWikiLinks', dbMethod: 'ensureChapterWikiLinks', args: ['c', ['w']], fallbackMessage: 'Failed to ensure chapter wiki links' },
+    { apiMethod: 'setWikiPageChapterLinks', dbMethod: 'setWikiPageChapterLinks', args: ['w', ['c']], fallbackMessage: 'Failed to update wiki page chapter links' },
+    { apiMethod: 'createPart', dbMethod: 'createPart', args: ['b', 'Part'], fallbackMessage: 'Failed to create part' },
+    { apiMethod: 'getParts', dbMethod: 'getParts', args: ['b'], fallbackMessage: 'Failed to get parts' },
+    { apiMethod: 'updatePart', dbMethod: 'updatePart', args: ['p', 'Part'], fallbackMessage: 'Failed to update part' },
+    { apiMethod: 'deletePart', dbMethod: 'deletePart', args: ['p'], fallbackMessage: 'Failed to delete part' },
+    { apiMethod: 'updateChapterOrders', dbMethod: 'updateChapterOrders', args: ['b', [], {}], fallbackMessage: 'Failed to update chapter orders' },
+    { apiMethod: 'updatePartOrder', dbMethod: 'updatePartOrder', args: ['b', []], fallbackMessage: 'Failed to update part order' },
+    { apiMethod: 'searchBook', dbMethod: 'searchBook', args: ['b', 'term'], fallbackMessage: 'Failed to search' },
+    { apiMethod: 'findReplaceMatches', dbMethod: 'findReplaceMatches', args: [{ bookId: 'b' }], fallbackMessage: 'Failed to find matches' },
+    { apiMethod: 'replaceFindReplaceMatches', dbMethod: 'replaceFindReplaceMatches', args: [{ bookId: 'b' }], fallbackMessage: 'Failed to replace matches' },
+    { apiMethod: 'restoreFindReplaceFields', dbMethod: 'restoreFindReplaceFields', args: [{ bookId: 'b' }], fallbackMessage: 'Failed to undo replacement' },
+    { apiMethod: 'replaceInChapter', dbMethod: 'replaceInChapter', args: ['c', 'a', 'b'], fallbackMessage: 'Failed to replace in chapter' },
+    { apiMethod: 'replaceInWikiPage', dbMethod: 'replaceInWikiPage', args: ['w', 'a', 'b'], fallbackMessage: 'Failed to replace in wiki page' },
+    { apiMethod: 'saveImageAssetRecord', dbMethod: 'saveImageAsset', args: [{ id: 'i' }], fallbackMessage: 'Failed to save image' },
+    { apiMethod: 'deleteImageAssetRecord', dbMethod: 'deleteImageAsset', args: ['i'], fallbackMessage: 'Failed to delete image' },
+    { apiMethod: 'getChapterImageAssets', dbMethod: 'getChapterImages', args: ['c'], fallbackMessage: 'Failed to load images' },
+    { apiMethod: 'getPartImageAssets', dbMethod: 'getPartImages', args: ['p'], fallbackMessage: 'Failed to load part images' },
+    { apiMethod: 'getBookCoverImageAsset', dbMethod: 'getBookCoverImage', args: ['b'], fallbackMessage: 'Failed to load book cover' },
+    { apiMethod: 'setBookCoverImageId', dbMethod: 'setBookCoverImage', args: ['b', 'i'], fallbackMessage: 'Failed to update book cover' },
+    { apiMethod: 'setPartCoverImageId', dbMethod: 'setPartCoverImageId', args: ['p', 'i'], fallbackMessage: 'Failed to update part cover' },
+    { apiMethod: 'getPartCoverImageAsset', dbMethod: 'getPartCoverImage', args: ['p'], fallbackMessage: 'Failed to get part cover' },
+    { apiMethod: 'setChapterCoverImageId', dbMethod: 'setChapterCoverImageId', args: ['c', 'i'], fallbackMessage: 'Failed to update chapter cover' },
+    { apiMethod: 'getChapterCoverImageAsset', dbMethod: 'getChapterCoverImage', args: ['c'], fallbackMessage: 'Failed to get chapter cover' },
+    { apiMethod: 'setWikiPageCoverImageId', dbMethod: 'setWikiPageCoverImageId', args: ['w', 'i'], fallbackMessage: 'Failed to update wiki page cover' },
+    { apiMethod: 'getWikiPageCoverImageAsset', dbMethod: 'getWikiPageCoverImage', args: ['w'], fallbackMessage: 'Failed to get wiki page cover' },
+    { apiMethod: 'getBookImageAssets', dbMethod: 'getBookImages', args: ['b'], fallbackMessage: 'Failed to load book images' },
+    { apiMethod: 'updateImageAssetNotes', dbMethod: 'updateImageAssetNotes', args: ['i', 'notes'], fallbackMessage: 'Failed to save image notes' },
+    { apiMethod: 'getImageWikiTags', dbMethod: 'getImageWikiTags', args: ['i'], fallbackMessage: 'Failed to load image tags' },
+    { apiMethod: 'setImageWikiTags', dbMethod: 'setImageWikiTags', args: ['i', ['w']], fallbackMessage: 'Failed to save image tags' },
+    { apiMethod: 'getWikiPageImageAssets', dbMethod: 'getWikiPageImages', args: ['w'], fallbackMessage: 'Failed to load wiki page images' },
+  ]
+
+  it.each(rethrowingCases)('$apiMethod records Error and non-Error failures before rethrowing', async ({
+    apiMethod, dbMethod, args, fallbackMessage,
+  }) => {
+    const api = useDatabase() as unknown as Record<string, (...values: unknown[]) => Promise<unknown>> & {
+      error: { value: string | null }
+    }
+    const failure = new Error(`${apiMethod} failed`)
+    dbProxy[dbMethod].mockRejectedValueOnce(failure)
+
+    await expect(api[apiMethod](...args)).rejects.toBe(failure)
+    expect(api.error.value).toBe(failure.message)
+
+    dbProxy[dbMethod].mockRejectedValueOnce('non-error failure')
+    await expect(api[apiMethod](...args)).rejects.toBe('non-error failure')
+    expect(api.error.value).toBe(fallbackMessage)
+  })
+
+  const fallbackCases: Array<{
+    apiMethod: string
+    dbMethod: string
+    args: unknown[]
+    result: unknown
+    fallbackMessage: string
+  }> = [
+    { apiMethod: 'loadBooks', dbMethod: 'getBooks', args: [], result: undefined, fallbackMessage: 'Failed to load books' },
+    { apiMethod: 'loadChapters', dbMethod: 'getChapters', args: ['b'], result: undefined, fallbackMessage: 'Failed to load chapters' },
+    { apiMethod: 'getSummary', dbMethod: 'getSummary', args: ['c'], result: null, fallbackMessage: 'Failed to get summary' },
+    { apiMethod: 'getPartSummary', dbMethod: 'getPartSummary', args: ['p'], result: null, fallbackMessage: 'Failed to get part summary' },
+    { apiMethod: 'getReviews', dbMethod: 'getReviews', args: ['c'], result: [], fallbackMessage: 'Failed to get reviews' },
+    { apiMethod: 'getNotes', dbMethod: 'getNotes', args: ['c'], result: null, fallbackMessage: 'Failed to get notes' },
+    { apiMethod: 'getCustomProfiles', dbMethod: 'getCustomProfiles', args: [], result: [], fallbackMessage: 'Failed to get custom profiles' },
+    { apiMethod: 'getWikiPageById', dbMethod: 'getWikiPageById', args: ['w'], result: null, fallbackMessage: 'Failed to get wiki page by ID' },
+    { apiMethod: 'getWikiPage', dbMethod: 'getWikiPage', args: ['b', 'name'], result: null, fallbackMessage: 'Failed to get wiki page' },
+    { apiMethod: 'getWikiPages', dbMethod: 'getWikiPages', args: ['b'], result: [], fallbackMessage: 'Failed to get wiki pages' },
+    { apiMethod: 'getChapterWikiLinks', dbMethod: 'getChapterWikiLinks', args: ['c'], result: [], fallbackMessage: 'Failed to get chapter wiki links' },
+    { apiMethod: 'getWikiPageChapterLinks', dbMethod: 'getWikiPageChapterLinks', args: ['w'], result: [], fallbackMessage: 'Failed to get wiki page chapter links' },
+  ]
+
+  it.each(fallbackCases)('$apiMethod returns its safe fallback after Error and non-Error failures', async ({
+    apiMethod, dbMethod, args, result, fallbackMessage,
+  }) => {
+    const api = useDatabase() as unknown as Record<string, (...values: unknown[]) => Promise<unknown>> & {
+      error: { value: string | null }
+    }
+    const failure = new Error(`${apiMethod} failed`)
+    dbProxy[dbMethod].mockRejectedValueOnce(failure)
+
+    await expect(api[apiMethod](...args)).resolves.toEqual(result)
+    expect(api.error.value).toBe(failure.message)
+
+    dbProxy[dbMethod].mockRejectedValueOnce('non-error failure')
+    await expect(api[apiMethod](...args)).resolves.toEqual(result)
+    expect(api.error.value).toBe(fallbackMessage)
+  })
+})
+
 describe('useDatabase — cloud sync initialization', () => {
   it('wires up CloudSync when a client id is configured, enabling backup/restore', async () => {
     vi.resetModules()
@@ -302,5 +425,32 @@ describe('useDatabase — cloud sync initialization', () => {
 
     await api.restoreFromCloud('pw')
     expect(cloudInstance.restore).toHaveBeenCalledWith('pw')
+
+    await api.restoreFromCloud('pw', 'generation-1')
+    expect(cloudInstance.restore).toHaveBeenCalledWith('pw', 'generation-1')
+
+    const generations = [{ id: 'generation-1' }]
+    cloudInstance.listBackupGenerations.mockResolvedValueOnce(generations)
+    await expect(api.listCloudBackups()).resolves.toBe(generations)
+
+    const backupFailure = new Error('backup failed')
+    cloudInstance.backup.mockRejectedValueOnce(backupFailure)
+    await expect(api.backupToCloud('pw')).rejects.toBe(backupFailure)
+    expect(api.error.value).toBe('backup failed')
+    cloudInstance.backup.mockRejectedValueOnce('non-error backup failure')
+    await expect(api.backupToCloud('pw')).rejects.toBe('non-error backup failure')
+    expect(api.error.value).toBe('Backup failed')
+
+    const restoreFailure = new Error('restore failed')
+    cloudInstance.restore.mockRejectedValueOnce(restoreFailure)
+    await expect(api.restoreFromCloud('pw')).rejects.toBe(restoreFailure)
+    expect(api.error.value).toBe('restore failed')
+    cloudInstance.restore.mockRejectedValueOnce('non-error restore failure')
+    await expect(api.restoreFromCloud('pw')).rejects.toBe('non-error restore failure')
+    expect(api.error.value).toBe('Restore failed')
+
+    cloudInstance.ensureWebSdkReady.mockRejectedValueOnce(new Error('SDK unavailable'))
+    await api.prepareCloudSync()
+    expect(api.cloudSyncReady.value).toBe(false)
   })
 })
