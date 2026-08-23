@@ -63,7 +63,13 @@ const toggleFullChapter = (value: boolean) => {
 
       <div v-else class="prose prose-gray max-w-none dark:prose-invert">
         <template v-if="!showFullChapterText && truncatedChapterText.needsTruncation">
-          <MarkdownRenderer :text="truncatedChapterText.truncated" :font-size="fontSize" :font-family="fontFamily" reading-layout />
+          <MarkdownRenderer
+            class="pb-0!"
+            :text="truncatedChapterText.truncated"
+            :font-size="fontSize"
+            :font-family="fontFamily"
+            reading-layout
+          />
           <div class="not-prose">
             <span class="text-gray-500">...</span>
             <button
