@@ -116,47 +116,41 @@ Bardwall is an optional, illustrated mini-game woven into the app: a haunted tow
 
 ## Screenshots
 
-### AI Summary Generation
+### An Illustrated Example Book
 
-Clicking the generate summary button generates structured summaries that track characters, plot points, and key events for each chapter.
+The built-in Jack and the Beanstalk example is a complete illustrated book workspace with parts, chapters, summaries, and a connected story bible.
 
-![Summary Being Generated](./src/assets/screenshots/summary-being-generated.png)
+![Jack and the Beanstalk manuscript](./src/assets/screenshots/jack-and-the-beanstalk-overview.png)
 
-### Summary Management
+### Structured Chapter Summaries
 
-You can manually edit or regenerate summaries to ensure they accurately capture the important details that will provide context for AI reviews.
+Chapter summaries track the point-of-view character, cast, and key beats used as context for AI reviews. You can inspect, edit, or regenerate them at any time.
+
+![Structured summary for Beneath the Bruised Purple Cloud](./src/assets/screenshots/summary-being-generated.png)
 
 ![Manually Edit Summary](./src/assets/screenshots/manually-edit-summary.png)
 
 ![Regenerate Summary Button](./src/assets/screenshots/regenerate-summary-button.png)
 
-### AI Review Transparency
+### Transparent AI Review Setup
 
-The app shows you exactly what summaries are being sent to the AI as context, giving you full transparency into the review process.
+Choose the reviewer perspective that best fits the manuscript and inspect its complete AI prompt before requesting feedback.
 
-![Review Summaries in Prompt](./src/assets/screenshots/review-summaries-in-prompt-to-see-if-summaries-need-editing.png)
+![Developmental editor AI prompt](./src/assets/screenshots/review-summaries-in-prompt-to-see-if-summaries-need-editing.png)
 
-### Contextual AI Feedback
-
-Get intelligent feedback that understands your story's continuity and can catch inconsistencies across chapters.
-
-![Example of Feedback on Consistency](./src/assets/screenshots/example-of-feedback-on-consistency-with-other-chapters.png)
+![Choosing a custom reviewer for a Jack and the Beanstalk chapter](./src/assets/screenshots/getting-feedback-from-custom-ai-profile.png)
 
 ### Custom AI Profiles
 
 Create personalized reviewer profiles with custom prompts to get the exact type of feedback you need.
 
-![Custom AI Profile Creation](./src/assets/screenshots/custom-ai-profile-creation.png)
-
 ![Custom AI Profile in User Settings](./src/assets/screenshots/custom-ai-profile-in-user-settings.png)
 
-![Getting Feedback from Custom AI Profile](./src/assets/screenshots/getting-feedback-from-custom-ai-profile.png)
-
-![Feedback by AI Profile](./src/assets/screenshots/feedback-by-ai-profile.png)
+![Custom AI Profile Creation](./src/assets/screenshots/custom-ai-profile-creation.png)
 
 ### Character Wiki System
 
-Wiki pages can be maintained by hand or updated as part of chapter summary generation. Before selecting **Generate** or **Regenerate**, use the **Update wiki pages for detected characters and locations** checkbox to control whether the AI should:
+Wiki pages connect characters and locations to their source chapters and tagged illustrations. They can be maintained by hand or updated as part of chapter summary generation. Before selecting **Generate** or **Regenerate**, use the **Update wiki pages for detected characters and locations** checkbox to control whether the AI should:
 
 - Create pages for newly detected characters and locations
 - Add relevant chapter information to existing pages
@@ -165,7 +159,7 @@ Wiki pages can be maintained by hand or updated as part of chapter summary gener
 
 After generation, the summary panel reports which pages were created, updated, or left unchanged and provides links to review them.
 
-![Auto-generated Character Sheet with Change History](./src/assets/screenshots/auto-generated-character-sheet-with-change-history.png)
+![Jack character page with story-bible details and illustrations](./src/assets/screenshots/auto-generated-character-sheet-with-change-history.png)
 
 ### Search and Replace for Continuity
 
@@ -229,6 +223,18 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 - User-facing export/import uses the versioned canonical library bundle. Internally, named database snapshots bridge the platform storage engines to the shared bundle codec.
 - Browser image bytes live in the IndexedDB `imageBlobs` object store. SQLite keeps only image metadata during normal use; legacy base64 rows migrate automatically in restartable batches.
 
+### Plain-text bundle round trips
+
+Beta bot's bundle format lets the visual app and a plain-text writing workflow share the same book. This is useful when you want the app for reading, organization, illustrations, summaries, and story-bible navigation, but prefer editing Markdown and YAML in a text editor—or with an AI coding tool such as the Codex or Claude desktop app or CLI.
+
+1. In beta bot, choose **Text-only Git workspace** as the export format and export the selected book as a folder or ZIP.
+2. Open the exported workspace in your editor, a Git repository, Codex, or Claude. Chapters, part summaries, chapter summaries, and wiki pages are ordinary Markdown; book structure and relationships use YAML.
+3. Edit and review the changes as normal text diffs. Keep existing entity IDs and frontmatter relationships intact, and do not edit `_beta-bot/inventory.json` by hand.
+4. Return to **My Books → Import Bundle**. Beta bot previews every create, update, and conflict before anything is written to the local library.
+5. Continue working in the visual UI. When you want to move back to plain text, export again; folder export safely updates app-managed files while preserving unknown files and customized workspace instructions.
+
+This makes the bundle a round-trip workspace rather than a one-way export. You can move between the UI and plain text repeatedly, keep the workspace under Git, and resolve overlapping edits explicitly during import. Full-library bundles remain the right choice for backup and device migration because they include image bytes, history, profiles, and audit data; text-only workspaces are optimized for editing and preserve matching local image content when reapplied.
+
 ### Google Drive Backup & Restore
 
 1. **Backup** (`User Settings → Back up to Drive`)
@@ -259,7 +265,7 @@ See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secre
 
 ### Folder export and validation
 
-- **Export Git workspace to folder** writes the same canonical files as full ZIP and Drive backup.
+- Folder export can write either a complete library bundle or the editable text-only Git workspace, depending on the selected export format.
 - Existing bundles are updated from their prior inventory: unknown files and customized workspace guidance are preserved, and obsolete managed files are removed only after verified writes.
 - Validate either transport without opening the app or database:
 

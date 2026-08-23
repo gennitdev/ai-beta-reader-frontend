@@ -17,7 +17,7 @@ const h = vi.hoisted(() => ({
   wikiPages: [] as Array<Record<string, unknown>>,
   activity: [] as Array<Record<string, unknown>>,
   loadBooks: vi.fn(async () => {}), loadChapters: vi.fn(async () => {}), getParts: vi.fn(),
-  getSummary: vi.fn(), getNotes: vi.fn(), getWikiPages: vi.fn(), getWikiPage: vi.fn(),
+  getSummary: vi.fn(), getPartSummary: vi.fn(), getNotes: vi.fn(), getWikiPages: vi.fn(), getWikiPage: vi.fn(),
   createWikiPage: vi.fn(async () => 'wiki-new'), saveBook: vi.fn(async () => {}),
   updateWikiPage: vi.fn(async () => {}), updateChapterOrders: vi.fn(async () => {}),
   updatePartOrder: vi.fn(async () => {}), getBookRevisionActivity: vi.fn(),
@@ -40,6 +40,7 @@ vi.mock('@/composables/useDatabase', async () => {
       books: ref(h.books), chapters: ref(h.chapters), loadBooks: h.loadBooks, loadChapters: h.loadChapters,
       getWikiPages: h.getWikiPages, getWikiPage: h.getWikiPage, createWikiPage: h.createWikiPage,
       getSummary: h.getSummary, getNotes: h.getNotes, saveBook: h.saveBook, getParts: h.getParts,
+      getPartSummary: h.getPartSummary,
       updateWikiPage: h.updateWikiPage, updateChapterOrders: h.updateChapterOrders,
       updatePartOrder: h.updatePartOrder, findReplaceMatches: vi.fn(), replaceFindReplaceMatches: vi.fn(),
       restoreFindReplaceFields: vi.fn(), setBookCoverImageId: h.setBookCoverImageId,
@@ -68,7 +69,7 @@ import BookView from '@/views/BookView.vue'
 const DesktopStub = {
   name: 'BookDesktopLayout',
   props: [
-    'book', 'chapterCount', 'totalWordCount', 'chaptersByPart', 'sidebarPartLists',
+    'book', 'chapterCount', 'totalWordCount', 'chaptersByPart', 'partSummaries', 'sidebarPartLists',
     'sidebarUncategorized', 'wikiPagesByType', 'revisionActivity', 'currentTab',
     'createNewChapter', 'createNewChapterInPart', 'goToOrganizeChapters', 'openSearchModal',
     'editChapter', 'insertChapter', 'togglePart', 'onSidebarDragEnd', 'startEditingBookTitle',
@@ -147,6 +148,7 @@ beforeEach(() => {
   h.activity = [{ id: 'revision-1', chapter_id: 'chapter-1', chapter_title: 'One', activity_type: 'save' }]
   h.getParts.mockImplementation(async () => h.parts)
   h.getSummary.mockImplementation(async (id: string) => id === 'chapter-1' ? { summary: 'Summary one.' } : null)
+  h.getPartSummary.mockImplementation(async (id: string) => id === 'part-1' ? { summary: 'The opening bargain.' } : null)
   h.getNotes.mockImplementation(async (id: string) => id === 'chapter-2' ? { notes: 'Note two.' } : null)
   h.getWikiPages.mockImplementation(async () => h.wikiPages)
   h.getWikiPage.mockResolvedValue(null)
@@ -174,6 +176,7 @@ describe('BookView', () => {
     expect(desktop.props('totalWordCount')).toBe(1000)
     expect(desktop.props('chaptersByPart').parts.map((item: { id: string }) => item.id)).toEqual(['part-2', 'part-1'])
     expect(desktop.props('chaptersByPart').parts[0].chapters[0].id).toBe('chapter-2')
+    expect(desktop.props('partSummaries')).toEqual({ 'part-1': 'The opening bargain.' })
     expect(desktop.props('revisionActivity')).toEqual(h.activity)
   })
 

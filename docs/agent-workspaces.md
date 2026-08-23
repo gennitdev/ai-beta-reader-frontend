@@ -1,10 +1,10 @@
 # Git and agent workspaces
 
-Beta Bot can export the canonical library bundle directly to a folder in browsers that support the File System Access API. Choose **Export Git workspace to folder** in Settings, then select either an empty folder or a folder containing an earlier Beta Bot bundle.
+Beta Bot can export the canonical library bundle directly to a folder in browsers that support the File System Access API. Choose **Text-only Git workspace** as the export format in Settings, export to a folder, then select either an empty folder or a folder containing an earlier Beta Bot bundle.
 
 ZIP remains available on every supported platform. Folder export is progressive enhancement for Chromium-class browsers and compatible desktop builds.
 
-The current folder action writes a complete full-library bundle, including image bytes and app-owned history. A smaller `text-only` workspace export is planned in [#129](https://github.com/gennitdev/ai-beta-reader-frontend/issues/129); until then, do not describe folder export as text-only.
+Text-only workspaces keep the authored Markdown, YAML, relationships, stable IDs, and image metadata needed for an editable round trip without duplicating image binaries or app-owned recovery history. Full-library folder export remains available when a complete, replace-capable backup is needed.
 
 ## Safe folder updates
 
