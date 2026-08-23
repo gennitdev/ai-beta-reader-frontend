@@ -128,7 +128,9 @@ defineProps<{
           </div>
         </section>
 
-        <BookActivityHeatmap class="mt-12" :book-id="bookId" :activity="revisionActivity || []" />
+        <div class="mt-12">
+          <BookActivityHeatmap :book-id="bookId" :activity="revisionActivity || []" />
+        </div>
       </div>
     </div>
 
