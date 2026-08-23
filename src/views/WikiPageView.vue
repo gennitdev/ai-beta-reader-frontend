@@ -440,10 +440,11 @@ watch(
 </script>
 
 <template>
-  <div class="w-full">
+  <div class="w-full lg:h-full lg:overflow-hidden">
     <!-- Hero Image Section -->
     <WikiPageHeroSection
       v-if="heroImageSrc && wikiPage"
+      class="lg:hidden"
       :hero-image-src="heroImageSrc"
       :book-title="bookTitle"
       :page-name="wikiPage.page_name"
@@ -453,7 +454,22 @@ watch(
       @go-back="goBack"
     />
 
-    <div class="mx-auto max-w-6xl p-6">
+    <div class="mx-auto w-full max-w-6xl px-6 py-6 lg:h-full lg:max-w-none lg:px-0 lg:py-0">
+      <div class="lg:grid lg:h-full lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+        <div class="lg:min-h-0 lg:overflow-y-auto">
+          <WikiPageHeroSection
+            v-if="heroImageSrc && wikiPage"
+            class="hidden lg:block"
+            :hero-image-src="heroImageSrc"
+            :book-title="bookTitle"
+            :page-name="wikiPage.page_name"
+            :page-type="wikiPage.page_type"
+            :is-major="wikiPage.is_major"
+            @open-lightbox="openHeroLightbox"
+            @go-back="goBack"
+          />
+
+          <div class="lg:mx-auto lg:max-w-4xl lg:px-8 lg:py-6">
       <!-- Header (only show full header when no hero image) -->
       <div v-if="!heroImageSrc" class="mb-8">
         <nav class="breadcrumbs mb-4 text-sm">
@@ -696,9 +712,8 @@ watch(
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-600"></div>
     </div>
 
-    <div v-else-if="wikiPage" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div v-else-if="wikiPage">
       <!-- Main content -->
-      <div class="lg:col-span-2">
         <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
           <div class="p-6">
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Content</h2>
@@ -734,10 +749,16 @@ watch(
           </div>
         </div>
 
+          </div>
+        </div>
       </div>
 
       <!-- Sidebar -->
-      <div class="space-y-6">
+      <aside
+        v-if="wikiPage"
+        class="mt-8 space-y-6 lg:mt-0 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-gray-200 lg:bg-gray-100/60 lg:px-6 lg:py-6 dark:lg:border-navy-700 dark:lg:bg-navy-950/30"
+        data-testid="wiki-detail-sidebar"
+      >
         <!-- Reading text size -->
         <FontSizeControl
           v-if="!isEditing && wikiPage.content"
@@ -910,7 +931,7 @@ watch(
             </div>
           </div>
         </div>
-      </div>
+      </aside>
     </div>
   </div>
 
