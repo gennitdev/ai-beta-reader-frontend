@@ -5,8 +5,11 @@ import { useRouter } from 'vue-router'
 import { useBooks, type Book } from '@/composables/useBooks'
 import { useImageLibrary } from '@/composables/useImageLibrary'
 import { PlusIcon, BookOpenIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
+import { useLibraryContext } from '@/composables/useLibraryContext'
 
 const router = useRouter()
+const { booksPath, readOnly, readOnlyReason } = useLibraryContext()
 const showCreateModal = ref(false)
 const newBook = ref({ id: '', title: '' })
 
@@ -52,7 +55,7 @@ const refreshCoverSources = async () => {
 }
 
 const viewBook = (bookId: string) => {
-  router.push(`/books/${bookId}`)
+  router.push(`${booksPath}/${bookId}`)
 }
 
 const generateBookId = () => {
@@ -98,12 +101,17 @@ watch(
   <div class="mx-auto max-w-7xl p-4 sm:p-6">
     <div class="mb-6 flex items-center justify-between sm:mb-8">
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white">My Books</h1>
+      <ExampleDisabledControl v-if="readOnly" :explanation="readOnlyReason">
+        <button disabled class="inline-flex cursor-not-allowed items-center rounded-lg bg-gold-600 px-4 py-2 text-white opacity-60">
+          <PlusIcon class="w-5 h-5 mr-2" /> New Book
+        </button>
+      </ExampleDisabledControl>
       <button
+        v-else
         @click="showCreateModal = true"
         class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
       >
-        <PlusIcon class="w-5 h-5 mr-2" />
-        New Book
+        <PlusIcon class="w-5 h-5 mr-2" /> New Book
       </button>
     </div>
 
@@ -176,6 +184,14 @@ watch(
         <PlusIcon class="w-5 h-5 mr-2" />
         Create Your First Book
       </button>
+      <div class="mt-4">
+        <router-link
+          to="/example-books"
+          class="inline-flex items-center text-sm font-semibold text-gold-700 hover:underline dark:text-gold-300"
+        >
+          Explore the read-only example story →
+        </router-link>
+      </div>
     </div>
 
     <!-- Create book modal -->

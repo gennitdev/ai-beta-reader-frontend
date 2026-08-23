@@ -43,6 +43,18 @@ export function bundleShortId(id: string): string {
   return safe.length <= 12 ? safe : safe.slice(-12)
 }
 
+function bundleAssetShortId(id: string): string {
+  const safe = bundleSlug(id)
+  if (safe.length <= 12) return safe
+
+  const truncatedAt = safe.length - 12
+  const priorSeparator = safe.lastIndexOf('-', truncatedAt)
+  const completeSuffix = priorSeparator >= 0 ? safe.slice(priorSeparator + 1) : safe
+
+  // Prefer a slightly longer readable suffix to one that begins mid-word.
+  return completeSuffix.length <= 24 ? completeSuffix : safe.slice(-12)
+}
+
 function entityDirectory(name: string, id: string): string {
   return `${bundleSlug(name)}--${bundleShortId(id)}`
 }
@@ -212,7 +224,7 @@ export async function writeLibraryBundle(
   for (const asset of sortById(model.assets)) {
     const bookPath = bookPaths.get(asset.book_id)
     if (!bookPath) throw new Error(`Asset ${asset.id} refers to unknown book ${asset.book_id}.`)
-    const assetDirectory = `${bookPath}/assets/${bundleShortId(asset.id)}`
+    const assetDirectory = `${bookPath}/assets/${bundleAssetShortId(asset.id)}`
     const metadataPath = `${assetDirectory}/asset.yaml`
     const { bytes, ...metadata } = asset
     addFile(files, metadataPath, yaml(metadata))

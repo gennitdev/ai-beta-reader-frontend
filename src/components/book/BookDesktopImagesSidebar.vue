@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useLibraryContext } from '@/composables/useLibraryContext'
 import { PhotoIcon } from '@heroicons/vue/24/outline'
 import type { ImageAsset } from '@/lib/database'
+const { booksPath } = useLibraryContext()
 
 defineProps<{
   bookId: string
@@ -32,7 +34,7 @@ defineProps<{
       <router-link
         v-for="image in bookImages"
         :key="image.id"
-        :to="`/books/${bookId}?tab=images&imageId=${image.id}`"
+        :to="`${booksPath}/${bookId}?tab=images&imageId=${image.id}`"
         :class="[
           'relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 cursor-pointer transition-all',
           selectedImageId === image.id

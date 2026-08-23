@@ -19,6 +19,7 @@ export default defineConfigWithVueTs(
     '**/coverage/**',
     'android/app/build/**',
     'android/app/src/main/assets/**',
+    'electron/app/**',
     'electron/build/**',
     // Generated/scaffold Electron support code is CommonJS and maintained by
     // the Capacitor Electron tooling. Maintained files under electron/src are

@@ -1,4 +1,4 @@
-import { ref, onMounted } from 'vue'
+import { inject, onMounted, provide, ref, type InjectionKey } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { logger } from '@/lib/logger'
 import {
@@ -79,7 +79,7 @@ export async function initializeDatabase() {
   return initializationPromise
 }
 
-export function useDatabase() {
+export function useLocalDatabase() {
   onMounted(async () => {
     await initializeDatabase()
   })
@@ -1135,4 +1135,15 @@ export function useDatabase() {
     importFromJSON,
     importDatabaseBackup,
   }
+}
+
+export type DatabaseApi = ReturnType<typeof useLocalDatabase>
+const databaseApiKey: InjectionKey<DatabaseApi> = Symbol('database-api')
+
+export function provideDatabase(api: DatabaseApi): void {
+  provide(databaseApiKey, api)
+}
+
+export function useDatabase(): DatabaseApi {
+  return inject(databaseApiKey, null) ?? useLocalDatabase()
 }

@@ -3,6 +3,10 @@ import draggable from 'vuedraggable'
 import { BookOpenIcon, DocumentTextIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import type { BookChapter, BookChaptersByPart } from '@/types/bookView'
 import BookDesktopChapterListItem from './BookDesktopChapterListItem.vue'
+import { useLibraryContext } from '@/composables/useLibraryContext'
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
+
+const { booksPath, readOnly, readOnlyReason } = useLibraryContext()
 
 defineProps<{
   bookId: string
@@ -71,7 +75,7 @@ defineProps<{
                     words
                     ·
                     <router-link
-                      :to="`/books/${bookId}/parts/${part.id}`"
+                      :to="`${booksPath}/${bookId}/parts/${part.id}`"
                       class="text-gold-300 hover:text-gold-200 hover:underline"
                       @click.stop="expandPart(part.id)"
                     >View</router-link>
@@ -121,7 +125,7 @@ defineProps<{
                     words
                     ·
                     <router-link
-                      :to="`/books/${bookId}/parts/${part.id}`"
+                      :to="`${booksPath}/${bookId}/parts/${part.id}`"
                       class="text-gold-600 hover:text-gold-700 hover:underline dark:text-gold-400 dark:hover:text-gold-300"
                       @click.stop="expandPart(part.id)"
                     >View</router-link>
@@ -152,13 +156,16 @@ defineProps<{
           class="bg-white dark:bg-navy-800"
         >
           <div class="pr-2 pt-3 pb-2 flex justify-end border-t border-gray-200 dark:border-gray-700">
+            <ExampleDisabledControl :active="readOnly" :explanation="readOnlyReason">
             <button
+              :disabled="readOnly"
               @click.prevent.stop="createNewChapterInPart(part.id)"
               class="inline-flex items-center rounded-md bg-gold-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gold-700"
             >
               <PlusIcon class="w-4 h-4 mr-1" />
               Add Chapter in Part
             </button>
+            </ExampleDisabledControl>
           </div>
           <draggable
             :list="sidebarPartLists[part.id]"
@@ -167,7 +174,7 @@ defineProps<{
             class="space-y-1"
             @start="onSidebarDragStart"
             @end="onSidebarDragEnd"
-            :disabled="false"
+            :disabled="readOnly"
             ghost-class="opacity-50"
             drag-class="rotate-1"
             handle=".drag-handle"
@@ -212,7 +219,7 @@ defineProps<{
             class="space-y-1"
             @start="onSidebarDragStart"
             @end="onSidebarDragEnd"
-            :disabled="false"
+            :disabled="readOnly"
             ghost-class="opacity-50"
             drag-class="rotate-1"
             handle=".drag-handle"

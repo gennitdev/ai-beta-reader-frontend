@@ -37,6 +37,20 @@ describe('library bundle reader and validation', () => {
     expect(parsed.model).not.toBeNull()
   })
 
+  it('accepts standard repository documentation and GitHub workflow files as workspace scaffolding', async () => {
+    const files = await validFiles()
+    files.set('README.md', encodeBundleText('# Example story\n'))
+    files.set('LICENSE.md', encodeBundleText('License text\n'))
+    files.set('.gitignore', encodeBundleText('.DS_Store\n'))
+    files.set('.github/workflows/validate.yml', encodeBundleText('name: Validate\n'))
+
+    const parsed = readLibraryBundle(files)
+
+    expect(parsed.unknownFiles).toEqual([])
+    expect(parsed.diagnostics.map((value) => value.code)).not.toContain('file.unknown')
+    expect(parsed.model).not.toBeNull()
+  })
+
   it.each([
     ['duplicate key', 'id: one\nid: two\n', 'yaml.invalid'],
     ['alias', 'id: &id one\ntitle: *id\n', 'yaml.anchor'],

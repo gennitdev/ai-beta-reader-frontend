@@ -38,6 +38,9 @@ describe('standalone bundle validator', () => {
       bundleId: 'bundle:validator', exportedAt: '2026-08-20T00:00:00.000Z', appVersion: '2.0.0',
     })
     await writeFiles(directory, new Map([...bundle.files, ...createAgentWorkspaceScaffold()]))
+    await writeFile(join(directory, 'README.md'), '# Example story\n')
+    await mkdir(join(directory, '.github', 'workflows'), { recursive: true })
+    await writeFile(join(directory, '.github', 'workflows', 'validate.yml'), 'name: Validate\n')
     await mkdir(join(directory, '.git'))
     await writeFile(join(directory, '.git', 'config'), 'ignored git metadata')
 

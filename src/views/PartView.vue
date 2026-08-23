@@ -13,6 +13,8 @@ import {
 } from "@heroicons/vue/24/outline";
 import MarkdownRenderer from "@/components/MarkdownRenderer.vue";
 import { useDatabase } from "@/composables/useDatabase";
+import { useLibraryContext } from "@/composables/useLibraryContext";
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue';
 import { useImageLibrary } from "@/composables/useImageLibrary";
 import { usePartImages } from "@/composables/usePartImages";
 import {
@@ -29,6 +31,7 @@ import Modal from "@/components/Modal.vue";
 
 const route = useRoute();
 const router = useRouter();
+const { booksPath, readOnly, readOnlyReason } = useLibraryContext();
 defineEmits<{
   (event: 'wiki-page-pin-changed', payload: { id: string; isPinned: boolean; updatedAt: string }): void;
 }>();
@@ -129,11 +132,11 @@ const partLabel = computed(() => {
 });
 
 const isMobileRoute = computed(() => route.meta.mobile === true);
-const routePrefix = computed(() => (isMobileRoute.value ? "/m/books" : "/books"));
+const routePrefix = computed(() => booksPath === '/books' && isMobileRoute.value ? "/m/books" : booksPath);
 // Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
 // BookView handles mobile display via CSS media queries
-const bookUrl = computed(() => `/books/${bookId.value}`);
-const organizeUrl = computed(() => `/books/${bookId.value}/organize`);
+const bookUrl = computed(() => `${booksPath}/${bookId.value}`);
+const organizeUrl = computed(() => `${booksPath}/${bookId.value}/organize`);
 
 function truncateSummary(text: string, limit = 200) {
   if (text.length <= limit) return text;
@@ -376,7 +379,7 @@ const createNewChapterInPart = () => {
   if (!part.value) return;
 
   router.push({
-    path: `/books/${bookId.value}/chapter-editor`,
+    path: `${booksPath}/${bookId.value}/chapter-editor`,
     query: { partId: part.value.id },
   });
 };
@@ -421,7 +424,13 @@ watch([bookId, partId], async () => {
         </div>
 
         <div class="flex items-center space-x-3">
+          <ExampleDisabledControl v-if="readOnly" :explanation="readOnlyReason">
+            <button disabled class="cursor-not-allowed rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-400">
+              Manage Parts
+            </button>
+          </ExampleDisabledControl>
           <router-link
+            v-else
             :to="organizeUrl"
             class="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-navy-800"
           >
@@ -475,10 +484,11 @@ watch([bookId, partId], async () => {
               v-if="canSelectImages"
               class="absolute right-4 top-4 flex items-center gap-2 sm:right-6 lg:right-8"
             >
+              <ExampleDisabledControl class="w-full" :active="readOnly" :explanation="readOnlyReason">
               <button
                 type="button"
                 class="inline-flex items-center rounded-md bg-black/50 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-60"
-                :disabled="partCoverLoading"
+                :disabled="partCoverLoading || readOnly"
                 @click.stop="handleSelectPartCover"
               >
                 <span
@@ -487,6 +497,7 @@ watch([bookId, partId], async () => {
                 ></span>
                 {{ partCoverLoading ? "Updating..." : "Change cover" }}
               </button>
+              </ExampleDisabledControl>
               <button
                 type="button"
                 class="inline-flex items-center rounded-md bg-black/50 px-2.5 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/70"
@@ -602,9 +613,10 @@ watch([bookId, partId], async () => {
                 </p>
               </div>
               <div class="flex flex-col gap-3">
+                <ExampleDisabledControl class="w-full" :active="readOnly" :explanation="readOnlyReason">
                 <button
                   @click="handleGeneratePartSummary"
-                  :disabled="generatingSummary || chapterEntries.length === 0"
+                  :disabled="generatingSummary || chapterEntries.length === 0 || readOnly"
                   class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md bg-gold-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span
@@ -620,14 +632,18 @@ watch([bookId, partId], async () => {
                         : "Generate Summary"
                   }}
                 </button>
+                </ExampleDisabledControl>
+                <ExampleDisabledControl v-if="hasPartSummary && !isEditingSummary" class="w-full" :active="readOnly" :explanation="readOnlyReason">
                 <button
                   v-if="hasPartSummary && !isEditingSummary"
+                  :disabled="readOnly"
                   @click="startEditingSummary"
                   class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-navy-800"
                 >
                   <PencilIcon class="mr-2 h-4 w-4" />
                   Edit
                 </button>
+                </ExampleDisabledControl>
               </div>
             </div>
 
@@ -794,14 +810,17 @@ watch([bookId, partId], async () => {
               <p class="text-sm text-gray-500 dark:text-gray-400">
                 {{ summarizedChapterCount }} of {{ chapterEntries.length }} chapters summarized
               </p>
+              <ExampleDisabledControl class="w-full" :active="readOnly" :explanation="readOnlyReason">
               <button
                 type="button"
-                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md bg-gold-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700"
+                :disabled="readOnly"
+                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md bg-gold-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-50"
                 @click="createNewChapterInPart"
               >
                 <PlusIcon class="mr-2 h-4 w-4" />
                 Add Chapter in Part
               </button>
+              </ExampleDisabledControl>
             </div>
 
             <div

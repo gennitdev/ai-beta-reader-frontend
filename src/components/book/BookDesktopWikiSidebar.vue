@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { useLibraryContext } from '@/composables/useLibraryContext'
 import { computed, type Component } from 'vue'
 import { BookmarkIcon, BookOpenIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import type { BookWikiPage } from '@/types/bookView'
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
+const { booksPath, readOnly, readOnlyReason } = useLibraryContext()
 
 const props = defineProps<{
   bookId: string
@@ -30,14 +33,17 @@ const hasFilteredPages = computed(() =>
     </div>
 
     <div v-else-if="hasFilteredPages" class="space-y-4">
+      <ExampleDisabledControl v-if="openCreateWikiModal" :active="readOnly" :explanation="readOnlyReason">
       <button
         v-if="openCreateWikiModal"
+        :disabled="readOnly"
         @click="openCreateWikiModal"
         class="w-full inline-flex items-center justify-center px-3 py-2 text-sm bg-gold-600 text-white rounded-md hover:bg-gold-700 transition-colors"
       >
         <PlusIcon class="w-4 h-4 mr-1.5" />
         New Wiki Page
       </button>
+      </ExampleDisabledControl>
       <div v-for="(pages, type) in wikiPagesByType" :key="type" class="space-y-2">
         <div class="flex items-center space-x-2">
           <component :is="getTypeIcon(type)" :class="['w-4 h-4', getTypeColor(type)]" />
@@ -51,7 +57,7 @@ const hasFilteredPages = computed(() =>
           <router-link
             v-for="page in pages"
             :key="page.id"
-            :to="`/books/${bookId}/wiki/${page.id}`"
+            :to="`${booksPath}/${bookId}/wiki/${page.id}`"
             class="flex gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gold-300 dark:hover:border-gold-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             :class="
               activeWikiPageId === page.id
@@ -82,7 +88,9 @@ const hasFilteredPages = computed(() =>
                     Major
                   </span>
                 </div>
+                <ExampleDisabledControl :active="readOnly" :explanation="readOnlyReason">
                 <button
+                  :disabled="readOnly"
                   @click.prevent.stop="toggleWikiPagePinned(page)"
                   class="ml-2 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gold-600 dark:hover:bg-gray-700 dark:hover:text-gold-300"
                   :class="page.is_pinned ? 'text-gold-600 dark:text-gold-300' : ''"
@@ -94,6 +102,7 @@ const hasFilteredPages = computed(() =>
                     :class="page.is_pinned ? 'fill-current' : ''"
                   />
                 </button>
+                </ExampleDisabledControl>
               </div>
               <p
                 v-if="page.summary"
@@ -119,14 +128,17 @@ const hasFilteredPages = computed(() =>
       <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
         Try a different type, or add a new page.
       </p>
+      <ExampleDisabledControl v-if="openCreateWikiModal" :active="readOnly" :explanation="readOnlyReason">
       <button
         v-if="openCreateWikiModal"
+        :disabled="readOnly"
         @click="openCreateWikiModal"
         class="inline-flex items-center px-3 py-1.5 text-sm bg-gold-600 text-white rounded-md hover:bg-gold-700 transition-colors"
       >
         <PlusIcon class="w-4 h-4 mr-1" />
         New Wiki Page
       </button>
+      </ExampleDisabledControl>
     </div>
 
     <div v-else class="text-center py-8">

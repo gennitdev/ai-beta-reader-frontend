@@ -34,6 +34,39 @@ const router = createRouter({
       component: () => import('../views/BooksView.vue')
     },
     {
+      path: '/example-books',
+      component: () => import('../components/ExampleLibraryHost.vue'),
+      children: [
+        {
+          path: '',
+          name: 'example-books',
+          component: () => import('../views/BooksView.vue')
+        },
+        {
+          path: ':id',
+          name: 'example-book',
+          component: () => import('../views/BookView.vue'),
+          children: [
+            {
+              path: 'chapters/:chapterId',
+              name: 'example-book-chapter',
+              component: () => import('../views/ChapterView.vue')
+            },
+            {
+              path: 'parts/:partId',
+              name: 'example-book-part',
+              component: () => import('../views/PartView.vue')
+            },
+            {
+              path: 'wiki/:wikiPageId',
+              name: 'example-book-wiki-page',
+              component: () => import('../views/WikiPageView.vue')
+            }
+          ]
+        }
+      ]
+    },
+    {
       path: '/books/:id',
       name: 'book',
       component: () => import('../views/BookView.vue'),

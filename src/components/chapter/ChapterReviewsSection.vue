@@ -11,6 +11,10 @@ import {
 import AvatarComponent from '@/components/AvatarComponent.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { copyToClipboard } from '@/utils/clipboard'
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
+import { useLibraryContext } from '@/composables/useLibraryContext'
+
+const { readOnly, readOnlyReason } = useLibraryContext()
 
 type Review = {
   id: string
@@ -152,14 +156,16 @@ onUnmounted(() => {
             />
           </div>
 
+          <ExampleDisabledControl :active="readOnly" :explanation="readOnlyReason">
           <button
             @click="emit('generate-review')"
-            :disabled="generatingReview"
+            :disabled="generatingReview || readOnly"
             class="inline-flex items-center whitespace-nowrap rounded-md bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <SparklesIcon class="mr-1 h-4 w-4" />
             {{ generatingReview ? 'Generating...' : 'Get Review' }}
           </button>
+          </ExampleDisabledControl>
         </div>
       </div>
 
@@ -246,7 +252,7 @@ onUnmounted(() => {
                 </button>
                 <button
                   @click="emit('delete-review', review.id)"
-                  :disabled="deletingReviewId === review.id"
+                  :disabled="deletingReviewId === review.id || readOnly"
                   class="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-700 dark:hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
                   title="Delete review"
                 >
