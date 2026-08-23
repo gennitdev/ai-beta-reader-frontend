@@ -68,7 +68,7 @@ export async function initializeDatabase() {
           cloudSyncReady.value = ready
           logger.log('[useDatabase] cloudSyncReady updated to:', cloudSyncReady.value)
         }).catch((err) => {
-          console.warn('[useDatabase] Failed to preload GIS SDK:', err)
+          logger.warn('[useDatabase] Failed to preload GIS SDK:', err)
         })
       }
     }
@@ -87,6 +87,47 @@ export function useLocalDatabase() {
     await initializeDatabase()
   })
 
+  /**
+   * Wraps a database operation with the composable's shared error/loading state.
+   * Consolidates the try/catch/finally boilerplate that every data-access method
+   * previously repeated: it initializes the database, runs `fn`, and on failure
+   * records `error.value` (and logs via the level-gated logger) before either
+   * rethrowing or returning a recovery value.
+   *
+   * @param label     prefix for the logged error message
+   * @param fallback  message stored in `error.value` when the thrown value is not an Error
+   * @param options.loading     manage the shared `loading` flag around the call
+   * @param options.clearError  clear `error.value` before running (matches the legacy load/save methods)
+   * @param options.recover     return this value on failure instead of rethrowing
+   * @param options.log         set false to record the error without logging it
+   */
+  async function withDb<T>(
+    label: string,
+    fallback: string,
+    fn: () => Promise<T>,
+    options: {
+      loading?: boolean
+      clearError?: boolean
+      recover?: () => T
+      log?: boolean
+    } = {},
+  ): Promise<T> {
+    const { loading: manageLoading = false, clearError = false, recover, log = true } = options
+    try {
+      if (manageLoading) loading.value = true
+      if (clearError) error.value = null
+      await initializeDatabase()
+      return await fn()
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : fallback
+      if (log) logger.error(`${label}:`, e)
+      if (recover) return recover()
+      throw e
+    } finally {
+      if (manageLoading) loading.value = false
+    }
+  }
+
   async function retryPersistence(): Promise<void> {
     if (isRetryingPersistence.value) return
 
@@ -95,7 +136,7 @@ export function useLocalDatabase() {
       await db.flushPersistence()
       reportPersistenceSuccess()
     } catch (retryError) {
-      console.error('Retry persistence error:', retryError)
+      logger.error('Retry persistence error:', retryError)
       reportPersistenceFailure()
     } finally {
       isRetryingPersistence.value = false
@@ -109,33 +150,16 @@ export function useLocalDatabase() {
 
   // Book operations
   async function loadBooks() {
-    try {
-      loading.value = true
-      error.value = null
-      await initializeDatabase() // Ensure DB is initialized
+    return withDb('Load books error', 'Failed to load books', async () => {
       books.value = await db.getBooks()
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load books'
-      console.error('Load books error:', e)
-    } finally {
-      loading.value = false
-    }
+    }, { loading: true, clearError: true, recover: () => undefined })
   }
 
   async function saveBook(book: Book) {
-    try {
-      loading.value = true
-      error.value = null
-      await initializeDatabase() // Ensure DB is initialized
+    return withDb('Save book error', 'Failed to save book', async () => {
       await db.saveBook(book)
       await loadBooks() // Refresh list
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save book'
-      console.error('Save book error:', e)
-      throw e
-    } finally {
-      loading.value = false
-    }
+    }, { loading: true, clearError: true })
   }
 
   async function getBookDeletionPreview(bookId: string): Promise<BookDeletionPreview | null> {
@@ -144,20 +168,11 @@ export function useLocalDatabase() {
   }
 
   async function deleteBook(bookId: string): Promise<BookDeletionResult> {
-    try {
-      loading.value = true
-      error.value = null
-      await initializeDatabase()
+    return withDb('Delete book error', 'Failed to delete book', async () => {
       const result = await db.deleteBook(bookId)
       await loadBooks()
       return result
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to delete book'
-      console.error('Delete book error:', e)
-      throw e
-    } finally {
-      loading.value = false
-    }
+    }, { loading: true, clearError: true })
   }
 
   async function getPendingImageDeletions(): Promise<PendingImageDeletion[]> {
@@ -178,101 +193,51 @@ export function useLocalDatabase() {
 
   // Chapter operations
   async function loadChapters(bookId: string) {
-    try {
-      loading.value = true
-      error.value = null
-      await initializeDatabase() // Ensure DB is initialized
+    return withDb('Load chapters error', 'Failed to load chapters', async () => {
       chapters.value = await db.getChapters(bookId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load chapters'
-      console.error('Load chapters error:', e)
-    } finally {
-      loading.value = false
-    }
+    }, { loading: true, clearError: true, recover: () => undefined })
   }
 
   async function saveChapter(chapter: Chapter) {
-    try {
-      loading.value = true
-      error.value = null
-      await initializeDatabase() // Ensure DB is initialized
+    return withDb('Save chapter error', 'Failed to save chapter', async () => {
       await db.saveChapter(chapter)
       if (chapter.book_id) {
         await loadChapters(chapter.book_id) // Refresh list
       }
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save chapter'
-      console.error('Save chapter error:', e)
-      throw e
-    } finally {
-      loading.value = false
-    }
+    }, { loading: true, clearError: true })
   }
 
   async function deleteChapter(chapterId: string, bookId: string) {
-    try {
-      loading.value = true
-      error.value = null
-      await initializeDatabase()
+    return withDb('Delete chapter error', 'Failed to delete chapter', async () => {
       await db.deleteChapter(chapterId, bookId)
       await loadChapters(bookId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to delete chapter'
-      console.error('Delete chapter error:', e)
-      throw e
-    } finally {
-      loading.value = false
-    }
+    }, { loading: true, clearError: true })
   }
 
   async function getChapterRevisions(chapterId: string): Promise<ChapterRevision[]> {
-    try {
-      error.value = null
-      await initializeDatabase()
+    return withDb('Load chapter versions error', 'Failed to load chapter versions', async () => {
       return await db.getChapterRevisions(chapterId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load chapter versions'
-      console.error('Load chapter versions error:', e)
-      throw e
-    }
+    }, { clearError: true })
   }
 
   async function restoreChapterRevision(revisionId: string): Promise<ChapterRevision> {
-    try {
-      error.value = null
-      await initializeDatabase()
+    return withDb('Restore chapter version error', 'Failed to restore chapter version', async () => {
       const restored = await db.restoreChapterRevision(revisionId)
       await loadChapters(restored.book_id)
       return restored
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to restore chapter version'
-      console.error('Restore chapter version error:', e)
-      throw e
-    }
+    }, { clearError: true })
   }
 
   async function discardChapterRevision(revisionId: string): Promise<ChapterRevision> {
-    try {
-      error.value = null
-      await initializeDatabase()
+    return withDb('Discard chapter version error', 'Failed to discard chapter version', async () => {
       return await db.discardChapterRevision(revisionId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to discard chapter version'
-      console.error('Discard chapter version error:', e)
-      throw e
-    }
+    }, { clearError: true })
   }
 
   async function getBookRevisionActivity(bookId: string): Promise<ChapterRevisionActivity[]> {
-    try {
-      error.value = null
-      await initializeDatabase()
+    return withDb('Load writing activity error', 'Failed to load writing activity', async () => {
       return await db.getBookRevisionActivity(bookId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load writing activity'
-      console.error('Load writing activity error:', e)
-      throw e
-    }
+    }, { clearError: true })
   }
 
   // Cloud sync operations
@@ -284,7 +249,7 @@ export function useLocalDatabase() {
         cloudSyncReady.value = cloudSync.value.isWebSdkReady()
       }
     } catch (e) {
-      console.error('Cloud sync initialization error:', e)
+      logger.error('Cloud sync initialization error:', e)
       cloudSyncReady.value = false
     }
   }
@@ -302,7 +267,7 @@ export function useLocalDatabase() {
       logger.log('[CloudSync] backupToCloud completed')
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Backup failed'
-      console.error('Backup error:', e)
+      logger.error('Backup error:', e)
       throw e
     } finally {
       loading.value = false
@@ -329,7 +294,7 @@ export function useLocalDatabase() {
       await loadBooks() // Refresh after restore
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Restore failed'
-      console.error('Restore error:', e)
+      logger.error('Restore error:', e)
       throw e
     } finally {
       loading.value = false
@@ -338,34 +303,17 @@ export function useLocalDatabase() {
 
   // Import from JSON file
   async function importFromJSON(jsonData: unknown) {
-    try {
-      loading.value = true
-      error.value = null
-      await initializeDatabase()
+    return withDb('Import error', 'Import failed', async () => {
       await db.importFromNeonExport(jsonData)
       await loadBooks() // Refresh after import
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Import failed'
-      console.error('Import error:', e)
-      throw e
-    } finally {
-      loading.value = false
-    }
+    }, { loading: true, clearError: true })
   }
 
   async function importDatabaseBackup(data: Uint8Array) {
-    try {
-      loading.value = true
-      error.value = null
-      await initializeDatabase()
+    return withDb('importDatabaseBackup', 'Import failed', async () => {
       await db.importDatabase(data)
       await loadBooks()
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Import failed'
-      throw e
-    } finally {
-      loading.value = false
-    }
+    }, { loading: true, clearError: true, log: false })
   }
 
   // Summary operations
@@ -379,25 +327,15 @@ export function useLocalDatabase() {
     generated_by?: 'ai' | 'user' | null;
     model?: string | null;
   }) {
-    try {
-      await initializeDatabase()
+    return withDb('Save summary error', 'Failed to save summary', async () => {
       await db.saveSummary(summary)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save summary'
-      console.error('Save summary error:', e)
-      throw e
-    }
+    })
   }
 
   async function getSummary(chapterId: string): Promise<ChapterSummary | null> {
-    try {
-      await initializeDatabase()
+    return withDb('Get summary error', 'Failed to get summary', async () => {
       return await db.getSummary(chapterId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get summary'
-      console.error('Get summary error:', e)
-      return null
-    }
+    }, { recover: () => null })
   }
 
   async function savePartSummary(summary: {
@@ -408,25 +346,15 @@ export function useLocalDatabase() {
     generated_by?: 'ai' | 'user' | null;
     model?: string | null;
   }) {
-    try {
-      await initializeDatabase()
+    return withDb('Save part summary error', 'Failed to save part summary', async () => {
       await db.savePartSummary(summary)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save part summary'
-      console.error('Save part summary error:', e)
-      throw e
-    }
+    })
   }
 
   async function getPartSummary(partId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Get part summary error', 'Failed to get part summary', async () => {
       return await db.getPartSummary(partId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get part summary'
-      console.error('Get part summary error:', e)
-      return null
-    }
+    }, { recover: () => null })
   }
 
   // Review operations
@@ -439,115 +367,65 @@ export function useLocalDatabase() {
     tone_key: string | null;
     profile_stable_id?: string | null;
   }) {
-    try {
-      await initializeDatabase()
+    return withDb('Save review error', 'Failed to save review', async () => {
       await db.saveReview(review)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save review'
-      console.error('Save review error:', e)
-      throw e
-    }
+    })
   }
 
   async function getReviews(chapterId: string): Promise<ChapterReview[]> {
-    try {
-      await initializeDatabase()
+    return withDb('Get reviews error', 'Failed to get reviews', async () => {
       return await db.getReviews(chapterId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get reviews'
-      console.error('Get reviews error:', e)
-      return []
-    }
+    }, { recover: () => [] })
   }
 
   async function deleteReview(reviewId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Delete review error', 'Failed to delete review', async () => {
       await db.deleteReview(reviewId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to delete review'
-      console.error('Delete review error:', e)
-      throw e
-    }
+    })
   }
 
   // Chapter notes operations
   async function saveNotes(chapterId: string, notes: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Save notes error', 'Failed to save notes', async () => {
       await db.saveNotes(chapterId, notes)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save notes'
-      console.error('Save notes error:', e)
-      throw e
-    }
+    })
   }
 
   async function getNotes(chapterId: string): Promise<ChapterNote | null> {
-    try {
-      await initializeDatabase()
+    return withDb('Get notes error', 'Failed to get notes', async () => {
       return await db.getNotes(chapterId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get notes'
-      console.error('Get notes error:', e)
-      return null
-    }
+    }, { recover: () => null })
   }
 
   async function deleteNotes(chapterId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Delete notes error', 'Failed to delete notes', async () => {
       await db.deleteNotes(chapterId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to delete notes'
-      console.error('Delete notes error:', e)
-      throw e
-    }
+    })
   }
 
   // Custom reviewer profile operations
   async function getCustomProfiles() {
-    try {
-      await initializeDatabase()
+    return withDb('Get custom profiles error', 'Failed to get custom profiles', async () => {
       return await db.getCustomProfiles()
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get custom profiles'
-      console.error('Get custom profiles error:', e)
-      return []
-    }
+    }, { recover: () => [] })
   }
 
   async function createCustomProfile(profile: { name: string; description: string }) {
-    try {
-      await initializeDatabase()
+    return withDb('Create custom profile error', 'Failed to create custom profile', async () => {
       return await db.createCustomProfile(profile)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to create custom profile'
-      console.error('Create custom profile error:', e)
-      throw e
-    }
+    })
   }
 
   async function updateCustomProfile(profileId: number, updates: { name?: string; description?: string }) {
-    try {
-      await initializeDatabase()
+    return withDb('Update custom profile error', 'Failed to update custom profile', async () => {
       await db.updateCustomProfile(profileId, updates)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update custom profile'
-      console.error('Update custom profile error:', e)
-      throw e
-    }
+    })
   }
 
   async function deleteCustomProfile(profileId: number) {
-    try {
-      await initializeDatabase()
+    return withDb('Delete custom profile error', 'Failed to delete custom profile', async () => {
       await db.deleteCustomProfile(profileId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to delete custom profile'
-      console.error('Delete custom profile error:', e)
-      throw e
-    }
+    })
   }
 
   // Wiki page operations
@@ -561,14 +439,9 @@ export function useLocalDatabase() {
     is_pinned?: boolean;
     aliases?: string[];
   }) {
-    try {
-      await initializeDatabase()
+    return withDb('Create wiki page error', 'Failed to create wiki page', async () => {
       return await db.createWikiPage(page)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to create wiki page'
-      console.error('Create wiki page error:', e)
-      throw e
-    }
+    })
   }
 
   async function updateWikiPage(pageId: string, updates: {
@@ -579,58 +452,33 @@ export function useLocalDatabase() {
     is_pinned?: boolean;
     aliases?: string[];
   }) {
-    try {
-      await initializeDatabase()
+    return withDb('Update wiki page error', 'Failed to update wiki page', async () => {
       await db.updateWikiPage(pageId, updates)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update wiki page'
-      console.error('Update wiki page error:', e)
-      throw e
-    }
+    })
   }
 
   async function getWikiPageById(id: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Get wiki page by ID error', 'Failed to get wiki page by ID', async () => {
       return await db.getWikiPageById(id)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get wiki page by ID'
-      console.error('Get wiki page by ID error:', e)
-      return null
-    }
+    }, { recover: () => null })
   }
 
   async function getWikiPage(bookId: string, pageName: string, pageType?: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Get wiki page error', 'Failed to get wiki page', async () => {
       return await db.getWikiPage(bookId, pageName, pageType)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get wiki page'
-      console.error('Get wiki page error:', e)
-      return null
-    }
+    }, { recover: () => null })
   }
 
   async function getWikiPages(bookId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Get wiki pages error', 'Failed to get wiki pages', async () => {
       return await db.getWikiPages(bookId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get wiki pages'
-      console.error('Get wiki pages error:', e)
-      return []
-    }
+    }, { recover: () => [] })
   }
 
   async function deleteWikiPage(pageId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Delete wiki page error', 'Failed to delete wiki page', async () => {
       await db.deleteWikiPage(pageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to delete wiki page'
-      console.error('Delete wiki page error:', e)
-      throw e
-    }
+    })
   }
 
   async function trackWikiUpdate(update: {
@@ -640,14 +488,9 @@ export function useLocalDatabase() {
     change_summary?: string;
     contradiction_notes?: string;
   }) {
-    try {
-      await initializeDatabase()
+    return withDb('Track wiki update error', 'Failed to track wiki update', async () => {
       await db.trackWikiUpdate(update)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to track wiki update'
-      console.error('Track wiki update error:', e)
-      throw e
-    }
+    })
   }
 
   async function addChapterWikiMention(
@@ -655,36 +498,21 @@ export function useLocalDatabase() {
     wikiPageId: string,
     linkSource: ChapterWikiLinkSource = 'manual',
   ) {
-    try {
-      await initializeDatabase()
+    return withDb('Add wiki mention error', 'Failed to add wiki mention', async () => {
       await db.addChapterWikiMention(chapterId, wikiPageId, linkSource)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to add wiki mention'
-      console.error('Add wiki mention error:', e)
-      throw e
-    }
+    })
   }
 
   async function getChapterWikiLinks(chapterId: string): Promise<ChapterWikiLink[]> {
-    try {
-      await initializeDatabase()
+    return withDb('Get chapter wiki links error', 'Failed to get chapter wiki links', async () => {
       return await db.getChapterWikiLinks(chapterId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get chapter wiki links'
-      console.error('Get chapter wiki links error:', e)
-      return []
-    }
+    }, { recover: () => [] })
   }
 
   async function getWikiPageChapterLinks(wikiPageId: string): Promise<WikiPageChapterLink[]> {
-    try {
-      await initializeDatabase()
+    return withDb('Get wiki page chapter links error', 'Failed to get wiki page chapter links', async () => {
       return await db.getWikiPageChapterLinks(wikiPageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get wiki page chapter links'
-      console.error('Get wiki page chapter links error:', e)
-      return []
-    }
+    }, { recover: () => [] })
   }
 
   async function setChapterWikiLinks(
@@ -692,14 +520,9 @@ export function useLocalDatabase() {
     wikiPageIds: string[],
     linkSource: ChapterWikiLinkSource = 'manual',
   ) {
-    try {
-      await initializeDatabase()
+    return withDb('Set chapter wiki links error', 'Failed to update chapter wiki links', async () => {
       await db.setChapterWikiLinks(chapterId, wikiPageIds, linkSource)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update chapter wiki links'
-      console.error('Set chapter wiki links error:', e)
-      throw e
-    }
+    })
   }
 
   async function ensureChapterWikiLinks(
@@ -707,14 +530,9 @@ export function useLocalDatabase() {
     wikiPageIds: string[],
     linkSource: ChapterWikiLinkSource = 'manual',
   ) {
-    try {
-      await initializeDatabase()
+    return withDb('Ensure chapter wiki links error', 'Failed to ensure chapter wiki links', async () => {
       await db.ensureChapterWikiLinks(chapterId, wikiPageIds, linkSource)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to ensure chapter wiki links'
-      console.error('Ensure chapter wiki links error:', e)
-      throw e
-    }
+    })
   }
 
   async function setWikiPageChapterLinks(
@@ -722,58 +540,33 @@ export function useLocalDatabase() {
     chapterIds: string[],
     linkSource: ChapterWikiLinkSource = 'manual',
   ) {
-    try {
-      await initializeDatabase()
+    return withDb('Set wiki page chapter links error', 'Failed to update wiki page chapter links', async () => {
       await db.setWikiPageChapterLinks(wikiPageId, chapterIds, linkSource)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update wiki page chapter links'
-      console.error('Set wiki page chapter links error:', e)
-      throw e
-    }
+    })
   }
 
   async function createPart(bookId: string, name: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Create part error', 'Failed to create part', async () => {
       return await db.createPart({ book_id: bookId, name })
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to create part'
-      console.error('Create part error:', e)
-      throw e
-    }
+    })
   }
 
   async function getParts(bookId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Get parts error', 'Failed to get parts', async () => {
       return await db.getParts(bookId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get parts'
-      console.error('Get parts error:', e)
-      throw e
-    }
+    })
   }
 
   async function updatePart(partId: string, name: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Update part error', 'Failed to update part', async () => {
       await db.updatePart(partId, name)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update part'
-      console.error('Update part error:', e)
-      throw e
-    }
+    })
   }
 
   async function deletePart(partId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Delete part error', 'Failed to delete part', async () => {
       await db.deletePart(partId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to delete part'
-      console.error('Delete part error:', e)
-      throw e
-    }
+    })
   }
 
   async function updateChapterOrders(
@@ -782,246 +575,136 @@ export function useLocalDatabase() {
     partUpdates: { [partId: string]: string[] },
     partOrder?: string[]
   ) {
-    try {
-      await initializeDatabase()
+    return withDb('Update chapter orders error', 'Failed to update chapter orders', async () => {
       await db.updateChapterOrders(bookId, chapterOrder, partUpdates, partOrder)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update chapter orders'
-      console.error('Update chapter orders error:', e)
-      throw e
-    }
+    })
   }
 
   async function updatePartOrder(bookId: string, partOrder: string[]) {
-    try {
-      await initializeDatabase()
+    return withDb('Update part order error', 'Failed to update part order', async () => {
       await db.updatePartOrder(bookId, partOrder)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update part order'
-      console.error('Update part order error:', e)
-      throw e
-    }
+    })
   }
 
   async function searchBook(bookId: string, searchTerm: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Search error', 'Failed to search', async () => {
       return await db.searchBook(bookId, searchTerm)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to search'
-      console.error('Search error:', e)
-      throw e
-    }
+    })
   }
 
   async function findReplaceMatches(request: FindReplaceSearchRequest) {
-    try {
-      await initializeDatabase()
+    return withDb('Find matches error', 'Failed to find matches', async () => {
       return await db.findReplaceMatches(request)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to find matches'
-      console.error('Find matches error:', e)
-      throw e
-    }
+    })
   }
 
   async function replaceFindReplaceMatches(request: ReplaceFindReplaceMatchesRequest) {
-    try {
-      await initializeDatabase()
+    return withDb('Replace matches error', 'Failed to replace matches', async () => {
       return await db.replaceFindReplaceMatches(request)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to replace matches'
-      console.error('Replace matches error:', e)
-      throw e
-    }
+    })
   }
 
   async function restoreFindReplaceFields(request: RestoreFindReplaceFieldsRequest) {
-    try {
-      await initializeDatabase()
+    return withDb('Undo replacement error', 'Failed to undo replacement', async () => {
       await db.restoreFindReplaceFields(request)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to undo replacement'
-      console.error('Undo replacement error:', e)
-      throw e
-    }
+    })
   }
 
   async function replaceInChapter(chapterId: string, searchTerm: string, replaceTerm: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Replace in chapter error', 'Failed to replace in chapter', async () => {
       await db.replaceInChapter(chapterId, searchTerm, replaceTerm)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to replace in chapter'
-      console.error('Replace in chapter error:', e)
-      throw e
-    }
+    })
   }
 
   async function replaceInWikiPage(wikiPageId: string, searchTerm: string, replaceTerm: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Replace in wiki page error', 'Failed to replace in wiki page', async () => {
       await db.replaceInWikiPage(wikiPageId, searchTerm, replaceTerm)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to replace in wiki page'
-      console.error('Replace in wiki page error:', e)
-      throw e
-    }
+    })
   }
 
   // Image asset operations (Electron-only features)
   async function saveImageAssetRecord(asset: ImageAsset) {
-    try {
-      await initializeDatabase()
+    return withDb('Save image asset error', 'Failed to save image', async () => {
       await db.saveImageAsset(asset)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save image'
-      console.error('Save image asset error:', e)
-      throw e
-    }
+    })
   }
 
   async function deleteImageAssetRecord(imageId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Delete image asset error', 'Failed to delete image', async () => {
       await db.deleteImageAsset(imageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to delete image'
-      console.error('Delete image asset error:', e)
-      throw e
-    }
+    })
   }
 
   async function getChapterImageAssets(chapterId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Get chapter images error', 'Failed to load images', async () => {
       return await db.getChapterImages(chapterId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load images'
-      console.error('Get chapter images error:', e)
-      throw e
-    }
+    })
   }
 
   async function getPartImageAssets(partId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Get part images error', 'Failed to load part images', async () => {
       return await db.getPartImages(partId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load part images'
-      console.error('Get part images error:', e)
-      throw e
-    }
+    })
   }
 
   async function getBookCoverImageAsset(bookId: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Get book cover image error', 'Failed to load book cover', async () => {
       return await db.getBookCoverImage(bookId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load book cover'
-      console.error('Get book cover image error:', e)
-      throw e
-    }
+    })
   }
 
   async function setBookCoverImageId(bookId: string, imageId: string | null) {
-    try {
-      await initializeDatabase()
+    return withDb('Set book cover image error', 'Failed to update book cover', async () => {
       await db.setBookCoverImage(bookId, imageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update book cover'
-      console.error('Set book cover image error:', e)
-      throw e
-    }
+    })
   }
 
   async function setPartCoverImageId(partId: string, imageId: string | null) {
-    try {
-      await initializeDatabase()
+    return withDb('Set part cover image error', 'Failed to update part cover', async () => {
       await db.setPartCoverImageId(partId, imageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update part cover'
-      console.error('Set part cover image error:', e)
-      throw e
-    }
+    })
   }
 
   async function getPartCoverImageAsset(partId: string): Promise<ImageAsset | null> {
-    try {
-      await initializeDatabase()
+    return withDb('Get part cover image error', 'Failed to get part cover', async () => {
       return await db.getPartCoverImage(partId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get part cover'
-      console.error('Get part cover image error:', e)
-      throw e
-    }
+    })
   }
 
   async function setChapterCoverImageId(chapterId: string, imageId: string | null) {
-    try {
-      await initializeDatabase()
+    return withDb('Set chapter cover image error', 'Failed to update chapter cover', async () => {
       await db.setChapterCoverImageId(chapterId, imageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update chapter cover'
-      console.error('Set chapter cover image error:', e)
-      throw e
-    }
+    })
   }
 
   async function getChapterCoverImageAsset(chapterId: string): Promise<ImageAsset | null> {
-    try {
-      await initializeDatabase()
+    return withDb('Get chapter cover image error', 'Failed to get chapter cover', async () => {
       return await db.getChapterCoverImage(chapterId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get chapter cover'
-      console.error('Get chapter cover image error:', e)
-      throw e
-    }
+    })
   }
 
   async function setWikiPageCoverImageId(wikiPageId: string, imageId: string | null) {
-    try {
-      await initializeDatabase()
+    return withDb('Set wiki page cover image error', 'Failed to update wiki page cover', async () => {
       await db.setWikiPageCoverImageId(wikiPageId, imageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to update wiki page cover'
-      console.error('Set wiki page cover image error:', e)
-      throw e
-    }
+    })
   }
 
   async function getWikiPageCoverImageAsset(wikiPageId: string): Promise<ImageAsset | null> {
-    try {
-      await initializeDatabase()
+    return withDb('Get wiki page cover image error', 'Failed to get wiki page cover', async () => {
       return await db.getWikiPageCoverImage(wikiPageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to get wiki page cover'
-      console.error('Get wiki page cover image error:', e)
-      throw e
-    }
+    })
   }
 
   async function getBookImageAssets(bookId: string): Promise<ImageAsset[]> {
-    try {
-      await initializeDatabase()
+    return withDb('Get book images error', 'Failed to load book images', async () => {
       return await db.getBookImages(bookId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load book images'
-      console.error('Get book images error:', e)
-      throw e
-    }
+    })
   }
 
   async function updateImageAssetNotes(imageId: string, notes: string) {
-    try {
-      await initializeDatabase()
+    return withDb('Update image notes error', 'Failed to save image notes', async () => {
       await db.updateImageAssetNotes(imageId, notes)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save image notes'
-      console.error('Update image notes error:', e)
-      throw e
-    }
+    })
   }
 
   async function updateImageAssetIntegrity(
@@ -1033,36 +716,21 @@ export function useLocalDatabase() {
   }
 
   async function getImageWikiTags(imageId: string): Promise<ImageWikiTag[]> {
-    try {
-      await initializeDatabase()
+    return withDb('Get image tags error', 'Failed to load image tags', async () => {
       return await db.getImageWikiTags(imageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load image tags'
-      console.error('Get image tags error:', e)
-      throw e
-    }
+    })
   }
 
   async function setImageWikiTags(imageId: string, wikiPageIds: string[]) {
-    try {
-      await initializeDatabase()
+    return withDb('Set image tags error', 'Failed to save image tags', async () => {
       await db.setImageWikiTags(imageId, wikiPageIds)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save image tags'
-      console.error('Set image tags error:', e)
-      throw e
-    }
+    })
   }
 
   async function getWikiPageImageAssets(wikiPageId: string): Promise<ImageAsset[]> {
-    try {
-      await initializeDatabase()
+    return withDb('Get wiki page images error', 'Failed to load wiki page images', async () => {
       return await db.getWikiPageImages(wikiPageId)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load wiki page images'
-      console.error('Get wiki page images error:', e)
-      throw e
-    }
+    })
   }
 
   return {
