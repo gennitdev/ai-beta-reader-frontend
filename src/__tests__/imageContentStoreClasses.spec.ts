@@ -4,7 +4,6 @@ import type { ImageAsset } from '@/lib/database'
 import {
   ElectronImageContentStore,
   IndexedDbImageContentStore,
-  blobToDataUrl,
 } from '@/lib/imageContentStore'
 
 const { read, write, del, listKeys } = vi.hoisted(() => ({
@@ -111,13 +110,13 @@ describe('IndexedDbImageContentStore', () => {
 describe('ElectronImageContentStore', () => {
   function bridge() {
     return {
-      readImageData: vi.fn(async () => ({ dataUrl: 'data:image/png;base64,aGVsbG8=' })),
+      readImageData: vi.fn(async () => ({ bytes: new Uint8Array([104, 101, 108, 108, 111]), mimeType: 'image/png' })),
       writeImageData: vi.fn(async () => {}),
       deleteImageFile: vi.fn(async () => {}),
     }
   }
 
-  it('reads via the bridge and converts the data URL to a Blob', async () => {
+  it('reads binary image bytes via the bridge', async () => {
     const b = bridge()
     const store = new ElectronImageContentStore(b as never)
     const blob = await store.read(asset())
@@ -133,14 +132,15 @@ describe('ElectronImageContentStore', () => {
     expect(await store.read(asset({ file_path: '' }))).toBeNull()
   })
 
-  it('writes the blob as a data URL', async () => {
+  it('writes the blob as binary bytes', async () => {
     const b = bridge()
     const store = new ElectronImageContentStore(b as never)
     const blob = new Blob(['hi'], { type: 'image/png' })
     await store.write(asset(), blob)
     expect(b.writeImageData).toHaveBeenCalledWith({
       relativePath: 'images/img.png',
-      dataUrl: await blobToDataUrl(blob),
+      bytes: new Uint8Array([104, 105]),
+      mimeType: 'image/png',
     })
   })
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assertAllowedSecureStorageKey,
   assertSecureStorageValue,
-  decodeImageDataUrl,
+  decodeImageBytes,
   MAX_IMAGE_BYTES,
   resolveContainedPath,
 } from '../src/security-boundaries'
@@ -40,31 +40,21 @@ describe('Electron security boundaries', () => {
     expect(() => assertSecureStorageValue('x'.repeat(65 * 1024))).toThrow()
   })
 
-  it('decodes supported raster image data URLs', () => {
-    const decoded = decodeImageDataUrl('data:image/png;base64,aGVsbG8=')
+  it('accepts supported raster image bytes', () => {
+    const decoded = decodeImageBytes(new Uint8Array(Buffer.from('hello')), 'image/png')
 
     expect(decoded.mimeType).toBe('image/png')
     expect(decoded.buffer.toString('utf8')).toBe('hello')
   })
 
-  it.each([
-    'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
-    'data:text/html;base64,PGgxPm5vcGU8L2gxPg==',
-    'not-a-data-url',
-  ])('rejects unsupported image payloads: %s', (dataUrl) => {
-    expect(() => decodeImageDataUrl(dataUrl)).toThrow()
+  it('rejects unsupported image MIME types and non-binary payloads', () => {
+    expect(() => decodeImageBytes(new Uint8Array([1]), 'image/svg+xml')).toThrow(/unsupported/)
+    expect(() => decodeImageBytes('not-bytes', 'image/png')).toThrow(/byte payload/)
   })
 
-  it('rejects oversized image payloads before decoding them', () => {
-    const oversized = 'A'.repeat(Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 4)
+  it('rejects oversized image payloads', () => {
+    const oversized = new Uint8Array(MAX_IMAGE_BYTES + 1)
 
-    expect(() => decodeImageDataUrl(`data:image/png;base64,${oversized}`)).toThrow(/maximum/)
-  })
-
-  it('rejects a maximum-length unpadded payload that decodes beyond the byte limit', () => {
-    const encodedLength = Math.ceil(MAX_IMAGE_BYTES / 3) * 4
-    const decodedBeyondLimit = 'A'.repeat(encodedLength)
-
-    expect(() => decodeImageDataUrl(`data:image/png;base64,${decodedBeyondLimit}`)).toThrow(/maximum/)
+    expect(() => decodeImageBytes(oversized, 'image/png')).toThrow(/maximum/)
   })
 })

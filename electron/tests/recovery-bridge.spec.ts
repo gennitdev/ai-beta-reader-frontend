@@ -30,7 +30,7 @@ describe('Electron recovery bridge', () => {
     expect(ipcMain.handle.mock.calls.map(([channel]) => channel)).toEqual([
       'desktop-recovery:write', 'desktop-recovery:read', 'desktop-recovery:list', 'desktop-recovery:delete',
     ])
-    await getIpcHandler('desktop-recovery:write')(null, { metadata, bytesBase64: 'AQID' })
+    await getIpcHandler('desktop-recovery:write')(null, { metadata, bytes: new Uint8Array([1, 2, 3]) })
     expect(fsMocks.mkdir).toHaveBeenCalledWith(path.join('/tmp/beta-bot-user-data', 'recovery'), { recursive: true })
     expect(fsMocks.writeFile).toHaveBeenCalledTimes(2)
     expect(fsMocks.rename).toHaveBeenCalledTimes(2)
@@ -39,7 +39,7 @@ describe('Electron recovery bridge', () => {
 
   it('reads valid bundles and treats only missing files as absent', async () => {
     fsMocks.readFile.mockResolvedValueOnce(JSON.stringify(metadata)).mockResolvedValueOnce(Buffer.from([1, 2, 3]))
-    await expect(getIpcHandler('desktop-recovery:read')(null, metadata.id)).resolves.toEqual({ metadata, bytesBase64: 'AQID' })
+    await expect(getIpcHandler('desktop-recovery:read')(null, metadata.id)).resolves.toEqual({ metadata, bytes: new Uint8Array([1, 2, 3]) })
     fsMocks.readFile.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     await expect(getIpcHandler('desktop-recovery:read')(null, metadata.id)).resolves.toBeNull()
     fsMocks.readFile.mockRejectedValueOnce(new Error('denied'))
@@ -57,7 +57,7 @@ describe('Electron recovery bridge', () => {
     expect(fsMocks.rm).toHaveBeenCalledWith(path.join('/tmp/beta-bot-user-data', 'recovery', 'recovery-1.json'), { force: true })
   })
 
-  it('rejects unsafe IDs, malformed metadata, invalid encodings, and inconsistent lengths', async () => {
+  it('rejects unsafe IDs, malformed metadata, invalid bytes, and inconsistent lengths', async () => {
     await expect(getIpcHandler('desktop-recovery:read')(null, '../escape')).rejects.toThrow('Invalid recovery')
     const malformedMetadata = [
       null,
@@ -71,12 +71,10 @@ describe('Electron recovery bridge', () => {
       { ...metadata, sha256: 'short' },
     ]
     for (const invalid of malformedMetadata) {
-      await expect(getIpcHandler('desktop-recovery:write')(null, { metadata: invalid, bytesBase64: '' })).rejects.toThrow()
+      await expect(getIpcHandler('desktop-recovery:write')(null, { metadata: invalid, bytes: new Uint8Array() })).rejects.toThrow()
     }
-    await expect(getIpcHandler('desktop-recovery:write')(null, { metadata, bytesBase64: '***' })).rejects.toThrow('encoding')
-    await expect(getIpcHandler('desktop-recovery:write')(null, { metadata: { ...metadata, byteLength: 0 }, bytesBase64: 'A' })).rejects.toThrow('encoding')
-    await expect(getIpcHandler('desktop-recovery:write')(null, { metadata: { ...metadata, byteLength: 1 }, bytesBase64: 'AB==' })).rejects.toThrow('encoding')
-    await expect(getIpcHandler('desktop-recovery:write')(null, { metadata, bytesBase64: 'AQI=' })).rejects.toThrow('byte length')
+    await expect(getIpcHandler('desktop-recovery:write')(null, { metadata, bytes: 'not-bytes' })).rejects.toThrow('bytes')
+    await expect(getIpcHandler('desktop-recovery:write')(null, { metadata, bytes: new Uint8Array([1, 2]) })).rejects.toThrow('byte length')
     fsMocks.readFile.mockResolvedValueOnce(JSON.stringify({ ...metadata, id: 'recovery-2' })).mockResolvedValueOnce(Buffer.from([1, 2, 3]))
     await expect(getIpcHandler('desktop-recovery:read')(null, metadata.id)).rejects.toThrow('filename')
     fsMocks.readdir.mockResolvedValueOnce(['wrong-name.json'])
@@ -86,7 +84,7 @@ describe('Electron recovery bridge', () => {
 
   it('cleans temporary files when a write fails and propagates non-missing list errors', async () => {
     fsMocks.writeFile.mockRejectedValueOnce(new Error('disk full'))
-    await expect(getIpcHandler('desktop-recovery:write')(null, { metadata, bytesBase64: 'AQID' })).rejects.toThrow('disk full')
+    await expect(getIpcHandler('desktop-recovery:write')(null, { metadata, bytes: new Uint8Array([1, 2, 3]) })).rejects.toThrow('disk full')
     expect(fsMocks.rm).toHaveBeenCalledTimes(2)
     fsMocks.readdir.mockRejectedValueOnce(new Error('denied'))
     await expect(getIpcHandler('desktop-recovery:list')()).rejects.toThrow('denied')

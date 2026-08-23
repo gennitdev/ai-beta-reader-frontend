@@ -44,7 +44,7 @@ function bridge(overrides: Partial<DesktopImagesBridge> = {}): DesktopImagesBrid
   return {
     pickChapterImages: vi.fn(async () => ({ canceled: false, images: [] })),
     pickBookCover: vi.fn(async () => ({ canceled: true })),
-    readImageData: vi.fn(async () => ({ dataUrl: 'data:image/png;base64,AQID' })),
+    readImageData: vi.fn(async () => ({ bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png' })),
     writeImageData: vi.fn(async () => ({ success: true })),
     deleteImageFile: vi.fn(async () => ({ success: true })),
     ...overrides,

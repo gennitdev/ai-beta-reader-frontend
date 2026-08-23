@@ -3,7 +3,11 @@ import packageInfo from '../../package.json'
 import type { ImageAsset } from '@/lib/database'
 import { previewBundleDirectoryImport, previewBundleZipImport, type PreviewedBundleImport } from '@/lib/libraryBundle/importPreview'
 import { resolveImportConflict, type ImportConflictResolution } from '@/lib/libraryBundle/plan'
-import { applyImportPlanToModel, canonicalModelToDatabaseImport } from '@/lib/libraryBundle/apply'
+import { applyImportPlanToModel } from '@/lib/libraryBundle/apply'
+import {
+  importCanonicalLibraryModel,
+  removeCanonicalAssetsAbsentFromModel,
+} from '@/lib/libraryBundle/restore'
 import { sha256Hex } from '@/lib/libraryBundle/semanticHash'
 import { MAX_BUNDLE_ARCHIVE_BYTES } from '@/lib/libraryBundle/limits'
 import { createPortableId } from '@/lib/portableIds'
@@ -11,6 +15,7 @@ import type { RecoveryBundleMetadata, RecoveryStore } from '@/lib/recovery/model
 import { createRuntimeRecoveryStore } from '@/lib/recovery/runtime'
 import { prepareLibraryReplacement, replaceLibraryWithRecovery } from '@/lib/recovery/replacement'
 import { readVerifiedRecovery } from '@/lib/recovery/service'
+import { createRuntimeImageContentStore } from '@/lib/runtimeImageContentStore'
 
 interface LibraryBundleImportDeps {
   exportDatabase: () => Promise<Uint8Array>
@@ -126,9 +131,16 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
     try {
       const currentBackup = await deps.exportDatabase()
       const currentGeneration = await sha256Hex(currentBackup)
-      const merged = applyImportPlanToModel(preview.value.plan, preview.value.localModel, currentGeneration)
-      const databaseData = canonicalModelToDatabaseImport(merged)
-      await deps.importDatabaseBackup(new TextEncoder().encode(JSON.stringify(databaseData)))
+      const merged = applyImportPlanToModel(
+        preview.value.plan,
+        preview.value.localModel,
+        preview.value.incomingModel,
+        currentGeneration,
+      )
+      await importCanonicalLibraryModel(merged, {
+        imageStore: createRuntimeImageContentStore(),
+        importDatabaseBackup: deps.importDatabaseBackup,
+      })
       importMessage.value = 'Bundle changes applied successfully.'
       preview.value = null
     } catch (error) {
@@ -191,7 +203,20 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
         activePreview.incomingModel,
         activeRecovery,
         currentGeneration,
-        deps.importDatabaseBackup,
+        async (model, phase) => {
+          const imageStore = createRuntimeImageContentStore()
+          await importCanonicalLibraryModel(model, {
+            imageStore,
+            importDatabaseBackup: deps.importDatabaseBackup,
+          })
+          if (phase === 'rollback') {
+            await removeCanonicalAssetsAbsentFromModel(
+              imageStore,
+              activePreview.incomingModel.assets,
+              model,
+            )
+          }
+        },
       )
       importMessage.value = 'Library replaced successfully. The verified recovery remains available below.'
       if (preview.value === activePreview) {

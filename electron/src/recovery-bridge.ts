@@ -15,7 +15,7 @@ interface RecoveryMetadata {
 
 interface RecoveryWritePayload {
   metadata: RecoveryMetadata;
-  bytesBase64: string;
+  bytes: Uint8Array;
 }
 
 function recoveryRoot(): string {
@@ -48,13 +48,8 @@ function pathsFor(id: string) {
 
 async function writeRecovery(payload: RecoveryWritePayload): Promise<void> {
   assertMetadata(payload?.metadata);
-  if (
-    typeof payload.bytesBase64 !== 'string'
-    || payload.bytesBase64.length % 4 !== 0
-    || !/^[a-zA-Z0-9+/]*={0,2}$/.test(payload.bytesBase64)
-  ) throw new Error('Invalid recovery bundle encoding.');
-  const bytes = Buffer.from(payload.bytesBase64, 'base64');
-  if (bytes.toString('base64') !== payload.bytesBase64) throw new Error('Invalid recovery bundle encoding.');
+  if (!(payload.bytes instanceof Uint8Array)) throw new Error('Invalid recovery bundle bytes.');
+  const bytes = Buffer.from(payload.bytes.buffer, payload.bytes.byteOffset, payload.bytes.byteLength);
   if (bytes.byteLength !== payload.metadata.byteLength) throw new Error('Recovery byte length does not match metadata.');
   await mkdir(recoveryRoot(), { recursive: true });
   const target = pathsFor(payload.metadata.id);
@@ -71,14 +66,14 @@ async function writeRecovery(payload: RecoveryWritePayload): Promise<void> {
   }
 }
 
-async function readRecovery(id: string): Promise<{ metadata: RecoveryMetadata; bytesBase64: string } | null> {
+async function readRecovery(id: string): Promise<{ metadata: RecoveryMetadata; bytes: Uint8Array } | null> {
   const target = pathsFor(id);
   try {
     const [metadataJson, bytes] = await Promise.all([readFile(target.metadata, 'utf8'), readFile(target.zip)]);
     const metadata: unknown = JSON.parse(metadataJson);
     assertMetadata(metadata);
     if (metadata.id !== id) throw new Error('Recovery metadata ID does not match its filename.');
-    return { metadata, bytesBase64: bytes.toString('base64') };
+    return { metadata, bytes: new Uint8Array(bytes) };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;

@@ -12,6 +12,7 @@ const previewZip = vi.hoisted(() => vi.fn())
 const previewDirectory = vi.hoisted(() => vi.fn())
 const prepareReplacement = vi.hoisted(() => vi.fn())
 const replaceWithRecovery = vi.hoisted(() => vi.fn())
+const importCanonicalModel = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/libraryBundle/importPreview', () => ({
   previewBundleZipImport: previewZip,
   previewBundleDirectoryImport: previewDirectory,
@@ -19,6 +20,13 @@ vi.mock('@/lib/libraryBundle/importPreview', () => ({
 vi.mock('@/lib/recovery/replacement', () => ({
   prepareLibraryReplacement: prepareReplacement,
   replaceLibraryWithRecovery: replaceWithRecovery,
+}))
+vi.mock('@/lib/libraryBundle/restore', () => ({
+  importCanonicalLibraryModel: importCanonicalModel,
+  removeCanonicalAssetsAbsentFromModel: vi.fn(),
+}))
+vi.mock('@/lib/runtimeImageContentStore', () => ({
+  createRuntimeImageContentStore: () => ({ kind: 'image-store' }),
 }))
 
 function emptyPlan(generation: string): LibraryImportPlan {
@@ -45,7 +53,12 @@ function memoryStore(): RecoveryStore {
 }
 
 describe('useLibraryBundleImport', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    importCanonicalModel.mockImplementation(async (_model, importer) => {
+      await importer.importDatabaseBackup(new Uint8Array())
+    })
+  })
 
   it('previews ZIPs and directories, resolves a conflict, and applies against the same generation', async () => {
     const model = completeCanonicalLibraryFixture()

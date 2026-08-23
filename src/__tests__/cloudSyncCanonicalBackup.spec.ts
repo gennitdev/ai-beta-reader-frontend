@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   previewImport: vi.fn(),
   prepareReplacement: vi.fn(),
   replaceLibrary: vi.fn(),
+  importCanonicalModel: vi.fn(),
+  removeAbsentAssets: vi.fn(),
   recoveryStore: { kind: 'recovery-store' },
   sha256: vi.fn(),
 }))
@@ -51,6 +53,10 @@ vi.mock('@/lib/libraryBundle/importPreview', () => ({
 vi.mock('@/lib/recovery/replacement', () => ({
   prepareLibraryReplacement: mocks.prepareReplacement,
   replaceLibraryWithRecovery: mocks.replaceLibrary,
+}))
+vi.mock('@/lib/libraryBundle/restore', () => ({
+  importCanonicalLibraryModel: mocks.importCanonicalModel,
+  removeCanonicalAssetsAbsentFromModel: mocks.removeAbsentAssets,
 }))
 vi.mock('@/lib/recovery/runtime', () => ({
   createRuntimeRecoveryStore: () => mocks.recoveryStore,
@@ -100,6 +106,8 @@ beforeEach(() => {
   mocks.previewImport.mockResolvedValue({ plan: { replaceEligible: true } })
   mocks.prepareReplacement.mockResolvedValue({ recovery: true })
   mocks.replaceLibrary.mockResolvedValue(undefined)
+  mocks.importCanonicalModel.mockResolvedValue(undefined)
+  mocks.removeAbsentAssets.mockResolvedValue(undefined)
   mocks.sha256.mockResolvedValue('database-hash')
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -216,15 +224,15 @@ describe('CloudSync canonical backup and import', () => {
   it('prepares recovery and replaces the library for an eligible canonical bundle', async () => {
     const preview = {
       plan: { replaceEligible: true },
-      localModel: { books: [] },
+      localModel: { books: [], assets: [] },
       incomingModel: { books: [{ id: 'book-1' }] },
-      databaseGeneration: new Uint8Array([7]),
+      databaseGeneration: 'database-hash',
     }
     mocks.previewImport.mockResolvedValueOnce(preview)
     mocks.replaceLibrary.mockImplementationOnce(async (
-      _store, _plan, _incoming, _recovery, _hash, importDatabase,
+      _store, _plan, incoming, _recovery, _hash, importLibrary,
     ) => {
-      await importDatabase(new TextEncoder().encode(JSON.stringify({ version: 5, image_assets: [] })))
+      await importLibrary(incoming)
     })
     const now = new Date('2026-08-22T12:00:00.000Z')
     const cloud = new CloudSync(provider(), { now: () => now, appVersion: '9.1.0' }) as unknown as PrivateCloudSync
@@ -246,7 +254,10 @@ describe('CloudSync canonical backup and import', () => {
       'database-hash',
       expect.any(Function),
     )
-    expect(mocks.importDatabase).toHaveBeenCalled()
+    expect(mocks.importCanonicalModel).toHaveBeenCalledWith(
+      preview.incomingModel,
+      expect.objectContaining({ importDatabaseBackup: expect.any(Function) }),
+    )
   })
 
   it('restores legacy image metadata without a runtime content store', async () => {

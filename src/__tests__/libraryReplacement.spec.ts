@@ -48,7 +48,7 @@ describe('Replace library with verified recovery', () => {
     const importDatabase = vi.fn().mockResolvedValue(undefined)
     await replaceLibraryWithRecovery(store, plan(), incoming, recovery, plan().databaseGeneration, importDatabase)
     expect(importDatabase).toHaveBeenCalledOnce()
-    const imported = JSON.parse(new TextDecoder().decode(importDatabase.mock.calls[0][0]))
+    const imported = importDatabase.mock.calls[0][0]
     expect(imported.books[0].title).toBe('Replacement title')
     expect(recovery).toEqual(expect.objectContaining({ byteLength: expect.any(Number), sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }))
   })
@@ -63,7 +63,7 @@ describe('Replace library with verified recovery', () => {
       store, plan(), completeCanonicalLibraryFixture(), recovery, plan().databaseGeneration, importDatabase,
     )).rejects.toThrow('prior library was restored')
     expect(importDatabase).toHaveBeenCalledTimes(2)
-    const rollback = JSON.parse(new TextDecoder().decode(importDatabase.mock.calls[1][0]))
+    const rollback = importDatabase.mock.calls[1][0]
     expect(rollback.books[0].title).toBe('A Book')
   })
 
@@ -77,7 +77,7 @@ describe('Replace library with verified recovery', () => {
     expect(await store.read(recovery.id)).not.toBeNull()
   })
 
-  it('rejects stale generations, ineligible bundles, mismatched recovery metadata, and corrupt recovery bytes before writing', async () => {
+  it('rejects invalid replacement metadata and loads recovery bytes only after a write failure', async () => {
     const { store, values } = memoryStore()
     await expect(prepared(store, plan('a'.repeat(64), false))).rejects.toThrow('not eligible')
     await expect(prepareLibraryReplacement(
@@ -97,9 +97,10 @@ describe('Replace library with verified recovery', () => {
       plan().databaseGeneration, importDatabase,
     )).rejects.toThrow('does not match')
     values.get(recovery.id)!.bytes[0] ^= 0xff
+    importDatabase.mockRejectedValueOnce(new Error('write failed'))
     await expect(replaceLibraryWithRecovery(
       store, plan(), completeCanonicalLibraryFixture(), recovery, plan().databaseGeneration, importDatabase,
-    )).rejects.toThrow('SHA-256')
-    expect(importDatabase).not.toHaveBeenCalled()
+    )).rejects.toThrow(`Verified recovery ${recovery.id} is still available`)
+    expect(importDatabase).toHaveBeenCalledOnce()
   })
 })
