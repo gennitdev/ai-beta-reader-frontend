@@ -540,6 +540,18 @@ Round-trip equality is defined by a versioned logical database dump, not raw SQL
 
 ## Import modes
 
+### Add or update books — default from My Books
+
+The book-list import accepts a bundle ZIP or folder without offering whole-library replacement. For each declared `book_id`:
+
+- if the entire book is absent locally, the book and all of its scoped entities are created with their existing stable IDs;
+- if the book already exists, the normal three-way Apply changes rules are used;
+- books outside the manifest scope are never modified;
+- an entity ID that already belongs to a different local book is a fatal identity collision;
+- a newly imported illustrated book must include its image bytes.
+
+Preserving stable IDs allows a bundle imported from a Git workspace to receive later edits from that same workspace. Deliberately duplicating an installed book remains a separate Import as copy operation.
+
 ### Apply changes — default for files
 
 Apply changes performs a three-way comparison for every entity in scope:
@@ -846,6 +858,8 @@ A bundle intended for Git includes a sample `AGENTS.md` or `CLAUDE.md` outside t
 Provide a small Node-based validator command that uses the same schema, migration, and validation modules as the app. It performs no database access and exits nonzero on errors.
 
 ## User interface
+
+The My Books page offers **Import Bundle** beside **New Book**. It previews additions, updates, conflicts, images, and warnings, then refreshes the book list and offers to open a successfully imported book. It never offers Replace library.
 
 Settings presents separate, accurately named actions:
 

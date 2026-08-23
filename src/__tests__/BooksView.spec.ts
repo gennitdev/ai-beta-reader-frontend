@@ -9,6 +9,14 @@ const h = vi.hoisted(() => ({
   createBook: vi.fn(async () => ({ id: 'new', title: 'New' })),
   fetchBookCover: vi.fn(async () => null),
   getImageSource: vi.fn(async () => 'src'),
+  getImageBlob: vi.fn(async () => new Blob()),
+  exportDatabase: vi.fn(async () => new Uint8Array()),
+  importDatabaseBackup: vi.fn(async () => {}),
+  previewFile: vi.fn(async () => {}),
+  previewDirectory: vi.fn(async () => {}),
+  resolveConflict: vi.fn(),
+  applyChanges: vi.fn(async () => [] as string[]),
+  resetImport: vi.fn(),
   push: vi.fn(),
 }))
 
@@ -34,6 +42,38 @@ vi.mock('@/composables/useImageLibrary', async () => {
       canStoreImages: ref(false),
       fetchBookCover: h.fetchBookCover,
       getImageSource: h.getImageSource,
+      getImageBlob: h.getImageBlob,
+    }),
+  }
+})
+
+vi.mock('@/composables/useDatabase', () => ({
+  useDatabase: () => ({
+    exportDatabase: h.exportDatabase,
+    importDatabaseBackup: h.importDatabaseBackup,
+  }),
+}))
+
+vi.mock('@/composables/useLibraryBundleImport', async () => {
+  const { ref, shallowRef } = await import('vue')
+  return {
+    useLibraryBundleImport: () => ({
+      plan: shallowRef(null),
+      importFileName: ref(''),
+      importError: ref(''),
+      importMessage: ref(''),
+      isPreviewing: ref(false),
+      isApplying: ref(false),
+      isPreparingReplace: ref(false),
+      isReplacing: ref(false),
+      recoveries: ref([]),
+      preparedRecovery: ref(null),
+      replaceRemovalCounts: ref({ books: 0, chapters: 0, wikiPages: 0 }),
+      previewFile: h.previewFile,
+      previewDirectory: h.previewDirectory,
+      resolveConflict: h.resolveConflict,
+      applyChanges: h.applyChanges,
+      resetImport: h.resetImport,
     }),
   }
 })
@@ -132,5 +172,18 @@ describe('BooksView', () => {
     const arg = h.createBook.mock.calls[0][0] as { id: string; title: string }
     expect(arg.title).toBe('Fresh Book')
     expect(arg.id).toContain('fresh-book')
+  })
+
+  it('opens the focused bundle-import workflow from the book list', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const importButton = wrapper.findAll('button').find((button) => button.text().includes('Import Bundle'))!
+    await importButton.trigger('click')
+
+    expect(h.resetImport).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Import books from a bundle')
+    expect(wrapper.text()).toContain('Choose a Beta Bot bundle')
+    expect(wrapper.text()).not.toContain('Prepare Replace library')
   })
 })

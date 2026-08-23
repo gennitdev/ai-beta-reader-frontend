@@ -2,7 +2,7 @@ import { computed, ref, shallowRef } from 'vue'
 import packageInfo from '../../package.json'
 import type { ImageAsset } from '@/lib/database'
 import { previewBundleDirectoryImport, previewBundleZipImport, type PreviewedBundleImport } from '@/lib/libraryBundle/importPreview'
-import { resolveImportConflict, type ImportConflictResolution } from '@/lib/libraryBundle/plan'
+import { resolveImportConflict, type ImportConflictResolution, type LibraryImportIntent } from '@/lib/libraryBundle/plan'
 import { applyImportPlanToModel } from '@/lib/libraryBundle/apply'
 import {
   importCanonicalLibraryModel,
@@ -23,6 +23,7 @@ interface LibraryBundleImportDeps {
   getImageBlob: (asset: ImageAsset) => Promise<Blob>
   recoveryStore?: RecoveryStore
   confirmReplace?: (message: string) => boolean
+  intent?: LibraryImportIntent
 }
 
 function triggerRecoveryDownload(bytes: Uint8Array, fileName: string): void {
@@ -88,6 +89,7 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
       ])
       preview.value = await previewBundleZipImport(zipBytes, databaseBackup, {
         readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+        intent: deps.intent,
       })
     } catch (error) {
       importError.value = error instanceof Error ? error.message : 'Could not preview this bundle.'
@@ -107,6 +109,7 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
       const databaseBackup = await deps.exportDatabase()
       preview.value = await previewBundleDirectoryImport(files, databaseBackup, {
         readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+        intent: deps.intent,
       })
     } catch (error) {
       importError.value = error instanceof Error ? error.message : 'Could not preview this bundle folder.'
@@ -123,8 +126,9 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
     }
   }
 
-  async function applyChanges(): Promise<void> {
-    if (!preview.value) return
+  async function applyChanges(): Promise<string[]> {
+    if (!preview.value) return []
+    const activePreview = preview.value
     importError.value = ''
     importMessage.value = ''
     isApplying.value = true
@@ -132,19 +136,34 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
       const currentBackup = await deps.exportDatabase()
       const currentGeneration = await sha256Hex(currentBackup)
       const merged = applyImportPlanToModel(
-        preview.value.plan,
-        preview.value.localModel,
-        preview.value.incomingModel,
+        activePreview.plan,
+        activePreview.localModel,
+        activePreview.incomingModel,
         currentGeneration,
       )
-      await importCanonicalLibraryModel(merged, {
-        imageStore: createRuntimeImageContentStore(),
-        importDatabaseBackup: deps.importDatabaseBackup,
-      })
+      const imageStore = createRuntimeImageContentStore()
+      try {
+        await importCanonicalLibraryModel(merged, {
+          imageStore,
+          importDatabaseBackup: deps.importDatabaseBackup,
+        })
+      } catch (error) {
+        const createdAssetIds = new Set(activePreview.plan.operations
+          .filter((operation) => operation.entityType === 'asset' && operation.kind === 'create')
+          .map((operation) => operation.entityId))
+        await removeCanonicalAssetsAbsentFromModel(
+          imageStore,
+          merged.assets.filter((asset) => createdAssetIds.has(asset.id)),
+          activePreview.localModel,
+        )
+        throw error
+      }
       importMessage.value = 'Bundle changes applied successfully.'
       preview.value = null
+      return [...activePreview.plan.bookIds]
     } catch (error) {
       importError.value = error instanceof Error ? error.message : 'Import failed.'
+      return []
     } finally {
       isApplying.value = false
     }
@@ -260,10 +279,18 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
     }
   }
 
+  function resetImport(): void {
+    preview.value = null
+    importFileName.value = ''
+    importError.value = ''
+    importMessage.value = ''
+    preparedRecovery.value = null
+  }
+
   return {
     preview, plan, importFileName, importError, importMessage, isPreviewing, isApplying,
     isPreparingReplace, isReplacing, recoveries, preparedRecovery, replaceRemovalCounts,
     previewFile, previewDirectory, resolveConflict, applyChanges, prepareReplace, replaceLibrary,
-    refreshRecoveries, previewRecovery, downloadRecovery,
+    refreshRecoveries, previewRecovery, downloadRecovery, resetImport,
   }
 }

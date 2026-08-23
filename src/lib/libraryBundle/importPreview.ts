@@ -7,11 +7,12 @@ import type { ReadonlyBundleFileMap } from './fileMap'
 import type { BundleDiagnostic } from './diagnostics'
 import { readLibraryBundle } from './read'
 import { validateLibraryBundle } from './validate'
-import { createLibraryImportPlan, type LibraryImportPlan } from './plan'
+import { createLibraryImportPlan, type LibraryImportIntent, type LibraryImportPlan } from './plan'
 import { sha256Hex } from './semanticHash'
 
 export interface PreviewBundleImportOptions {
   readLocalAssetBytes?: AssetByteReader
+  intent?: LibraryImportIntent
 }
 
 export interface PreviewedBundleImport {
@@ -56,7 +57,9 @@ export async function previewBundleFileMapImport(
   const localModel = await createCanonicalLibrarySnapshot(current, { readAssetBytes: options.readLocalAssetBytes })
   const databaseGeneration = await sha256Hex(currentDatabaseBackup)
   return {
-    plan: await createLibraryImportPlan(validated, localModel, databaseGeneration),
+    plan: await createLibraryImportPlan(validated, localModel, databaseGeneration, {
+      intent: options.intent,
+    }),
     localModel,
     incomingModel: validated.model ?? localModel,
     databaseGeneration,

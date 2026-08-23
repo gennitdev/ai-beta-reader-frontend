@@ -72,6 +72,18 @@ describe('untrusted bundle transports', () => {
     expect((await readBundleZip(compressed, { maxFiles: 10, maxTotalBytes: 20_000, maxNonImageBytes: 20_000, maxPathBytes: 100, maxCompressionRatio: 2 })).diagnostics.some((value) => value.code === 'limit.compression_ratio')).toBe(true)
   })
 
+  it('accepts a canonical bundle wrapped in a single repository ZIP folder', async () => {
+    const wrapped = await new JSZip()
+      .file('example-story-jack-main/beta-bot.yaml', 'format: test')
+      .file('example-story-jack-main/README.md', 'Example story')
+      .generateAsync({ type: 'uint8array' })
+    const result = await readBundleZip(wrapped)
+
+    expect(result.files?.has('beta-bot.yaml')).toBe(true)
+    expect(result.files?.has('README.md')).toBe(true)
+    expect(result.files?.has('example-story-jack-main/beta-bot.yaml')).toBe(false)
+  })
+
   it('reads central-directory metadata before inflation and detects exact duplicate names', async () => {
     const original = await new JSZip().file('same.txt', 'hello').generateAsync({ type: 'uint8array' })
     const { end, central, size } = zipOffsets(original)

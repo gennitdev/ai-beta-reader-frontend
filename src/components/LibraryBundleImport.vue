@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import type { LibraryImportPlan, ImportConflictResolution, ImportPlanOperation } from '@/lib/libraryBundle/plan'
 import type { RecoveryBundleMetadata } from '@/lib/recovery/model'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   plan: LibraryImportPlan | null
   fileName: string
   error: string
@@ -15,7 +15,20 @@ const props = defineProps<{
   recoveries: readonly RecoveryBundleMetadata[]
   preparedRecovery: RecoveryBundleMetadata | null
   replaceRemovalCounts: { books: number; chapters: number; wikiPages: number }
-}>()
+  heading?: string
+  description?: string
+  applyLabel?: string
+  showReplace?: boolean
+  showRecoveries?: boolean
+  embedded?: boolean
+}>(), {
+  heading: 'Import a Library Bundle',
+  description: 'Preview a Beta Bot ZIP with three-way conflict detection. Nothing changes until you confirm the immutable plan.',
+  applyLabel: 'Apply changes',
+  showReplace: true,
+  showRecoveries: true,
+  embedded: false,
+})
 
 const emit = defineEmits<{
   select: [file: File]
@@ -29,13 +42,17 @@ const emit = defineEmits<{
 }>()
 
 function selectFile(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
   if (file) emit('select', file)
+  input.value = ''
 }
 
 function selectDirectory(event: Event) {
-  const files = [...((event.target as HTMLInputElement).files ?? [])]
+  const input = event.target as HTMLInputElement
+  const files = [...(input.files ?? [])]
   if (files.length) emit('selectDirectory', files)
+  input.value = ''
 }
 
 function formatValue(value: unknown): string {
@@ -97,11 +114,14 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
 </script>
 
 <template>
-  <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-8">
+  <div
+    class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800"
+    :class="{ 'mt-8': !embedded }"
+  >
     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Import a Library Bundle</h2>
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ heading }}</h2>
       <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-        Preview a Beta Bot ZIP with three-way conflict detection. Nothing changes until you confirm the immutable plan.
+        {{ description }}
       </p>
     </div>
     <div class="px-6 py-4 space-y-4">
@@ -221,7 +241,7 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
                       </div>
                     </details>
                   </div>
-                  <div v-if="operation.kind === 'conflict'" class="flex gap-2">
+                  <div v-if="operation.kind === 'conflict' && operation.conflictReason !== 'cross_book_id_collision'" class="flex gap-2">
                     <button class="rounded px-2 py-1 text-xs" :class="operation.resolution === 'keep_local' ? 'bg-navy-700 text-white' : 'bg-gray-100 dark:bg-gray-700'" @click="emit('resolve', operation.key, 'keep_local')">Keep local</button>
                     <button class="rounded px-2 py-1 text-xs" :class="operation.resolution === 'use_incoming' ? 'bg-green-700 text-white' : 'bg-gray-100 dark:bg-gray-700'" @click="emit('resolve', operation.key, 'use_incoming')">Use incoming</button>
                   </div>
@@ -233,34 +253,36 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
 
         <div class="flex flex-wrap items-center gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
           <button class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!plan.canApply || isApplying || isPreparingReplace || isReplacing" @click="emit('apply')">
-            {{ isApplying ? 'Applying…' : 'Apply changes' }}
+            {{ isApplying ? 'Applying…' : applyLabel }}
           </button>
-          <button
-            v-if="!preparedRecovery"
-            class="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-300"
-            :disabled="!plan.replaceEligible || isPreparingReplace || isApplying || isPreviewing"
-            :title="plan.replaceEligible ? 'Create and verify a recovery before confirmation' : 'Only a complete, validated full-library bundle can replace the library'"
-            @click="emit('prepareReplace')"
-          >
-            {{ isPreparingReplace ? 'Verifying recovery…' : 'Prepare Replace library' }}
-          </button>
-          <button
-            v-else
-            class="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="isReplacing || isApplying || isPreviewing"
-            @click="emit('replace')"
-          >
-            {{ isReplacing ? 'Replacing…' : 'Confirm Replace library' }}
-          </button>
+          <template v-if="showReplace">
+            <button
+              v-if="!preparedRecovery"
+              class="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-300"
+              :disabled="!plan.replaceEligible || isPreparingReplace || isApplying || isPreviewing"
+              :title="plan.replaceEligible ? 'Create and verify a recovery before confirmation' : 'Only a complete, validated full-library bundle can replace the library'"
+              @click="emit('prepareReplace')"
+            >
+              {{ isPreparingReplace ? 'Verifying recovery…' : 'Prepare Replace library' }}
+            </button>
+            <button
+              v-else
+              class="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="isReplacing || isApplying || isPreviewing"
+              @click="emit('replace')"
+            >
+              {{ isReplacing ? 'Replacing…' : 'Confirm Replace library' }}
+            </button>
+          </template>
           <span v-if="plan.unresolvedConflicts" class="text-xs text-amber-700 dark:text-amber-300">Resolve {{ plan.unresolvedConflicts }} conflict(s) before applying.</span>
         </div>
-        <div v-if="preparedRecovery" class="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+        <div v-if="showReplace && preparedRecovery" class="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
           Recovery {{ preparedRecovery.id }} was written and SHA-256 verified outside the main database.
           Replacing will remove {{ replaceRemovalCounts.books }} book(s), {{ replaceRemovalCounts.chapters }} chapter(s), and {{ replaceRemovalCounts.wikiPages }} wiki page(s) absent from this bundle.
         </div>
       </template>
 
-      <div v-if="recoveries.length" class="border-t border-gray-200 pt-4 dark:border-gray-700">
+      <div v-if="showRecoveries && recoveries.length" class="border-t border-gray-200 pt-4 dark:border-gray-700">
         <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Verified recovery bundles</h3>
         <div class="mt-2 space-y-2">
           <div v-for="recovery in recoveries" :key="recovery.id" class="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 p-3 dark:border-gray-700">
