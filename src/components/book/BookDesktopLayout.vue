@@ -55,6 +55,7 @@ withDefaults(defineProps<{
   coverError?: string | null
   selectBookCover: () => void
   deleteBookCover?: (() => void) | null
+  requestDeleteBook?: () => void
   chapterThumbnails?: Record<string, string>
   partThumbnails?: Record<string, string>
   bookImages?: ImageAsset[]
@@ -93,6 +94,7 @@ withDefaults(defineProps<{
   coverLoading: false,
   coverError: null,
   deleteBookCover: null,
+  requestDeleteBook: undefined,
   chapterThumbnails: () => ({}),
   partThumbnails: () => ({}),
   bookImages: () => [],
@@ -161,6 +163,7 @@ withDefaults(defineProps<{
         :cover-error="coverError"
         :select-book-cover="selectBookCover"
         :delete-book-cover="deleteBookCover"
+        :request-delete-book="requestDeleteBook"
         :chapter-thumbnails="chapterThumbnails"
         :part-thumbnails="partThumbnails"
         :book-images="bookImages"

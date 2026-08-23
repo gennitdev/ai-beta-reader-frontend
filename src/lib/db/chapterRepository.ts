@@ -345,6 +345,7 @@ async function deleteChapterRows(ctx: DatabaseContext, chapterId: string, bookId
 
   // Remove dependent records
   const cleanupStatements = [
+    { query: "DELETE FROM wiki_review_state WHERE chapter_id = ?", params: [chapterId] },
     { query: "DELETE FROM chapter_summaries WHERE chapter_id = ?", params: [chapterId] },
     { query: "DELETE FROM chapter_reviews WHERE chapter_id = ?", params: [chapterId] },
     { query: "DELETE FROM chapter_wiki_mentions WHERE chapter_id = ?", params: [chapterId] },

@@ -187,12 +187,12 @@ export async function deletePart(ctx: DatabaseContext, partId: string): Promise<
     const deleteQuery = `DELETE FROM book_parts WHERE id = ?`
     if (txCtx.isNative) {
       await txCtx.connection.run(updateChaptersQuery, [updatedAt, partId])
-      await txCtx.connection.run(deleteQuery, [partId])
       await txCtx.connection.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId])
+      await txCtx.connection.run(deleteQuery, [partId])
     } else {
       txCtx.connection.run(updateChaptersQuery, [updatedAt, partId])
-      txCtx.connection.run(deleteQuery, [partId])
       txCtx.connection.run(`DELETE FROM part_summaries WHERE part_id = ?`, [partId])
+      txCtx.connection.run(deleteQuery, [partId])
     }
 
     if (bookId) {

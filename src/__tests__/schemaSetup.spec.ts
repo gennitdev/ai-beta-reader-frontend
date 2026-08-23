@@ -348,8 +348,8 @@ describe('schema migrations', () => {
     expect(columns(database, 'image_assets')).toEqual(expect.arrayContaining([
       'image_data', 'notes', 'content_hash', 'content_hash_algorithm', 'content_byte_length',
     ]))
-    expect(beginTransaction).toHaveBeenCalledTimes(3)
-    expect(commitTransaction).toHaveBeenCalledTimes(3)
+    expect(beginTransaction).toHaveBeenCalledTimes(CURRENT_SCHEMA_VERSION)
+    expect(commitTransaction).toHaveBeenCalledTimes(CURRENT_SCHEMA_VERSION)
     expect(rollbackTransaction).not.toHaveBeenCalled()
     expect(ctx.requestPersistence).not.toHaveBeenCalled()
   })

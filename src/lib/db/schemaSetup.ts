@@ -244,6 +244,15 @@ const SCHEMA = `
     FOREIGN KEY (chapter_id) REFERENCES chapters(id)
   );
 
+  CREATE TABLE IF NOT EXISTS pending_image_deletions (
+    image_id TEXT PRIMARY KEY,
+    file_path TEXT NOT NULL,
+    mime_type TEXT,
+    created_at TIMESTAMP NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT
+  );
+
   CREATE INDEX IF NOT EXISTS idx_image_assets_book ON image_assets(book_id);
   CREATE INDEX IF NOT EXISTS idx_image_assets_chapter ON image_assets(chapter_id);
   CREATE INDEX IF NOT EXISTS idx_image_wiki_tags_image ON image_wiki_tags(image_id);
@@ -256,7 +265,7 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_wiki_review_state_chapter ON wiki_review_state(chapter_id);
 `
 
-export const CURRENT_SCHEMA_VERSION = 3
+export const CURRENT_SCHEMA_VERSION = 4
 
 interface ColumnMigration {
   table: string
@@ -546,11 +555,23 @@ async function applyImageContentHashSchemaMigration(ctx: DatabaseContext): Promi
   }
 }
 
+async function applyPendingImageDeletionSchemaMigration(ctx: DatabaseContext): Promise<void> {
+  await execute(ctx, `CREATE TABLE IF NOT EXISTS pending_image_deletions (
+    image_id TEXT PRIMARY KEY,
+    file_path TEXT NOT NULL,
+    mime_type TEXT,
+    created_at TIMESTAMP NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT
+  )`)
+}
+
 /** Append future migrations here; each version is committed and recorded separately. */
 const SCHEMA_MIGRATIONS: SchemaMigration[] = [
   { version: 1, apply: applyLegacySchemaMigration },
   { version: 2, apply: applyPortableBundleSchemaMigration },
   { version: 3, apply: applyImageContentHashSchemaMigration },
+  { version: 4, apply: applyPendingImageDeletionSchemaMigration },
 ]
 
 export async function createTables(ctx: DatabaseContext): Promise<void> {

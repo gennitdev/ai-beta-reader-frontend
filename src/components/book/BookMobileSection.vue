@@ -158,6 +158,10 @@ const props = defineProps({
     type: Function as PropType<() => void>,
     default: null
   },
+  requestDeleteBook: {
+    type: Function as PropType<() => void>,
+    default: null
+  },
   chapterThumbnails: {
     type: Object as PropType<Record<string, string>>,
     default: () => ({})
@@ -388,6 +392,15 @@ watch(
           <button @click="goToOrganizeChapters" class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
             <Cog6ToothIcon class="w-5 h-5 mr-2" />
             Organize Chapters
+          </button>
+          <button
+            v-if="!readOnly && requestDeleteBook"
+            type="button"
+            class="inline-flex items-center rounded-lg border border-red-300 px-4 py-2 text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+            @click="requestDeleteBook"
+          >
+            <TrashIcon class="mr-2 h-5 w-5" />
+            Delete Book
           </button>
         </div>
       </div>

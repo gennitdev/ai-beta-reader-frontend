@@ -5,7 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useLibraryContext } from "@/composables/useLibraryContext";
 import { useImageLibrary } from "@/composables/useImageLibrary";
-import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ChapterRevisionActivity } from "@/lib/database";
+import type { Book as DatabaseBook, BookDeletionPreview, BookPart, Chapter as DatabaseChapter, ChapterRevisionActivity } from "@/lib/database";
 import type { FindReplaceScope } from "@/lib/findReplace";
 import type {
   BookChapter,
@@ -27,6 +27,8 @@ type Chapter = BookChapter;
 import SearchModal from "@/components/SearchModal.vue";
 import BookMobileSection from "@/components/book/BookMobileSection.vue";
 import BookDesktopLayout from "@/components/book/BookDesktopLayout.vue";
+import BookDeleteModal from "@/components/book/BookDeleteModal.vue";
+import { useBookDeletion } from "@/composables/useBookDeletion";
 
 const route = useRoute();
 const router = useRouter();
@@ -75,6 +77,48 @@ const {
 } = useImageLibrary();
 
 const book = ref<DatabaseBook | null>(null);
+const showDeleteBookModal = ref(false);
+const deleteBookPreview = ref<BookDeletionPreview | null>(null);
+const deletingBook = ref(false);
+const deleteBookError = ref<string | null>(null);
+const { getBookDeletionPreview, deleteBookAndCleanup } = useBookDeletion();
+
+const requestDeleteBook = async () => {
+  deleteBookError.value = null;
+  showDeleteBookModal.value = true;
+  try {
+    deleteBookPreview.value = await getBookDeletionPreview(bookId.value);
+    if (!deleteBookPreview.value) throw new Error('Book not found');
+  } catch (error) {
+    deleteBookError.value = error instanceof Error ? error.message : 'Could not prepare book deletion.';
+  }
+};
+
+const cancelDeleteBook = () => {
+  if (deletingBook.value) return;
+  showDeleteBookModal.value = false;
+  deleteBookPreview.value = null;
+  deleteBookError.value = null;
+};
+
+const confirmDeleteBook = async () => {
+  if (!deleteBookPreview.value || deletingBook.value) return;
+  const id = bookId.value;
+  try {
+    deletingBook.value = true;
+    deleteBookError.value = null;
+    const outcome = await deleteBookAndCleanup(id);
+    showDeleteBookModal.value = false;
+    await router.push(booksPath);
+    if (outcome.pendingCleanupCount > 0) {
+      alert(`The book was deleted. ${outcome.pendingCleanupCount} image file cleanup task(s) will be retried automatically.`);
+    }
+  } catch (error) {
+    deleteBookError.value = error instanceof Error ? error.message : 'Failed to delete book.';
+  } finally {
+    deletingBook.value = false;
+  }
+};
 
 // Book cover image
 const {
@@ -807,6 +851,7 @@ onMounted(async () => {
       :cover-error="coverError"
       :select-book-cover="handleSelectBookCover"
       :delete-book-cover="handleDeleteBookCover"
+      :request-delete-book="requestDeleteBook"
       :chapter-thumbnails="chapterThumbnails"
       :part-thumbnails="partThumbnails"
       :book-images="bookImages"
@@ -881,6 +926,7 @@ onMounted(async () => {
     :cover-error="coverError"
     :select-book-cover="handleSelectBookCover"
     :delete-book-cover="handleDeleteBookCover"
+    :request-delete-book="requestDeleteBook"
     :chapter-thumbnails="chapterThumbnails"
     :part-thumbnails="partThumbnails"
     :book-images="bookImages"
@@ -908,6 +954,15 @@ onMounted(async () => {
     :target-id="contextualSearchTargetId"
     @close="showSearchModal = false"
     @refresh="refreshData"
+  />
+
+  <BookDeleteModal
+    :show="showDeleteBookModal"
+    :preview="deleteBookPreview"
+    :deleting="deletingBook"
+    :error="deleteBookError"
+    @cancel="cancelDeleteBook"
+    @confirm="confirmDeleteBook"
   />
 
   <!-- Create Wiki Page Modal -->
