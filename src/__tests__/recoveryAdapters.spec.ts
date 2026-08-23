@@ -31,20 +31,20 @@ describe('recovery runtime adapters', () => {
   it('round-trips through the desktop preload bridge', async () => {
     const bridge: DesktopRecoveryBridge = {
       write: vi.fn(async () => undefined),
-      read: vi.fn(async () => ({ metadata, bytesBase64: 'AQID' })),
+      read: vi.fn(async () => ({ metadata, bytes: new Uint8Array([1, 2, 3]) })),
       list: vi.fn(async () => [metadata]),
       delete: vi.fn(async () => undefined),
     }
     const store = new DesktopRecoveryStore(bridge)
     await store.write(bundle)
-    expect(bridge.write).toHaveBeenCalledWith({ metadata, bytesBase64: 'AQID' })
+    expect(bridge.write).toHaveBeenCalledWith({ metadata, bytes: new Uint8Array([1, 2, 3]) })
     expect(await store.read(metadata.id)).toEqual(bundle)
     expect(await store.list()).toEqual([metadata])
     await store.delete(metadata.id)
     expect(bridge.delete).toHaveBeenCalledWith(metadata.id)
     bridge.read = vi.fn(async () => null)
     expect(await store.read(metadata.id)).toBeNull()
-    bridge.read = vi.fn(async () => ({ metadata: { ...metadata, id: 'recovery-other' }, bytesBase64: 'AQID' }))
+    bridge.read = vi.fn(async () => ({ metadata: { ...metadata, id: 'recovery-other' }, bytes: new Uint8Array([1, 2, 3]) }))
     await expect(store.read(metadata.id)).rejects.toThrow('requested ID')
     await expect(store.read('../escape')).rejects.toThrow('Invalid recovery')
   })

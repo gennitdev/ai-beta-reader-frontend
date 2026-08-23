@@ -15,9 +15,14 @@ export interface DesktopImagesBridge {
     image?: DesktopImageMetadata;
   }>;
   readImageData: (payload: { relativePath: string; mimeType?: string | null }) => Promise<{
-    dataUrl: string;
+    bytes: Uint8Array;
+    mimeType: string;
   }>;
-  writeImageData: (payload: { relativePath: string; dataUrl: string }) => Promise<{ success: boolean }>;
+  writeImageData: (payload: {
+    relativePath: string;
+    bytes: Uint8Array;
+    mimeType: string;
+  }) => Promise<{ success: boolean }>;
   deleteImageFile: (payload: { relativePath: string }) => Promise<{ success: boolean }>;
 }
 

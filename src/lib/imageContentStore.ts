@@ -177,14 +177,15 @@ export class ElectronImageContentStore implements ImageContentStore {
       relativePath: asset.file_path,
       mimeType: asset.mime_type,
     })
-    return dataUrlToBlob(result.dataUrl)
+    return new Blob([result.bytes.slice().buffer], { type: result.mimeType })
   }
 
   async write(asset: ImageAsset, blob: Blob): Promise<void> {
     if (!asset.file_path) throw new Error('Image path is required for Electron storage.')
     await this.bridge.writeImageData({
       relativePath: asset.file_path,
-      dataUrl: await blobToDataUrl(blob),
+      bytes: new Uint8Array(await blob.arrayBuffer()),
+      mimeType: blob.type || asset.mime_type || 'application/octet-stream',
     })
   }
 

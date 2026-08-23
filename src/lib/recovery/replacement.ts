@@ -5,7 +5,6 @@ import { writeLibraryBundle } from '@/lib/libraryBundle/write'
 import { createBundleZip, readBundleZip } from '@/lib/libraryBundle/adapters/zip'
 import { readLibraryBundle } from '@/lib/libraryBundle/read'
 import { validateLibraryBundle } from '@/lib/libraryBundle/validate'
-import { canonicalModelToDatabaseImport } from '@/lib/libraryBundle/apply'
 import type { RecoveryBundleMetadata, RecoveryStore } from './model'
 import { createVerifiedRecovery, readVerifiedRecovery } from './service'
 
@@ -14,10 +13,6 @@ export interface PrepareReplacementOptions {
   recoveryBundleId: string
   createdAt: string
   appVersion: string
-}
-
-function databaseBytes(model: CanonicalLibraryModel): Uint8Array {
-  return new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
 }
 
 export async function prepareLibraryReplacement(
@@ -65,7 +60,7 @@ export async function replaceLibraryWithRecovery(
   incomingModel: CanonicalLibraryModel,
   recovery: RecoveryBundleMetadata,
   currentDatabaseGeneration: string,
-  importDatabaseBackup: (bytes: Uint8Array) => Promise<void>,
+  importLibraryModel: (model: CanonicalLibraryModel, phase: 'replace' | 'rollback') => Promise<void>,
 ): Promise<void> {
   assertImportPlanGeneration(plan, currentDatabaseGeneration)
   if (!plan.replaceEligible) throw new Error('This bundle is not eligible to replace the library.')
@@ -75,12 +70,14 @@ export async function replaceLibraryWithRecovery(
   if (recovery.databaseGeneration !== currentDatabaseGeneration) {
     throw new Error('The prepared recovery does not match the current library generation.')
   }
-  const rollbackModel = await recoveryModel(store, recovery)
   try {
-    await importDatabaseBackup(databaseBytes(incomingModel))
+    await importLibraryModel(incomingModel, 'replace')
   } catch (replaceError) {
     try {
-      await importDatabaseBackup(databaseBytes(rollbackModel))
+      // Recovery bundles can be large, so do not materialize one unless the
+      // replacement actually failed and rollback is required.
+      const rollbackModel = await recoveryModel(store, recovery)
+      await importLibraryModel(rollbackModel, 'rollback')
     } catch (rollbackError) {
       throw new AggregateError(
         [replaceError, rollbackError],

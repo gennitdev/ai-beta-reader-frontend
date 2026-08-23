@@ -2,8 +2,9 @@ import { DATABASE_EXPORT_VERSION, type DatabaseImportData } from '@/lib/database
 import type { CanonicalLibraryModel } from './model'
 import type { LibraryImportPlan } from './plan'
 import { assertImportPlanCurrent } from './plan'
-import { canonicalEntityKey } from './entities'
 import { canonicalLibraryModelSchema } from './schemas'
+import { collectCanonicalModelEntities, canonicalEntityKey } from './entities'
+import { IMAGE_CONTENT_HASH_ALGORITHM } from '@/lib/imageContentHash'
 
 type ModelArrayKey = Exclude<keyof CanonicalLibraryModel,
   'format_version' | 'bundle_kind' | 'content_mode' | 'book_ids' | 'includes'>
@@ -25,13 +26,16 @@ function valueId(entityType: string, value: unknown): string {
 export function applyImportPlanToModel(
   plan: LibraryImportPlan,
   local: CanonicalLibraryModel,
+  incomingModel: CanonicalLibraryModel,
   currentDatabaseGeneration: string,
 ): CanonicalLibraryModel {
   assertImportPlanCurrent(plan, currentDatabaseGeneration)
+  const incomingEntities = new Map(collectCanonicalModelEntities(incomingModel)
+    .map((entity) => [canonicalEntityKey(entity.entityType, entity.id), entity.value]))
   const result = structuredClone(local)
   result.assets = result.assets.map((asset) => ({
     ...asset,
-    bytes: asset.bytes ? new Uint8Array(Array.from(asset.bytes)) : null,
+    bytes: asset.bytes ? new Uint8Array(asset.bytes) : null,
   }))
   for (const operation of plan.operations) {
     const useIncoming = operation.kind === 'create' || operation.kind === 'update'
@@ -45,10 +49,15 @@ export function applyImportPlanToModel(
     const index = values.findIndex((value) => canonicalEntityKey(operation.entityType, valueId(operation.entityType, value)) === operation.key)
     if (useDeletion) {
       if (index >= 0) values.splice(index, 1)
-    } else if (operation.incomingValue !== undefined) {
-      const incoming = structuredClone(operation.incomingValue) as { bytes?: unknown }
-      if (operation.entityType === 'asset' && Array.isArray(incoming.bytes)) {
-        incoming.bytes = new Uint8Array(incoming.bytes)
+    } else {
+      const incomingValue = incomingEntities.get(operation.key)
+      if (incomingValue === undefined) throw new Error(`Incoming value is missing for ${operation.key}.`)
+      const incoming = structuredClone(incomingValue) as { bytes?: unknown }
+      if (operation.entityType === 'asset' && ArrayBuffer.isView(incoming.bytes)) {
+        incoming.bytes = new Uint8Array(incoming.bytes.buffer.slice(
+          incoming.bytes.byteOffset,
+          incoming.bytes.byteOffset + incoming.bytes.byteLength,
+        ))
       }
       if (operation.entityType === 'asset' && incoming.bytes === null && index >= 0) {
         const localAsset = values[index] as { sha256?: string; byte_length?: number; bytes?: Uint8Array | null }
@@ -74,8 +83,17 @@ function base64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+export interface CanonicalDatabaseImportOptions {
+  embedAssetBytes?: boolean
+  assetFilePath?: (asset: CanonicalLibraryModel['assets'][number]) => string | null
+}
+
 /** Convert a merged canonical model back to the named database-import contract. */
-export function canonicalModelToDatabaseImport(model: CanonicalLibraryModel): DatabaseImportData {
+export function canonicalModelToDatabaseImport(
+  model: CanonicalLibraryModel,
+  options: CanonicalDatabaseImportOptions = {},
+): DatabaseImportData {
+  const embedAssetBytes = options.embedAssetBytes ?? true
   const customProfiles = model.profiles.filter((profile) => profile.profile_kind === 'custom')
   const aiProfiles = model.profiles.filter((profile) => profile.profile_kind !== 'custom')
   const profilesById = new Map(model.profiles.map((profile) => [profile.id, profile]))
@@ -116,10 +134,16 @@ export function canonicalModelToDatabaseImport(model: CanonicalLibraryModel): Da
     }))),
     image_assets: model.assets.map((value) => ({
       id: value.id, book_id: value.book_id, chapter_id: value.chapter_id,
-      asset_type: value.asset_type, file_name: value.file_name, file_path: null,
+      asset_type: value.asset_type, file_name: value.file_name,
+      file_path: options.assetFilePath?.(value) ?? null,
       mime_type: value.mime_type, notes: value.notes, created_at: value.created_at,
       updated_at: value.updated_at,
-      image_data: value.bytes ? `data:${value.mime_type ?? 'application/octet-stream'};base64,${base64(value.bytes)}` : null,
+      content_hash: value.sha256,
+      content_hash_algorithm: IMAGE_CONTENT_HASH_ALGORITHM,
+      content_byte_length: value.byte_length,
+      image_data: embedAssetBytes && value.bytes
+        ? `data:${value.mime_type ?? 'application/octet-stream'};base64,${base64(value.bytes)}`
+        : null,
     })),
     image_wiki_tags: model.assets.flatMap((asset) => asset.wiki_page_ids.map((wikiPageId) => ({
       image_id: asset.id, wiki_page_id: wikiPageId, created_at: asset.created_at,

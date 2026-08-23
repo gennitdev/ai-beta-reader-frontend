@@ -44,23 +44,14 @@ export function assertSecureStorageValue(value: unknown): asserts value is strin
   }
 }
 
-export function decodeImageDataUrl(dataUrl: string): { mimeType: string; buffer: Buffer } {
-  const matches = dataUrl.match(/^data:([^;,]+);base64,([A-Za-z0-9+/]*={0,2})$/);
-  if (!matches || !SUPPORTED_IMAGE_MIME_TYPES.has(matches[1])) {
-    throw new Error('Invalid or unsupported image data URL');
-  }
-
-  const maximumBase64Length = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
-  if (matches[2].length > maximumBase64Length) {
-    throw new Error('Image exceeds the maximum supported size');
-  }
-
-  const buffer = Buffer.from(matches[2], 'base64');
-  if (buffer.byteLength > MAX_IMAGE_BYTES) {
-    throw new Error('Image exceeds the maximum supported size');
-  }
-
-  return { mimeType: matches[1], buffer };
+export function decodeImageBytes(value: unknown, mimeType: unknown): { mimeType: string; buffer: Buffer } {
+  if (!isSupportedImageMimeType(mimeType)) throw new Error('Invalid or unsupported image MIME type');
+  if (!(value instanceof Uint8Array)) throw new Error('Invalid image byte payload');
+  if (value.byteLength > MAX_IMAGE_BYTES) throw new Error('Image exceeds the maximum supported size');
+  return {
+    mimeType,
+    buffer: Buffer.from(value.buffer, value.byteOffset, value.byteLength),
+  };
 }
 
 export function isSupportedImageMimeType(value: unknown): value is string {
