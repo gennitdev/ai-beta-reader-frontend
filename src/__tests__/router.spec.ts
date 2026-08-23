@@ -10,11 +10,20 @@ describe('router', () => {
     expect(byName.get('privacy')).toBe('/privacy')
     expect(byName.get('terms')).toBe('/terms')
     expect(byName.get('books')).toBe('/books')
+    expect(byName.get('example-books')).toBe('/example-books')
     expect(byName.get('book')).toBe('/books/:id')
     expect(byName.get('settings')).toBe('/settings')
     expect(byName.get('ai-profiles')).toBe('/ai-profiles')
     expect(byName.get('challenges')).toBe('/challenges')
     expect(byName.get('bardwall')).toBe('/bardwall')
+  })
+
+  it('keeps example routes separate from editable book routes', () => {
+    expect(router.resolve('/example-books').name).toBe('example-books')
+    expect(router.resolve('/example-books/jack-house-above-rain').name).toBe('example-book')
+    expect(router.resolve('/example-books/jack-house-above-rain/chapters/ch-1').name).toBe('example-book-chapter')
+    expect(router.resolve('/example-books/jack-house-above-rain/parts/part-1').name).toBe('example-book-part')
+    expect(router.resolve('/example-books/jack-house-above-rain/wiki/jack').name).toBe('example-book-wiki-page')
   })
 
   it('resolves the home path to the home route', () => {

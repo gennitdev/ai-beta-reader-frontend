@@ -2,6 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
+import { useLibraryContext } from "@/composables/useLibraryContext";
 import { useChapterImages } from "@/composables/useChapterImages";
 import { useChapterSummaryContext } from "@/composables/useChapterSummaryContext";
 import { useChapterMutationFlow } from "@/composables/useChapterMutationFlow";
@@ -39,6 +40,7 @@ import {
 
 const route = useRoute();
 const router = useRouter();
+const { booksPath } = useLibraryContext();
 defineEmits<{
   (event: 'wiki-page-pin-changed', payload: { id: string; isPinned: boolean; updatedAt: string }): void;
 }>();
@@ -185,12 +187,12 @@ const deletingChapter = ref(false);
 
 // Mobile detection
 const isMobileRoute = computed(() => route.meta?.mobile === true);
-const routePrefix = computed(() => (isMobileRoute.value ? "/m/books" : "/books"));
+const routePrefix = computed(() => booksPath === '/books' && isMobileRoute.value ? "/m/books" : booksPath);
 
 // Computed navigation URLs
 // Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
 // BookView handles mobile display via CSS media queries
-const bookUrl = computed(() => `/books/${bookId.value}`);
+const bookUrl = computed(() => `${booksPath}/${bookId.value}`);
 const backButtonUrl = computed(() => bookUrl.value);
 
 const hasUnsavedChanges = computed(() => {

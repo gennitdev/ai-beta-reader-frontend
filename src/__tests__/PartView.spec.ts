@@ -155,6 +155,7 @@ function mountView() {
         MarkdownRenderer: { props: ['text'], template: '<div data-testid="summary">{{ text }}</div>' },
         CoverHeroImage: false,
         Modal: { template: '<div><slot /></div>' },
+        ExampleDisabledControl: { template: '<span><slot /></span>' },
         IllustrationDetail: true,
         ArrowLeftIcon: true, ArrowDownTrayIcon: true, SparklesIcon: true,
         PencilIcon: true, PlusIcon: true, CheckCircleIcon: true, ClockIcon: true, TrashIcon: true,

@@ -2,6 +2,10 @@
 import { PencilIcon, DocumentTextIcon } from '@heroicons/vue/24/outline'
 import TextEditor from '@/components/TextEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
+import { useLibraryContext } from '@/composables/useLibraryContext'
+
+const { readOnly, readOnlyReason } = useLibraryContext()
 
 defineProps({
   chapterNotes: {
@@ -36,8 +40,10 @@ const emit = defineEmits<{
       <div class="mb-4 space-y-3">
         <h3 class="w-full text-lg font-semibold text-gray-900 dark:text-white">Chapter Notes</h3>
         <div v-if="!isEditingNotes" class="flex w-full flex-wrap items-center justify-end gap-2">
+          <ExampleDisabledControl v-if="chapterNotes" :active="readOnly" :explanation="readOnlyReason">
           <button
             v-if="chapterNotes"
+            :disabled="readOnly"
             @click="emit('start-edit')"
             class="inline-flex items-center px-2 py-1 text-xs text-purple-600 transition-colors hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
             title="Edit notes"
@@ -45,14 +51,18 @@ const emit = defineEmits<{
             <PencilIcon class="mr-1 h-3 w-3" />
             Edit
           </button>
+          </ExampleDisabledControl>
+          <ExampleDisabledControl v-if="!chapterNotes" :active="readOnly" :explanation="readOnlyReason">
           <button
             v-if="!chapterNotes"
+            :disabled="readOnly"
             @click="emit('start-edit')"
             class="inline-flex items-center rounded-md bg-purple-600 px-3 py-1 text-sm text-white transition-colors hover:bg-purple-700"
           >
             <DocumentTextIcon class="mr-1 h-4 w-4" />
             Add Notes
           </button>
+          </ExampleDisabledControl>
         </div>
       </div>
 

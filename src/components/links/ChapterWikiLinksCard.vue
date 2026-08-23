@@ -4,6 +4,10 @@ import AutocompleteMultiSelect, {
   type AutocompleteOption,
 } from '@/components/links/AutocompleteMultiSelect.vue'
 import type { ChapterWikiLink } from '@/lib/database'
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
+import { useLibraryContext } from '@/composables/useLibraryContext'
+
+const { readOnly, readOnlyReason } = useLibraryContext()
 
 const props = defineProps<{
   routePrefix: string
@@ -124,14 +128,17 @@ const emit = defineEmits<{
         No linked wiki pages yet.
       </p>
 
+      <ExampleDisabledControl v-if="!isEditing" class="mt-5 w-full" :active="readOnly" :explanation="readOnlyReason">
       <button
         v-if="!isEditing"
         type="button"
-        class="mt-5 block w-full rounded-md border border-gold-300 px-4 py-2.5 text-center text-sm font-medium text-gold-700 transition-colors hover:border-gold-400 hover:bg-gold-50 dark:border-gold-700 dark:text-gold-300 dark:hover:bg-gold-900/20"
+        :disabled="readOnly"
+        class="block w-full rounded-md border border-gold-300 px-4 py-2.5 text-center text-sm font-medium text-gold-700 transition-colors hover:border-gold-400 hover:bg-gold-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gold-700 dark:text-gold-300 dark:hover:bg-gold-900/20"
         @click="emit('startEdit')"
       >
         {{ links.length ? 'Edit links' : 'Add links' }}
       </button>
+      </ExampleDisabledControl>
     </div>
   </section>
 </template>

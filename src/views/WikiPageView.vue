@@ -2,6 +2,8 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDatabase } from '@/composables/useDatabase'
+import { useLibraryContext } from '@/composables/useLibraryContext'
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
 import { useWikiImages } from '@/composables/useWikiImages'
 import { useWikiAliases } from '@/composables/useWikiAliases'
 import { useWikiTags } from '@/composables/useWikiTags'
@@ -38,6 +40,7 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const { booksPath, readOnly, readOnlyReason } = useLibraryContext()
 const emit = defineEmits<{
   (event: 'wiki-page-pin-changed', payload: { id: string; isPinned: boolean; updatedAt: string }): void
 }>()
@@ -134,7 +137,7 @@ const bookTitle = computed(() => {
 // Computed navigation URLs
 // Always use /books/ prefix for going back, since /m/books/:id route doesn't exist
 // BookView handles mobile display via CSS media queries
-const bookWikiUrl = computed(() => `/books/${bookId.value}?tab=wiki`)
+const bookWikiUrl = computed(() => `${booksPath}/${bookId.value}?tab=wiki`)
 const originatingChapterId = computed(() =>
   typeof route.query.fromChapterId === 'string' ? route.query.fromChapterId : null,
 )
@@ -566,20 +569,26 @@ watch(
             </button>
           </template>
           <template v-else>
+            <ExampleDisabledControl :active="readOnly" :explanation="readOnlyReason">
             <button
+              :disabled="readOnly"
               @click="isEditing = true"
               class="inline-flex items-center px-3 py-2 bg-gold-100 dark:bg-gold-900 text-gold-700 dark:text-gold-300 rounded-md hover:bg-gold-200 dark:hover:bg-gold-800 transition-colors"
             >
               <PencilIcon class="w-4 h-4 mr-1" />
               Edit
             </button>
+            </ExampleDisabledControl>
+            <ExampleDisabledControl :active="readOnly" :explanation="readOnlyReason">
             <button
+              :disabled="readOnly"
               @click="confirmDelete"
               class="inline-flex items-center px-3 py-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-md hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
             >
               <TrashIcon class="w-4 h-4 mr-1" />
               Delete
             </button>
+            </ExampleDisabledControl>
           </template>
         </div>
       </div>
@@ -658,20 +667,26 @@ watch(
           </button>
         </template>
         <template v-else>
+          <ExampleDisabledControl :active="readOnly" :explanation="readOnlyReason">
           <button
+            :disabled="readOnly"
             @click="isEditing = true"
             class="inline-flex items-center px-2 py-1.5 text-sm bg-gold-100 dark:bg-gold-900 text-gold-700 dark:text-gold-300 rounded-md hover:bg-gold-200 dark:hover:bg-gold-800"
           >
             <PencilIcon class="w-4 h-4 mr-1" />
             Edit
           </button>
+          </ExampleDisabledControl>
+          <ExampleDisabledControl :active="readOnly" :explanation="readOnlyReason">
           <button
+            :disabled="readOnly"
             @click="confirmDelete"
             class="inline-flex items-center px-2 py-1.5 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-md hover:bg-red-200 dark:hover:bg-red-800"
           >
             <TrashIcon class="w-4 h-4 mr-1" />
             Delete
           </button>
+          </ExampleDisabledControl>
         </template>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from "vue";
 import { logger } from '@/lib/logger'
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
+import { useLibraryContext } from "@/composables/useLibraryContext";
 import { useImageLibrary } from "@/composables/useImageLibrary";
 import type { Book as DatabaseBook, BookPart, Chapter as DatabaseChapter, ChapterRevisionActivity } from "@/lib/database";
 import type { FindReplaceScope } from "@/lib/findReplace";
@@ -29,6 +30,7 @@ import BookDesktopLayout from "@/components/book/BookDesktopLayout.vue";
 
 const route = useRoute();
 const router = useRouter();
+const { booksPath } = useLibraryContext();
 const bookId = computed(() => route.params.id as string);
 
 // Use local database
@@ -200,7 +202,7 @@ const currentTab = computed(() => {
 const isOnBookOnly = computed(() => {
   // Check if we're on the book route but no child route (chapter or wiki page) is active
   // Also not viewing an image
-  return route.name === "book" && !route.params.chapterId && !route.params.wikiPageId && !selectedImageId.value;
+  return (route.name === "book" || route.name === "example-book") && !route.params.chapterId && !route.params.wikiPageId && !selectedImageId.value;
 });
 
 const activeChapterId = computed(() => route.params.chapterId as string | undefined);
@@ -577,11 +579,11 @@ const refreshData = async () => {
 };
 
 const createNewChapter = () => {
-  router.push(`/books/${bookId.value}/chapter-editor`);
+  router.push(`${booksPath}/${bookId.value}/chapter-editor`);
 };
 
 const goToOrganizeChapters = () => {
-  router.push(`/books/${bookId.value}/organize`);
+  router.push(`${booksPath}/${bookId.value}/organize`);
 };
 
 const openSearchModal = () => {
@@ -590,14 +592,14 @@ const openSearchModal = () => {
 
 const createNewChapterInPart = (partId: string) => {
   router.push({
-    path: `/books/${bookId.value}/chapter-editor`,
+    path: `${booksPath}/${bookId.value}/chapter-editor`,
     query: { partId },
   });
 };
 
 const insertChapter = (chapter: Chapter, placement: "before" | "after") => {
   router.push({
-    path: `/books/${bookId.value}/chapter-editor`,
+    path: `${booksPath}/${bookId.value}/chapter-editor`,
     query: {
       ...(chapter.part_id ? { partId: chapter.part_id } : {}),
       insertRelativeTo: chapter.id,
@@ -607,7 +609,7 @@ const insertChapter = (chapter: Chapter, placement: "before" | "after") => {
 };
 
 const editChapter = (chapterId: string) => {
-  router.push(`/books/${bookId.value}/chapter-editor/${chapterId}`);
+  router.push(`${booksPath}/${bookId.value}/chapter-editor/${chapterId}`);
 };
 
 // Parts management functions
@@ -622,13 +624,13 @@ const togglePart = (partId: string) => {
       const part = chaptersByPart.value.parts.find((p) => p.id === partId);
       const containsActiveChapter = part?.chapters.some((chapter) => chapter.id === activeId);
       if (containsActiveChapter) {
-        router.push(`/books/${bookId.value}`);
+        router.push(`${booksPath}/${bookId.value}`);
       }
     }
   } else {
     // Expand the part and navigate to the part detail page
     expandedParts.value.add(partId);
-    router.push(`/books/${bookId.value}/parts/${partId}`);
+    router.push(`${booksPath}/${bookId.value}/parts/${partId}`);
   }
 };
 

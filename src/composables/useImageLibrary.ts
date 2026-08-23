@@ -242,6 +242,14 @@ export function useImageLibrary() {
   }
 
   async function getImageBlob(image: ImageAsset): Promise<Blob> {
+    // Bundled/read-only libraries can carry their image bytes directly without
+    // having a corresponding platform content-store entry.
+    if (image.image_data && image.file_path.startsWith('example/')) {
+      const embeddedBlob = dataUrlToBlob(image.image_data)
+      await verifyContentIntegrity(image, embeddedBlob)
+      await backfillContentIntegrity(image, embeddedBlob)
+      return embeddedBlob
+    }
     let storedBlob: Blob | null
     try {
       storedBlob = await getContentStore().read(image)

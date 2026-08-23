@@ -8,6 +8,10 @@ import type { PropType } from 'vue'
 import BookMobileChapterCard from './BookMobileChapterCard.vue'
 import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
 import BookActivityHeatmap from './BookActivityHeatmap.vue'
+import { useLibraryContext } from '@/composables/useLibraryContext'
+
+const { booksPath, readOnly, readOnlyReason } = useLibraryContext()
+const detailBooksPath = booksPath === '/books' ? '/m/books' : booksPath
 
 const props = defineProps({
   book: {
@@ -446,7 +450,7 @@ watch(
 
     <div class="flex space-x-1 rounded-xl bg-gold-900/20 p-1 mb-6">
       <router-link
-        :to="`/books/${bookId}`"
+        :to="`${booksPath}/${bookId}`"
         :class="[
           'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-gold-700 ring-white/60 ring-offset-2 ring-offset-gold-400 focus:outline-none focus:ring-2 flex items-center justify-center',
           currentTab === 'chapters'
@@ -458,7 +462,7 @@ watch(
         Chapters
       </router-link>
       <router-link
-        :to="`/books/${bookId}?tab=wiki`"
+        :to="`${booksPath}/${bookId}?tab=wiki`"
         :class="[
           'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-gold-400 ring-white/60 ring-offset-2 ring-offset-gold-400 focus:outline-none focus:ring-2 flex items-center justify-center',
           currentTab === 'wiki'
@@ -470,7 +474,7 @@ watch(
         Wiki
       </router-link>
       <router-link
-        :to="`/books/${bookId}?tab=images`"
+        :to="`${booksPath}/${bookId}?tab=images`"
         :class="[
           'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-gold-400 ring-white/60 ring-offset-2 ring-offset-gold-400 focus:outline-none focus:ring-2 flex items-center justify-center',
           currentTab === 'images'
@@ -520,7 +524,7 @@ watch(
                     {{ part.chapters.length }} chapter{{ part.chapters.length !== 1 ? 's' : '' }} ·
                     {{ formatWordCount(part.wordCount) }} words ·
                     <router-link
-                      :to="`/m/books/${bookId}/parts/${part.id}`"
+                      :to="`${detailBooksPath}/${bookId}/parts/${part.id}`"
                       class="text-gold-600 hover:text-gold-700 hover:underline dark:text-gold-400 dark:hover:text-gold-300"
                       @click.stop
                     >View</router-link>
@@ -542,6 +546,8 @@ watch(
             </button>
             <div class="flex items-center gap-2">
               <button
+                :disabled="readOnly"
+                :title="readOnly ? readOnlyReason : undefined"
                 @click="createNewChapterInPart(part.id)"
                 class="inline-flex items-center rounded-lg bg-gold-600 px-3 py-2 text-sm text-white transition-colors hover:bg-gold-700"
               >
@@ -583,7 +589,7 @@ watch(
                 }}
               </p>
             </div>
-            <button @click="createNewChapter" class="inline-flex items-center px-3 py-2 text-sm bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors">
+            <button :disabled="readOnly" :title="readOnly ? readOnlyReason : undefined" @click="createNewChapter" class="inline-flex items-center px-3 py-2 text-sm bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50">
               <PlusIcon class="w-4 h-4 mr-2" />
               Add Chapter
             </button>
@@ -632,7 +638,7 @@ watch(
         <p class="text-gray-600 dark:text-gray-400 mb-6">
           Add your first chapter to start getting AI feedback.
         </p>
-        <button @click="createNewChapter" class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors">
+        <button :disabled="readOnly" :title="readOnly ? readOnlyReason : undefined" @click="createNewChapter" class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50">
           <PlusIcon class="w-5 h-5 mr-2" />
           Add First Chapter
         </button>
@@ -696,6 +702,8 @@ watch(
         <div v-if="hasFilteredWikiPages" class="space-y-8">
         <div class="flex justify-end">
           <button
+            :disabled="readOnly"
+            :title="readOnly ? readOnlyReason : undefined"
             @click="openCreateWikiModal"
             class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
           >
@@ -716,7 +724,7 @@ watch(
             <router-link
               v-for="page in pages"
               :key="page.id"
-              :to="`/m/books/${bookId}/wiki/${page.id}`"
+              :to="`${detailBooksPath}/${bookId}/wiki/${page.id}`"
               class="flex gap-3 bg-white dark:bg-navy-800 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 p-4 hover:border-gold-300 dark:hover:border-gold-600 cursor-pointer"
             >
               <div
@@ -744,6 +752,7 @@ watch(
                     Major
                   </span>
                   <button
+                    :disabled="readOnly"
                     @click.prevent.stop="toggleWikiPagePinned(page)"
                     class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gold-600 dark:hover:bg-gray-700 dark:hover:text-gold-300"
                     :class="page.is_pinned ? 'text-gold-600 dark:text-gold-300' : ''"
@@ -793,6 +802,8 @@ watch(
             Try a different type, or add a new page.
           </p>
           <button
+            :disabled="readOnly"
+            :title="readOnly ? readOnlyReason : undefined"
             @click="openCreateWikiModal"
             class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
           >
@@ -826,7 +837,7 @@ watch(
       <!-- Image Detail View -->
       <div v-if="selectedImageId && selectedImageSrc">
         <router-link
-          :to="`/books/${bookId}?tab=images`"
+          :to="`${booksPath}/${bookId}?tab=images`"
           class="inline-flex items-center text-sm text-gold-600 dark:text-gold-400 hover:text-gold-800 dark:hover:text-gold-300 mb-4"
         >
           <ArrowLeftIcon class="w-4 h-4 mr-1" />
@@ -868,7 +879,7 @@ watch(
           <router-link
             v-for="image in bookImages"
             :key="image.id"
-            :to="`/books/${bookId}?tab=images&imageId=${image.id}`"
+            :to="`${booksPath}/${bookId}?tab=images&imageId=${image.id}`"
             class="relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 cursor-pointer transition-all hover:ring-2 hover:ring-gold-400"
           >
             <img

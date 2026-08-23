@@ -17,6 +17,8 @@ import type { FindReplaceScope } from '@/lib/findReplace'
 
 const route = useRoute()
 const router = useRouter()
+const isExampleRoute = computed(() => route.path.startsWith('/example-books'))
+const exampleReadOnlyReason = 'This example is read-only. Import it or create your own book to try this action.'
 const {
   books,
   chapters,
@@ -127,7 +129,7 @@ const contextualSearchTargetId = computed(() => {
 })
 
 const goToNewChapter = () => {
-  if (!currentBookId.value) return
+  if (!currentBookId.value || isExampleRoute.value) return
   router.push(`/books/${currentBookId.value}/chapter-editor`)
 }
 
@@ -140,7 +142,7 @@ watch(
   async (params) => {
     const bookId = (params.bookId || params.id) as string | undefined
     currentRevision.value = null
-    if (bookId) {
+    if (bookId && !isExampleRoute.value) {
       await loadChapters(bookId)
       // Load parts for breadcrumb navigation
       try {
@@ -355,9 +357,10 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
           <div class="flex items-center space-x-4 md:order-1 md:w-full md:justify-end lg:order-2 lg:w-auto">
             <button
               v-if="currentBookId"
+              :disabled="isExampleRoute"
               @click="goToNewChapter"
               class="hidden items-center justify-center rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white md:flex"
-              title="New Chapter"
+              :title="isExampleRoute ? exampleReadOnlyReason : 'New Chapter'"
               aria-label="Create new chapter"
             >
               <PlusIcon class="w-5 h-5" />
@@ -365,7 +368,9 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
             <!-- Search bar (desktop) -->
             <button
               v-if="currentBookId"
+              :disabled="isExampleRoute"
               @click="showSearchModal = true"
+              :title="isExampleRoute ? exampleReadOnlyReason : 'Search manuscript'"
               class="hidden items-center rounded-md border border-gray-200 bg-gray-100 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-200 dark:border-navy-700 dark:bg-navy-800 dark:text-gray-300 dark:hover:bg-navy-700 md:flex"
             >
               <MagnifyingGlassIcon class="w-4 h-4 mr-2" />
@@ -383,9 +388,10 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
             <!-- Search button (mobile) -->
             <button
               v-if="currentBookId"
+              :disabled="isExampleRoute"
               @click="showSearchModal = true"
               class="rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white md:hidden"
-              title="Search"
+              :title="isExampleRoute ? exampleReadOnlyReason : 'Search'"
             >
               <MagnifyingGlassIcon class="w-5 h-5" />
             </button>
@@ -462,17 +468,19 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               <!-- Search button (mobile) -->
               <button
                 v-if="currentBookId"
+                :disabled="isExampleRoute"
                 @click="showSearchModal = true"
                 class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white"
-                title="Search"
+                :title="isExampleRoute ? exampleReadOnlyReason : 'Search'"
               >
                 <MagnifyingGlassIcon class="w-5 h-5" />
               </button>
               <button
                 v-if="currentBookId"
+                :disabled="isExampleRoute"
                 @click="goToNewChapter"
                 class="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-navy-800 dark:hover:text-white"
-                title="New Chapter"
+                :title="isExampleRoute ? exampleReadOnlyReason : 'New Chapter'"
                 aria-label="Create new chapter"
               >
                 <PlusIcon class="w-5 h-5" />

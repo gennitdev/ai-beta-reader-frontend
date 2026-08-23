@@ -3,6 +3,10 @@ import { computed } from 'vue'
 import type { PropType } from 'vue'
 import { PencilIcon, SparklesIcon, ClockIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/vue/24/outline'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
+import { useLibraryContext } from '@/composables/useLibraryContext'
+
+const { readOnly, readOnlyReason } = useLibraryContext()
 
 type CharacterWikiInfo = {
   id: string
@@ -107,8 +111,10 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
       <div class="mb-4 space-y-3">
         <h3 class="w-full text-lg font-semibold text-gray-900 dark:text-white">Chapter Summary</h3>
         <div class="flex w-full flex-wrap items-center justify-end gap-2">
+          <ExampleDisabledControl v-if="chapterSummary && !isEditingSummary" :active="readOnly" :explanation="readOnlyReason">
           <button
             v-if="chapterSummary && !isEditingSummary"
+            :disabled="readOnly"
             @click="emit('start-edit')"
             class="inline-flex items-center px-2 py-1 text-xs text-gold-600 transition-colors hover:text-gold-800 dark:text-gold-400 dark:hover:text-gold-300"
             title="Edit summary"
@@ -116,14 +122,17 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
             <PencilIcon class="mr-1 h-3 w-3" />
             Edit
           </button>
+          </ExampleDisabledControl>
+          <ExampleDisabledControl :active="readOnly" :explanation="readOnlyReason">
           <button
             @click="emit('generate')"
-            :disabled="generatingSummary || isEditingSummary"
+            :disabled="generatingSummary || isEditingSummary || readOnly"
             class="inline-flex items-center rounded-md bg-green-600 px-3 py-1 text-sm text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <SparklesIcon class="mr-1 h-4 w-4" />
             {{ generatingSummary ? 'Generating...' : chapterSummary ? 'Regenerate' : 'Generate' }}
           </button>
+          </ExampleDisabledControl>
         </div>
       </div>
 
@@ -134,7 +143,7 @@ const getCharacterInfo = (name: string) => props.characterLookup?.(name)
           :checked="updateWikiEnabled"
           type="checkbox"
           class="mt-0.5 h-4 w-4 rounded border-gray-300 text-gold-600 focus:ring-gold-500 dark:border-gray-600 dark:bg-gray-700"
-          :disabled="generatingSummary || isEditingSummary"
+          :disabled="generatingSummary || isEditingSummary || readOnly"
           @change="emit('update:updateWikiEnabled', ($event.target as HTMLInputElement).checked)"
         />
         <span>

@@ -4,6 +4,8 @@ import type { PropType } from 'vue'
 import { PencilIcon, DocumentTextIcon, EllipsisVerticalIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import type { BookChapter } from '@/types/bookView'
+import { useLibraryContext } from '@/composables/useLibraryContext'
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
 
 const props = defineProps({
   bookId: {
@@ -33,7 +35,8 @@ const props = defineProps({
 })
 
 const showActionMenu = ref(false)
-const chapterLink = `/books/${props.bookId}/chapters/${props.chapter.id}`
+const { booksPath, readOnly, readOnlyReason } = useLibraryContext()
+const chapterLink = `${booksPath}/${props.bookId}/chapters/${props.chapter.id}`
 
 const toggleActionMenu = () => {
   showActionMenu.value = !showActionMenu.value
@@ -101,7 +104,9 @@ const insertChapter = (placement: 'before' | 'after') => {
         </div>
       </div>
       <div class="flex items-center space-x-1 ml-2">
+        <ExampleDisabledControl :active="readOnly" :explanation="readOnlyReason">
         <button
+          :disabled="readOnly"
           @click.prevent.stop="editChapter(chapter.id)"
           class="p-1 text-gray-400 hover:text-gold-600 dark:hover:text-gold-400 transition-colors"
           title="Edit chapter"
@@ -109,8 +114,10 @@ const insertChapter = (placement: 'before' | 'after') => {
         >
           <PencilIcon class="w-3 h-3" />
         </button>
+        </ExampleDisabledControl>
         <div class="relative">
           <button
+            :disabled="readOnly"
             @click.prevent.stop="toggleActionMenu"
             class="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
             :aria-expanded="showActionMenu"

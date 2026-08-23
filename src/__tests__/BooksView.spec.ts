@@ -39,7 +39,9 @@ vi.mock('@/composables/useImageLibrary', async () => {
 })
 
 function mountView() {
-  return mount(BooksView, { global: { stubs: { RouterLink: true } } })
+  return mount(BooksView, {
+    global: { stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } } },
+  })
 }
 
 beforeEach(() => {
@@ -56,6 +58,7 @@ describe('BooksView', () => {
     await flushPromises()
     expect(h.loadBooks).toHaveBeenCalled()
     expect(wrapper.text()).toContain('No books yet')
+    expect(wrapper.text()).toContain('Explore the read-only example story')
   })
 
   it('renders the book list when books exist', async () => {

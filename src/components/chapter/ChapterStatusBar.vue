@@ -10,6 +10,10 @@ import {
   XMarkIcon,
 } from "@heroicons/vue/24/outline";
 import ChapterReadingActions from "@/components/chapter/ChapterReadingActions.vue";
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
+import { useLibraryContext } from '@/composables/useLibraryContext'
+
+const { readOnly, readOnlyReason } = useLibraryContext()
 
 withDefaults(
   defineProps<{
@@ -89,15 +93,17 @@ const actionClass = computed(() =>
         :font-family="fontFamily"
       />
 
-      <button
-        v-if="!isEditing"
-        type="button"
-        :class="[actionClass, 'border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700/60 dark:hover:text-white']"
-        @click="emit('start-edit')"
-      >
-        <PencilSquareIcon class="h-4 w-4 shrink-0" />
-        Edit Chapter
-      </button>
+      <ExampleDisabledControl v-if="!isEditing" class="w-full" :active="readOnly" :explanation="readOnlyReason">
+        <button
+          type="button"
+          :class="[actionClass, 'border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700/60 dark:hover:text-white']"
+          :disabled="readOnly"
+          @click="emit('start-edit')"
+        >
+          <PencilSquareIcon class="h-4 w-4 shrink-0" />
+          Edit Chapter
+        </button>
+      </ExampleDisabledControl>
 
       <button
         v-if="isEditing"
@@ -114,22 +120,24 @@ const actionClass = computed(() =>
         v-if="isEditing"
         type="button"
         :class="[actionClass, 'border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700/60 dark:hover:text-white']"
-        :disabled="savingChapter"
+        :disabled="savingChapter || readOnly"
         @click="emit('cancel-edit')"
       >
         <XMarkIcon class="h-4 w-4 shrink-0" />
         Cancel Editing
       </button>
 
-      <button
-        type="button"
-        :class="[actionClass, 'border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700/60 dark:hover:text-white']"
-        :disabled="savingChapter"
-        @click="emit('delete-chapter')"
-      >
-        <TrashIcon class="h-4 w-4 shrink-0" />
-        Delete chapter
-      </button>
+      <ExampleDisabledControl class="w-full" :active="readOnly" :explanation="readOnlyReason">
+        <button
+          type="button"
+          :class="[actionClass, 'border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700/60 dark:hover:text-white']"
+          :disabled="savingChapter || readOnly"
+          @click="emit('delete-chapter')"
+        >
+          <TrashIcon class="h-4 w-4 shrink-0" />
+          Delete chapter
+        </button>
+      </ExampleDisabledControl>
     </div>
   </section>
 </template>

@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import IllustrationGrid from '@/components/images/IllustrationGrid.vue';
 import type { ImageAsset, ImageWikiTag } from '@/lib/database';
+import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue';
+import { useLibraryContext } from '@/composables/useLibraryContext';
+
+const { readOnly, readOnlyReason } = useLibraryContext();
 
 defineProps<{
   images: ImageAsset[];
@@ -41,12 +45,13 @@ const emit = defineEmits<{
           {{ canAddImages ? "Images are stored locally on this device." : "Restored images are available for viewing." }}
         </p>
       </div>
+      <ExampleDisabledControl v-if="canAddImages" :active="readOnly" :explanation="readOnlyReason">
       <button
         v-if="canAddImages"
         type="button"
         class="inline-flex items-center justify-center rounded-md bg-gold-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-60"
         :class="layout === 'panel' ? 'w-full' : ''"
-        :disabled="adding"
+        :disabled="adding || readOnly"
         @click="emit('add-images')"
       >
         <span
@@ -55,6 +60,7 @@ const emit = defineEmits<{
         ></span>
         {{ adding ? "Adding..." : "Add images" }}
       </button>
+      </ExampleDisabledControl>
     </div>
 
     <p v-if="error" class="mt-4 text-sm text-red-600 dark:text-red-400">
@@ -69,9 +75,9 @@ const emit = defineEmits<{
       :cover-image-id="coverImageId"
       :loading="loading"
       :setting-cover-id="settingCoverId"
-      :can-set-cover="true"
+      :can-set-cover="!readOnly"
       :can-download="true"
-      :can-delete="true"
+      :can-delete="!readOnly"
       :layout="layout"
       empty-text="No illustrations yet."
       @open-image="emit('open-image', $event)"
