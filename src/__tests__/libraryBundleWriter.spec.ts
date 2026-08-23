@@ -96,6 +96,23 @@ describe('writeLibraryBundle', () => {
     ]))
   })
 
+  it('does not cut through words in long asset directory IDs', async () => {
+    for (const [id, directory] of [
+      ['jack-asset-12-jack-portrait', 'jack-portrait'],
+      ['jack-asset-13-nell-portrait', 'nell-portrait'],
+      ['jack-asset-17-morrows-table', 'morrows-table'],
+    ]) {
+      const model = completeCanonicalLibraryFixture()
+      model.assets[0].id = id
+      const result = await writeLibraryBundle(model, options)
+
+      expect(sortedBundlePaths(result.files)).toEqual(expect.arrayContaining([
+        `books/a-book--book-1/assets/${directory}/asset.yaml`,
+        `books/a-book--book-1/assets/${directory}/cover.png`,
+      ]))
+    }
+  })
+
   it('hashes typed semantics instead of formatting or updated timestamps', async () => {
     const book = completeCanonicalLibraryFixture().books[0]
     const updated = { ...book, updated_at: '2026-08-20T16:30:00.000Z' }
