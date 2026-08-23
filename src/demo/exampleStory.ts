@@ -2,7 +2,7 @@ import { readBundleZip } from '@/lib/libraryBundle/adapters/zip'
 import type { CanonicalLibraryModel } from '@/lib/libraryBundle/model'
 import { readLibraryBundle } from '@/lib/libraryBundle/read'
 import { validateLibraryBundle } from '@/lib/libraryBundle/validate'
-import exampleStoryBundleUrl from '@/demo/stories/jack-and-the-house-above-the-rain.zip?url'
+import exampleStoryBundleUrl from '@/demo/stories/jack-and-the-beanstalk.zip?url'
 
 export interface ExampleStory {
   model: CanonicalLibraryModel

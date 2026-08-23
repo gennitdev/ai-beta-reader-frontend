@@ -6,13 +6,13 @@ import { readExampleStory } from '@/demo/exampleStory'
 
 describe('example story fixture', () => {
   it('loads the complete canonical story without a database', async () => {
-    const path = fileURLToPath(new URL('../demo/stories/jack-and-the-house-above-the-rain.zip', import.meta.url))
+    const path = fileURLToPath(new URL('../demo/stories/jack-and-the-beanstalk.zip', import.meta.url))
     const story = await readExampleStory(new Uint8Array(await readFile(path)))
 
     expect(story.model.books).toHaveLength(1)
     expect(story.model.books[0]).toMatchObject({
       id: 'jack-house-above-rain',
-      title: 'Jack and the House Above the Rain',
+      title: 'Jack and the Beanstalk',
     })
     expect(story.model.parts).toHaveLength(3)
     expect(story.model.chapters).toHaveLength(7)

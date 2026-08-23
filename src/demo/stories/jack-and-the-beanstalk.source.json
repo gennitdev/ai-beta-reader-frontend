@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "storyId": "jack-house-above-rain",
   "sourceRepository": "https://github.com/gennitdev/example-story-jack",
-  "sourceCommit": "231bccfa037c2e4e4b01e626e21d0a66fe958b36",
+  "sourceCommit": "0d58c9b19bfd3aa0ec624f66c25545aad37969e9",
   "bundleId": "bundle-jack-example-workshop-v1",
-  "bundleSha256": "1c853821556614514cda637a936ea5c87cf80f1d5159565ff3d5fe122684a00d",
+  "bundleSha256": "c7f7648c7e413511f639a570dd278504079fd5351a5538c4b8caa22b98081986",
   "fileCount": 75,
   "entityCount": 63
 }

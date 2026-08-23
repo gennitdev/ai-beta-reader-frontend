@@ -6,8 +6,8 @@ import { syncExampleStory } from './exampleStorySync'
 
 const execFileAsync = promisify(execFile)
 const sourceDirectory = resolve(process.argv[2] ?? '../example-story-jack')
-const outputZipPath = resolve('src/demo/stories/jack-and-the-house-above-the-rain.zip')
-const provenancePath = resolve('src/demo/stories/jack-and-the-house-above-the-rain.source.json')
+const outputZipPath = resolve('src/demo/stories/jack-and-the-beanstalk.zip')
+const provenancePath = resolve('src/demo/stories/jack-and-the-beanstalk.source.json')
 
 async function git(...args: string[]): Promise<string> {
   const result = await execFileAsync('git', ['-C', sourceDirectory, ...args])
