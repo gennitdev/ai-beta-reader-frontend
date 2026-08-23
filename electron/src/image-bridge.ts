@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  decodeImageDataUrl,
+  decodeImageBytes,
   isSupportedImageMimeType,
   resolveContainedPath,
 } from './security-boundaries';
@@ -135,8 +135,7 @@ export function registerDesktopImageBridge() {
     const mimeType = isSupportedImageMimeType(payload.mimeType)
       ? payload.mimeType
       : getMimeType(path.extname(absolutePath)) ?? 'application/octet-stream';
-    const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
-    return { dataUrl };
+    return { bytes: new Uint8Array(buffer), mimeType };
   });
 
   ipcMain.handle('desktop-images:delete', async (_event, payload: { relativePath: string }) => {
@@ -162,13 +161,16 @@ export function registerDesktopImageBridge() {
     };
   });
 
-  // Write image data from base64 data URL to filesystem (for restore from backup)
-  ipcMain.handle('desktop-images:write', async (_event, payload: { relativePath: string; dataUrl: string }) => {
-    if (!payload?.relativePath || !payload?.dataUrl) {
+  ipcMain.handle('desktop-images:write', async (_event, payload: {
+    relativePath: string;
+    bytes: Uint8Array;
+    mimeType: string;
+  }) => {
+    if (!payload?.relativePath || !payload?.bytes) {
       throw new Error('Missing image path or data');
     }
 
-    const { buffer } = decodeImageDataUrl(payload.dataUrl);
+    const { buffer } = decodeImageBytes(payload.bytes, payload.mimeType);
 
     // Ensure the directory exists
     const absolutePath = resolveRelativePath(payload.relativePath);

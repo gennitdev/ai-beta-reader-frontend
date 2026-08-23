@@ -94,14 +94,14 @@ describe('three-way library import planning', () => {
     local.chapters[0].body = 'Local edit'
     const plan = await createLibraryImportPlan(await bundle(incoming), local, 'generation-1')
     expect(plan.canApply).toBe(false)
-    const assetBytes = plan.operations.find((value) => value.entityType === 'asset')?.incomingValue as { bytes: number[] }
-    expect(Object.isFrozen(assetBytes.bytes)).toBe(true)
+    const assetBytes = plan.operations.find((value) => value.entityType === 'asset')?.incomingValue as { bytes: string }
+    expect(assetBytes.bytes).toBe('[3 binary bytes]')
     const key = chapterOperation(plan).key
     const resolved = resolveImportConflict(plan, key, 'use_incoming')
     expect(plan.operations.find((value) => value.key === key)?.resolution).toBeUndefined()
     expect(resolved.canApply).toBe(true)
-    expect(applyImportPlanToModel(resolved, local, 'generation-1').chapters[0].body).toBe('Incoming edit')
-    expect(() => applyImportPlanToModel(resolved, local, 'changed')).toThrow('library changed')
+    expect(applyImportPlanToModel(resolved, local, incoming, 'generation-1').chapters[0].body).toBe('Incoming edit')
+    expect(() => applyImportPlanToModel(resolved, local, incoming, 'changed')).toThrow('library changed')
     expect(() => resolveImportConflict(resolved, 'missing', 'keep_local')).toThrow('No conflict')
     expect(() => assertImportPlanCurrent(plan, 'generation-1')).toThrow('unresolved conflicts')
   })
@@ -121,7 +121,7 @@ describe('three-way library import planning', () => {
     validated.model!.assets[0].notes = 'Updated image metadata'
     validated.model!.chapters[0].body = 'Text-only edit'
     const plan = await createLibraryImportPlan(validated, local, 'generation')
-    const applied = applyImportPlanToModel(plan, local, 'generation')
+    const applied = applyImportPlanToModel(plan, local, validated.model!, 'generation')
 
     expect(plan.replaceEligible).toBe(false)
     expect(plan.operations.some((value) => ['chapter_revision', 'chapter_activity', 'wiki_update', 'wiki_review_state'].includes(value.entityType))).toBe(false)
@@ -184,7 +184,7 @@ describe('three-way library import planning', () => {
     incoming.reviews = [{ ...incoming.reviews[0], id: 'review-new' }]
     incoming.assets[0].file_name = 'renamed.png'
     const plan = await createLibraryImportPlan(await bundle(incoming), structuredClone(original), 'g')
-    const applied = applyImportPlanToModel(plan, original, 'g')
+    const applied = applyImportPlanToModel(plan, original, incoming, 'g')
     expect(applied.reviews.map((value) => value.id)).toEqual(['review-new'])
     expect(applied.assets[0].bytes).toBeInstanceOf(Uint8Array)
     expect(applied.assets[0].file_name).toBe('renamed.png')
@@ -212,7 +212,12 @@ describe('three-way library import planning', () => {
         ambiguousAliases: [], warnings: { unknownProfiles: [], ignoredFiles: [] },
       },
     }
-    expect(() => applyImportPlanToModel(plan, completeCanonicalLibraryFixture(), 'g')).toThrow('Unsupported import entity type')
+    expect(() => applyImportPlanToModel(
+      plan,
+      completeCanonicalLibraryFixture(),
+      completeCanonicalLibraryFixture(),
+      'g',
+    )).toThrow('Unsupported import entity type')
   })
 
   it('returns a non-applicable empty plan for structurally invalid bundles', async () => {

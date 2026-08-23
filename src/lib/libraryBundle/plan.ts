@@ -199,7 +199,9 @@ function deepFreeze<T>(value: T): T {
 }
 
 function immutableClone(value: unknown): unknown {
-  if (value instanceof Uint8Array) return value.length ? [...value] : []
+  if (ArrayBuffer.isView(value)) {
+    return value.byteLength ? `[${value.byteLength} binary bytes]` : '[0 binary bytes]'
+  }
   if (Array.isArray(value)) return value.map(immutableClone)
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, immutableClone(child)]))

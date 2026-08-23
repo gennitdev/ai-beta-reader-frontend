@@ -36,7 +36,10 @@ import {
   type UploadDriveGenerationRequest,
 } from './libraryBundle/adapters/drive';
 import { previewBundleZipImport } from './libraryBundle/importPreview';
-import { sha256Hex } from './libraryBundle/semanticHash';
+import {
+  importCanonicalLibraryModel,
+  removeCanonicalAssetsAbsentFromModel,
+} from './libraryBundle/restore';
 import { prepareLibraryReplacement, replaceLibraryWithRecovery } from './recovery/replacement';
 import { createRuntimeRecoveryStore } from './recovery/runtime';
 import type { RecoveryStore } from './recovery/model';
@@ -1090,11 +1093,12 @@ export class CloudSync {
   }
 
   private async restoreBundle(zipBytes: Uint8Array): Promise<boolean> {
-    const currentBackup = await db.exportDatabase();
+    let currentBackup = await db.exportDatabase();
     const imageStore = createRuntimeImageContentStore();
     const preview = await previewBundleZipImport(zipBytes, currentBackup, {
       readLocalAssetBytes: (asset) => this.assetBytes(asset, imageStore),
     });
+    currentBackup = new Uint8Array(0);
     if (!preview.plan.replaceEligible) {
       throw new Error('The Drive backup is not a complete, validated full-library bundle.');
     }
@@ -1112,13 +1116,28 @@ export class CloudSync {
         appVersion: this.appVersion,
       },
     );
+    // The verified recovery now owns the prior image bytes. They are no longer
+    // needed in the active restore heap and can be loaded lazily on rollback.
+    preview.localModel.assets.forEach((asset) => { asset.bytes = null; });
     await replaceLibraryWithRecovery(
       recoveryStore,
       preview.plan,
       preview.incomingModel,
       recovery,
-      await sha256Hex(currentBackup),
-      (data) => this.importCanonicalDatabase(data),
+      preview.databaseGeneration,
+      async (model, phase) => {
+        await importCanonicalLibraryModel(model, {
+          imageStore,
+          importDatabaseBackup: (data) => db.importDatabase(data),
+        });
+        if (phase === 'rollback') {
+          await removeCanonicalAssetsAbsentFromModel(
+            imageStore,
+            preview.incomingModel.assets,
+            model,
+          );
+        }
+      },
     );
     return true;
   }

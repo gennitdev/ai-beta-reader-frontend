@@ -147,7 +147,8 @@ describe('Electron desktop-image bridge runtime', () => {
       relativePath,
       mimeType: 'text/html',
     })).resolves.toEqual({
-      dataUrl: `data:image/png;base64,${Buffer.from('image-bytes').toString('base64')}`,
+      bytes: new Uint8Array(Buffer.from('image-bytes')),
+      mimeType: 'image/png',
     })
     expect(fsMocks.readFile).toHaveBeenCalledWith(path.join(
       '/tmp/beta-bot-user-data',
@@ -158,7 +159,8 @@ describe('Electron desktop-image bridge runtime', () => {
     await expect(getIpcHandler('desktop-images:read')(null, {
       relativePath: 'books/book-1/unknown.bin',
     })).resolves.toEqual({
-      dataUrl: `data:application/octet-stream;base64,${Buffer.from('image-bytes').toString('base64')}`,
+      bytes: new Uint8Array(Buffer.from('image-bytes')),
+      mimeType: 'application/octet-stream',
     })
   })
 
@@ -194,11 +196,12 @@ describe('Electron desktop-image bridge runtime', () => {
 
   it('writes validated image data into a contained library directory', async () => {
     const relativePath = path.join('books', 'book-1', 'covers', 'restored.png')
-    const dataUrl = `data:image/png;base64,${Buffer.from('restored-image').toString('base64')}`
+    const bytes = new Uint8Array(Buffer.from('restored-image'))
 
     await expect(getIpcHandler('desktop-images:write')(null, {
       relativePath,
-      dataUrl,
+      bytes,
+      mimeType: 'image/png',
     })).resolves.toEqual({ success: true })
 
     const absolutePath = path.join('/tmp/beta-bot-user-data', 'images', relativePath)
@@ -212,11 +215,13 @@ describe('Electron desktop-image bridge runtime', () => {
     })).rejects.toThrow('Missing image path or data')
     await expect(getIpcHandler('desktop-images:write')(null, {
       relativePath: 'books/book-1/image.svg',
-      dataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
+      bytes: new Uint8Array([1]),
+      mimeType: 'image/svg+xml',
     })).rejects.toThrow('unsupported image')
     await expect(getIpcHandler('desktop-images:write')(null, {
       relativePath: '../outside.png',
-      dataUrl: 'data:image/png;base64,aGVsbG8=',
+      bytes: new Uint8Array([1]),
+      mimeType: 'image/png',
     })).rejects.toThrow('escapes')
     expect(fsMocks.writeFile).not.toHaveBeenCalled()
   })

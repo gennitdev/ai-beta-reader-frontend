@@ -129,6 +129,7 @@ const updatePlan: LibraryImportPlan = {
 const applied = await measure('apply', () => applyImportPlanToModel(
   updatePlan,
   previewed.value.localModel,
+  previewed.value.incomingModel,
   databaseGeneration,
 ))
 metrics.push(applied.metric)
@@ -151,7 +152,11 @@ const replace = await measure('replace', async () => {
   let importedBytes = 0
   await replaceLibraryWithRecovery(
     store, previewed.value.plan, previewed.value.incomingModel, recovery,
-    databaseGeneration, async (bytes) => { importedBytes = bytes.byteLength },
+    databaseGeneration, async (model) => {
+      importedBytes = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model, {
+        embedAssetBytes: false,
+      }))).byteLength
+    },
   )
   if (!importedBytes) throw new Error('Replace did not produce a database import.')
   return { recoveryBytes: recovery.byteLength, importedBytes }
