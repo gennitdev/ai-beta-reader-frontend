@@ -23,7 +23,102 @@ function chapterOperation(plan: Awaited<ReturnType<typeof createLibraryImportPla
   return plan.operations.find((value) => value.entityType === 'chapter' && value.entityId === 'chapter-1')!
 }
 
+function emptyLocalLibrary() {
+  const model = completeCanonicalLibraryFixture()
+  model.book_ids = []
+  for (const key of [
+    'books', 'parts', 'chapters', 'chapter_notes', 'chapter_summaries', 'part_summaries',
+    'reviews', 'wiki_pages', 'book_characters', 'profiles', 'assets', 'chapter_revisions',
+    'chapter_activity', 'wiki_updates', 'wiki_review_state',
+  ] as const) model[key] = []
+  return model
+}
+
 describe('three-way library import planning', () => {
+  it('creates every entity when adding a wholly absent book while preserving stable IDs', async () => {
+    const plan = await createLibraryImportPlan(
+      await bundle(),
+      emptyLocalLibrary(),
+      'generation',
+      { intent: 'add-or-update-books' },
+    )
+
+    expect(plan.canApply).toBe(true)
+    expect(plan.counts.create).toBe(plan.operations.length)
+    expect(plan.operations.find((value) => value.entityType === 'book')).toEqual(expect.objectContaining({
+      entityId: 'book-1', kind: 'create',
+    }))
+    expect(chapterOperation(plan).kind).toBe('create')
+    expect(plan.operations.find((value) => value.entityType === 'profile')?.kind).toBe('create')
+
+    const imported = applyImportPlanToModel(
+      plan,
+      emptyLocalLibrary(),
+      (await bundle()).model!,
+      'generation',
+    )
+    expect(imported.books.map((book) => book.id)).toEqual(['book-1'])
+    expect(imported.assets[0].bytes).toEqual(new Uint8Array([1, 2, 3]))
+  })
+
+  it('keeps normal three-way behavior for an already installed book in book-import mode', async () => {
+    const original = completeCanonicalLibraryFixture()
+    const incoming = structuredClone(original)
+    incoming.chapters[0].body = 'Incoming edit'
+    const plan = await createLibraryImportPlan(
+      await bundle(incoming),
+      structuredClone(original),
+      'generation',
+      { intent: 'add-or-update-books' },
+    )
+
+    expect(chapterOperation(plan).kind).toBe('update')
+  })
+
+  it('blocks cross-book identity collisions during a first import', async () => {
+    const local = emptyLocalLibrary()
+    local.book_ids = ['other-book']
+    local.books = [{
+      ...completeCanonicalLibraryFixture().books[0],
+      id: 'other-book', title: 'Other Book', chapter_order: ['chapter-1'], part_order: [],
+      cover_image_id: null,
+    }]
+    local.chapters = [{
+      ...completeCanonicalLibraryFixture().chapters[0],
+      book_id: 'other-book', part_id: null, wiki_mentions: [],
+    }]
+    const plan = await createLibraryImportPlan(
+      await bundle(),
+      local,
+      'generation',
+      { intent: 'add-or-update-books' },
+    )
+
+    expect(plan.canApply).toBe(false)
+    expect(plan.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'identity.cross_book_collision', entityId: 'chapter-1' }),
+    ]))
+    const collision = plan.operations.find((operation) => operation.entityId === 'chapter-1')!
+    expect(collision.conflictReason).toBe('cross_book_id_collision')
+    expect(() => resolveImportConflict(plan, collision.key, 'use_incoming')).toThrow('cannot be resolved')
+  })
+
+  it('requires bundled image bytes when adding a new illustrated book', async () => {
+    const validated = await bundle()
+    validated.model!.assets[0].bytes = null
+    const plan = await createLibraryImportPlan(
+      validated,
+      emptyLocalLibrary(),
+      'generation',
+      { intent: 'add-or-update-books' },
+    )
+
+    expect(plan.canApply).toBe(false)
+    expect(plan.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'asset.missing_new_book_bytes', entityId: 'image-1' }),
+    ]))
+  })
+
   it('classifies unchanged, incoming-only, local-only, equal, and conflicting edits', async () => {
     const original = completeCanonicalLibraryFixture()
     expect(chapterOperation(await createLibraryImportPlan(await bundle(), structuredClone(original), 'g')).kind).toBe('unchanged')

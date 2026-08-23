@@ -1,11 +1,16 @@
 import type { CanonicalLibraryModel } from './model'
 import type { ValidatedLibraryBundle } from './validate'
-import { hasBundleErrors } from './diagnostics'
+import { bundleError, hasBundleErrors } from './diagnostics'
 import { canonicalEntityKey, collectCanonicalModelEntities, type CanonicalModelEntity } from './entities'
 import { semanticHash } from './semanticHash'
 
 export type ImportOperationKind = 'create' | 'update' | 'delete' | 'keep_local' | 'unchanged' | 'conflict'
 export type ImportConflictResolution = 'keep_local' | 'use_incoming'
+export type LibraryImportIntent = 'apply-changes' | 'add-or-update-books'
+
+export interface CreateLibraryImportPlanOptions {
+  intent?: LibraryImportIntent
+}
 
 export interface ImportPlanOperation {
   readonly key: string
@@ -16,7 +21,7 @@ export interface ImportPlanOperation {
   readonly title?: string
   readonly path?: string
   readonly kind: ImportOperationKind
-  readonly conflictReason?: 'different_edits' | 'delete_vs_edit' | 'edit_vs_delete' | 'duplicate_new_id'
+  readonly conflictReason?: 'different_edits' | 'delete_vs_edit' | 'edit_vs_delete' | 'duplicate_new_id' | 'cross_book_id_collision'
   readonly resolution?: ImportConflictResolution
   readonly baseHash?: string
   readonly localHash?: string
@@ -269,6 +274,7 @@ export async function createLibraryImportPlan(
   bundle: ValidatedLibraryBundle,
   localModel: CanonicalLibraryModel,
   databaseGeneration: string,
+  options: CreateLibraryImportPlanOptions = {},
 ): Promise<LibraryImportPlan> {
   if (!bundle.manifest || !bundle.inventory || !bundle.model) {
     return finishPlan({
@@ -279,6 +285,11 @@ export async function createLibraryImportPlan(
   }
   const incomingEntities = collectCanonicalModelEntities(bundle.model)
   const localEntities = collectCanonicalModelEntities(localModel)
+  const intent = options.intent ?? 'apply-changes'
+  const localBookIds = new Set(localModel.books.map((book) => book.id))
+  const newBookIds = new Set(bundle.model.books
+    .map((book) => book.id)
+    .filter((bookId) => !localBookIds.has(bookId)))
   const bookTitles = new Map([
     ...localModel.books.map((book) => [book.id, book.title] as const),
     ...bundle.model.books.map((book) => [book.id, book.title] as const),
@@ -316,6 +327,7 @@ export async function createLibraryImportPlan(
     return hash
   }
   const operations: ImportPlanOperation[] = []
+  const diagnostics = [...bundle.diagnostics]
   for (const key of [...candidateKeys].sort()) {
     const localEntity = local.get(key)
     const incomingEntity = incoming.get(key)
@@ -323,7 +335,27 @@ export async function createLibraryImportPlan(
     const [entityType, entityId] = key.split('\0')
     const localHash = await getHash('local', localEntity)
     const incomingHash = await getHash('incoming', incomingEntity)
-    const classification = classify(baseEntity?.semantic_sha256, localHash, incomingHash)
+    const crossBookCollision = intent === 'add-or-update-books'
+      && localEntity?.bookId !== undefined
+      && incomingEntity?.bookId !== undefined
+      && localEntity.bookId !== incomingEntity.bookId
+    if (crossBookCollision) {
+      diagnostics.push(bundleError(
+        'identity.cross_book_collision',
+        `${entityType} ID ${entityId} already belongs to book ${localEntity.bookId} and cannot be imported for ${incomingEntity.bookId}.`,
+        { entityType, entityId, path: paths.get(key) ?? baseEntity?.path },
+      ))
+    }
+    const importsNewBookEntity = intent === 'add-or-update-books'
+      && incomingEntity !== undefined
+      && localEntity === undefined
+      && (incomingEntity.bookId !== undefined && newBookIds.has(incomingEntity.bookId)
+        || incomingEntity.entityType === 'profile' && newBookIds.size > 0)
+    const classification = crossBookCollision
+      ? { kind: 'conflict' as const, conflictReason: 'cross_book_id_collision' as const }
+      : importsNewBookEntity
+        ? { kind: 'create' as const }
+        : classify(baseEntity?.semantic_sha256, localHash, incomingHash)
     operations.push({
       key, entityType, entityId,
       bookId: incomingEntity?.bookId ?? localEntity?.bookId,
@@ -336,10 +368,21 @@ export async function createLibraryImportPlan(
       changedFields: changedFields(localEntity?.value, incomingEntity?.value),
     })
   }
+  if (intent === 'add-or-update-books') {
+    for (const asset of bundle.model.assets) {
+      if (newBookIds.has(asset.book_id) && !asset.bytes) {
+        diagnostics.push(bundleError(
+          'asset.missing_new_book_bytes',
+          `Image ${asset.file_name} must include its bytes when importing a new book.`,
+          { entityType: 'asset', entityId: asset.id, path: paths.get(canonicalEntityKey('asset', asset.id)) },
+        ))
+      }
+    }
+  }
   return finishPlan({
     planVersion: 1, bundleId: bundle.manifest.bundle_id, databaseGeneration,
     bookIds: [...bundle.manifest.book_ids], operations, replaceEligible: bundle.replaceEligible,
-    diagnostics: bundle.diagnostics, previewSummary: createPreviewSummary(bundle),
+    diagnostics, previewSummary: createPreviewSummary(bundle),
   })
 }
 
@@ -350,6 +393,9 @@ export function resolveImportConflict(
 ): LibraryImportPlan {
   const operation = plan.operations.find((candidate) => candidate.key === operationKey)
   if (!operation || operation.kind !== 'conflict') throw new Error(`No conflict exists for ${operationKey}.`)
+  if (operation.conflictReason === 'cross_book_id_collision') {
+    throw new Error(`Cross-book identity collision ${operationKey} cannot be resolved during import.`)
+  }
   const operations = plan.operations.map((candidate) => candidate.key === operationKey
     ? { ...candidate, resolution }
     : candidate)

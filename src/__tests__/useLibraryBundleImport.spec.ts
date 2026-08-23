@@ -13,6 +13,7 @@ const previewDirectory = vi.hoisted(() => vi.fn())
 const prepareReplacement = vi.hoisted(() => vi.fn())
 const replaceWithRecovery = vi.hoisted(() => vi.fn())
 const importCanonicalModel = vi.hoisted(() => vi.fn())
+const removeAbsentAssets = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/libraryBundle/importPreview', () => ({
   previewBundleZipImport: previewZip,
   previewBundleDirectoryImport: previewDirectory,
@@ -23,7 +24,7 @@ vi.mock('@/lib/recovery/replacement', () => ({
 }))
 vi.mock('@/lib/libraryBundle/restore', () => ({
   importCanonicalLibraryModel: importCanonicalModel,
-  removeCanonicalAssetsAbsentFromModel: vi.fn(),
+  removeCanonicalAssetsAbsentFromModel: removeAbsentAssets,
 }))
 vi.mock('@/lib/runtimeImageContentStore', () => ({
   createRuntimeImageContentStore: () => ({ kind: 'image-store' }),
@@ -71,11 +72,15 @@ describe('useLibraryBundleImport', () => {
       exportDatabase: vi.fn().mockResolvedValue(backup), importDatabaseBackup,
       getImageBlob: vi.fn().mockResolvedValue(new Blob([new Uint8Array([1, 2, 3])])),
       recoveryStore: memoryStore(),
+      intent: 'add-or-update-books',
     })
 
     await state.previewFile(new File(['zip'], 'bundle.zip'))
     expect(state.plan.value?.bundleId).toBe('bundle:test')
     expect(state.importFileName.value).toBe('bundle.zip')
+    expect(previewZip).toHaveBeenCalledWith(expect.any(Uint8Array), backup, expect.objectContaining({
+      intent: 'add-or-update-books',
+    }))
 
     const folderFile = new File(['manifest'], 'beta-bot.yaml')
     Object.defineProperty(folderFile, 'webkitRelativePath', { value: 'my-library/beta-bot.yaml' })
@@ -86,6 +91,46 @@ describe('useLibraryBundleImport', () => {
     expect(importDatabaseBackup).toHaveBeenCalledOnce()
     expect(state.importMessage.value).toBe('Bundle changes applied successfully.')
     expect(state.preview.value).toBeNull()
+  })
+
+  it('cleans up newly created image content when applying the database import fails', async () => {
+    const incomingModel = completeCanonicalLibraryFixture()
+    const localModel = structuredClone(incomingModel)
+    localModel.book_ids = []
+    localModel.books = []
+    localModel.assets = []
+    const backup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(localModel)))
+    const generation = await sha256Hex(backup)
+    const plan = {
+      ...emptyPlan(generation),
+      operations: [{
+        key: 'asset\0image-1', entityType: 'asset', entityId: 'image-1', bookId: 'book-1',
+        kind: 'create' as const, changedFields: [],
+      }],
+      counts: { create: 1, update: 0, delete: 0, keep_local: 0, unchanged: 0, conflict: 0 },
+      countsByEntityType: {
+        asset: { create: 1, update: 0, delete: 0, keep_local: 0, unchanged: 0, conflict: 0 },
+      },
+    }
+    previewZip.mockResolvedValue({ plan, localModel, incomingModel, databaseGeneration: generation })
+    importCanonicalModel.mockRejectedValueOnce(new Error('database write failed'))
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn().mockResolvedValue(backup),
+      importDatabaseBackup: vi.fn(),
+      getImageBlob: vi.fn(),
+      recoveryStore: memoryStore(),
+      intent: 'add-or-update-books',
+    })
+
+    await state.previewFile(new File(['zip'], 'bundle.zip'))
+    await expect(state.applyChanges()).resolves.toEqual([])
+
+    expect(removeAbsentAssets).toHaveBeenCalledWith(
+      expect.anything(),
+      [expect.objectContaining({ id: 'image-1' })],
+      localModel,
+    )
+    expect(state.importError.value).toBe('database write failed')
   })
 
   it('exposes immutable preview summaries without deriving them from live state', async () => {

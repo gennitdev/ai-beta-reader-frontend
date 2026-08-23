@@ -7,6 +7,15 @@ import type { BundleFileReadResult } from './directory'
 
 const DETERMINISTIC_ZIP_DATE = new Date('1980-01-01T00:00:00.000Z')
 
+function stripSharedBundleRoot(files: Map<string, Uint8Array>): Map<string, Uint8Array> {
+  if (files.has('beta-bot.yaml') || files.size === 0) return files
+  const roots = new Set([...files.keys()].map((path) => path.split('/')[0]))
+  if (roots.size !== 1) return files
+  const root = [...roots][0]
+  if (!files.has(`${root}/beta-bot.yaml`)) return files
+  return new Map([...files].map(([path, bytes]) => [path.slice(root.length + 1), bytes]))
+}
+
 export async function createBundleZip(files: ReadonlyBundleFileMap): Promise<Uint8Array> {
   const zip = new JSZip()
   for (const path of sortedBundlePaths(files)) {
@@ -155,5 +164,5 @@ export async function readBundleZip(
     diagnostics.push(bundleError('zip.read_failed', `Could not decompress ZIP entry: ${error instanceof Error ? error.message : String(error)}`))
     return { files: null, diagnostics }
   }
-  return { files, diagnostics }
+  return { files: stripSharedBundleRoot(files), diagnostics }
 }
