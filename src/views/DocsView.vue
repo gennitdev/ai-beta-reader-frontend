@@ -29,12 +29,12 @@ interface Section {
 const sections = ref<Section[]>([
   {
     id: 'manuscript',
-    title: 'A Real Manuscript',
-    description: 'Explore a complete illustrated manuscript organized into parts and chapters. This walkthrough uses the built-in Jack and the Beanstalk example throughout.',
+    title: 'An Illustrated Example Book',
+    description: 'Explore a complete illustrated book workspace organized into parts and chapters. This walkthrough uses the built-in Jack and the Beanstalk example throughout.',
     screenshots: [
       {
         src: jackManuscriptOverview,
-        alt: 'Jack and the Beanstalk manuscript overview',
+        alt: 'Jack and the Beanstalk book overview',
         caption: 'Jack and the Beanstalk includes seven chapters, three illustrated parts, chapter covers, summaries, and a connected story bible.'
       }
     ]

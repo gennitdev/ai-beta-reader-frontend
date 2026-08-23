@@ -116,9 +116,9 @@ Bardwall is an optional, illustrated mini-game woven into the app: a haunted tow
 
 ## Screenshots
 
-### A Real Manuscript
+### An Illustrated Example Book
 
-The built-in Jack and the Beanstalk example is a complete illustrated manuscript with parts, chapters, summaries, and a connected story bible.
+The built-in Jack and the Beanstalk example is a complete illustrated book workspace with parts, chapters, summaries, and a connected story bible.
 
 ![Jack and the Beanstalk manuscript](./src/assets/screenshots/jack-and-the-beanstalk-overview.png)
 
@@ -223,6 +223,18 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 - User-facing export/import uses the versioned canonical library bundle. Internally, named database snapshots bridge the platform storage engines to the shared bundle codec.
 - Browser image bytes live in the IndexedDB `imageBlobs` object store. SQLite keeps only image metadata during normal use; legacy base64 rows migrate automatically in restartable batches.
 
+### Plain-text bundle round trips
+
+Beta bot's bundle format lets the visual app and a plain-text writing workflow share the same book. This is useful when you want the app for reading, organization, illustrations, summaries, and story-bible navigation, but prefer editing Markdown and YAML in a text editor—or with an AI coding tool such as the Codex or Claude desktop app or CLI.
+
+1. In beta bot, choose **Text-only Git workspace** as the export format and export the selected book as a folder or ZIP.
+2. Open the exported workspace in your editor, a Git repository, Codex, or Claude. Chapters, part summaries, chapter summaries, and wiki pages are ordinary Markdown; book structure and relationships use YAML.
+3. Edit and review the changes as normal text diffs. Keep existing entity IDs and frontmatter relationships intact, and do not edit `_beta-bot/inventory.json` by hand.
+4. Return to **My Books → Import Bundle**. Beta bot previews every create, update, and conflict before anything is written to the local library.
+5. Continue working in the visual UI. When you want to move back to plain text, export again; folder export safely updates app-managed files while preserving unknown files and customized workspace instructions.
+
+This makes the bundle a round-trip workspace rather than a one-way export. You can move between the UI and plain text repeatedly, keep the workspace under Git, and resolve overlapping edits explicitly during import. Full-library bundles remain the right choice for backup and device migration because they include image bytes, history, profiles, and audit data; text-only workspaces are optimized for editing and preserve matching local image content when reapplied.
+
 ### Google Drive Backup & Restore
 
 1. **Backup** (`User Settings → Back up to Drive`)
@@ -253,7 +265,7 @@ See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secre
 
 ### Folder export and validation
 
-- **Export Git workspace to folder** writes the same canonical files as full ZIP and Drive backup.
+- Folder export can write either a complete library bundle or the editable text-only Git workspace, depending on the selected export format.
 - Existing bundles are updated from their prior inventory: unknown files and customized workspace guidance are preserved, and obsolete managed files are removed only after verified writes.
 - Validate either transport without opening the app or database:
 

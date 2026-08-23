@@ -8,6 +8,7 @@ import BookDesktopSidebar from './BookDesktopSidebar.vue'
 withDefaults(defineProps<{
   book: Book | null
   bookId: string
+  booksPath: string
   isEditingBookTitle?: boolean
   editingBookTitle?: string
   chapterCount?: number
@@ -16,6 +17,7 @@ withDefaults(defineProps<{
   hasChapters?: boolean
   loadingChapters?: boolean
   chaptersByPart: BookChaptersByPart
+  partSummaries?: Record<string, string>
   sidebarPartLists: Record<string, BookChapter[]>
   sidebarUncategorized: BookChapter[]
   expandedParts: Set<string>
@@ -169,7 +171,12 @@ withDefaults(defineProps<{
 
       <BookDesktopMainPane
         :book-id="bookId"
+        :books-path="booksPath"
         :current-tab="currentTab"
+        :chapters-by-part="chaptersByPart"
+        :part-summaries="partSummaries"
+        :part-thumbnails="partThumbnails"
+        :format-word-count="formatWordCount"
         :selected-image-id="selectedImageId"
         :selected-image-src="selectedImageSrc"
         :selected-image="selectedImage"

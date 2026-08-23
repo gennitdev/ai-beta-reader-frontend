@@ -43,6 +43,7 @@ const {
   getWikiPage,
   createWikiPage,
   getSummary,
+  getPartSummary,
   getNotes,
   saveBook,
   getParts,
@@ -149,6 +150,7 @@ const {
 
 const chapters = ref<BookChapter[]>([]);
 const parts = ref<BookPart[]>([]);
+const partSummaries = ref<Record<string, string>>({});
 const partOrder = ref<string[]>([]);
 const loading = ref(false);
 const expandedSummaries = ref<Set<string>>(new Set());
@@ -542,6 +544,13 @@ const loadBook = async () => {
 
     // Load parts from database first
     parts.value = await getParts(bookId.value);
+    partSummaries.value = Object.fromEntries(
+      (await Promise.all(parts.value.map(async (part) => {
+        const summary = await getPartSummary(part.id);
+        const text = summary?.summary?.trim();
+        return text ? [part.id, text] as const : null;
+      }))).filter((entry): entry is readonly [string, string] => entry !== null)
+    );
 
     await syncPartOrderWithParts();
     await syncChaptersFromDb();
@@ -825,6 +834,7 @@ onMounted(async () => {
   <BookDesktopLayout
     :book="book"
     :book-id="bookId"
+    :books-path="booksPath"
     :is-editing-book-title="isEditingBookTitle"
     :editing-book-title="editingBookTitle"
     :chapter-count="chapterCount"
@@ -833,6 +843,7 @@ onMounted(async () => {
     :has-chapters="hasChapters"
     :loading-chapters="loading"
     :chapters-by-part="chaptersByPart"
+    :part-summaries="partSummaries"
     :sidebar-part-lists="sidebarPartLists"
     :sidebar-uncategorized="sidebarUncategorized"
     :expanded-parts="expandedParts"
