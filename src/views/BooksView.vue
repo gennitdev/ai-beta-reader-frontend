@@ -1,23 +1,92 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { logger } from '@/lib/logger'
 import { useRouter } from 'vue-router'
 import { useBooks, type Book } from '@/composables/useBooks'
 import { useImageLibrary } from '@/composables/useImageLibrary'
-import { PlusIcon, BookOpenIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
+import { useDatabase } from '@/composables/useDatabase'
+import { useLibraryBundleImport } from '@/composables/useLibraryBundleImport'
+import LibraryBundleImport from '@/components/LibraryBundleImport.vue'
+import { PlusIcon, BookOpenIcon, DocumentArrowUpIcon, ExclamationTriangleIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
 import { useLibraryContext } from '@/composables/useLibraryContext'
 
 const router = useRouter()
 const { booksPath, readOnly, readOnlyReason } = useLibraryContext()
 const showCreateModal = ref(false)
+const showImportModal = ref(false)
 const newBook = ref({ id: '', title: '' })
+const importedBookIds = ref<string[]>([])
 
 // Use local database instead of API
 const { books, loading, error, loadBooks, createBook } = useBooks()
-const { canStoreImages, fetchBookCover, getImageSource } = useImageLibrary()
+const { exportDatabase, importDatabaseBackup } = useDatabase()
+const { canStoreImages, fetchBookCover, getImageSource, getImageBlob } = useImageLibrary()
 const bookCoverSources = ref<Record<string, string>>({})
 const coverRefreshError = ref<string | null>(null)
+
+const {
+  plan: importPlan,
+  importFileName,
+  importError,
+  importMessage,
+  isPreviewing,
+  isApplying,
+  isPreparingReplace,
+  isReplacing,
+  recoveries,
+  preparedRecovery,
+  replaceRemovalCounts,
+  previewFile,
+  previewDirectory,
+  resolveConflict,
+  applyChanges,
+  resetImport,
+} = useLibraryBundleImport({
+  exportDatabase,
+  importDatabaseBackup,
+  getImageBlob,
+  intent: 'add-or-update-books',
+})
+
+const importApplyLabel = computed(() => {
+  const newBooks = importPlan.value?.operations.filter(
+    (operation) => operation.entityType === 'book' && operation.kind === 'create',
+  ).length ?? 0
+  if (newBooks === 1) return 'Import book'
+  if (newBooks > 1) return `Import ${newBooks} books`
+  return 'Apply book updates'
+})
+
+const importBusy = computed(() => isPreviewing.value || isApplying.value)
+
+const openImportModal = () => {
+  resetImport()
+  importedBookIds.value = []
+  showImportModal.value = true
+}
+
+const closeImportModal = () => {
+  if (importBusy.value) return
+  showImportModal.value = false
+  resetImport()
+  importedBookIds.value = []
+}
+
+const applyBookImport = async () => {
+  const importedIds = await applyChanges()
+  if (!importedIds.length) return
+  importedBookIds.value = importedIds
+  await loadBooks()
+  await refreshCoverSources()
+}
+
+const openImportedBook = () => {
+  const bookId = importedBookIds.value[0]
+  if (!bookId) return
+  showImportModal.value = false
+  router.push(`/books/${bookId}`)
+}
 
 const createBookHandler = async () => {
   if (!newBook.value.id || !newBook.value.title) return
@@ -99,20 +168,36 @@ watch(
 
 <template>
   <div class="mx-auto max-w-7xl p-4 sm:p-6">
-    <div class="mb-6 flex items-center justify-between sm:mb-8">
+    <div class="mb-6 flex items-center justify-between gap-3 sm:mb-8">
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white">My Books</h1>
-      <ExampleDisabledControl v-if="readOnly" :explanation="readOnlyReason">
-        <button disabled class="inline-flex cursor-not-allowed items-center rounded-lg bg-gold-600 px-4 py-2 text-white opacity-60">
-          <PlusIcon class="w-5 h-5 mr-2" /> New Book
-        </button>
-      </ExampleDisabledControl>
-      <button
-        v-else
-        @click="showCreateModal = true"
-        class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
-      >
-        <PlusIcon class="w-5 h-5 mr-2" /> New Book
-      </button>
+      <div class="flex flex-wrap justify-end gap-2">
+        <template v-if="readOnly">
+          <ExampleDisabledControl :explanation="readOnlyReason">
+            <button disabled class="inline-flex cursor-not-allowed items-center rounded-lg border border-gold-600 px-4 py-2 text-gold-700 opacity-60 dark:text-gold-300">
+              <DocumentArrowUpIcon class="mr-2 h-5 w-5" /> Import Bundle
+            </button>
+          </ExampleDisabledControl>
+          <ExampleDisabledControl :explanation="readOnlyReason">
+            <button disabled class="inline-flex cursor-not-allowed items-center rounded-lg bg-gold-600 px-4 py-2 text-white opacity-60">
+              <PlusIcon class="mr-2 h-5 w-5" /> New Book
+            </button>
+          </ExampleDisabledControl>
+        </template>
+        <template v-else>
+          <button
+            @click="openImportModal"
+            class="inline-flex items-center rounded-lg border border-gold-600 px-4 py-2 text-gold-700 transition-colors hover:bg-gold-50 dark:text-gold-300 dark:hover:bg-gold-900/20"
+          >
+            <DocumentArrowUpIcon class="mr-2 h-5 w-5" /> Import Bundle
+          </button>
+          <button
+            @click="showCreateModal = true"
+            class="inline-flex items-center rounded-lg bg-gold-600 px-4 py-2 text-white transition-colors hover:bg-gold-700"
+          >
+            <PlusIcon class="mr-2 h-5 w-5" /> New Book
+          </button>
+        </template>
+      </div>
     </div>
 
     <!-- Loading state -->
@@ -178,12 +263,21 @@ watch(
         Create your first book to start getting AI feedback on your chapters.
       </p>
       <button
+        v-if="!readOnly"
         @click="showCreateModal = true"
         class="inline-flex items-center px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 transition-colors"
       >
         <PlusIcon class="w-5 h-5 mr-2" />
         Create Your First Book
       </button>
+      <div v-if="!readOnly" class="mt-3">
+        <button
+          class="inline-flex items-center text-sm font-semibold text-gold-700 hover:underline dark:text-gold-300"
+          @click="openImportModal"
+        >
+          <DocumentArrowUpIcon class="mr-1.5 h-4 w-4" /> Import a book bundle
+        </button>
+      </div>
       <div class="mt-4">
         <router-link
           to="/example-books"
@@ -191,6 +285,71 @@ watch(
         >
           Explore the read-only example story →
         </router-link>
+      </div>
+    </div>
+
+    <!-- Import bundle modal -->
+    <div
+      v-if="showImportModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="book-bundle-import-title"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      @click.self="closeImportModal"
+    >
+      <div class="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-xl bg-white shadow-2xl dark:bg-navy-900">
+        <div class="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-gray-700 dark:bg-navy-900">
+          <div>
+            <h2 id="book-bundle-import-title" class="text-xl font-semibold text-gray-900 dark:text-white">Import books from a bundle</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400">Add a new book or apply Git-compatible updates to one you already imported.</p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close import dialog"
+            :disabled="importBusy"
+            class="rounded p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-navy-800"
+            @click="closeImportModal"
+          >
+            <XMarkIcon class="h-6 w-6" />
+          </button>
+        </div>
+
+        <div v-if="importedBookIds.length" class="p-8 text-center">
+          <BookOpenIcon class="mx-auto h-14 w-14 text-green-600" />
+          <h3 class="mt-4 text-xl font-semibold text-gray-900 dark:text-white">Bundle imported successfully</h3>
+          <p class="mt-2 text-gray-600 dark:text-gray-300">
+            {{ importedBookIds.length === 1 ? 'Your book is ready to edit.' : `${importedBookIds.length} books are ready to edit.` }}
+          </p>
+          <div class="mt-6 flex justify-center gap-3">
+            <button class="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:border-gray-600 dark:text-gray-200" @click="closeImportModal">Done</button>
+            <button v-if="importedBookIds.length === 1" class="rounded-lg bg-gold-600 px-4 py-2 font-medium text-white hover:bg-gold-700" @click="openImportedBook">Open book</button>
+          </div>
+        </div>
+
+        <LibraryBundleImport
+          v-else
+          embedded
+          heading="Choose a Beta Bot bundle"
+          description="Preview a ZIP or bundle folder before adding or updating its books. Nothing changes until you confirm."
+          :apply-label="importApplyLabel"
+          :show-replace="false"
+          :show-recoveries="false"
+          :plan="importPlan"
+          :file-name="importFileName"
+          :error="importError"
+          :message="importMessage"
+          :is-previewing="isPreviewing"
+          :is-applying="isApplying"
+          :is-preparing-replace="isPreparingReplace"
+          :is-replacing="isReplacing"
+          :recoveries="recoveries"
+          :prepared-recovery="preparedRecovery"
+          :replace-removal-counts="replaceRemovalCounts"
+          @select="previewFile"
+          @select-directory="previewDirectory"
+          @resolve="resolveConflict"
+          @apply="applyBookImport"
+        />
       </div>
     </div>
 

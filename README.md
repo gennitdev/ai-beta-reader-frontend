@@ -86,6 +86,7 @@ OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron 
 - **Local-first data**: Every project lives in a local SQLite database. Backups are user-initiated; AI features send the selected manuscript context to the configured AI service when invoked.
 - **Encrypted backups**: The complete canonical library ZIP is encrypted with a password-derived AES-GCM key and uploaded to Google Drive as a new immutable generation. The three newest successful generations are retained.
 - **Cross-platform restore**: Browser, Electron, and Android use the same canonical bundle format. Restore also retains permanent compatibility with older WC1, WC2, and CryptoJS-encrypted JSON backups. Android uses Google Play services authorization without a browser redirect.
+- **Book bundle import**: Add a new book—or apply later Git-workspace edits to an installed book—directly from My Books using a validated bundle ZIP or folder.
 - **Git-ready workspaces**: Chromium-class browsers can safely update canonical bundle folders without overwriting unknown files. New workspaces include maintained agent instructions and a conservative `.gitattributes` policy.
 - **Story bible**: Character sheets and wiki pages can record human-edited alternate names, helping AI updates resolve nicknames and titles to one canonical page.
 - **Find & replace**: Rename characters/places everywhere in one shot.
