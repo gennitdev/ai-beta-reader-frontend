@@ -116,47 +116,41 @@ Bardwall is an optional, illustrated mini-game woven into the app: a haunted tow
 
 ## Screenshots
 
-### AI Summary Generation
+### A Real Manuscript
 
-Clicking the generate summary button generates structured summaries that track characters, plot points, and key events for each chapter.
+The built-in Jack and the Beanstalk example is a complete illustrated manuscript with parts, chapters, summaries, and a connected story bible.
 
-![Summary Being Generated](./src/assets/screenshots/summary-being-generated.png)
+![Jack and the Beanstalk manuscript](./src/assets/screenshots/jack-and-the-beanstalk-overview.png)
 
-### Summary Management
+### Structured Chapter Summaries
 
-You can manually edit or regenerate summaries to ensure they accurately capture the important details that will provide context for AI reviews.
+Chapter summaries track the point-of-view character, cast, and key beats used as context for AI reviews. You can inspect, edit, or regenerate them at any time.
+
+![Structured summary for Beneath the Bruised Purple Cloud](./src/assets/screenshots/summary-being-generated.png)
 
 ![Manually Edit Summary](./src/assets/screenshots/manually-edit-summary.png)
 
 ![Regenerate Summary Button](./src/assets/screenshots/regenerate-summary-button.png)
 
-### AI Review Transparency
+### Transparent AI Review Setup
 
-The app shows you exactly what summaries are being sent to the AI as context, giving you full transparency into the review process.
+Choose the reviewer perspective that best fits the manuscript and inspect its complete AI prompt before requesting feedback.
 
-![Review Summaries in Prompt](./src/assets/screenshots/review-summaries-in-prompt-to-see-if-summaries-need-editing.png)
+![Developmental editor AI prompt](./src/assets/screenshots/review-summaries-in-prompt-to-see-if-summaries-need-editing.png)
 
-### Contextual AI Feedback
-
-Get intelligent feedback that understands your story's continuity and can catch inconsistencies across chapters.
-
-![Example of Feedback on Consistency](./src/assets/screenshots/example-of-feedback-on-consistency-with-other-chapters.png)
+![Choosing a custom reviewer for a Jack and the Beanstalk chapter](./src/assets/screenshots/getting-feedback-from-custom-ai-profile.png)
 
 ### Custom AI Profiles
 
 Create personalized reviewer profiles with custom prompts to get the exact type of feedback you need.
 
-![Custom AI Profile Creation](./src/assets/screenshots/custom-ai-profile-creation.png)
-
 ![Custom AI Profile in User Settings](./src/assets/screenshots/custom-ai-profile-in-user-settings.png)
 
-![Getting Feedback from Custom AI Profile](./src/assets/screenshots/getting-feedback-from-custom-ai-profile.png)
-
-![Feedback by AI Profile](./src/assets/screenshots/feedback-by-ai-profile.png)
+![Custom AI Profile Creation](./src/assets/screenshots/custom-ai-profile-creation.png)
 
 ### Character Wiki System
 
-Wiki pages can be maintained by hand or updated as part of chapter summary generation. Before selecting **Generate** or **Regenerate**, use the **Update wiki pages for detected characters and locations** checkbox to control whether the AI should:
+Wiki pages connect characters and locations to their source chapters and tagged illustrations. They can be maintained by hand or updated as part of chapter summary generation. Before selecting **Generate** or **Regenerate**, use the **Update wiki pages for detected characters and locations** checkbox to control whether the AI should:
 
 - Create pages for newly detected characters and locations
 - Add relevant chapter information to existing pages
@@ -165,7 +159,7 @@ Wiki pages can be maintained by hand or updated as part of chapter summary gener
 
 After generation, the summary panel reports which pages were created, updated, or left unchanged and provides links to review them.
 
-![Auto-generated Character Sheet with Change History](./src/assets/screenshots/auto-generated-character-sheet-with-change-history.png)
+![Jack character page with story-bible details and illustrations](./src/assets/screenshots/auto-generated-character-sheet-with-change-history.png)
 
 ### Search and Replace for Continuity
 
