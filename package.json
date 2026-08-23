@@ -18,6 +18,7 @@
     "benchmark:bundle": "tsx scripts/benchmarks/libraryBundleStress.ts --scale=smoke",
     "benchmark:bundle:ci": "tsx scripts/benchmarks/libraryBundleStress.ts --scale=ci --seed=132202608 --enforce",
     "benchmark:bundle:nightly": "tsx scripts/benchmarks/libraryBundleStress.ts --scale=nightly --seed=132202608",
+    "example-story:sync": "tsx scripts/sync-example-story.ts",
     "test:coverage": "vitest run --coverage",
     "test:coverage:strict": "node scripts/check-strict-coverage.mjs --minimum=80",
     "test:electron": "vitest run electron/tests",

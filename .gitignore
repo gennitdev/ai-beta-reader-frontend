@@ -159,6 +159,9 @@ android/app/betabot-release.keystore
 ai-beta-reader-backup.enc
 inspect-backup.mjs
 fixtures/
+# Local editorial source retained for reference; the canonical example now
+# lives in the sibling example-story-jack repository.
+/jack-and-the-beanstalk-fixture-data/
 # Unit-test golden fixtures are intentionally versioned compatibility evidence.
 !src/__tests__/fixtures/
 !src/__tests__/fixtures/**

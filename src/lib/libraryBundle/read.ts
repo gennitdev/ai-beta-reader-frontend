@@ -189,7 +189,8 @@ export function readLibraryBundle(files: ReadonlyBundleFileMap): ReadLibraryBund
   const knownFiles = new Set([
     'beta-bot.yaml', '_beta-bot/inventory.json',
     // Optional Git-workspace scaffolding lives outside the managed bundle tree.
-    'AGENTS.md', 'CLAUDE.md', '.gitattributes',
+    'AGENTS.md', 'CLAUDE.md', '.gitattributes', '.gitignore',
+    'README.md', 'LICENSE', 'LICENSE.md',
   ])
   const rawManifest = yamlFile(files, 'beta-bot.yaml', z.record(z.string(), z.unknown()), diagnostics)
   if (rawManifest) {
@@ -257,7 +258,9 @@ export function readLibraryBundle(files: ReadonlyBundleFileMap): ReadLibraryBund
     entityType: 'wiki_review_state', id: `${value.wiki_page_id}:${value.chapter_id}`, path: reviewStatePath,
   }))
 
-  const unknownFiles = [...files.keys()].filter((path) => !knownFiles.has(path)).sort()
+  const unknownFiles = [...files.keys()]
+    .filter((path) => !knownFiles.has(path) && !path.startsWith('.github/'))
+    .sort()
   unknownFiles.forEach((path) => diagnostics.push(bundleWarning('file.unknown', 'Unknown file is ignored during database import.', { path })))
   if (!manifest || !inventory || hasBundleErrors(diagnostics)) {
     return { manifest, inventory, model: null, entitySources: sources, unknownFiles, diagnostics }
