@@ -6,12 +6,31 @@
 
 [![CI](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/gennitdev/ai-beta-reader-frontend/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend/branch/main/graph/badge.svg)](https://codecov.io/gh/gennitdev/ai-beta-reader-frontend)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A local-first writing application for managing books and chapters, editing content with a rich markdown editor, generating AI summaries, and getting contextual feedback on your writing.
 
-This repository contains the complete application code for the browser, Electron desktop, and Android builds. No separate application backend or API server is required: writing data is stored locally, AI requests are sent directly to OpenAI using the API key configured by the user, and optional encrypted backups communicate directly with Google Drive.
+**[Open beta-bot.net](https://beta-bot.net)** · **[Browse the example library](https://beta-bot.net/example-books)** — a complete illustrated book you can explore with no account and no API key · [Privacy](https://beta-bot.net/privacy) · [Terms](https://beta-bot.net/terms)
 
-> **Why the backend is deprecated:** earlier versions relied on a companion Express server to store data and proxy AI and cloud requests. The current architecture no longer needs it. The app is local-first — SQLite lives on the user's device, so there is no application database to host — and it talks directly to OpenAI and Google Drive from the client, so there is nothing left for a server to do. Removing it means no infrastructure to run, host, or secure, and no shared server holding users' writing. The `ai-beta-reader-express` project is kept only for reference; it is not part of the running application.
+![Jack and the Beanstalk manuscript](./src/assets/screenshots/jack-and-the-beanstalk-overview.png)
+
+Your writing stays on your device. This repository contains the complete application code for the browser, Electron desktop, and Android builds, and there is no application backend or API server anywhere in it. SQLite lives on the user's device, so there is no application database to host; AI requests go directly to OpenAI using the API key the user configures, and optional encrypted backups go directly to Google Drive. Nothing to run, host, or secure, and no shared server holding anyone's writing.
+
+<details>
+<summary>Why there is no backend anymore</summary>
+
+Earlier versions relied on a companion Express server to store data and proxy AI and cloud requests. The current architecture no longer needs it: the app is local-first and talks directly to OpenAI and Google Drive from the client, so there is nothing left for a server to do. The `ai-beta-reader-express` project is kept only for reference; it is not part of the running application, and `src/services/api.ts` remains as unused legacy compatibility code that should not be used for new features.
+
+</details>
+
+## Your data
+
+- **Your manuscript lives on your device.** Books, chapters, summaries, wiki pages, and images are stored in a local SQLite database. Nothing is uploaded in the background.
+- **AI features send only what you ask for, when you ask for it.** Generating a summary or requesting a review sends that chapter's text, plus the earlier summaries used as context, directly to OpenAI under your own API key. No AI request is made unless you initiate it, and you can inspect the complete prompt before sending it.
+- **Backups are user-initiated and encrypted before they leave.** A backup builds a canonical library ZIP, encrypts it with a key derived from your password (PBKDF2, then AES-GCM through the Web Crypto API), and uploads it to your own Google Drive under the `drive.file` scope, which limits the app to files it created. Restore only reads. Nothing is ever uploaded automatically.
+- **Your keys and passwords are not collected.** OpenAI API keys are encrypted at rest with OS-backed secure storage on Electron and Android; browser builds keep a remembered key in browser storage, because a browser cannot reach an OS keychain. API keys are never included in backups, and the backup password is never stored — losing it makes that backup unreadable.
+
+The in-app [Privacy Policy](https://beta-bot.net/privacy) and [Terms of Use](https://beta-bot.net/terms) carry the full statement.
 
 ## Tech Stack
 
@@ -56,7 +75,7 @@ flowchart TB
 
 The browser, desktop, and Android targets share the same application and portable backup format. Platform adapters only change how the local SQLite database and image binaries are stored. OpenAI and Google Drive are contacted directly from the running client; there is no application server between them.
 
-OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron and Android builds. Browser builds cannot access an OS keychain, so a key remembered there is kept in the site's browser storage. Keys are never included in application backups.
+See [Your data](#your-data) for what leaves the device and how credentials are stored on each platform.
 
 ## Features
 
@@ -64,6 +83,8 @@ OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron 
 
 - **Book Management**: Create and organize your writing projects with support for parts/sections
 - **Chapter Editor**: Rich markdown editor with live preview and word count tracking
+- **Version history**: Each save that changes a chapter keeps a revision. Compare any saved version against the one before it, restore it, or permanently discard it
+- **Read-only example library**: Explore a complete illustrated book — chapters, summaries, story bible, and illustrations — without an account, an API key, or any effect on your own library
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
 
 ### AI-Powered Features
@@ -87,6 +108,7 @@ OpenAI API keys are encrypted at rest with OS-backed secure storage in Electron 
 - **Encrypted backups**: The complete canonical library ZIP is encrypted with a password-derived AES-GCM key and uploaded to Google Drive as a new immutable generation. The three newest successful generations are retained.
 - **Cross-platform restore**: Browser, Electron, and Android use the same canonical bundle format. Restore also retains permanent compatibility with older WC1, WC2, and CryptoJS-encrypted JSON backups. Android uses Google Play services authorization without a browser redirect.
 - **Book bundle import**: Add a new book—or apply later Git-workspace edits to an installed book—directly from My Books using a validated bundle ZIP or folder.
+- **Book deletion**: Remove a book together with everything attached to it — chapters, revisions, summaries, reviews, notes, wiki pages, and image assets — after a preview of exactly what will be deleted.
 - **Git-ready workspaces**: Chromium-class browsers can safely update canonical bundle folders without overwriting unknown files. New workspaces include maintained agent instructions and a conservative `.gitattributes` policy.
 - **Story bible**: Character sheets and wiki pages can record human-edited alternate names, helping AI updates resolve nicknames and titles to one canonical page.
 - **Find & replace**: Rename characters/places everywhere in one shot.
@@ -116,13 +138,10 @@ Bardwall is an optional, illustrated mini-game woven into the app: a haunted tow
 
 ## Screenshots
 
-### An Illustrated Example Book
+The screenshot above is the built-in Jack and the Beanstalk example: a complete illustrated workspace with parts, chapters, summaries, and a connected story bible. You can [click through the same book live](https://beta-bot.net/example-books). Expand any section below for more.
 
-The built-in Jack and the Beanstalk example is a complete illustrated book workspace with parts, chapters, summaries, and a connected story bible.
-
-![Jack and the Beanstalk manuscript](./src/assets/screenshots/jack-and-the-beanstalk-overview.png)
-
-### Structured Chapter Summaries
+<details>
+<summary><strong>Structured chapter summaries</strong></summary>
 
 Chapter summaries track the point-of-view character, cast, and key beats used as context for AI reviews. You can inspect, edit, or regenerate them at any time.
 
@@ -132,7 +151,10 @@ Chapter summaries track the point-of-view character, cast, and key beats used as
 
 ![Regenerate Summary Button](./src/assets/screenshots/regenerate-summary-button.png)
 
-### Transparent AI Review Setup
+</details>
+
+<details>
+<summary><strong>Transparent AI review setup</strong></summary>
 
 Choose the reviewer perspective that best fits the manuscript and inspect its complete AI prompt before requesting feedback.
 
@@ -140,7 +162,10 @@ Choose the reviewer perspective that best fits the manuscript and inspect its co
 
 ![Choosing a custom reviewer for a Jack and the Beanstalk chapter](./src/assets/screenshots/getting-feedback-from-custom-ai-profile.png)
 
-### Custom AI Profiles
+</details>
+
+<details>
+<summary><strong>Custom AI profiles</strong></summary>
 
 Create personalized reviewer profiles with custom prompts to get the exact type of feedback you need.
 
@@ -148,7 +173,10 @@ Create personalized reviewer profiles with custom prompts to get the exact type 
 
 ![Custom AI Profile Creation](./src/assets/screenshots/custom-ai-profile-creation.png)
 
-### Character Wiki System
+</details>
+
+<details>
+<summary><strong>Character wiki system</strong></summary>
 
 Wiki pages connect characters and locations to their source chapters and tagged illustrations. They can be maintained by hand or updated as part of chapter summary generation. Before selecting **Generate** or **Regenerate**, use the **Update wiki pages for detected characters and locations** checkbox to control whether the AI should:
 
@@ -161,7 +189,10 @@ After generation, the summary panel reports which pages were created, updated, o
 
 ![Jack character page with story-bible details and illustrations](./src/assets/screenshots/auto-generated-character-sheet-with-change-history.png)
 
-### Search and Replace for Continuity
+</details>
+
+<details>
+<summary><strong>Search and replace for continuity</strong></summary>
 
 Review individual matches before replacing text across your entire manuscript, or limit the operation to the current chapter or wiki page. Matches are grouped by document and field, with controls to replace one, selected matches, or every match in a document.
 
@@ -169,13 +200,19 @@ Review individual matches before replacing text across your entire manuscript, o
 
 ![Find and Replace for Continuity Fixes](./src/assets/screenshots/find-and-replace-for-continuity-fixes.png)
 
-## Prerequisites for Self Hosting beta bot
+</details>
+
+## Running Locally
+
+beta bot is a client application, so running it means a Vite dev server or a static build. There is no server to provision and no database to host.
+
+### Prerequisites
 
 - Node.js 22.12+ or 24+
 - An OpenAI API key, entered in the app, to use AI summaries and reviews
 - Optional: a Google Cloud project with the Drive API enabled and appropriate OAuth clients if you want Google Drive backup and restore
 
-## Setup
+### Setup
 
 1. **Install dependencies:**
 
@@ -299,14 +336,27 @@ npm install          # install deps
 npm run dev          # local dev server (Vite)
 npm run build        # type-check + production bundle (outputs to dist/)
 npm run preview      # serve production bundle locally
-npm run lint         # ESLint check
-npm run lint:fix     # ESLint autofix
-npm run type-check   # vue-tsc --build
-npm run test:unit    # Vitest unit suite
-npm run test:coverage # Vitest with coverage
-npm run test:e2e     # Playwright browser suite
-npm run test:electron # Electron runtime unit suite
+
+# Lint and types
+npm run lint             # ESLint check
+npm run lint:fix         # ESLint autofix
+npm run type-check       # vue-tsc --build (browser app)
+npm run type-check:electron  # Electron main/preload types
+npm run type-check:e2e   # Playwright spec types
+
+# Tests
+npm run test:unit             # Vitest unit suite
+npm run test:coverage         # Vitest with coverage
+npm run test:coverage:strict  # coverage with the enforced thresholds
+npm run test:fuzz             # property/fuzz suite for the bundle codec
+npm run test:e2e              # Playwright browser suite
+npm run test:electron         # Electron runtime unit suite
+npm run test:electron-security # Electron sandbox/IPC security checks
+
+# Bundles and fixtures
 npm run validate:bundle -- /path/to/bundle  # offline directory/ZIP validation
+npm run benchmark:bundle     # bundle stress benchmarks (smoke scale by default)
+npm run example-story:sync   # rebuild the demo book ZIP from ../example-story-jack
 
 # Android
 npx cap sync android # sync Capacitor plugins & web assets (run after build)
@@ -318,7 +368,11 @@ npm run electron:dev          # build and launch with the live runner
 npm run electron:build        # create configured distributable packages
 ```
 
-Pull request titles follow Conventional Commits so squash merges can drive semantic versioning. See [Releases](docs/releases.md) for title examples and the automated GitHub release process.
+CI runs lint, browser and Electron type checks, the production build, coverage, Electron runtime tests, and the Playwright suite. Run `npm run lint`, `npm run type-check`, `npm run type-check:electron`, and `npm run test:unit` before pushing to catch the common failures locally.
+
+## Contributing
+
+Contribution guidelines — project layout, coding style, testing expectations, and pull request checklists — live in [AGENTS.md](AGENTS.md). Pull request titles follow Conventional Commits so squash merges can drive semantic versioning; see [Releases](docs/releases.md) for title examples and the automated GitHub release process.
 
 ## Hosting & Deployment
 
@@ -338,12 +392,11 @@ Pull request titles follow Conventional Commits so squash merges can drive seman
 
 | Problem | Fix |
 |---------|-----|
-| Android authorization is denied or unavailable | Confirm Google Play services is current and the OAuth client matches package `com.betareader.app` plus the certificate that signed the installed build. |
-| Internal-test build cannot authorize | Configure the Play app-signing certificate SHA‑1, not only the upload-key SHA‑1, then install the build from the Play internal-testing track. |
 | `No backup found in cloud storage` | No versioned generation or legacy `ai-beta-reader-backup.enc` exists. Run a backup or verify the legacy file still exists. |
-| `Failed to decrypt - wrong password? TypeError: this.db.importFromJson is not a function` | Fixed in native import logic (manual inserts). Update to latest build. |
-| `FOREIGN KEY constraint failed (code 787)` | Latest build disables/re-enables foreign keys during import. Rebuild and redeploy. |
+| A restored backup is missing images on Android | Android has no local image-binary store, so restore keeps image metadata and strips the bytes. Restore that bundle on a browser or Electron build to recover the image library. |
 | `adb` can’t find the device | Reconnect cable, enable File Transfer mode, rerun `adb kill-server && adb start-server`, accept the trust prompt. |
+
+Google Drive and Android OAuth problems — denied authorization, SHA‑1 mismatches, internal-test builds that cannot sign in — are covered in full by [`docs/cloud-sync.md`](docs/cloud-sync.md).
 
 ## Need More Detail?
 
@@ -351,7 +404,15 @@ Pull request titles follow Conventional Commits so squash merges can drive seman
 - [Git and agent workspaces](docs/agent-workspaces.md) – folder updates, validation, and generated workspace files.
 - [Google Drive backup and restore](docs/cloud-sync.md) – OAuth setup, platform behavior, and troubleshooting.
 - [Image library storage](docs/desktop-images.md) – browser/Electron image persistence and backup behavior.
+- [Image content integrity](docs/image-content-integrity.md) – content hashing, migration, and the deduplication decision.
 - [Browser image parity design record](docs/browser-image-parity-plan.md) – completed migration design and deferred work.
+- [Bundle release hardening](docs/release-hardening.md) – the verification tracks and acceptance evidence for large-library bundles.
+- [Bundle stress benchmarks](docs/bundle-stress-benchmarks.md) – how the large-library export, validate, and Replace benchmarks are run.
+- [Electron macOS packaging](docs/developer/electron-macos-packaging.md) – signing and notarization work that distribution still needs.
 - [Releases](docs/releases.md) – Conventional Commit titles and automated releases.
+
+## License
+
+Released under the [MIT License](LICENSE).
 
 Happy writing! ✍️📚
