@@ -99,6 +99,80 @@ describe('books', () => {
     expect(books).toHaveLength(1)
     expect(books[0].title).toBe('Renamed')
   })
+
+  it('deletes a book and all owned records while preserving shared and unrelated data', async () => {
+    await db.saveBook(book())
+    await db.saveBook(book({ id: 'book-2', title: 'Keep Me' }))
+    await db.saveChapter(chapter())
+    await db.saveChapter(chapter({ id: 'ch-2', book_id: 'book-2' }))
+
+    const sql = rawDatabase(db)
+    sql.run(`INSERT INTO book_parts (id, book_id, name, chapter_order) VALUES ('part-1', 'book-1', 'Part', '["ch-1"]')`)
+    sql.run(`UPDATE chapters SET part_id = 'part-1' WHERE id = 'ch-1'`)
+    sql.run(`INSERT INTO part_summaries (id, part_id, summary) VALUES ('part-summary-1', 'part-1', 'Summary')`)
+    sql.run(`INSERT INTO chapter_summaries (id, chapter_id, summary) VALUES ('summary-1', 'ch-1', 'Summary')`)
+    sql.run(`INSERT INTO chapter_reviews (id, chapter_id, review_text) VALUES ('review-1', 'ch-1', 'Review')`)
+    sql.run(`INSERT INTO chapter_notes (id, chapter_id, notes) VALUES ('note-1', 'ch-1', 'Notes')`)
+    sql.run(`INSERT INTO wiki_pages (id, book_id, page_name) VALUES ('wiki-1', 'book-1', 'Hero')`)
+    sql.run(`INSERT INTO book_characters (id, book_id, character_name, wiki_page_id) VALUES ('character-1', 'book-1', 'Hero', 'wiki-1')`)
+    sql.run(`INSERT INTO chapter_wiki_mentions (id, chapter_id, wiki_page_id) VALUES ('mention-1', 'ch-1', 'wiki-1')`)
+    sql.run(`INSERT INTO wiki_updates (id, wiki_page_id, chapter_id) VALUES ('update-1', 'wiki-1', 'ch-1')`)
+    sql.run(`INSERT INTO wiki_review_state (wiki_page_id, chapter_id, chapter_content_sha256, reviewed_at, reviewed_by)
+      VALUES ('wiki-1', 'ch-1', 'hash', '2026-01-01T00:00:00.000Z', 'test')`)
+    sql.run(`INSERT INTO custom_reviewer_profiles (id, name, stable_id) VALUES (99, 'Shared', 'shared-profile')`)
+    await db.saveImageAsset({
+      id: 'img-1', book_id: 'book-1', chapter_id: 'ch-1', asset_type: 'chapter',
+      file_name: 'scene.png', file_path: 'web/img-1/scene.png', mime_type: 'image/png',
+      image_data: null, notes: '', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+    })
+    sql.run(`INSERT INTO image_wiki_tags (image_id, wiki_page_id) VALUES ('img-1', 'wiki-1')`)
+
+    expect(await db.getBookDeletionPreview('book-1')).toEqual({
+      bookId: 'book-1', title: 'My Book', chapterCount: 1, partCount: 1, wikiPageCount: 1, imageCount: 1,
+    })
+    const result = await db.deleteBook('book-1')
+
+    expect(result.pendingImages).toEqual([expect.objectContaining({ imageId: 'img-1' })])
+    expect((await db.getBooks()).map(({ id }) => id)).toEqual(['book-2'])
+    expect(await db.getChapters('book-2')).toHaveLength(1)
+    for (const [table, column, id] of [
+      ['chapters', 'id', 'ch-1'], ['book_parts', 'id', 'part-1'],
+      ['chapter_summaries', 'id', 'summary-1'], ['part_summaries', 'id', 'part-summary-1'],
+      ['chapter_reviews', 'id', 'review-1'], ['chapter_notes', 'id', 'note-1'],
+      ['wiki_pages', 'id', 'wiki-1'], ['book_characters', 'id', 'character-1'],
+      ['chapter_wiki_mentions', 'id', 'mention-1'], ['wiki_updates', 'id', 'update-1'],
+      ['image_assets', 'id', 'img-1'],
+    ]) {
+      expect(sql.exec(`SELECT COUNT(*) FROM ${table} WHERE ${column} = ?`, [id])[0].values[0][0]).toBe(0)
+    }
+    expect(sql.exec(`SELECT COUNT(*) FROM wiki_review_state WHERE chapter_id = 'ch-1'`)[0].values[0][0]).toBe(0)
+    expect(sql.exec(`SELECT COUNT(*) FROM image_wiki_tags WHERE image_id = 'img-1'`)[0].values[0][0]).toBe(0)
+    expect(sql.exec(`SELECT COUNT(*) FROM chapter_revisions WHERE book_id = 'book-1'`)[0].values[0][0]).toBe(0)
+    expect(sql.exec(`SELECT COUNT(*) FROM chapter_activity WHERE book_id = 'book-1'`)[0].values[0][0]).toBe(0)
+    expect(sql.exec(`SELECT COUNT(*) FROM custom_reviewer_profiles WHERE id = 99`)[0].values[0][0]).toBe(1)
+    expect(await db.getPendingImageDeletions()).toEqual([expect.objectContaining({ imageId: 'img-1' })])
+    await db.failPendingImageDeletion('img-1', 'file locked')
+    expect(await db.getPendingImageDeletions()).toEqual([
+      expect.objectContaining({ imageId: 'img-1', attemptCount: 1, lastError: 'file locked' }),
+    ])
+    await db.completePendingImageDeletion('img-1')
+    expect(await db.getPendingImageDeletions()).toEqual([])
+  })
+
+  it('rolls back every book cleanup step when the final parent deletion fails', async () => {
+    await db.saveBook(book())
+    await db.saveChapter(chapter())
+    rawDatabase(db).run(`CREATE TRIGGER reject_book_delete BEFORE DELETE ON books
+      BEGIN SELECT RAISE(ABORT, 'forced book failure'); END`)
+
+    await expect(db.deleteBook('book-1')).rejects.toThrow('forced book failure')
+
+    expect(await db.getBooks()).toEqual([expect.objectContaining({ id: 'book-1' })])
+    expect(await db.getChapters('book-1')).toEqual([expect.objectContaining({ id: 'ch-1' })])
+    expect(await db.getChapterRevisions('ch-1')).toHaveLength(1)
+    expect(await db.getBookRevisionActivity('book-1')).toHaveLength(1)
+    expect(await db.getPendingImageDeletions()).toEqual([])
+  })
 })
 
 describe('database import safety', () => {

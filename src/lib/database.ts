@@ -43,6 +43,7 @@ import * as imageRepo from '@/lib/db/imageRepository';
 import { imageAssetFromSqlRow } from '@/lib/db/imageRepository';
 import * as partRepo from '@/lib/db/partRepository';
 import * as chapterRepo from '@/lib/db/chapterRepository';
+import * as bookDeletionRepo from '@/lib/db/bookDeletionRepository';
 import * as searchRepo from '@/lib/db/searchRepository';
 import * as importExportRepo from '@/lib/db/importExportRepository';
 import * as schemaSetup from '@/lib/db/schemaSetup';
@@ -60,6 +61,29 @@ export interface Book {
   cover_image_id?: string | null;
   created_at: string;
   updated_at?: string;
+}
+
+export interface BookDeletionPreview {
+  bookId: string;
+  title: string;
+  chapterCount: number;
+  partCount: number;
+  wikiPageCount: number;
+  imageCount: number;
+}
+
+export interface PendingImageDeletion {
+  imageId: string;
+  filePath: string;
+  mimeType: string | null;
+  createdAt: string;
+  attemptCount: number;
+  lastError: string | null;
+}
+
+export interface BookDeletionResult {
+  preview: BookDeletionPreview;
+  pendingImages: PendingImageDeletion[];
 }
 
 export interface Chapter {
@@ -429,6 +453,26 @@ export class AppDatabase {
 
   async getBooks(): Promise<Book[]> {
     return chapterRepo.getBooks(this.context);
+  }
+
+  async getBookDeletionPreview(bookId: string): Promise<BookDeletionPreview | null> {
+    return bookDeletionRepo.getBookDeletionPreview(this.context, bookId);
+  }
+
+  async deleteBook(bookId: string): Promise<BookDeletionResult> {
+    return bookDeletionRepo.deleteBook(this.context, bookId);
+  }
+
+  async getPendingImageDeletions(): Promise<PendingImageDeletion[]> {
+    return bookDeletionRepo.getPendingImageDeletions(this.context);
+  }
+
+  async completePendingImageDeletion(imageId: string): Promise<void> {
+    return bookDeletionRepo.completePendingImageDeletion(this.context, imageId);
+  }
+
+  async failPendingImageDeletion(imageId: string, errorMessage: string): Promise<void> {
+    return bookDeletionRepo.failPendingImageDeletion(this.context, imageId, errorMessage);
   }
 
   async saveChapter(chapter: Chapter, options: { createRevision?: boolean; forceRevision?: boolean } = {}): Promise<string | null> {

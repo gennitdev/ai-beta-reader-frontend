@@ -4,6 +4,8 @@ import { logger } from '@/lib/logger'
 import {
   db,
   type Book,
+  type BookDeletionPreview,
+  type BookDeletionResult,
   type Chapter,
   type ChapterNote,
   type ChapterRevision,
@@ -14,6 +16,7 @@ import {
   type ChapterWikiLinkSource,
   type ImageAsset,
   type ImageWikiTag,
+  type PendingImageDeletion,
   type WikiPageChapterLink,
 } from '@/lib/database'
 import { CloudSync, GoogleDriveProvider } from '@/lib/cloudSync'
@@ -133,6 +136,44 @@ export function useLocalDatabase() {
     } finally {
       loading.value = false
     }
+  }
+
+  async function getBookDeletionPreview(bookId: string): Promise<BookDeletionPreview | null> {
+    await initializeDatabase()
+    return db.getBookDeletionPreview(bookId)
+  }
+
+  async function deleteBook(bookId: string): Promise<BookDeletionResult> {
+    try {
+      loading.value = true
+      error.value = null
+      await initializeDatabase()
+      const result = await db.deleteBook(bookId)
+      await loadBooks()
+      return result
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete book'
+      console.error('Delete book error:', e)
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function getPendingImageDeletions(): Promise<PendingImageDeletion[]> {
+    await initializeDatabase()
+    return db.getPendingImageDeletions()
+  }
+
+  async function completePendingImageDeletion(imageId: string): Promise<void> {
+    await initializeDatabase()
+    await db.completePendingImageDeletion(imageId)
+  }
+
+  async function failPendingImageDeletion(imageId: string, cleanupError: unknown): Promise<void> {
+    await initializeDatabase()
+    const message = cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+    await db.failPendingImageDeletion(imageId, message)
   }
 
   // Chapter operations
@@ -1037,6 +1078,11 @@ export function useLocalDatabase() {
     // Book operations
     loadBooks,
     saveBook,
+    getBookDeletionPreview,
+    deleteBook,
+    getPendingImageDeletions,
+    completePendingImageDeletion,
+    failPendingImageDeletion,
     retryPersistence,
     exportDatabase,
 

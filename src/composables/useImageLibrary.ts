@@ -1,7 +1,7 @@
 import { computed, ref, onBeforeUnmount } from 'vue'
 import { Share } from '@capacitor/share'
 import { logger } from '@/lib/logger'
-import type { ImageAsset, ImageAssetType } from '@/lib/database'
+import type { ImageAsset, ImageAssetType, PendingImageDeletion } from '@/lib/database'
 import type { DesktopImageMetadata } from '@/shims/desktop-images'
 import { useDatabase } from './useDatabase'
 import { isDesktopAppRuntime } from '@/utils/platform'
@@ -418,6 +418,24 @@ export function useImageLibrary() {
     }
   }
 
+  async function deletePendingImageContent(pending: PendingImageDeletion): Promise<void> {
+    const placeholder: ImageAsset = {
+      id: pending.imageId,
+      book_id: '',
+      chapter_id: null,
+      asset_type: 'chapter',
+      file_name: '',
+      file_path: pending.filePath,
+      mime_type: pending.mimeType,
+      image_data: null,
+      notes: '',
+      created_at: pending.createdAt,
+      updated_at: pending.createdAt,
+    }
+    await getContentStore().delete(placeholder)
+    clearCachedSource(pending.imageId)
+  }
+
   async function reconcileImageContent(assets: ImageAsset[], removeOrphans = false) {
     const contentStore = getContentStore()
     return removeOrphans
@@ -573,6 +591,7 @@ export function useImageLibrary() {
     addImagesFromFiles,
     canDisplayImages,
     deleteImage,
+    deletePendingImageContent,
     reconcileImageContent,
     fetchChapterImages,
     fetchFirstChapterImage,

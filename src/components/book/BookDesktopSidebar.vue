@@ -66,6 +66,7 @@ const props = defineProps<{
   coverError?: string | null
   selectBookCover: () => void
   deleteBookCover?: (() => void) | null
+  requestDeleteBook?: () => void
   chapterThumbnails: Record<string, string>
   partThumbnails: Record<string, string>
   bookImages: ImageAsset[]
@@ -440,7 +441,7 @@ const closeLightbox = () => {
         :selected-image-id="selectedImageId"
       />
 
-      <div class="fixed bottom-4 left-4 z-10">
+      <div class="fixed bottom-4 left-4 z-10 flex items-center gap-2">
         <router-link
           to="/settings"
           class="inline-flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg bg-white dark:bg-navy-800 hover:bg-gray-100 dark:hover:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-700"
@@ -449,6 +450,16 @@ const closeLightbox = () => {
           <Cog6ToothIcon class="w-5 h-5 mr-2" />
           Settings
         </router-link>
+        <button
+          v-if="!readOnly && requestDeleteBook"
+          type="button"
+          class="inline-flex items-center rounded-lg border border-red-300 bg-white px-3 py-2 text-sm text-red-600 shadow-sm transition-colors hover:bg-red-50 dark:border-red-800 dark:bg-navy-800 dark:text-red-400 dark:hover:bg-red-900/20"
+          title="Delete book"
+          @click="requestDeleteBook"
+        >
+          <TrashIcon class="mr-2 h-5 w-5" />
+          Delete
+        </button>
       </div>
     </div>
   </div>

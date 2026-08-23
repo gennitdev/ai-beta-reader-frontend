@@ -368,6 +368,7 @@ export async function getWikiPages(ctx: DatabaseContext, bookId: string): Promis
 }
 
 export async function deleteWikiPage(ctx: DatabaseContext, pageId: string): Promise<void> {
+  const deleteReviewStateQuery = `DELETE FROM wiki_review_state WHERE wiki_page_id = ?`
   // Delete related wiki updates first
   const deleteUpdatesQuery = `DELETE FROM wiki_updates WHERE wiki_page_id = ?`
   // Delete related chapter mentions
@@ -379,11 +380,13 @@ export async function deleteWikiPage(ctx: DatabaseContext, pageId: string): Prom
 
   await runInTransaction(ctx, async (txCtx) => {
     if (txCtx.isNative) {
+      await txCtx.connection.run(deleteReviewStateQuery, [pageId])
       await txCtx.connection.run(deleteUpdatesQuery, [pageId])
       await txCtx.connection.run(deleteMentionsQuery, [pageId])
       await txCtx.connection.run(deleteImageTagsQuery, [pageId])
       await txCtx.connection.run(deletePageQuery, [pageId])
     } else {
+      txCtx.connection.run(deleteReviewStateQuery, [pageId])
       txCtx.connection.run(deleteUpdatesQuery, [pageId])
       txCtx.connection.run(deleteMentionsQuery, [pageId])
       txCtx.connection.run(deleteImageTagsQuery, [pageId])

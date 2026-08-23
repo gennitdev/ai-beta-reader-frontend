@@ -128,6 +128,15 @@ describe('BookMobileSection', () => {
     expect(input.deleteBookCover).toHaveBeenCalled()
   })
 
+  it('exposes the book deletion action on mobile', async () => {
+    const requestDeleteBook = vi.fn()
+    const wrapper = mountSection({ requestDeleteBook })
+
+    await wrapper.findAll('button').find((button) => button.text().includes('Delete Book'))!.trigger('click')
+
+    expect(requestDeleteBook).toHaveBeenCalledOnce()
+  })
+
   it('filters wiki types and delegates wiki actions', async () => {
     const page = {
       id: 'wiki-1', page_name: 'Ada', summary: '', content_length: 0,

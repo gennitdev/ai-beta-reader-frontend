@@ -12,6 +12,7 @@ import logoStacked from '@/assets/logo-stacked.png'
 import { getPrimaryNavItems } from '@/config/navigation'
 import { useBardwallSettings } from '@/composables/useBardwallSettings'
 import { useTheme } from '@/composables/useTheme'
+import { useBookDeletion } from '@/composables/useBookDeletion'
 import type { Book, Chapter, ChapterRevision } from '@/lib/database'
 import type { FindReplaceScope } from '@/lib/findReplace'
 
@@ -51,6 +52,7 @@ const searchService = {
 const isSideNavOpen = ref(false)
 const { bardwallEnabled } = useBardwallSettings()
 const { theme, toggleTheme } = useTheme()
+const { retryPendingImageCleanup } = useBookDeletion()
 const sideNavItems = computed(() => getPrimaryNavItems(bardwallEnabled.value))
 const standardSideNavItems = computed(() => sideNavItems.value.filter((item) => !item.featured))
 const featuredSideNavItems = computed(() => sideNavItems.value.filter((item) => item.featured))
@@ -107,6 +109,9 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  void retryPendingImageCleanup().catch((error) => {
+    console.warn('Some previously deleted image files still need cleanup:', error)
+  })
 })
 
 onUnmounted(() => {

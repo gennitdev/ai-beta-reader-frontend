@@ -26,6 +26,7 @@ const h = vi.hoisted(() => ({
   getImageSource: vi.fn(async () => 'image-src'), fetchChapterThumbnails: vi.fn(async () => ({})),
   fetchPartThumbnails: vi.fn(async () => ({})), deleteImage: vi.fn(async () => {}),
   setBookCoverImageId: vi.fn(async () => {}),
+  getBookDeletionPreview: vi.fn(), deleteBookAndCleanup: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -64,6 +65,13 @@ vi.mock('@/composables/useImageLibrary', async () => {
   }
 })
 
+vi.mock('@/composables/useBookDeletion', () => ({
+  useBookDeletion: () => ({
+    getBookDeletionPreview: h.getBookDeletionPreview,
+    deleteBookAndCleanup: h.deleteBookAndCleanup,
+  }),
+}))
+
 import BookView from '@/views/BookView.vue'
 
 const DesktopStub = {
@@ -74,7 +82,7 @@ const DesktopStub = {
     'createNewChapter', 'createNewChapterInPart', 'goToOrganizeChapters', 'openSearchModal',
     'editChapter', 'insertChapter', 'togglePart', 'onSidebarDragEnd', 'startEditingBookTitle',
     'saveBookTitle', 'cancelEditingBookTitle', 'updateEditingBookTitle', 'toggleWikiPagePinned',
-    'openCreateWikiModal', 'selectBookCover', 'deleteBookCover',
+    'openCreateWikiModal', 'selectBookCover', 'deleteBookCover', 'requestDeleteBook',
   ],
   template: `<div data-testid="desktop">
     <span data-testid="book-title">{{ book?.title }}</span><span data-testid="chapter-count">{{ chapterCount }}</span>
@@ -88,6 +96,7 @@ const DesktopStub = {
     <button data-testid="toggle-part" @click="togglePart('part-1')">Part</button>
     <button data-testid="rename" @click="startEditingBookTitle(); updateEditingBookTitle('Renamed Book'); saveBookTitle()">Rename</button>
     <button data-testid="create-wiki" @click="openCreateWikiModal()">Wiki</button>
+    <button data-testid="delete-book" @click="requestDeleteBook()">Delete book</button>
   </div>`,
 }
 
@@ -153,6 +162,10 @@ beforeEach(() => {
   h.getWikiPages.mockImplementation(async () => h.wikiPages)
   h.getWikiPage.mockResolvedValue(null)
   h.getBookRevisionActivity.mockImplementation(async () => h.activity)
+  h.getBookDeletionPreview.mockResolvedValue({
+    bookId: 'book-1', title: 'Ghost Stories', chapterCount: 2, partCount: 2, wikiPageCount: 0, imageCount: 0,
+  })
+  h.deleteBookAndCleanup.mockResolvedValue({ preview: {}, pendingCleanupCount: 0 })
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -228,6 +241,25 @@ describe('BookView', () => {
       id: 'book-1', title: 'Renamed Book', chapter_order: '["chapter-2","chapter-1"]',
     }))
     expect(wrapper.get('[data-testid="book-title"]').text()).toBe('Renamed Book')
+  })
+
+  it('requires title confirmation before deleting and returning to the library', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="delete-book"]').trigger('click')
+    await flushPromises()
+
+    expect(h.getBookDeletionPreview).toHaveBeenCalledWith('book-1')
+    const deleteButton = wrapper.findAll('button').find(
+      (button) => button.text() === 'Delete book' && button.attributes('data-testid') === undefined,
+    )!
+    expect(deleteButton.attributes('disabled')).toBeDefined()
+    await wrapper.get('#delete-book-confirmation').setValue('Ghost Stories')
+    await wrapper.findAll('button').find((button) => button.text() === 'Delete book' && button.attributes('data-testid') === undefined)!.trigger('click')
+    await flushPromises()
+
+    expect(h.deleteBookAndCleanup).toHaveBeenCalledWith('book-1')
+    expect(h.push).toHaveBeenCalledWith('/books')
   })
 
   it('opens search with chapter context and closes it cleanly', async () => {

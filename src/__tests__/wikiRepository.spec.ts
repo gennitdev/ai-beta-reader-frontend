@@ -316,10 +316,10 @@ describe('wikiRepository (web path)', () => {
     await wikiRepo.deleteWikiPage(ctx, 'wiki-1')
 
     expect(runCalls.map(({ sql }) => sql.trim().split(' ')[0])).toEqual([
-      'BEGIN', 'DELETE', 'DELETE', 'DELETE', 'DELETE', 'COMMIT',
+      'BEGIN', 'DELETE', 'DELETE', 'DELETE', 'DELETE', 'DELETE', 'COMMIT',
     ])
     expect(runCalls.filter(({ sql }) => sql.includes('DELETE')).map(({ params }) => params))
-      .toEqual([['wiki-1'], ['wiki-1'], ['wiki-1'], ['wiki-1']])
+      .toEqual([['wiki-1'], ['wiki-1'], ['wiki-1'], ['wiki-1'], ['wiki-1']])
     expect(requestPersistence).toHaveBeenCalledOnce()
     expect(flushPersistence).toHaveBeenCalledOnce()
   })
@@ -533,7 +533,7 @@ describe('wikiRepository (native path)', () => {
 
     const deletion = makeNativeContext()
     await wikiRepo.deleteWikiPage(deletion.ctx, 'wiki-1')
-    expect(deletion.runCalls.filter(({ sql }) => sql.includes('DELETE'))).toHaveLength(4)
+    expect(deletion.runCalls.filter(({ sql }) => sql.includes('DELETE'))).toHaveLength(5)
     expect(deletion.ctx.requestPersistence).not.toHaveBeenCalled()
 
     const addition = makeNativeContext()
