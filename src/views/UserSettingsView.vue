@@ -601,58 +601,62 @@ onMounted(async () => {
 
       <!-- Data Export Section -->
       <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-8">
-        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+        <div class="border-b border-gray-200 px-4 py-4 dark:border-gray-700 sm:px-6">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div class="min-w-0">
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Export Your Data</h2>
               <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Download all your books, chapters, and character data in a structured format.
               </p>
             </div>
-            <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <div class="flex min-w-0 w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <button
                 @click="handleExport"
                 :disabled="isExporting || (exportFormat === 'bundle' && bundleScope === 'selection' && !selectedBooksAreValid)"
-                class="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap w-full sm:w-auto"
+                class="inline-flex w-full min-w-0 items-center justify-center rounded-lg bg-green-600 px-3 py-2 text-center font-medium leading-snug text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-4 sm:whitespace-nowrap"
               >
-                <DocumentArrowDownIcon class="w-5 h-5 mr-2" />
-                {{ isExporting
-                  ? 'Exporting...'
-                  : exportFormat === 'bundle'
-                    ? bundleScope === 'selection' ? 'Export selected books' : 'Export full library backup'
-                    : exportFormat === 'text-workspace' ? 'Export text-only workspace ZIP' : 'Export Data' }}
+                <DocumentArrowDownIcon class="mr-2 h-5 w-5 shrink-0" />
+                <span>
+                  {{ isExporting
+                    ? 'Exporting...'
+                    : exportFormat === 'bundle'
+                      ? bundleScope === 'selection' ? 'Export selected books' : 'Export full library backup'
+                      : exportFormat === 'text-workspace' ? 'Export text-only workspace ZIP' : 'Export Data' }}
+                </span>
               </button>
               <button
                 v-if="canExportBundleDirectory && (exportFormat === 'bundle' || exportFormat === 'text-workspace')"
                 type="button"
                 :disabled="isExporting || (exportFormat === 'bundle' && bundleScope === 'selection' && !selectedBooksAreValid)"
-                class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-lg border border-green-600 px-4 py-2 font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20 sm:w-auto"
+                class="inline-flex w-full min-w-0 items-center justify-center rounded-lg border border-green-600 px-3 py-2 text-center font-medium leading-snug text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20 sm:w-auto sm:px-4 sm:whitespace-nowrap"
                 @click="exportFormat === 'bundle' ? exportBundleDirectory() : exportTextOnlyWorkspaceDirectory()"
               >
-                <DocumentArrowDownIcon class="mr-2 h-5 w-5" />
-                {{ exportFormat === 'text-workspace'
-                  ? 'Export text-only workspace to folder'
-                  : bundleScope === 'selection' ? 'Export selected books to folder' : 'Export full bundle to folder' }}
+                <DocumentArrowDownIcon class="mr-2 h-5 w-5 shrink-0" />
+                <span>
+                  {{ exportFormat === 'text-workspace'
+                    ? 'Export text-only workspace to folder'
+                    : bundleScope === 'selection' ? 'Export selected books to folder' : 'Export full bundle to folder' }}
+                </span>
               </button>
             </div>
           </div>
         </div>
 
-        <div class="px-6 py-4 space-y-4">
+        <div class="space-y-4 px-4 py-4 sm:px-6">
           <!-- Export Format Selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Export Format
             </label>
             <div class="space-y-2">
-              <label class="flex items-start cursor-pointer">
+              <label class="flex min-w-0 cursor-pointer items-start">
                 <input
                   type="radio"
                   v-model="exportFormat"
                   value="bundle"
                   class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
                 />
-                <span class="ml-2">
+                <span class="ml-2 min-w-0 break-words">
                   <span class="block text-sm text-gray-900 dark:text-white">Full library backup (recommended)</span>
                   <span class="block text-xs text-gray-500 dark:text-gray-400">
                     Creates a complete canonical Beta Bot bundle with images, history, profiles, and audit records
@@ -662,14 +666,14 @@ onMounted(async () => {
                   </span>
                 </span>
               </label>
-              <label class="flex items-start cursor-pointer">
+              <label class="flex min-w-0 cursor-pointer items-start">
                 <input
                   type="radio"
                   v-model="exportFormat"
                   value="text-workspace"
                   class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
                 />
-                <span class="ml-2">
+                <span class="ml-2 min-w-0 break-words">
                   <span class="block text-sm text-gray-900 dark:text-white">Text-only Git workspace (advanced)</span>
                   <span class="block text-xs text-gray-500 dark:text-gray-400">
                     For Git and coding agents. Includes editable Markdown/YAML, stable IDs, relationships, image metadata, and inventory hashes.
@@ -679,28 +683,28 @@ onMounted(async () => {
                   </span>
                 </span>
               </label>
-              <label class="flex items-start cursor-pointer">
+              <label class="flex min-w-0 cursor-pointer items-start">
                 <input
                   type="radio"
                   v-model="exportFormat"
                   value="zip"
                   class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
                 />
-                <span class="ml-2">
+                <span class="ml-2 min-w-0 break-words">
                   <span class="block text-sm text-gray-900 dark:text-white">Legacy structured ZIP (reading copy)</span>
                   <span class="block text-xs text-gray-500 dark:text-gray-400">
                     Creates folders for each book with separate files for chapters, images, and metadata
                   </span>
                 </span>
               </label>
-              <label class="flex items-start cursor-pointer">
+              <label class="flex min-w-0 cursor-pointer items-start">
                 <input
                   type="radio"
                   v-model="exportFormat"
                   value="markdown"
                   class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
                 />
-                <span class="ml-2">
+                <span class="ml-2 min-w-0 break-words">
                   <span class="block text-sm text-gray-900 dark:text-white">Markdown files</span>
                   <span class="block text-xs text-gray-500 dark:text-gray-400">
                     Exports each book as a single .md file with all chapters combined
@@ -710,7 +714,7 @@ onMounted(async () => {
             </div>
           </div>
 
-          <fieldset v-if="exportFormat === 'bundle'" class="space-y-3 border-l-2 border-gray-200 pl-6 dark:border-gray-700">
+          <fieldset v-if="exportFormat === 'bundle'" class="min-w-0 space-y-3 border-l-2 border-gray-200 pl-4 dark:border-gray-700 sm:pl-6">
             <legend class="text-sm font-medium text-gray-700 dark:text-gray-300">Bundle contents</legend>
             <label class="flex cursor-pointer items-start">
               <input v-model="bundleScope" type="radio" value="library" class="mt-0.5 h-4 w-4 border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-600" />
@@ -730,7 +734,7 @@ onMounted(async () => {
             <div v-if="bundleScope === 'selection'" class="space-y-2 rounded-lg border border-gray-200 p-3 dark:border-gray-600">
               <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Choose one or more books</p>
               <p v-if="books.length === 0" class="text-sm text-gray-500 dark:text-gray-400">No books are available to export.</p>
-              <label v-for="book in books" :key="book.id" class="flex cursor-pointer items-center gap-2 text-sm text-gray-900 dark:text-white">
+              <label v-for="book in books" :key="book.id" class="flex min-w-0 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-900 dark:text-white">
                 <input
                   v-model="selectedBookIds"
                   :value="book.id"
@@ -738,15 +742,15 @@ onMounted(async () => {
                   type="checkbox"
                   class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-600"
                 />
-                <span>{{ book.title }}</span>
-                <span class="font-mono text-xs text-gray-400">{{ book.id }}</span>
+                <span class="min-w-0 break-words">{{ book.title }}</span>
+                <span class="min-w-0 break-all font-mono text-xs text-gray-400">{{ book.id }}</span>
               </label>
               <p v-if="selectedBookIds.length === 0" class="text-xs text-amber-600 dark:text-amber-400">Select at least one book to export.</p>
             </div>
           </fieldset>
 
           <!-- Markdown Options (only for markdown export) -->
-          <div v-if="exportFormat === 'markdown'" class="pl-6 border-l-2 border-gray-200 dark:border-gray-700 space-y-4">
+          <div v-if="exportFormat === 'markdown'" class="space-y-4 border-l-2 border-gray-200 pl-4 dark:border-gray-700 sm:pl-6">
             <!-- Granularity Option -->
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
