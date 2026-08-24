@@ -206,16 +206,24 @@ describe('cover, modal, notes, tags, download', () => {
   })
 
   it('opens/closes the modal and navigates', async () => {
-    h.fetchChapterImages.mockResolvedValue([img('a'), img('b')])
+    h.fetchChapterImages.mockResolvedValue([img('a'), img('b'), img('missing')])
+    h.fetchChapterCover.mockResolvedValue(img('b'))
+    h.getImageSource.mockImplementation(async (image: ImageAsset) => {
+      if (image.id === 'missing') throw new Error('missing source')
+      return `src:${image.id}`
+    })
     const c = setup()
     await c.refreshChapterImages()
 
-    c.openImageModal('a')
+    expect(c.albumImages.value.map((image) => image.id)).toEqual(['b', 'a'])
+    c.openHeroLightbox()
     expect(c.showImageLightbox.value).toBe(true)
+    expect(c.activeImagePosition.value).toBe(1)
+    expect(c.albumImageCount.value).toBe(2)
     c.goToNextImage()
-    expect(c.activeImageId.value).toBe('b')
-    c.goToPrevImage()
     expect(c.activeImageId.value).toBe('a')
+    c.goToPrevImage()
+    expect(c.activeImageId.value).toBe('b')
     c.closeImageModal()
     expect(c.showImageLightbox.value).toBe(false)
   })
@@ -410,7 +418,8 @@ describe('warn and error branches', () => {
     expect(c.activeImageSource.value).toBe('')
     expect(c.activeImageTags.value).toEqual([])
     expect(c.activeImageLabel.value).toBe('')
-    c.goToNextImage()
+    expect(c.albumImages.value.map((image) => image.id)).toEqual(['b'])
+    c.openImageModal('b')
     expect(c.activeImageId.value).toBe('b')
     c.goToNextImage()
     expect(c.activeImageId.value).toBe('b')

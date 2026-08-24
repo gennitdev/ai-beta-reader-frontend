@@ -174,7 +174,7 @@ export function createExampleDatabase(base: DatabaseApi): { api: DatabaseApi; lo
     getChapterRevisions: async () => [],
     getBookRevisionActivity: async () => [],
     getChapterImageAssets: async (chapterId: string) => (await ensureLoaded(), images.filter((image) => image.chapter_id === chapterId && image.asset_type === 'chapter')),
-    getPartImageAssets: async (partId: string) => (await ensureLoaded(), images.filter((image) => parts.find((part) => part.id === partId)?.cover_image_id === image.id)),
+    getPartImageAssets: async (partId: string) => (await ensureLoaded(), images.filter((image) => chapters.value.some((chapter) => chapter.id === image.chapter_id && chapter.part_id === partId))),
     getBookCoverImageAsset: async (bookId: string) => (await ensureLoaded(), images.find((image) => books.value.find((book) => book.id === bookId)?.cover_image_id === image.id) ?? null),
     getPartCoverImageAsset: async (partId: string) => (await ensureLoaded(), images.find((image) => parts.find((part) => part.id === partId)?.cover_image_id === image.id) ?? null),
     getChapterCoverImageAsset: async (chapterId: string) => (await ensureLoaded(), images.find((image) => chapters.value.find((chapter) => chapter.id === chapterId)?.cover_image_id === image.id) ?? null),

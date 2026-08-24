@@ -73,13 +73,26 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     return wikiImageSources.value[heroImage.value.id] ?? null;
   });
 
-  const currentImageIndex = computed(() => {
-    if (!activeImageId.value) return -1;
-    return wikiImages.value.findIndex((img) => img.id === activeImageId.value);
+  const albumImages = computed(() => {
+    const availableImages = wikiImages.value.filter((image) => wikiImageSources.value[image.id]);
+    const coverId = wikiCoverImageId.value;
+    if (!coverId) return availableImages;
+    const cover = availableImages.find((image) => image.id === coverId);
+    return cover
+      ? [cover, ...availableImages.filter((image) => image.id !== coverId)]
+      : availableImages;
   });
 
+  const currentImageIndex = computed(() => {
+    if (!activeImageId.value) return -1;
+    return albumImages.value.findIndex((img) => img.id === activeImageId.value);
+  });
+
+  const activeImagePosition = computed(() => currentImageIndex.value + 1);
+  const albumImageCount = computed(() => albumImages.value.length);
+
   const hasNextImage = computed(() => {
-    return currentImageIndex.value >= 0 && currentImageIndex.value < wikiImages.value.length - 1;
+    return currentImageIndex.value >= 0 && currentImageIndex.value < albumImages.value.length - 1;
   });
 
   const hasPrevImage = computed(() => {
@@ -159,19 +172,15 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
   const goToNextImage = () => {
     if (!hasNextImage.value) return;
     const nextIndex = currentImageIndex.value + 1;
-    const nextImage = wikiImages.value[nextIndex];
-    if (nextImage && wikiImageSources.value[nextImage.id]) {
-      activeImageId.value = nextImage.id;
-    }
+    const nextImage = albumImages.value[nextIndex];
+    if (nextImage) activeImageId.value = nextImage.id;
   };
 
   const goToPrevImage = () => {
     if (!hasPrevImage.value) return;
     const prevIndex = currentImageIndex.value - 1;
-    const prevImage = wikiImages.value[prevIndex];
-    if (prevImage && wikiImageSources.value[prevImage.id]) {
-      activeImageId.value = prevImage.id;
-    }
+    const prevImage = albumImages.value[prevIndex];
+    if (prevImage) activeImageId.value = prevImage.id;
   };
 
   const handleSetAsCover = async (imageId: string) => {
@@ -282,6 +291,9 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     activeImageLabel,
     heroImage,
     heroImageSrc,
+    albumImages,
+    activeImagePosition,
+    albumImageCount,
     hasNextImage,
     hasPrevImage,
 

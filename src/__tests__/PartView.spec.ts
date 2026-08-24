@@ -91,10 +91,12 @@ vi.mock('@/composables/usePartImages', async () => {
       partImageTags: ref({}), bookWikiPages: ref([]), partImageError: ref(null),
       showImageLightbox: ref(false), activeImage: ref(null), activeImageSource: ref(null),
       activeImageTags: ref([]), activeImageLabel: ref(''), savingImageNotes: ref(false),
-      savingImageTags: ref(false), refreshPartImages: h.refreshPartImages,
+      activeImagePosition: ref(0), albumImageCount: ref(0), hasNextImage: ref(false),
+      hasPrevImage: ref(false), savingImageTags: ref(false), refreshPartImages: h.refreshPartImages,
       openImageModal: h.openImageModal, openImageAsset: h.openImageAsset,
       closeImageModal: vi.fn(), handleSaveActiveImageNotes: vi.fn(),
       handleSaveActiveImageTags: vi.fn(), handleDownloadImage: vi.fn(),
+      goToNextImage: vi.fn(), goToPrevImage: vi.fn(),
     }),
   }
 })
@@ -154,7 +156,7 @@ function mountView() {
         RouterLink: { template: '<a><slot /></a>' },
         MarkdownRenderer: { props: ['text'], template: '<div data-testid="summary">{{ text }}</div>' },
         CoverHeroImage: false,
-        Modal: { template: '<div><slot /></div>' },
+        ImageLightbox: { template: '<div><slot name="details" /></div>' },
         ExampleDisabledControl: { template: '<span><slot /></span>' },
         IllustrationDetail: true,
         ArrowLeftIcon: true, ArrowDownTrayIcon: true, SparklesIcon: true,
