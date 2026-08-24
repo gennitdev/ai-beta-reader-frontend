@@ -11,8 +11,12 @@ interface WikiPageOption {
 
 export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef: () => string | undefined) {
   const {
+    canSelectImages,
     canStoreImages,
+    addImagesToWikiPage,
+    deleteImage,
     getImageSource,
+    downloadOrShareImage,
   } = useImageLibrary();
   const {
     getWikiPageImageAssets,
@@ -26,6 +30,7 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
 
   const wikiImages = ref<ImageAsset[]>([]);
   const wikiImagesLoading = ref(false);
+  const addingWikiImages = ref(false);
   const wikiImageSources = ref<Record<string, string>>({});
   const wikiImageTags = ref<Record<string, ImageWikiTag[]>>({});
   const bookWikiPages = ref<WikiPageOption[]>([]);
@@ -36,6 +41,10 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
   const settingCoverId = ref<string | null>(null);
   const savingImageNotes = ref(false);
   const savingImageTags = ref(false);
+  const showDeleteIllustrationModal = ref(false);
+  const deletingIllustration = ref(false);
+  const illustrationToDelete = ref<string | null>(null);
+  const wikiImageUploadAvailable = canSelectImages;
 
   const activeImageSource = computed(() => {
     const id = activeImageId.value;
@@ -85,6 +94,14 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
   const hasPrevImage = computed(() => {
     return currentImageIndex.value > 0;
   });
+
+  const illustrationToDeleteName = computed(() => {
+    if (!illustrationToDelete.value) return "";
+    const image = wikiImages.value.find((item) => item.id === illustrationToDelete.value);
+    return image?.file_name || "this illustration";
+  });
+
+  const canDeleteWikiImage = (image: ImageAsset) => image.asset_type === 'wiki';
 
   const refreshWikiImages = async () => {
     const wikiPageId = wikiPageIdRef();
@@ -145,6 +162,82 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     }
   };
 
+  const handleAddIllustrations = async () => {
+    const wikiPageId = wikiPageIdRef();
+    const bookId = bookIdRef();
+    if (!wikiPageId || !bookId) return;
+
+    addingWikiImages.value = true;
+    wikiImageError.value = null;
+    try {
+      const newImages = await addImagesToWikiPage(bookId, wikiPageId);
+      if (!newImages.length) return;
+
+      wikiImages.value = [...newImages, ...wikiImages.value];
+      const sources = { ...wikiImageSources.value };
+      const tags = { ...wikiImageTags.value };
+      for (const image of newImages) {
+        try {
+          sources[image.id] = await getImageSource(image);
+        } catch (error) {
+          console.warn("Failed to load preview for new wiki illustration", error);
+        }
+        try {
+          tags[image.id] = await getImageWikiTags(image.id);
+        } catch (error) {
+          console.warn("Failed to load tags for new wiki illustration", error);
+          tags[image.id] = [];
+        }
+      }
+      wikiImageSources.value = sources;
+      wikiImageTags.value = tags;
+    } catch (error) {
+      wikiImageError.value = error instanceof Error ? error.message : "Failed to add illustrations";
+    } finally {
+      addingWikiImages.value = false;
+    }
+  };
+
+  const requestDeleteIllustration = (imageId: string) => {
+    const image = wikiImages.value.find((item) => item.id === imageId);
+    if (!image || !canDeleteWikiImage(image)) return;
+    illustrationToDelete.value = imageId;
+    showDeleteIllustrationModal.value = true;
+  };
+
+  const cancelDeleteIllustration = () => {
+    if (deletingIllustration.value) return;
+    showDeleteIllustrationModal.value = false;
+    illustrationToDelete.value = null;
+  };
+
+  const handleDeleteIllustration = async () => {
+    const imageId = illustrationToDelete.value;
+    if (!imageId) return;
+    const image = wikiImages.value.find((item) => item.id === imageId);
+    if (!image || !canDeleteWikiImage(image)) return;
+
+    deletingIllustration.value = true;
+    try {
+      await deleteImage(image);
+      wikiImages.value = wikiImages.value.filter((item) => item.id !== imageId);
+      const sources = { ...wikiImageSources.value };
+      delete sources[imageId];
+      wikiImageSources.value = sources;
+      const tags = { ...wikiImageTags.value };
+      delete tags[imageId];
+      wikiImageTags.value = tags;
+      if (activeImageId.value === imageId) closeImageModal();
+      if (wikiCoverImageId.value === imageId) wikiCoverImageId.value = null;
+      showDeleteIllustrationModal.value = false;
+      illustrationToDelete.value = null;
+    } catch (error) {
+      wikiImageError.value = error instanceof Error ? error.message : "Failed to delete illustration";
+    } finally {
+      deletingIllustration.value = false;
+    }
+  };
+
   const openImageModal = (imageId: string) => {
     if (!wikiImageSources.value[imageId]) return;
     activeImageId.value = imageId;
@@ -190,19 +283,14 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     }
   };
 
-  const handleDownloadImage = (imageId: string) => {
-    const imageSrc = wikiImageSources.value[imageId];
-    if (!imageSrc) return;
-
+  const handleDownloadImage = async (imageId: string) => {
     const image = wikiImages.value.find((img) => img.id === imageId);
-    const fileName = image?.file_name || `illustration-${imageId}.jpg`;
-
-    const link = document.createElement("a");
-    link.href = imageSrc;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (!image) return;
+    try {
+      await downloadOrShareImage(image);
+    } catch (error) {
+      wikiImageError.value = error instanceof Error ? error.message : 'Failed to save image';
+    }
   };
 
   const handleSaveActiveImageNotes = async (notes: string) => {
@@ -264,6 +352,7 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     // State
     wikiImages,
     wikiImagesLoading,
+    addingWikiImages,
     wikiImageSources,
     wikiImageTags,
     bookWikiPages,
@@ -274,6 +363,10 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     settingCoverId,
     savingImageNotes,
     savingImageTags,
+    showDeleteIllustrationModal,
+    deletingIllustration,
+    illustrationToDelete,
+    wikiImageUploadAvailable,
 
     // Computed
     activeImageSource,
@@ -284,9 +377,15 @@ export function useWikiImages(wikiPageIdRef: () => string | undefined, bookIdRef
     heroImageSrc,
     hasNextImage,
     hasPrevImage,
+    illustrationToDeleteName,
+    canDeleteWikiImage,
 
     // Methods
     refreshWikiImages,
+    handleAddIllustrations,
+    requestDeleteIllustration,
+    cancelDeleteIllustration,
+    handleDeleteIllustration,
     openImageModal,
     closeImageModal,
     goToNextImage,

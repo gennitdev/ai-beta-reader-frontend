@@ -10,6 +10,10 @@ export interface DesktopImagesBridge {
     canceled: boolean;
     images: DesktopImageMetadata[];
   }>;
+  pickWikiImages: (payload: { bookId: string; wikiPageId: string; allowMultiple?: boolean }) => Promise<{
+    canceled: boolean;
+    images: DesktopImageMetadata[];
+  }>;
   pickBookCover: (payload: { bookId: string }) => Promise<{
     canceled: boolean;
     image?: DesktopImageMetadata;

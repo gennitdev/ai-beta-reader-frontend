@@ -4,6 +4,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('desktopImages', {
   pickChapterImages: (payload: { bookId: string; chapterId: string; allowMultiple?: boolean }) =>
     ipcRenderer.invoke('desktop-images:pick-chapter', payload),
+  pickWikiImages: (payload: { bookId: string; wikiPageId: string; allowMultiple?: boolean }) =>
+    ipcRenderer.invoke('desktop-images:pick-wiki', payload),
   pickBookCover: (payload: { bookId: string }) => ipcRenderer.invoke('desktop-images:pick-cover', payload),
   readImageData: (payload: { relativePath: string; mimeType?: string }) =>
     ipcRenderer.invoke('desktop-images:read', payload),

@@ -14,6 +14,7 @@ const imageMocks = vi.hoisted(() => ({
   getChapterCoverImageAsset: vi.fn(),
   setChapterCoverImageId: vi.fn(),
   updateImageAssetIntegrity: vi.fn(),
+  setImageWikiTags: vi.fn(),
   requestPersistentBrowserStorage: vi.fn(),
   loggerWarn: vi.fn(),
 }))
@@ -51,6 +52,7 @@ beforeEach(() => {
   imageMocks.deleteImageAssetRecord.mockResolvedValue(undefined)
   imageMocks.requestPersistentBrowserStorage.mockResolvedValue(undefined)
   imageMocks.updateImageAssetIntegrity.mockResolvedValue(undefined)
+  imageMocks.setImageWikiTags.mockResolvedValue(undefined)
   Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: {} })
   vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 10, height: 10, close: vi.fn() })))
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:image-source') })

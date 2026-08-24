@@ -96,6 +96,7 @@ export async function deleteImageAsset(ctx: DatabaseContext, imageId: string): P
   const unlinkCoverQuery = `UPDATE books SET cover_image_id = NULL, updated_at = ? WHERE cover_image_id = ?`
   const unlinkPartCoverQuery = `UPDATE book_parts SET cover_image_id = NULL, updated_at = ? WHERE cover_image_id = ?`
   const unlinkChapterCoverQuery = `UPDATE chapters SET cover_image_id = NULL, updated_at = ? WHERE cover_image_id = ?`
+  const unlinkWikiCoverQuery = `UPDATE wiki_pages SET cover_image_id = NULL, updated_at = ? WHERE cover_image_id = ?`
   const deleteTagsQuery = `DELETE FROM image_wiki_tags WHERE image_id = ?`
   const deleteQuery = `DELETE FROM image_assets WHERE id = ?`
   const updatedAt = new Date().toISOString()
@@ -105,12 +106,14 @@ export async function deleteImageAsset(ctx: DatabaseContext, imageId: string): P
       await txCtx.connection.run(unlinkCoverQuery, [updatedAt, imageId])
       await txCtx.connection.run(unlinkPartCoverQuery, [updatedAt, imageId])
       await txCtx.connection.run(unlinkChapterCoverQuery, [updatedAt, imageId])
+      await txCtx.connection.run(unlinkWikiCoverQuery, [updatedAt, imageId])
       await txCtx.connection.run(deleteTagsQuery, [imageId])
       await txCtx.connection.run(deleteQuery, [imageId])
     } else {
       txCtx.connection.run(unlinkCoverQuery, [updatedAt, imageId])
       txCtx.connection.run(unlinkPartCoverQuery, [updatedAt, imageId])
       txCtx.connection.run(unlinkChapterCoverQuery, [updatedAt, imageId])
+      txCtx.connection.run(unlinkWikiCoverQuery, [updatedAt, imageId])
       txCtx.connection.run(deleteTagsQuery, [imageId])
       txCtx.connection.run(deleteQuery, [imageId])
     }

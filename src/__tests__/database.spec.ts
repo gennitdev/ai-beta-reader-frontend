@@ -764,11 +764,13 @@ describe('image assets', () => {
 
     await db.updateImageAssetNotes('img-1', 'a caption')
     await db.setImageWikiTags('img-1', [wikiId])
+    await db.setWikiPageCoverImageId(wikiId, 'img-1')
     const tags = await db.getImageWikiTags('img-1')
     expect(tags.map((t) => t.wiki_page_id)).toEqual([wikiId])
 
     await db.deleteImageAsset('img-1')
     expect(await db.getChapterImages('ch-1')).toHaveLength(0)
+    expect((await db.getWikiPageById(wikiId))?.cover_image_id).toBeNull()
   })
 })
 

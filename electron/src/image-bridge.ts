@@ -19,11 +19,12 @@ const MIME_LOOKUP: Record<string, string> = {
   '.bmp': 'image/bmp',
 };
 
-type AssetType = 'chapter' | 'cover';
+type AssetType = 'chapter' | 'cover' | 'wiki';
 
 interface CopyOptions {
   bookId: string;
   chapterId?: string | null;
+  wikiPageId?: string | null;
   assetType: AssetType;
 }
 
@@ -58,9 +59,10 @@ async function copyIntoLibrary(sourcePath: string, options: CopyOptions): Promis
   const id = randomUUID();
   const fileName = `${id}${normalizedExtension}`;
 
-  const folderSegments =
-    options.assetType === 'chapter'
-      ? ['books', sanitizeSegment(options.bookId), 'chapters', sanitizeSegment(options.chapterId, 'general')]
+  const folderSegments = options.assetType === 'chapter'
+    ? ['books', sanitizeSegment(options.bookId), 'chapters', sanitizeSegment(options.chapterId, 'general')]
+    : options.assetType === 'wiki'
+      ? ['books', sanitizeSegment(options.bookId), 'wiki', sanitizeSegment(options.wikiPageId)]
       : ['books', sanitizeSegment(options.bookId), 'covers'];
 
   const targetDir = path.join(baseDir, ...folderSegments);
@@ -103,6 +105,29 @@ export function registerDesktopImageBridge() {
           assetType: 'chapter',
         })
       );
+    }
+    return { canceled: false, images };
+  });
+
+  ipcMain.handle('desktop-images:pick-wiki', async (_event, payload: { bookId: string; wikiPageId: string }) => {
+    if (!payload?.bookId || !payload?.wikiPageId) {
+      throw new Error('Missing identifiers for wiki images');
+    }
+    const result = await dialog.showOpenDialog({
+      title: 'Select wiki illustrations',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Images', extensions: IMAGE_FILTER_EXTENSIONS }],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true, images: [] };
+    }
+    const images: StoredImageMetadata[] = [];
+    for (const filePath of result.filePaths) {
+      images.push(await copyIntoLibrary(filePath, {
+        bookId: payload.bookId,
+        wikiPageId: payload.wikiPageId,
+        assetType: 'wiki',
+      }));
     }
     return { canceled: false, images };
   });

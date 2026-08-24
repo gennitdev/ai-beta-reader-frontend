@@ -25,6 +25,7 @@ describe('Electron preload bridge', () => {
 
   it.each([
     ['desktopImages', 'pickChapterImages', 'desktop-images:pick-chapter', [{ bookId: 'book', chapterId: 'chapter', allowMultiple: true }]],
+    ['desktopImages', 'pickWikiImages', 'desktop-images:pick-wiki', [{ bookId: 'book', wikiPageId: 'wiki', allowMultiple: true }]],
     ['desktopImages', 'pickBookCover', 'desktop-images:pick-cover', [{ bookId: 'book' }]],
     ['desktopImages', 'readImageData', 'desktop-images:read', [{ relativePath: 'images/a.png', mimeType: 'image/png' }]],
     ['desktopImages', 'writeImageData', 'desktop-images:write', [{ relativePath: 'images/a.png', bytes: new Uint8Array([0]), mimeType: 'image/png' }]],

@@ -42,6 +42,7 @@ describe('Electron desktop-image bridge runtime', () => {
   it('registers the complete desktop-image IPC surface', () => {
     expect(ipcMain.handle.mock.calls.map(([channel]) => channel)).toEqual([
       'desktop-images:pick-chapter',
+      'desktop-images:pick-wiki',
       'desktop-images:pick-cover',
       'desktop-images:read',
       'desktop-images:delete',
@@ -57,6 +58,9 @@ describe('Electron desktop-image bridge runtime', () => {
     await expect(getIpcHandler('desktop-images:pick-cover')(null, {})).rejects.toThrow(
       'Missing book identifier',
     )
+    await expect(getIpcHandler('desktop-images:pick-wiki')(null, {
+      bookId: 'book-1',
+    })).rejects.toThrow('Missing identifiers')
 
     dialog.showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] })
     await expect(getIpcHandler('desktop-images:pick-chapter')(null, {
@@ -119,6 +123,26 @@ describe('Electron desktop-image bridge runtime', () => {
       '/source/no-extension',
       path.join(chapterDirectory, 'second-id.png'),
     )
+  })
+
+  it('copies selected wiki images into the wiki page directory', async () => {
+    dialog.showOpenDialog.mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ['/source/wiki.png'],
+    })
+
+    await expect(getIpcHandler('desktop-images:pick-wiki')(null, {
+      bookId: 'book/one',
+      wikiPageId: 'wiki?',
+    })).resolves.toEqual({
+      canceled: false,
+      images: [{
+        id: 'image-id',
+        fileName: 'image-id.png',
+        relativePath: path.join('books', 'book_one', 'wiki', 'wiki_', 'image-id.png'),
+        mimeType: 'image/png',
+      }],
+    })
   })
 
   it('copies a selected cover into the book cover directory', async () => {
