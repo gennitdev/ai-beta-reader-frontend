@@ -26,9 +26,9 @@ import {
 } from "@/lib/openai";
 import { loadOpenAIApiKey } from "@/lib/apiKeyStorage";
 import type { Book, BookPart } from "@/lib/database";
+import ImageLightbox from "@/components/images/ImageLightbox.vue";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
 import CoverHeroImage from "@/components/images/CoverHeroImage.vue";
-import Modal from "@/components/Modal.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -74,13 +74,18 @@ const {
   activeImage: partActiveImage,
   activeImageSource: partActiveImageSource,
   activeImageTags: partActiveImageTags,
-  activeImageLabel: partActiveImageLabel,
+  activeImagePosition: partActiveImagePosition,
+  albumImageCount: partAlbumImageCount,
+  hasNextImage: partHasNextImage,
+  hasPrevImage: partHasPrevImage,
   savingImageNotes: partSavingImageNotes,
   savingImageTags: partSavingImageTags,
   refreshPartImages,
   openImageModal: openPartImageModal,
   openImageAsset: openPartCoverImageModal,
   closeImageModal: closePartImageModal,
+  goToNextImage: goToNextPartImage,
+  goToPrevImage: goToPrevPartImage,
   handleSaveActiveImageNotes: handleSavePartImageNotes,
   handleSaveActiveImageTags: handleSavePartImageTags,
   handleDownloadImage: handleDownloadPartImage,
@@ -722,7 +727,7 @@ watch([bookId, partId], async () => {
                   :key="image.id"
                   type="button"
                   class="group overflow-hidden rounded-lg border border-gray-200 bg-gray-50 text-left transition hover:shadow dark:border-gray-700 dark:bg-navy-800"
-                  @click="openPartImageModal(image.id)"
+                  @click="openPartImageModal(image.id, partCoverImage, partCoverSrc)"
                 >
                   <div class="aspect-[4/3] w-full overflow-hidden bg-gray-200 dark:bg-gray-700">
                     <img
@@ -883,27 +888,36 @@ watch([bookId, partId], async () => {
     </div>
   </div>
 
-  <Modal
+  <ImageLightbox
     :show="partImageModalOpen"
-    :title="partActiveImageLabel || 'Illustration'"
-    max-width="4xl"
+    :image="partActiveImage"
+    :image-src="partActiveImageSource"
+    :current-index="partActiveImagePosition"
+    :total-images="partAlbumImageCount"
+    :has-previous="partHasPrevImage"
+    :has-next="partHasNextImage"
     @close="closePartImageModal"
+    @previous="goToPrevPartImage"
+    @next="goToNextPartImage"
   >
-    <IllustrationDetail
-      :image="partActiveImage"
-      :image-src="partActiveImageSource"
-      :wiki-pages="bookWikiPages"
-      :tags="partActiveImageTags"
-      :saving-notes="partSavingImageNotes"
-      :saving-tags="partSavingImageTags"
-      :can-edit-notes="true"
-      :can-edit-tags="true"
-      :can-download="true"
-      @save-notes="handleSavePartImageNotes"
-      @save-tags="handleSavePartImageTags"
-      @download="handleDownloadPartImage"
-    />
-  </Modal>
+    <template #details>
+      <IllustrationDetail
+        :image="partActiveImage"
+        :image-src="partActiveImageSource"
+        :wiki-pages="bookWikiPages"
+        :tags="partActiveImageTags"
+        :saving-notes="partSavingImageNotes"
+        :saving-tags="partSavingImageTags"
+        :can-edit-notes="true"
+        :can-edit-tags="true"
+        :can-download="true"
+        :show-preview="false"
+        @save-notes="handleSavePartImageNotes"
+        @save-tags="handleSavePartImageTags"
+        @download="handleDownloadPartImage"
+      />
+    </template>
+  </ImageLightbox>
 
   <!-- Delete Part Cover Confirmation Modal -->
   <teleport to="body">
