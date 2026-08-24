@@ -68,6 +68,12 @@ describe('Electron desktop-image bridge runtime', () => {
       chapterId: 'chapter-1',
     })).resolves.toEqual({ canceled: true, images: [] })
 
+    dialog.showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] })
+    await expect(getIpcHandler('desktop-images:pick-wiki')(null, {
+      bookId: 'book-1',
+      wikiPageId: 'wiki-1',
+    })).resolves.toEqual({ canceled: true, images: [] })
+
     dialog.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [] })
     await expect(getIpcHandler('desktop-images:pick-cover')(null, {
       bookId: 'book-1',

@@ -126,6 +126,37 @@ describe('useImageLibrary Electron lifecycle', () => {
     expect(imageMocks.setImageWikiTags).toHaveBeenCalledWith('wiki-image', ['wiki-1'])
   })
 
+  it.each([
+    { canceled: true, images: [metadata('ignored')] },
+    { canceled: false, images: [] },
+  ])('does not persist wiki images when selection has no usable result', async (response) => {
+    window.desktopImages = bridge({ pickWikiImages: vi.fn(async () => response) })
+
+    await expect(useImageLibrary().addImagesToWikiPage('book-1', 'wiki-1'))
+      .resolves.toEqual([])
+    expect(imageMocks.saveImageAssetRecord).not.toHaveBeenCalled()
+    expect(imageMocks.setImageWikiTags).not.toHaveBeenCalled()
+  })
+
+  it('rolls back wiki image metadata and content when tagging fails', async () => {
+    const desktopBridge = bridge({
+      pickWikiImages: vi.fn(async () => ({
+        canceled: false,
+        images: [metadata('wiki-image')],
+      })),
+    })
+    window.desktopImages = desktopBridge
+    imageMocks.setImageWikiTags.mockRejectedValueOnce(new Error('tag write failed'))
+
+    await expect(useImageLibrary().addImagesToWikiPage('book-1', 'wiki-1'))
+      .rejects.toThrow('tag write failed')
+
+    expect(imageMocks.deleteImageAssetRecord).toHaveBeenCalledWith('wiki-image')
+    expect(desktopBridge.deleteImageFile).toHaveBeenCalledWith({
+      relativePath: 'images/wiki-image.png',
+    })
+  })
+
   it('rejects a desktop image that cannot be read after selection', async () => {
     window.desktopImages = bridge({
       pickChapterImages: vi.fn(async () => ({ canceled: false, images: [metadata('missing')] })),
