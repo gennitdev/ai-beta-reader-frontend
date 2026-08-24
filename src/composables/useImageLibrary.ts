@@ -140,6 +140,7 @@ export function useImageLibrary() {
     setPartCoverImageId,
     getChapterCoverImageAsset,
     setChapterCoverImageId,
+    setImageWikiTags,
     updateImageAssetIntegrity,
   } = useDatabase()
 
@@ -334,6 +335,47 @@ export function useImageLibrary() {
       saved.push(asset)
     }
     return saved
+  }
+
+  async function addImagesToWikiPage(bookId: string, wikiPageId: string) {
+    let saved: ImageAsset[] = []
+
+    try {
+      if (!electronImageStorageAvailable.value) {
+        const files = await selectBrowserImages(true)
+        if (files.length === 0) return []
+        saved = await addImagesFromFiles(files, { bookId, assetType: 'wiki' })
+      } else {
+        const response = await ensureBridge().pickWikiImages({
+          bookId,
+          wikiPageId,
+          allowMultiple: true,
+        })
+        if (response.canceled || !response.images.length) return []
+
+        for (const item of response.images) {
+          const asset = createAssetFromMetadata(item, {
+            bookId,
+            assetType: 'wiki',
+          })
+          const blob = await getContentStore().read(asset)
+          if (!blob) {
+            throw new Error(`The selected image ${asset.file_name} could not be read after it was copied.`)
+          }
+          await addContentIntegrity(asset, blob)
+          await saveImageAssetRecord(asset)
+          saved.push(asset)
+        }
+      }
+
+      for (const asset of saved) {
+        await setImageWikiTags(asset.id, [wikiPageId])
+      }
+      return saved
+    } catch (error) {
+      await Promise.all(saved.map((asset) => deleteImage(asset).catch(() => undefined)))
+      throw error
+    }
   }
 
   async function addImagesFromFiles(
@@ -588,6 +630,7 @@ export function useImageLibrary() {
     canDownloadImages,
     refreshAvailability,
     addImagesToChapter,
+    addImagesToWikiPage,
     addImagesFromFiles,
     canDisplayImages,
     deleteImage,

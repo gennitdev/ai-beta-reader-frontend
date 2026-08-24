@@ -2,7 +2,7 @@
 import { ArrowDownTrayIcon, PhotoIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import type { ImageAsset, ImageWikiTag } from '@/lib/database'
 
-defineProps<{
+const props = defineProps<{
   images: ImageAsset[]
   imageSources: Record<string, string>
   coverImageId?: string | null
@@ -12,6 +12,7 @@ defineProps<{
   canSetCover?: boolean
   canDownload?: boolean
   canDelete?: boolean
+  canDeleteImage?: (image: ImageAsset) => boolean
   emptyText?: string
   // 'grid' (default) is a responsive multi-column grid; 'panel' is a single
   // column for use inside a narrow side panel.
@@ -24,6 +25,9 @@ const emit = defineEmits<{
   'download': [imageId: string]
   'delete': [imageId: string]
 }>()
+
+const isImageDeletable = (image: ImageAsset) =>
+  Boolean(props.canDelete && (!props.canDeleteImage || props.canDeleteImage(image)))
 </script>
 
 <template>
@@ -73,7 +77,7 @@ const emit = defineEmits<{
             <ArrowDownTrayIcon class="h-3.5 w-3.5" />
           </button>
           <button
-            v-if="canDelete"
+            v-if="isImageDeletable(image)"
             type="button"
             class="rounded-full bg-red-600/90 p-1.5 text-white transition hover:bg-red-700"
             title="Delete"

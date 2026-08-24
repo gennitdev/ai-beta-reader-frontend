@@ -23,6 +23,10 @@ const h = vi.hoisted(() => ({
   getWikiPageChapterLinks: vi.fn(),
   setWikiPageChapterLinks: vi.fn(async () => {}),
   refreshWikiImages: vi.fn(async () => {}),
+  wikiImages: [] as Array<Record<string, unknown>>,
+  handleAddIllustrations: vi.fn(),
+  requestDeleteIllustration: vi.fn(),
+  canDeleteWikiImage: vi.fn((image: Record<string, unknown>) => image.asset_type === 'wiki'),
 }))
 
 vi.mock('vue-router', () => ({
@@ -51,8 +55,9 @@ vi.mock('@/composables/useWikiImages', async () => {
   const { ref, computed } = await import('vue')
   return {
     useWikiImages: () => ({
-      wikiImages: ref([]),
+      wikiImages: ref(h.wikiImages),
       wikiImagesLoading: ref(false),
+      addingWikiImages: ref(false),
       wikiImageSources: ref({}),
       wikiImageTags: ref({}),
       bookWikiPages: ref([]),
@@ -69,7 +74,15 @@ vi.mock('@/composables/useWikiImages', async () => {
       hasNextImage: computed(() => false), hasPrevImage: computed(() => false),
       savingImageNotes: ref(false),
       savingImageTags: ref(false),
+      showDeleteIllustrationModal: ref(false),
+      deletingIllustration: ref(false),
+      wikiImageUploadAvailable: ref(true),
+      illustrationToDeleteName: computed(() => ''),
+      canDeleteWikiImage: h.canDeleteWikiImage,
       refreshWikiImages: h.refreshWikiImages,
+      handleAddIllustrations: h.handleAddIllustrations,
+      requestDeleteIllustration: h.requestDeleteIllustration,
+      cancelDeleteIllustration: vi.fn(), handleDeleteIllustration: vi.fn(),
       openImageModal: vi.fn(), closeImageModal: vi.fn(), handleSetAsCover: vi.fn(),
       goToNextImage: vi.fn(), goToPrevImage: vi.fn(),
       handleDownloadImage: vi.fn(), handleSaveActiveImageNotes: vi.fn(),
@@ -89,6 +102,21 @@ const AutocompleteStub = {
   props: ['selectedIds'],
   emits: ['update:selectedIds'],
   template: '<button data-testid="select-chapters" @click="$emit(\'update:selectedIds\', [\'chapter-2\'])">Choose chapter two</button>',
+}
+
+const IllustrationsSectionStub = {
+  name: 'IllustrationsSectionStub',
+  props: [
+    'images', 'title', 'description', 'canAddImages', 'canDeleteImage',
+  ],
+  emits: ['add-images', 'delete'],
+  template: `
+    <section data-testid="wiki-illustrations">
+      <h2>{{ title }}</h2>
+      <p>{{ description }}</p>
+      <button v-if="canAddImages" data-testid="add-wiki-images" @click="$emit('add-images')">Add images</button>
+    </section>
+  `,
 }
 
 const wrappers: VueWrapper[] = []
@@ -111,7 +139,8 @@ function mountView() {
         MarkdownRenderer: { props: ['text'], template: '<div data-testid="markdown">{{ text }}</div>' },
         FontSizeControl: true,
         WikiPageHeroSection: true,
-        WikiPageIllustrationsSection: true,
+        ChapterIllustrationsSection: IllustrationsSectionStub,
+        ConfirmDeleteModal: true,
         IllustrationDetail: true,
         AutocompleteMultiSelect: AutocompleteStub,
         ImageLightbox: { template: '<div><slot name="details" /></div>' },
@@ -144,6 +173,7 @@ beforeEach(() => {
   h.links = [{
     wiki_page_id: 'wiki-1', chapter_id: 'chapter-1', chapter_title: 'First Chapter', link_source: 'manual',
   }]
+  h.wikiImages = []
   h.getWikiPageById.mockImplementation(async () => h.page)
   h.getWikiPageChapterLinks.mockImplementation(async () => h.links)
   vi.stubGlobal('alert', vi.fn())
@@ -169,6 +199,31 @@ describe('WikiPageView', () => {
     expect(wrapper.text()).toContain('The Unreasonable Goddess')
     expect(wrapper.text()).toContain('deity')
     expect(wrapper.text()).toContain('First Chapter')
+  })
+
+  it('wires the shared illustration section for wiki uploads and ownership-aware deletion', async () => {
+    h.wikiImages = [
+      { id: 'chapter-image', asset_type: 'chapter', chapter_id: 'chapter-1' },
+      { id: 'wiki-image', asset_type: 'wiki', chapter_id: null },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+
+    const section = wrapper.getComponent(IllustrationsSectionStub)
+    expect(section.props('title')).toBe('Wiki Illustrations')
+    expect(section.props('description')).toContain('Upload images for this wiki page')
+    expect(section.props('canAddImages')).toBe(true)
+
+    const canDeleteImage = section.props('canDeleteImage') as (image: Record<string, unknown>) => boolean
+    expect(canDeleteImage(h.wikiImages[0])).toBe(false)
+    expect(canDeleteImage(h.wikiImages[1])).toBe(true)
+
+    await wrapper.get('[data-testid="add-wiki-images"]').trigger('click')
+    expect(h.handleAddIllustrations).toHaveBeenCalledOnce()
+
+    section.vm.$emit('delete', 'wiki-image')
+    await flushPromises()
+    expect(h.requestDeleteIllustration).toHaveBeenCalledWith('wiki-image')
   })
 
   it('edits and saves page content and its name', async () => {

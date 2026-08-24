@@ -239,7 +239,7 @@ export async function createCanonicalLibrarySnapshot(
       id: stringValue(row, 'id'),
       book_id: stringValue(row, 'book_id'),
       chapter_id: nullableString(row, 'chapter_id'),
-      asset_type: stringValue(row, 'asset_type') as 'cover' | 'chapter' | 'part_cover',
+      asset_type: stringValue(row, 'asset_type') as ImageAsset['asset_type'],
       file_name: stringValue(row, 'file_name'),
       mime_type: nullableString(row, 'mime_type'),
       notes: stringValue(row, 'notes'),

@@ -216,7 +216,7 @@ export interface WikiPage {
   cover_image_id?: string | null;
 }
 
-export type ImageAssetType = 'cover' | 'chapter' | 'part_cover';
+export type ImageAssetType = 'cover' | 'chapter' | 'part_cover' | 'wiki';
 
 export interface ImageAsset {
   id: string;

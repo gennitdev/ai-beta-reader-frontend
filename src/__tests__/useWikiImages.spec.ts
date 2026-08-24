@@ -6,7 +6,11 @@ import { useWikiImages } from '@/composables/useWikiImages'
 
 const h = vi.hoisted(() => ({
   canStoreImages: null as { value: boolean } | null,
+  canSelectImages: null as { value: boolean } | null,
+  addImagesToWikiPage: vi.fn(),
+  deleteImage: vi.fn(),
   getImageSource: vi.fn(),
+  downloadOrShareImage: vi.fn(),
   getWikiPageImageAssets: vi.fn(),
   getWikiPageCoverImageAsset: vi.fn(),
   setWikiPageCoverImageId: vi.fn(),
@@ -19,8 +23,17 @@ const h = vi.hoisted(() => ({
 vi.mock('@/composables/useImageLibrary', async () => {
   const { ref } = await import('vue')
   const canStoreImages = ref(true)
+  const canSelectImages = ref(true)
   h.canStoreImages = canStoreImages
-  return { useImageLibrary: () => ({ canStoreImages, getImageSource: h.getImageSource }) }
+  h.canSelectImages = canSelectImages
+  return { useImageLibrary: () => ({
+    canSelectImages,
+    canStoreImages,
+    addImagesToWikiPage: h.addImagesToWikiPage,
+    deleteImage: h.deleteImage,
+    getImageSource: h.getImageSource,
+    downloadOrShareImage: h.downloadOrShareImage,
+  }) }
 })
 
 vi.mock('@/composables/useDatabase', () => ({
@@ -63,6 +76,9 @@ beforeEach(() => {
   h.getWikiPages.mockResolvedValue([])
   h.setImageWikiTags.mockResolvedValue(undefined)
   h.updateImageAssetNotes.mockResolvedValue(undefined)
+  h.addImagesToWikiPage.mockResolvedValue([])
+  h.deleteImage.mockResolvedValue(undefined)
+  h.downloadOrShareImage.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -100,6 +116,56 @@ describe('refreshWikiImages', () => {
     const c = setup()
     await c.refreshWikiImages()
     expect(c.wikiImageError.value).toBe('nope')
+  })
+})
+
+describe('wiki illustration management', () => {
+  it('uploads images to the current wiki page and prepends them', async () => {
+    h.getWikiPageImageAssets.mockResolvedValue([img('existing')])
+    h.addImagesToWikiPage.mockResolvedValue([img('new', { asset_type: 'wiki' })])
+    h.getImageWikiTags.mockResolvedValue([{ wiki_page_id: 'wiki-1' }])
+    const c = setup()
+    await c.refreshWikiImages()
+
+    await c.handleAddIllustrations()
+
+    expect(h.addImagesToWikiPage).toHaveBeenCalledWith('book-1', 'wiki-1')
+    expect(c.wikiImages.value.map((image) => image.id)).toEqual(['new', 'existing'])
+    expect(c.wikiImageSources.value.new).toBe('src:new')
+    expect(c.addingWikiImages.value).toBe(false)
+  })
+
+  it('deletes wiki-owned images and clears the cover', async () => {
+    h.getWikiPageImageAssets.mockResolvedValue([
+      img('owned', { asset_type: 'wiki' }),
+      img('chapter-image', { asset_type: 'chapter', chapter_id: 'chapter-1' }),
+    ])
+    h.getWikiPageCoverImageAsset.mockResolvedValue(img('owned', { asset_type: 'wiki' }))
+    const c = setup()
+    await c.refreshWikiImages()
+
+    c.requestDeleteIllustration('chapter-image')
+    expect(c.showDeleteIllustrationModal.value).toBe(false)
+
+    c.requestDeleteIllustration('owned')
+    await c.handleDeleteIllustration()
+
+    expect(h.deleteImage).toHaveBeenCalledWith(expect.objectContaining({ id: 'owned' }))
+    expect(c.wikiCoverImageId.value).toBeNull()
+    expect(c.wikiImages.value.map((image) => image.id)).toEqual(['chapter-image'])
+  })
+
+  it('records upload and deletion errors', async () => {
+    const c = setup()
+    h.addImagesToWikiPage.mockRejectedValue(new Error('upload failed'))
+    await c.handleAddIllustrations()
+    expect(c.wikiImageError.value).toBe('upload failed')
+
+    c.wikiImages.value = [img('owned', { asset_type: 'wiki' })]
+    c.requestDeleteIllustration('owned')
+    h.deleteImage.mockRejectedValue(new Error('delete failed'))
+    await c.handleDeleteIllustration()
+    expect(c.wikiImageError.value).toBe('delete failed')
   })
 })
 
@@ -201,21 +267,13 @@ describe('cover, navigation, notes, tags, download', () => {
     expect(c.wikiImageTags.value.a).toEqual([{ wiki_page_id: 'w2' }])
   })
 
-  it('creates and clicks a download link', async () => {
+  it('downloads an image through the shared image library', async () => {
     h.getWikiPageImageAssets.mockResolvedValue([img('a')])
     const c = setup()
     await c.refreshWikiImages()
 
-    const click = vi.fn()
-    const realCreate = document.createElement.bind(document)
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      const el = realCreate(tag) as HTMLAnchorElement
-      if (tag === 'a') el.click = click
-      return el
-    })
-
-    c.handleDownloadImage('a')
-    expect(click).toHaveBeenCalled()
+    await c.handleDownloadImage('a')
+    expect(h.downloadOrShareImage).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }))
   })
 
   it('refreshes when the storage capability changes', async () => {

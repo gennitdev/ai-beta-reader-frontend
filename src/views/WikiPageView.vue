@@ -11,10 +11,11 @@ import { useWikiLinkedChapters } from '@/composables/useWikiLinkedChapters'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import FontSizeControl from '@/components/reading/FontSizeControl.vue'
 import WikiPageHeroSection from '@/components/wiki/WikiPageHeroSection.vue'
-import WikiPageIllustrationsSection from '@/components/wiki/WikiPageIllustrationsSection.vue'
+import ChapterIllustrationsSection from '@/components/chapter/ChapterIllustrationsSection.vue'
 import WikiPageInfoCard from '@/components/wiki/WikiPageInfoCard.vue'
 import ImageLightbox from '@/components/images/ImageLightbox.vue'
 import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
+import ConfirmDeleteModal from '@/components/chapter/ConfirmDeleteModal.vue'
 import AutocompleteMultiSelect from '@/components/links/AutocompleteMultiSelect.vue'
 import { useReadingFontSize } from '@/composables/useReadingFontSize'
 import type { Book } from '@/lib/database'
@@ -69,6 +70,7 @@ const {
 const {
   wikiImages,
   wikiImagesLoading,
+  addingWikiImages,
   wikiImageSources,
   wikiImageTags,
   bookWikiPages,
@@ -86,7 +88,16 @@ const {
   hasPrevImage,
   savingImageNotes,
   savingImageTags,
+  showDeleteIllustrationModal,
+  deletingIllustration,
+  wikiImageUploadAvailable,
+  illustrationToDeleteName,
+  canDeleteWikiImage,
   refreshWikiImages,
+  handleAddIllustrations,
+  requestDeleteIllustration,
+  cancelDeleteIllustration,
+  handleDeleteIllustration,
   openImageModal,
   closeImageModal,
   goToNextImage,
@@ -801,19 +812,26 @@ watch(
         />
 
         <!-- Illustrations -->
-        <WikiPageIllustrationsSection
-          v-if="wikiImages.length > 0"
+        <ChapterIllustrationsSection
           layout="panel"
+          title="Wiki Illustrations"
+          description="Upload images for this wiki page or view images tagged to it from chapters."
+          empty-text="No illustrations yet."
           :images="wikiImages"
           :image-sources="wikiImageSources"
           :image-tags="wikiImageTags"
           :cover-image-id="wikiCoverImageId"
           :loading="wikiImagesLoading"
+          :adding="addingWikiImages"
           :error="wikiImageError"
           :setting-cover-id="settingCoverId"
+          :can-add-images="wikiImageUploadAvailable"
+          :can-delete-image="canDeleteWikiImage"
+          @add-images="handleAddIllustrations"
           @open-image="openImageModal"
           @set-cover="handleSetAsCover"
           @download="handleDownloadImage"
+          @delete="requestDeleteIllustration"
         />
 
         <div class="bg-white dark:bg-navy-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
@@ -1005,5 +1023,14 @@ watch(
         />
       </template>
     </ImageLightbox>
+
+    <ConfirmDeleteModal
+      :show="showDeleteIllustrationModal"
+      title="Delete illustration?"
+      :item-name="illustrationToDeleteName"
+      :deleting="deletingIllustration"
+      @cancel="cancelDeleteIllustration"
+      @confirm="handleDeleteIllustration"
+    />
   </div>
 </template>

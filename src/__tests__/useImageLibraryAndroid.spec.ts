@@ -13,6 +13,7 @@ const imageMocks = vi.hoisted(() => ({
   getChapterCoverImageAsset: vi.fn(),
   setChapterCoverImageId: vi.fn(),
   updateImageAssetIntegrity: vi.fn(),
+  setImageWikiTags: vi.fn(),
 }))
 const nativeMocks = vi.hoisted(() => ({
   share: vi.fn(),
