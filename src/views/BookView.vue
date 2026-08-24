@@ -171,6 +171,7 @@ const {
 const {
   bookImages,
   bookImageSources,
+  bookImageTags,
   loadingImages,
   savingSelectedImageNotes,
   savingSelectedImageTags,
@@ -182,6 +183,7 @@ const {
   saveSelectedImageNotes,
   saveSelectedImageTags,
   downloadSelectedImage,
+  selectBookImage,
 } = useBookImages({
   bookId,
   wikiPages,
@@ -744,6 +746,7 @@ onMounted(async () => {
     :part-thumbnails="partThumbnails"
     :book-images="bookImages"
     :book-image-sources="bookImageSources"
+    :book-image-tags="bookImageTags"
     :loading-images="loadingImages"
     :selected-image-id="selectedImageId"
     :selected-image-src="selectedImageSrc"
@@ -755,6 +758,7 @@ onMounted(async () => {
     :save-selected-image-notes="saveSelectedImageNotes"
     :save-selected-image-tags="saveSelectedImageTags"
     :download-selected-image="downloadSelectedImage"
+    :select-book-image="selectBookImage"
     :wiki-page-pin-changed="handleWikiPagePinChanged"
     :revision-activity="revisionActivity"
   />

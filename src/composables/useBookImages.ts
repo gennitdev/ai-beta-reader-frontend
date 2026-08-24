@@ -1,4 +1,4 @@
-import { computed, ref, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import type { ImageAsset, ImageWikiTag } from '@/lib/database'
 
@@ -39,7 +39,14 @@ export function useBookImages(deps: UseBookImagesDeps) {
   const savingSelectedImageNotes = ref(false)
   const savingSelectedImageTags = ref(false)
 
-  const selectedImageId = computed(() => (route.query.imageId as string) || null)
+  const selectedImageId = ref<string | null>((route.query.imageId as string) || null)
+
+  watch(
+    () => route.query.imageId,
+    (imageId) => {
+      selectedImageId.value = typeof imageId === 'string' ? imageId : null
+    },
+  )
 
   const selectedImageSrc = computed(() => {
     if (!selectedImageId.value) return null
@@ -140,6 +147,10 @@ export function useBookImages(deps: UseBookImagesDeps) {
     await downloadOrShareImage(image)
   }
 
+  const selectBookImage = (imageId: string | null) => {
+    selectedImageId.value = imageId
+  }
+
   return {
     bookImages,
     bookImageSources,
@@ -155,5 +166,6 @@ export function useBookImages(deps: UseBookImagesDeps) {
     saveSelectedImageNotes,
     saveSelectedImageTags,
     downloadSelectedImage,
+    selectBookImage,
   }
 }
