@@ -30,9 +30,9 @@ import ChapterStatusBar from "@/components/chapter/ChapterStatusBar.vue";
 import ChapterVersionHistory from "@/components/chapter/ChapterVersionHistory.vue";
 import FontSizeControl from "@/components/reading/FontSizeControl.vue";
 import ConfirmDeleteModal from "@/components/chapter/ConfirmDeleteModal.vue";
+import ImageLightbox from "@/components/images/ImageLightbox.vue";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
 import ChapterWikiLinksCard from "@/components/links/ChapterWikiLinksCard.vue";
-import Modal from "@/components/Modal.vue";
 import {
   CHAPTER_WIKI_LINKS_CHANGED_EVENT,
   type ChapterWikiLinksChangedDetail,
@@ -67,10 +67,13 @@ const {
   activeImageSource,
   activeImage,
   activeImageTags,
-  activeImageLabel,
   savingImageNotes,
   savingImageTags,
   heroImageSrc,
+  activeImagePosition,
+  albumImageCount,
+  hasNextImage,
+  hasPrevImage,
   illustrationToDeleteName,
   refreshChapterImages,
   handleAddIllustrations,
@@ -79,6 +82,8 @@ const {
   handleDeleteIllustration,
   openImageModal,
   closeImageModal,
+  goToNextImage,
+  goToPrevImage,
   handleSetAsCover,
   handleDownloadImage,
   handleSaveActiveImageNotes,
@@ -850,27 +855,36 @@ onBeforeUnmount(() => {
     </div>
   </div>
 
-  <Modal
+  <ImageLightbox
     :show="showImageLightbox"
-    :title="activeImageLabel || 'Illustration'"
-    max-width="4xl"
+    :image="activeImage"
+    :image-src="activeImageSource"
+    :current-index="activeImagePosition"
+    :total-images="albumImageCount"
+    :has-previous="hasPrevImage"
+    :has-next="hasNextImage"
     @close="closeImageModal"
+    @previous="goToPrevImage"
+    @next="goToNextImage"
   >
-    <IllustrationDetail
-      :image="activeImage"
-      :image-src="activeImageSource"
-      :wiki-pages="bookWikiPages"
-      :tags="activeImageTags"
-      :saving-notes="savingImageNotes"
-      :saving-tags="savingImageTags"
-      :can-edit-notes="true"
-      :can-edit-tags="true"
-      :can-download="true"
-      @save-notes="handleSaveActiveImageNotes"
-      @save-tags="handleSaveActiveImageTags"
-      @download="handleDownloadImage"
-    />
-  </Modal>
+    <template #details>
+      <IllustrationDetail
+        :image="activeImage"
+        :image-src="activeImageSource"
+        :wiki-pages="bookWikiPages"
+        :tags="activeImageTags"
+        :saving-notes="savingImageNotes"
+        :saving-tags="savingImageTags"
+        :can-edit-notes="true"
+        :can-edit-tags="true"
+        :can-download="true"
+        :show-preview="false"
+        @save-notes="handleSaveActiveImageNotes"
+        @save-tags="handleSaveActiveImageTags"
+        @download="handleDownloadImage"
+      />
+    </template>
+  </ImageLightbox>
 
   <!-- Delete Chapter Confirmation Modal -->
   <ConfirmDeleteModal

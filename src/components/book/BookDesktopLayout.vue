@@ -163,7 +163,6 @@ withDefaults(defineProps<{
         :cover-error="coverError"
         :select-book-cover="selectBookCover"
         :delete-book-cover="deleteBookCover"
-        :request-delete-book="requestDeleteBook"
         :chapter-thumbnails="chapterThumbnails"
         :part-thumbnails="partThumbnails"
         :book-images="bookImages"
@@ -192,6 +191,7 @@ withDefaults(defineProps<{
         :download-selected-image="downloadSelectedImage"
         :is-on-book-only="isOnBookOnly"
         :revision-activity="revisionActivity"
+        :request-delete-book="requestDeleteBook"
         :router-view-key="routerViewKey"
         :wiki-page-pin-changed="wikiPagePinChanged"
       />

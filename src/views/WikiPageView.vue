@@ -13,10 +13,10 @@ import FontSizeControl from '@/components/reading/FontSizeControl.vue'
 import WikiPageHeroSection from '@/components/wiki/WikiPageHeroSection.vue'
 import ChapterIllustrationsSection from '@/components/chapter/ChapterIllustrationsSection.vue'
 import WikiPageInfoCard from '@/components/wiki/WikiPageInfoCard.vue'
+import ImageLightbox from '@/components/images/ImageLightbox.vue'
 import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
 import ConfirmDeleteModal from '@/components/chapter/ConfirmDeleteModal.vue'
 import AutocompleteMultiSelect from '@/components/links/AutocompleteMultiSelect.vue'
-import Modal from '@/components/Modal.vue'
 import { useReadingFontSize } from '@/composables/useReadingFontSize'
 import type { Book } from '@/lib/database'
 import type { WikiPage, WikiUpdate, Character } from '@/types/wikiPageView'
@@ -81,8 +81,11 @@ const {
   activeImageSource,
   activeImage,
   activeImageTags,
-  activeImageLabel,
   heroImageSrc,
+  activeImagePosition,
+  albumImageCount,
+  hasNextImage,
+  hasPrevImage,
   savingImageNotes,
   savingImageTags,
   showDeleteIllustrationModal,
@@ -97,6 +100,8 @@ const {
   handleDeleteIllustration,
   openImageModal,
   closeImageModal,
+  goToNextImage,
+  goToPrevImage,
   handleSetAsCover,
   handleDownloadImage,
   handleSaveActiveImageNotes,
@@ -988,27 +993,36 @@ watch(
     </div>
 
     <!-- Illustration detail modal -->
-    <Modal
+    <ImageLightbox
       :show="showImageLightbox"
-      :title="activeImageLabel || 'Illustration'"
-      max-width="4xl"
+      :image="activeImage"
+      :image-src="activeImageSource"
+      :current-index="activeImagePosition"
+      :total-images="albumImageCount"
+      :has-previous="hasPrevImage"
+      :has-next="hasNextImage"
       @close="closeImageModal"
+      @previous="goToPrevImage"
+      @next="goToNextImage"
     >
-      <IllustrationDetail
-        :image="activeImage"
-        :image-src="activeImageSource"
-        :wiki-pages="bookWikiPages"
-        :tags="activeImageTags"
-        :saving-notes="savingImageNotes"
-        :saving-tags="savingImageTags"
-        :can-edit-notes="true"
-        :can-edit-tags="true"
-        :can-download="true"
-        @save-notes="handleSaveActiveImageNotes"
-        @save-tags="handleSaveActiveImageTags"
-        @download="handleDownloadImage"
-      />
-    </Modal>
+      <template #details>
+        <IllustrationDetail
+          :image="activeImage"
+          :image-src="activeImageSource"
+          :wiki-pages="bookWikiPages"
+          :tags="activeImageTags"
+          :saving-notes="savingImageNotes"
+          :saving-tags="savingImageTags"
+          :can-edit-notes="true"
+          :can-edit-tags="true"
+          :can-download="true"
+          :show-preview="false"
+          @save-notes="handleSaveActiveImageNotes"
+          @save-tags="handleSaveActiveImageTags"
+          @download="handleDownloadImage"
+        />
+      </template>
+    </ImageLightbox>
 
     <ConfirmDeleteModal
       :show="showDeleteIllustrationModal"

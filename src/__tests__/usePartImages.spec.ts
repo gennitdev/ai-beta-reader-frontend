@@ -160,6 +160,38 @@ describe('navigation', () => {
     c.goToPrevImage()
     expect(c.activeImageId.value).toBe('b')
   })
+
+  it('combines the separate cover with part illustrations without duplicating it', async () => {
+    h.fetchPartImages.mockResolvedValue([img('a'), img('b')])
+    const c = setup()
+    await c.refreshPartImages()
+
+    const cover = img('cover', { asset_type: 'part_cover' })
+    await c.openImageAsset(cover, 'src:cover')
+
+    expect(c.albumImages.value.map((image) => image.id)).toEqual(['cover', 'a', 'b'])
+    expect(c.activeImagePosition.value).toBe(1)
+    expect(c.albumImageCount.value).toBe(3)
+
+    c.goToNextImage()
+    expect(c.activeImage.value?.id).toBe('a')
+    c.goToPrevImage()
+    expect(c.activeImage.value?.id).toBe('cover')
+  })
+
+  it('includes the cover when an attached illustration opens first', async () => {
+    h.fetchPartImages.mockResolvedValue([img('a'), img('b')])
+    const c = setup()
+    await c.refreshPartImages()
+
+    const cover = img('cover', { asset_type: 'part_cover' })
+    c.openImageModal('b', cover, 'src:cover')
+
+    expect(c.albumImages.value.map((image) => image.id)).toEqual(['cover', 'a', 'b'])
+    expect(c.activeImagePosition.value).toBe(3)
+    c.goToPrevImage()
+    expect(c.activeImage.value?.id).toBe('a')
+  })
 })
 
 describe('saving notes and tags', () => {
