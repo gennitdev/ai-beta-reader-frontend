@@ -11,10 +11,9 @@ import {
   TrashIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline'
-import type { Book, ImageAsset } from '@/lib/database'
+import type { Book } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import BookDesktopChapterSidebar from './BookDesktopChapterSidebar.vue'
-import BookDesktopImagesSidebar from './BookDesktopImagesSidebar.vue'
 import BookDesktopWikiSidebar from './BookDesktopWikiSidebar.vue'
 import { useLibraryContext } from '@/composables/useLibraryContext'
 import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
@@ -67,10 +66,6 @@ const props = defineProps<{
   deleteBookCover?: (() => void) | null
   chapterThumbnails: Record<string, string>
   partThumbnails: Record<string, string>
-  bookImages: ImageAsset[]
-  bookImageSources: Record<string, string>
-  loadingImages: boolean
-  selectedImageId?: string | null
 }>()
 const { booksPath, readOnly, readOnlyReason } = useLibraryContext()
 
@@ -427,16 +422,6 @@ const closeLightbox = () => {
         :open-create-wiki-modal="openCreateWikiModal"
         :filter-active="wikiTypeFilter !== 'all'"
         :filter-label="wikiTypeFilter"
-      />
-
-      <BookDesktopImagesSidebar
-        v-else-if="currentTab === 'images'"
-        :book-id="bookId"
-        :can-select-images="canSelectImages"
-        :book-images="bookImages"
-        :book-image-sources="bookImageSources"
-        :loading-images="loadingImages"
-        :selected-image-id="selectedImageId"
       />
 
     </div>

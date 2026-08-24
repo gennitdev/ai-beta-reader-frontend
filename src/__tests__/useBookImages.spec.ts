@@ -90,6 +90,18 @@ describe('useBookImages', () => {
     expect(images.selectedImageTags.value).toEqual([])
   })
 
+  it('selects and clears a book image for the shared viewer', async () => {
+    const { images } = setup()
+    await images.loadBookImages()
+
+    images.selectBookImage('img-1')
+    expect(images.selectedImage.value?.id).toBe('img-1')
+    expect(images.selectedImageSrc.value).toBe('blob:img')
+
+    images.selectBookImage(null)
+    expect(images.selectedImage.value).toBeNull()
+  })
+
   it('saves notes for the selected image and updates it in place', async () => {
     h.route.query = { imageId: 'img-1' }
     const { deps, images } = setup()

@@ -19,7 +19,11 @@ const part = {
   wordCount: 2950,
 }
 
-function mountPane(partSummaries: Record<string, string> = {}, requestDeleteBook = vi.fn()) {
+function mountPane(
+  partSummaries: Record<string, string> = {},
+  requestDeleteBook = vi.fn(),
+  overrides: Record<string, unknown> = {},
+) {
   return mount(BookDesktopMainPane, {
     props: {
       bookId: 'book-1',
@@ -33,12 +37,22 @@ function mountPane(partSummaries: Record<string, string> = {}, requestDeleteBook
       routerViewKey: 0,
       wikiPagePinChanged: vi.fn(),
       requestDeleteBook,
+      ...overrides,
     },
     global: {
       stubs: {
         RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
         RouterView: true,
         BookActivityHeatmap: true,
+        IllustrationGrid: {
+          props: ['images'],
+          emits: ['open-image'],
+          template: '<div data-testid="image-grid"><button v-for="image in images" :key="image.id" @click="$emit(\'open-image\', image.id)">{{ image.file_name }}</button></div>',
+        },
+        ImageLightbox: {
+          props: ['show', 'image'],
+          template: '<div v-if="show" data-testid="image-lightbox"><slot name="details" />{{ image?.file_name }}</div>',
+        },
       },
     },
   })
@@ -69,5 +83,49 @@ describe('BookDesktopMainPane book overview', () => {
 
     await actions.get('button').trigger('click')
     expect(requestDeleteBook).toHaveBeenCalledOnce()
+  })
+
+  it('shows wiki guidance and wiki cards instead of the chapter overview', () => {
+    const wrapper = mountPane({}, vi.fn(), {
+      currentTab: 'wiki',
+      wikiPagesByType: {
+        character: [{
+          id: 'wiki-1', page_name: 'Mara', page_type: 'character', summary: 'A reluctant guide.',
+          aliases: [], tags: [], is_major: true, is_pinned: false, created_by_ai: false,
+          created_at: '2026-01-01', updated_at: '2026-01-01', content_length: 120,
+          cover_image_id: null,
+        }],
+      },
+      getTypeIcon: () => 'span',
+      getTypeColor: () => 'text-blue-500',
+    })
+
+    expect(wrapper.text()).toContain('Please select a wiki page')
+    expect(wrapper.text()).not.toContain('Please select a chapter')
+    expect(wrapper.find('[data-testid="book-overview-part-part-1"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="book-overview-wiki-wiki-1"]').attributes('href')).toBe('/books/book-1/wiki/wiki-1')
+  })
+
+  it('renders images in the main pane and opens the shared image viewer selection', async () => {
+    const selectBookImage = vi.fn()
+    const image = {
+      id: 'image-1', book_id: 'book-1', chapter_id: null, asset_type: 'chapter',
+      file_name: 'Mara.png', file_path: '/Mara.png', mime_type: 'image/png', image_data: null,
+      notes: '', created_at: '2026-01-01', updated_at: '2026-01-01',
+    }
+    const wrapper = mountPane({}, vi.fn(), {
+      currentTab: 'images',
+      bookImages: [image],
+      bookImageSources: { 'image-1': 'blob:image-1' },
+      selectedImageId: 'image-1',
+      selectedImageSrc: 'blob:image-1',
+      selectedImage: image,
+      selectBookImage,
+    })
+
+    expect(wrapper.get('[data-testid="book-images-overview"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="image-grid"] button').trigger('click')
+    expect(selectBookImage).toHaveBeenCalledWith('image-1')
+    expect(wrapper.get('[data-testid="image-lightbox"]').text()).toContain('Mara.png')
   })
 })
