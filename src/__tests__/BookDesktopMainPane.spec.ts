@@ -19,7 +19,7 @@ const part = {
   wordCount: 2950,
 }
 
-function mountPane(partSummaries: Record<string, string> = {}) {
+function mountPane(partSummaries: Record<string, string> = {}, requestDeleteBook = vi.fn()) {
   return mount(BookDesktopMainPane, {
     props: {
       bookId: 'book-1',
@@ -32,6 +32,7 @@ function mountPane(partSummaries: Record<string, string> = {}) {
       isOnBookOnly: true,
       routerViewKey: 0,
       wikiPagePinChanged: vi.fn(),
+      requestDeleteBook,
     },
     global: {
       stubs: {
@@ -56,5 +57,17 @@ describe('BookDesktopMainPane book overview', () => {
   it('provides a useful fallback when a part has no summary yet', () => {
     const wrapper = mountPane()
     expect(wrapper.text()).toContain('Open this part to review its chapters and add a part summary.')
+  })
+
+  it('places settings and delete actions in the normal flow at the bottom of the overview', async () => {
+    const requestDeleteBook = vi.fn()
+    const wrapper = mountPane({}, requestDeleteBook)
+    const actions = wrapper.get('[data-testid="book-overview-actions"]')
+
+    expect(actions.classes()).not.toContain('fixed')
+    expect(actions.get('a').attributes('href')).toBe('/settings')
+
+    await actions.get('button').trigger('click')
+    expect(requestDeleteBook).toHaveBeenCalledOnce()
   })
 })

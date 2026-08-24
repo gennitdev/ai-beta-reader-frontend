@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { DocumentTextIcon, PhotoIcon } from '@heroicons/vue/24/outline'
+import { Cog6ToothIcon, DocumentTextIcon, PhotoIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import IllustrationDetail from '@/components/images/IllustrationDetail.vue'
+import { useLibraryContext } from '@/composables/useLibraryContext'
 import type { ImageAsset, ImageWikiTag } from '@/lib/database'
 import type { ChapterRevisionActivity } from '@/lib/database'
 import type { BookChaptersByPart, BookWikiPage } from '@/types/bookView'
@@ -28,7 +29,10 @@ defineProps<{
   routerViewKey: number
   wikiPagePinChanged: (payload: { id: string; isPinned: boolean; updatedAt: string }) => void
   revisionActivity?: ChapterRevisionActivity[]
+  requestDeleteBook?: () => void
 }>()
+
+const { readOnly } = useLibraryContext()
 </script>
 
 <template>
@@ -130,6 +134,30 @@ defineProps<{
 
         <div class="mt-12">
           <BookActivityHeatmap :book-id="bookId" :activity="revisionActivity || []" />
+        </div>
+
+        <div
+          class="mt-8 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 pt-6 dark:border-gray-700"
+          data-testid="book-overview-actions"
+        >
+          <router-link
+            to="/settings"
+            class="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900 dark:border-gray-700 dark:bg-navy-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+            title="User Settings"
+          >
+            <Cog6ToothIcon class="mr-2 h-5 w-5" />
+            Settings
+          </router-link>
+          <button
+            v-if="!readOnly && requestDeleteBook"
+            type="button"
+            class="inline-flex items-center rounded-lg border border-red-300 bg-white px-3 py-2 text-sm text-red-600 shadow-sm transition-colors hover:bg-red-50 dark:border-red-800 dark:bg-navy-800 dark:text-red-400 dark:hover:bg-red-900/20"
+            title="Delete book"
+            @click="requestDeleteBook"
+          >
+            <TrashIcon class="mr-2 h-5 w-5" />
+            Delete
+          </button>
         </div>
       </div>
     </div>
