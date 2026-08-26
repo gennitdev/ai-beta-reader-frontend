@@ -35,6 +35,7 @@ const emit = defineEmits<{
   select: [file: File]
   selectDirectory: [files: File[]]
   resolve: [key: string, resolution: ImportConflictResolution]
+  overrideInventory: []
   apply: []
   prepareReplace: []
   replace: []
@@ -210,6 +211,18 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
         </div>
         <div v-if="plan.canApply && !hasApplicableChanges" class="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
           No incoming changes were detected. Your local content will be kept, so there is nothing to apply.
+        </div>
+        <div v-if="plan.counts.keep_local && !plan.inventoryOverrideApplied" class="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+          <strong>{{ plan.counts.keep_local }} difference(s) are classified “keep local.”</strong>
+          The incoming values match the inventory baseline, which normally means they were changed locally after export. If the inventory was regenerated after editing this bundle, those edits are hidden by the new baseline.
+          <div class="mt-3">
+            <button class="rounded border border-amber-500 px-3 py-1.5 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40" :disabled="isApplying || isPreparingReplace || isReplacing" @click="emit('overrideInventory')">
+              Review keep-local differences as incoming
+            </button>
+          </div>
+        </div>
+        <div v-else-if="plan.inventoryOverrideApplied" class="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+          Inventory baseline override is active for {{ plan.inventoryOverrideOperationCount }} difference(s). These are now shown as incoming updates or deletions; review them carefully before applying.
         </div>
 
         <section aria-labelledby="image-impact-heading" class="rounded border border-gray-200 p-3 dark:border-gray-700">

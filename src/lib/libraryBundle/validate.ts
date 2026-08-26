@@ -4,6 +4,7 @@ import { bundleError, bundleWarning, hasBundleErrors, type BundleDiagnostic } fr
 import { canonicalEntityKey, collectCanonicalModelEntities } from './entities'
 import { chapterContentHash, sha256Hex } from './semanticHash'
 import { isReplaceStructurallyEligible } from './manifest'
+import { isBuiltInReviewProfileId } from '@/lib/reviewerProfileIdentity'
 
 export interface ValidatedLibraryBundle extends ReadLibraryBundleResult {
   diagnostics: readonly BundleDiagnostic[]
@@ -22,6 +23,14 @@ function reference(
   entityType: string, entityId: string,
 ): void {
   if (!exists) diagnostics.push(bundleError(code, message, { entityType, entityId }))
+}
+
+function isAggregateEntityPath(path: string): boolean {
+  return path === '_beta-bot/history/chapter-revisions.jsonl'
+    || path === '_beta-bot/history/chapter-activity.jsonl'
+    || path === '_beta-bot/history/wiki-updates.jsonl'
+    || path === '_beta-bot/review-state.jsonl'
+    || /^books\/[^/]+\/characters\.yaml$/.test(path)
 }
 
 /** Exhaustively validate a parsed bundle and verify inventory and binary integrity. */
@@ -120,7 +129,9 @@ export async function validateLibraryBundle(
     if (chapter && await chapterContentHash(chapter) !== state.chapter_content_sha256) diagnostics.push(bundleWarning('review_state.stale', 'Wiki review state is stale because chapter content changed.', { entityType: 'wiki_review_state', entityId: id }))
   }
   for (const review of model.reviews) {
-    if (review.profile_ref && !profiles.has(review.profile_ref)) diagnostics.push(bundleWarning('review.unknown_profile', `Review references unknown profile ${review.profile_ref}; snapshot fields will be retained.`, { entityType: 'review', entityId: review.id }))
+    if (review.profile_ref && !profiles.has(review.profile_ref) && !isBuiltInReviewProfileId(review.profile_ref)) {
+      diagnostics.push(bundleWarning('review.unknown_profile', `Review references unknown profile ${review.profile_ref}; snapshot fields will be retained.`, { entityType: 'review', entityId: review.id }))
+    }
   }
 
   const aliasOwners = new Map<string, string>()
@@ -158,7 +169,9 @@ export async function validateLibraryBundle(
   })
   for (const entry of inventory.entities) {
     const occupants = sourcesByPath.get(entry.path) ?? []
-    if (occupants.length && !occupants.some((source) => source.entityType === entry.entity_type && source.id === entry.id)) {
+    if (!isAggregateEntityPath(entry.path)
+      && occupants.length
+      && !occupants.some((source) => source.entityType === entry.entity_type && source.id === entry.id)) {
       diagnostics.push(bundleError('inventory.id_substitution', 'An inventoried file contains a different entity ID or type.', { entityType: entry.entity_type, entityId: entry.id, path: entry.path }))
     }
   }
