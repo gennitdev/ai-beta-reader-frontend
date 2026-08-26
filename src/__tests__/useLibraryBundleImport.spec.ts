@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { completeCanonicalLibraryFixture } from './fixtures/libraryBundle'
 import { useLibraryBundleImport } from '@/composables/useLibraryBundleImport'
 import { canonicalModelToDatabaseImport } from '@/lib/libraryBundle/apply'
@@ -59,6 +59,83 @@ describe('useLibraryBundleImport', () => {
     importCanonicalModel.mockImplementation(async (_model, importer) => {
       await importer.importDatabaseBackup(new Uint8Array())
     })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('uses a background worker for add/update ZIP previews', async () => {
+    const model = completeCanonicalLibraryFixture()
+    const backup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
+    const generation = await sha256Hex(backup)
+    const workerPreview = {
+      plan: emptyPlan(generation), localModel: model, incomingModel: model,
+      databaseGeneration: generation, exportedAt: '2026-08-25T03:20:00.000Z',
+    }
+    const transfers: Transferable[][] = []
+    const terminate = vi.fn()
+    class SuccessfulWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null
+      onerror: ((event: ErrorEvent) => void) | null = null
+      postMessage(_message: unknown, transfer: Transferable[]) {
+        transfers.push(transfer)
+        queueMicrotask(() => this.onmessage?.({
+          data: { type: 'preview-complete', preview: workerPreview },
+        } as MessageEvent))
+      }
+      terminate = terminate
+    }
+    vi.stubGlobal('Worker', SuccessfulWorker)
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn().mockResolvedValue(backup), importDatabaseBackup: vi.fn(),
+      getImageBlob: vi.fn(), recoveryStore: memoryStore(), intent: 'add-or-update-books',
+    })
+
+    await state.previewFile(new File(['zip'], 'large.zip'))
+
+    expect(state.preview.value).toBe(workerPreview)
+    expect(previewZip).not.toHaveBeenCalled()
+    expect(transfers).toHaveLength(1)
+    expect(transfers[0]).toHaveLength(2)
+    expect(terminate).toHaveBeenCalledOnce()
+  })
+
+  it('cancels an obsolete worker preview and ignores its result', async () => {
+    const model = completeCanonicalLibraryFixture()
+    const backup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
+    const generation = await sha256Hex(backup)
+    const workers: PendingWorker[] = []
+    class PendingWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null
+      onerror: ((event: ErrorEvent) => void) | null = null
+      postMessage = vi.fn()
+      terminate = vi.fn()
+      constructor() { workers.push(this) }
+    }
+    vi.stubGlobal('Worker', PendingWorker)
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn().mockResolvedValue(backup), importDatabaseBackup: vi.fn(),
+      getImageBlob: vi.fn(), recoveryStore: memoryStore(), intent: 'add-or-update-books',
+    })
+
+    const obsolete = state.previewFile(new File(['old'], 'old.zip'))
+    await vi.waitFor(() => expect(workers).toHaveLength(1))
+    const current = state.previewFile(new File(['new'], 'new.zip'))
+    await vi.waitFor(() => expect(workers).toHaveLength(2))
+    expect(workers[0].terminate).toHaveBeenCalledOnce()
+    const currentPreview = {
+      plan: emptyPlan(generation), localModel: model, incomingModel: model,
+      databaseGeneration: generation, exportedAt: null,
+    }
+    workers[1].onmessage?.({
+      data: { type: 'preview-complete', preview: currentPreview },
+    } as MessageEvent)
+
+    await Promise.all([obsolete, current])
+    expect(state.preview.value).toBe(currentPreview)
+    expect(state.importFileName.value).toBe('new.zip')
+    expect(state.isPreviewing.value).toBe(false)
   })
 
   it('previews ZIPs and directories, resolves a conflict, and applies against the same generation', async () => {
