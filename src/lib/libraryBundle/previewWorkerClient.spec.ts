@@ -21,6 +21,18 @@ class FakePreviewWorker {
 const preview = { databaseGeneration: 'generation' } as PreviewedBundleImport
 
 describe('previewBundleZipInWorker', () => {
+  it('does not start a worker when the request was already cancelled', async () => {
+    const controller = new AbortController()
+    const workerFactory = vi.fn(() => new FakePreviewWorker())
+    controller.abort()
+
+    await expect(previewBundleZipInWorker(new Uint8Array([1]), new Uint8Array([2]), {
+      signal: controller.signal,
+      workerFactory,
+    })).rejects.toEqual(expect.objectContaining({ name: 'AbortError' }))
+    expect(workerFactory).not.toHaveBeenCalled()
+  })
+
   it('transfers large inputs and resolves the worker preview without copying them', async () => {
     const worker = new FakePreviewWorker()
     const zipBytes = new Uint8Array([1, 2, 3])
@@ -118,6 +130,19 @@ describe('previewBundleZipInWorker', () => {
     await expect(previewBundleZipInWorker(new Uint8Array([1]), new Uint8Array([2]), {
       workerFactory: () => worker,
     })).rejects.toEqual(expect.objectContaining({ message: 'clone failed' }))
+    expect(worker.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('ignores late worker events after the first response settles the request', async () => {
+    const worker = new FakePreviewWorker()
+    const pending = previewBundleZipInWorker(new Uint8Array([1]), new Uint8Array([2]), {
+      workerFactory: () => worker,
+    })
+
+    worker.onmessage?.({ data: { type: 'preview-complete', preview } } as MessageEvent<LibraryBundlePreviewWorkerResponse>)
+    worker.onerror?.({ message: 'late crash', preventDefault: vi.fn() } as unknown as ErrorEvent)
+
+    await expect(pending).resolves.toBe(preview)
     expect(worker.terminate).toHaveBeenCalledOnce()
   })
 })
