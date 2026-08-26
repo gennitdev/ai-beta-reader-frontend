@@ -70,9 +70,10 @@ describe('LibraryBundleImport', () => {
     expect(wrapper.text()).toContain('Changed: body')
     expect(wrapper.text()).toContain('1.5 KB included across 2 image(s)')
     expect(wrapper.text()).toContain('2 KB omitted across 1 image(s)')
-    expect(wrapper.text()).toContain('3 current · 1 stale · 1 missing')
+    expect(wrapper.text()).toContain('0 pages deleted · 3 reviews current · 1 stale · 1 link needs review')
     expect(wrapper.text()).toContain('Stale: Alice for Opening')
-    expect(wrapper.text()).toContain('Missing: Alison for Opening')
+    expect(wrapper.text()).toContain('Needs review: Alison for Opening')
+    expect(wrapper.text()).toContain('the page itself is not missing')
     expect(wrapper.text()).toContain('“Al” is shared by Alice, Alison')
     expect(wrapper.text()).toContain('Unknown review profile: review-1')
     expect(wrapper.text()).toContain('Ignored file: draft.tmp')
@@ -98,8 +99,8 @@ describe('LibraryBundleImport', () => {
     } })
     expect(wrapper.text()).toContain('0 bytes included across 0 image(s)')
     expect(wrapper.text()).toContain('0 bytes omitted across 0 image(s)')
-    expect(wrapper.text()).toContain('0 current · 0 stale · 0 missing')
-    expect(wrapper.text()).toContain('No stale or missing wiki review state.')
+    expect(wrapper.text()).toContain('0 pages deleted · 0 reviews current · 0 stale · 0 links need review')
+    expect(wrapper.text()).toContain('No wiki links need review.')
     expect(wrapper.text()).toContain('No ambiguous aliases.')
     expect(wrapper.text()).toContain('No unknown profiles or ignored files.')
   })
@@ -159,7 +160,7 @@ describe('LibraryBundleImport', () => {
 
     expect(wrapper.text()).toContain('Wiki 19')
     expect(wrapper.text()).not.toContain('Wiki 20')
-    expect(wrapper.text()).toContain('5 additional wiki review warning(s) are not shown.')
+    expect(wrapper.text()).toContain('5 additional wiki review notice(s) are not shown.')
     expect(wrapper.text()).toContain('review-19')
     expect(wrapper.text()).not.toContain('review-20')
     expect(wrapper.text()).toContain('5 additional unknown profile warning(s) are not shown.')
@@ -192,6 +193,22 @@ describe('LibraryBundleImport', () => {
     expect(wrapper.text()).not.toContain('Chapter 100')
     expect(wrapper.text()).toContain('Required conflict')
     expect(wrapper.text()).toContain('5 additional non-conflict operation(s) are not shown.')
+  })
+
+  it('reports deleted wiki pages separately from surviving links that need review', () => {
+    const deletedPage = {
+      key: 'wiki_page\0deleted', entityType: 'wiki_page', entityId: 'deleted', bookId: 'book-1',
+      bookTitle: 'A Book', title: 'Old Cassian Vale', kind: 'delete' as const, changedFields: [],
+    }
+    const wrapper = mount(LibraryBundleImport, { props: {
+      plan: { ...plan, operations: [...plan.operations, deletedPage] },
+      fileName: 'bundle', error: '', message: '', isPreviewing: false, isApplying: false,
+      ...phase4Props,
+    } })
+
+    expect(wrapper.text()).toContain('1 page deleted')
+    expect(wrapper.text()).toContain('Deleted pages are included as normal delete operations below.')
+    expect(wrapper.get('[aria-label="Planned entity changes"]').text()).toContain('Old Cassian Vale')
   })
 
   it('keeps both write actions disabled when the plan has a fatal diagnostic', () => {
