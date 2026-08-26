@@ -1,5 +1,6 @@
 import type { PreviewedBundleImport } from './importPreview'
 import type { LibraryImportIntent } from './plan'
+import { prepareBundleDirectoryFiles } from './adapters/directory'
 import type {
   LibraryBundlePreviewWorkerErrorCode,
   LibraryBundlePreviewWorkerRequest,
@@ -48,9 +49,9 @@ function abortError(): Error {
   return new DOMException('Bundle preview was cancelled.', 'AbortError')
 }
 
-export function previewBundleZipInWorker(
-  zipBytes: Uint8Array,
-  databaseBackup: Uint8Array,
+function previewBundleInWorker(
+  request: LibraryBundlePreviewWorkerRequest,
+  transfer: Transferable[],
   options: PreviewBundleInWorkerOptions = {},
 ): Promise<PreviewedBundleImport> {
   if (options.signal?.aborted) return Promise.reject(abortError())
@@ -89,16 +90,37 @@ export function previewBundleZipInWorker(
     options.signal?.addEventListener('abort', handleAbort, { once: true })
 
     try {
-      worker.postMessage({
-        type: 'preview-library-bundle',
-        zipBytes,
-        databaseBackup,
-        intent: options.intent,
-      }, [zipBytes.buffer, databaseBackup.buffer])
+      worker.postMessage(request, transfer)
     } catch (error) {
       finish(() => reject(new LibraryBundlePreviewWorkerUnavailableError(
         error instanceof Error ? error.message : undefined,
       )))
     }
   })
+}
+
+export function previewBundleZipInWorker(
+  zipBytes: Uint8Array,
+  databaseBackup: Uint8Array,
+  options: PreviewBundleInWorkerOptions = {},
+): Promise<PreviewedBundleImport> {
+  return previewBundleInWorker({
+    type: 'preview-library-bundle',
+    zipBytes,
+    databaseBackup,
+    intent: options.intent,
+  }, [zipBytes.buffer, databaseBackup.buffer], options)
+}
+
+export function previewBundleDirectoryInWorker(
+  files: readonly File[],
+  databaseBackup: Uint8Array,
+  options: PreviewBundleInWorkerOptions = {},
+): Promise<PreviewedBundleImport> {
+  return previewBundleInWorker({
+    type: 'preview-library-bundle-directory',
+    files: prepareBundleDirectoryFiles(files),
+    databaseBackup,
+    intent: options.intent,
+  }, [databaseBackup.buffer], options)
 }

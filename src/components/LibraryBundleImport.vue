@@ -78,12 +78,34 @@ function formatExportedAt(value: string): string {
 }
 
 const MAX_VISIBLE_IGNORED_FILES = 20
+const MAX_VISIBLE_REVIEW_WARNINGS = 20
+const MAX_VISIBLE_UNKNOWN_PROFILES = 20
 const visibleIgnoredFiles = computed(() => props.plan?.previewSummary.warnings.ignoredFiles
   .slice(0, MAX_VISIBLE_IGNORED_FILES) ?? [])
 const hiddenIgnoredFileCount = computed(() => Math.max(
   0,
   (props.plan?.previewSummary.warnings.ignoredFiles.length ?? 0) - MAX_VISIBLE_IGNORED_FILES,
 ))
+const visibleWikiReviewWarnings = computed(() => [
+  ...(props.plan?.previewSummary.wikiReview.stale ?? []).map((item) => ({ kind: 'Stale', item })),
+  ...(props.plan?.previewSummary.wikiReview.missing ?? []).map((item) => ({ kind: 'Missing', item })),
+].slice(0, MAX_VISIBLE_REVIEW_WARNINGS))
+const hiddenWikiReviewWarningCount = computed(() => Math.max(
+  0,
+  (props.plan?.previewSummary.wikiReview.stale.length ?? 0)
+    + (props.plan?.previewSummary.wikiReview.missing.length ?? 0)
+    - MAX_VISIBLE_REVIEW_WARNINGS,
+))
+const visibleUnknownProfiles = computed(() => props.plan?.previewSummary.warnings.unknownProfiles
+  .slice(0, MAX_VISIBLE_UNKNOWN_PROFILES) ?? [])
+const hiddenUnknownProfileCount = computed(() => Math.max(
+  0,
+  (props.plan?.previewSummary.warnings.unknownProfiles.length ?? 0) - MAX_VISIBLE_UNKNOWN_PROFILES,
+))
+const hasApplicableChanges = computed(() => props.plan?.operations.some((operation) =>
+  operation.kind === 'create' || operation.kind === 'update' || operation.kind === 'delete'
+    || operation.kind === 'conflict' && operation.resolution === 'use_incoming',
+) ?? false)
 
 const dedicatedDiagnosticCodes = new Set([
   'asset.bytes_omitted', 'review_state.stale', 'wiki.ambiguous_alias', 'review.unknown_profile', 'file.unknown',
@@ -103,14 +125,29 @@ interface OperationBookGroup {
   entityTypes: OperationTypeGroup[]
 }
 
+const MAX_VISIBLE_NON_CONFLICT_OPERATIONS = 100
+const visibleOperations = computed(() => {
+  const changed = props.plan?.operations.filter((operation) =>
+    operation.kind !== 'unchanged' && operation.kind !== 'keep_local') ?? []
+  const conflicts = changed.filter((operation) => operation.kind === 'conflict')
+  const nonConflicts = changed.filter((operation) => operation.kind !== 'conflict')
+    .slice(0, MAX_VISIBLE_NON_CONFLICT_OPERATIONS)
+  return [...conflicts, ...nonConflicts]
+})
+const hiddenOperationCount = computed(() => Math.max(
+  0,
+  (props.plan?.operations.filter((operation) =>
+    operation.kind !== 'unchanged' && operation.kind !== 'keep_local' && operation.kind !== 'conflict').length ?? 0)
+    - MAX_VISIBLE_NON_CONFLICT_OPERATIONS,
+))
+
 const operationGroups = computed<OperationBookGroup[]>(() => {
   if (!props.plan) return []
-  const bookTitles = new Map(props.plan.operations
+  const bookTitles = new Map(visibleOperations.value
     .filter((operation) => operation.bookId)
     .map((operation) => [operation.bookId!, operation.bookTitle ?? operation.bookId!]))
   const groups = new Map<string, Map<string, ImportPlanOperation[]>>()
-  for (const operation of props.plan.operations) {
-    if (operation.kind === 'unchanged') continue
+  for (const operation of visibleOperations.value) {
     const bookId = operation.bookId ?? 'library-wide'
     const byType = groups.get(bookId) ?? new Map<string, ImportPlanOperation[]>()
     const operations = byType.get(operation.entityType) ?? []
@@ -171,6 +208,9 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
             </tbody>
           </table>
         </div>
+        <div v-if="plan.canApply && !hasApplicableChanges" class="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+          No incoming changes were detected. Your local content will be kept, so there is nothing to apply.
+        </div>
 
         <section aria-labelledby="image-impact-heading" class="rounded border border-gray-200 p-3 dark:border-gray-700">
           <h3 id="image-impact-heading" class="text-sm font-semibold text-gray-900 dark:text-white">Image impact</h3>
@@ -194,12 +234,12 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
             {{ plan.previewSummary.wikiReview.missing.length }} missing
           </p>
           <div v-if="plan.previewSummary.wikiReview.stale.length || plan.previewSummary.wikiReview.missing.length" class="mt-2 space-y-2 text-xs">
-            <div v-for="item in plan.previewSummary.wikiReview.stale" :key="`stale-${item.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-              <strong>Stale:</strong> {{ item.wikiPageTitle }} for {{ item.chapterTitle }}<template v-if="item.path"> · {{ item.path }}</template>
+            <div v-for="warning in visibleWikiReviewWarnings" :key="`${warning.kind}-${warning.item.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>{{ warning.kind }}:</strong> {{ warning.item.wikiPageTitle }} for {{ warning.item.chapterTitle }}<template v-if="warning.item.path"> · {{ warning.item.path }}</template>
             </div>
-            <div v-for="item in plan.previewSummary.wikiReview.missing" :key="`missing-${item.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-              <strong>Missing:</strong> {{ item.wikiPageTitle }} for {{ item.chapterTitle }}<template v-if="item.path"> · {{ item.path }}</template>
-            </div>
+            <p v-if="hiddenWikiReviewWarningCount" class="text-xs text-amber-800 dark:text-amber-200">
+              {{ hiddenWikiReviewWarningCount }} additional wiki review warning(s) are not shown.
+            </p>
           </div>
           <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400">No stale or missing wiki review state.</p>
         </section>
@@ -219,10 +259,13 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
         <section aria-labelledby="content-warnings-heading" class="rounded border border-gray-200 p-3 dark:border-gray-700">
           <h3 id="content-warnings-heading" class="text-sm font-semibold text-gray-900 dark:text-white">Content warnings</h3>
           <div v-if="plan.previewSummary.warnings.unknownProfiles.length || plan.previewSummary.warnings.ignoredFiles.length" class="mt-2 space-y-2 text-sm">
-            <div v-for="warning in plan.previewSummary.warnings.unknownProfiles" :key="`profile-${warning.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <div v-for="warning in visibleUnknownProfiles" :key="`profile-${warning.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
               <strong>Unknown review profile:</strong> {{ warning.title || warning.entityId }}<template v-if="warning.path"> · {{ warning.path }}</template>
               <div class="text-xs">{{ warning.message }}</div>
             </div>
+            <p v-if="hiddenUnknownProfileCount" class="text-xs text-amber-800 dark:text-amber-200">
+              {{ hiddenUnknownProfileCount }} additional unknown profile warning(s) are not shown.
+            </p>
             <div v-for="warning in visibleIgnoredFiles" :key="`file-${warning.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
               <strong>Ignored file:</strong> {{ warning.path || warning.entityId }}
               <div class="text-xs">{{ warning.message }}</div>
@@ -269,9 +312,12 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
             </section>
           </details>
         </div>
+        <p v-if="hiddenOperationCount" class="text-xs text-gray-500 dark:text-gray-400">
+          {{ hiddenOperationCount }} additional non-conflict operation(s) are not shown.
+        </p>
 
         <div class="flex flex-wrap items-center gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
-          <button class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!plan.canApply || isApplying || isPreparingReplace || isReplacing" @click="emit('apply')">
+          <button class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!plan.canApply || !hasApplicableChanges || isApplying || isPreparingReplace || isReplacing" @click="emit('apply')">
             {{ isApplying ? 'Applying…' : applyLabel }}
           </button>
           <template v-if="showReplace">

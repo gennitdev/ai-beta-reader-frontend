@@ -1,12 +1,23 @@
 import type { PreviewedBundleImport } from './importPreview'
 import type { LibraryImportIntent } from './plan'
+import type { SelectedDirectoryBundleFile } from './adapters/directory'
 
-export interface LibraryBundlePreviewWorkerRequest {
+export interface LibraryBundleZipPreviewWorkerRequest {
   type: 'preview-library-bundle'
   zipBytes: Uint8Array
   databaseBackup: Uint8Array
   intent?: LibraryImportIntent
 }
+
+export interface LibraryBundleDirectoryPreviewWorkerRequest {
+  type: 'preview-library-bundle-directory'
+  files: readonly SelectedDirectoryBundleFile[]
+  databaseBackup: Uint8Array
+  intent?: LibraryImportIntent
+}
+
+export type LibraryBundlePreviewWorkerRequest = LibraryBundleZipPreviewWorkerRequest
+  | LibraryBundleDirectoryPreviewWorkerRequest
 
 export type LibraryBundlePreviewWorkerErrorCode = 'local-asset-bytes-required' | 'preview-failed'
 

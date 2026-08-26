@@ -65,7 +65,7 @@ describe('useLibraryBundleImport', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses a background worker for add/update ZIP previews', async () => {
+  it('uses a background worker for add/update ZIP and folder previews', async () => {
     const model = completeCanonicalLibraryFixture()
     const backup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
     const generation = await sha256Hex(backup)
@@ -74,11 +74,13 @@ describe('useLibraryBundleImport', () => {
       databaseGeneration: generation, exportedAt: '2026-08-25T03:20:00.000Z',
     }
     const transfers: Transferable[][] = []
+    const messages: Array<{ type?: string }> = []
     const terminate = vi.fn()
     class SuccessfulWorker {
       onmessage: ((event: MessageEvent) => void) | null = null
       onerror: ((event: ErrorEvent) => void) | null = null
-      postMessage(_message: unknown, transfer: Transferable[]) {
+      postMessage(message: { type?: string }, transfer: Transferable[]) {
+        messages.push(message)
         transfers.push(transfer)
         queueMicrotask(() => this.onmessage?.({
           data: { type: 'preview-complete', preview: workerPreview },
@@ -98,7 +100,16 @@ describe('useLibraryBundleImport', () => {
     expect(previewZip).not.toHaveBeenCalled()
     expect(transfers).toHaveLength(1)
     expect(transfers[0]).toHaveLength(2)
-    expect(terminate).toHaveBeenCalledOnce()
+    const folderFile = new File(['manifest'], 'beta-bot.yaml')
+    Object.defineProperty(folderFile, 'webkitRelativePath', { value: 'large-folder/beta-bot.yaml' })
+    await state.previewDirectory([folderFile])
+    expect(state.preview.value).toBe(workerPreview)
+    expect(previewDirectory).not.toHaveBeenCalled()
+    expect(messages.map((message) => message.type)).toEqual([
+      'preview-library-bundle', 'preview-library-bundle-directory',
+    ])
+    expect(transfers[1]).toHaveLength(1)
+    expect(terminate).toHaveBeenCalledTimes(2)
   })
 
   it('cancels an obsolete worker preview and ignores its result', async () => {
@@ -136,6 +147,49 @@ describe('useLibraryBundleImport', () => {
     expect(state.preview.value).toBe(currentPreview)
     expect(state.importFileName.value).toBe('new.zip')
     expect(state.isPreviewing.value).toBe(false)
+  })
+
+  it('re-exports a detached database backup before falling back from a crashed folder worker', async () => {
+    const model = completeCanonicalLibraryFixture()
+    const firstBackup = new Uint8Array([1, 2, 3])
+    const fallbackBackup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
+    const generation = await sha256Hex(fallbackBackup)
+    const fallbackPreview = {
+      plan: emptyPlan(generation), localModel: model, incomingModel: model,
+      databaseGeneration: generation, exportedAt: null,
+    }
+    const exportDatabase = vi.fn()
+      .mockResolvedValueOnce(firstBackup)
+      .mockResolvedValueOnce(fallbackBackup)
+    class CrashingWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null
+      onerror: ((event: ErrorEvent) => void) | null = null
+      terminate = vi.fn()
+      postMessage(_message: unknown, transfer: Transferable[]) {
+        structuredClone(firstBackup, { transfer })
+        queueMicrotask(() => this.onerror?.({
+          message: 'worker crashed', preventDefault: vi.fn(),
+        } as unknown as ErrorEvent))
+      }
+    }
+    vi.stubGlobal('Worker', CrashingWorker)
+    previewDirectory.mockResolvedValue(fallbackPreview)
+    const state = useLibraryBundleImport({
+      exportDatabase, importDatabaseBackup: vi.fn(), getImageBlob: vi.fn(),
+      recoveryStore: memoryStore(), intent: 'add-or-update-books',
+    })
+    const folderFile = new File(['manifest'], 'beta-bot.yaml')
+    Object.defineProperty(folderFile, 'webkitRelativePath', { value: 'large-folder/beta-bot.yaml' })
+
+    await state.previewDirectory([folderFile])
+
+    expect(firstBackup.byteLength).toBe(0)
+    expect(exportDatabase).toHaveBeenCalledTimes(2)
+    expect(previewDirectory).toHaveBeenCalledWith([folderFile], fallbackBackup, expect.objectContaining({
+      intent: 'add-or-update-books', retainLocalAssetBytes: false,
+    }))
+    expect(state.preview.value).toBe(fallbackPreview)
+    expect(state.importError.value).toBe('')
   })
 
   it('previews ZIPs and directories, resolves a conflict, and applies against the same generation', async () => {

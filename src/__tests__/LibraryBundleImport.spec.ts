@@ -128,6 +128,68 @@ describe('LibraryBundleImport', () => {
     expect(wrapper.text()).toContain('5 additional ignored file(s) are not shown.')
   })
 
+  it('bounds large review warning lists and omits keep-local operation cards', () => {
+    const missing = Array.from({ length: 25 }, (_, index) => ({
+      entityType: 'wiki_review_state', entityId: `wiki-${index}:chapter-1`, bookId: 'book-1',
+      wikiPageId: `wiki-${index}`, wikiPageTitle: `Wiki ${index}`, chapterId: 'chapter-1',
+      chapterTitle: 'Opening', path: 'books/book-1/chapters/chapter-1/chapter.md',
+    }))
+    const unknownProfiles = Array.from({ length: 25 }, (_, index) => ({
+      entityType: 'review', entityId: `review-${index}`, message: 'Unknown profile.',
+    }))
+    const wrapper = mount(LibraryBundleImport, { props: {
+      plan: {
+        ...plan,
+        unresolvedConflicts: 0,
+        canApply: true,
+        counts: { create: 0, update: 0, delete: 0, keep_local: 1, unchanged: 0, conflict: 0 },
+        operations: [{
+          key: 'wiki_page\0wiki-1', entityType: 'wiki_page', entityId: 'wiki-1', bookId: 'book-1',
+          kind: 'keep_local', changedFields: ['body'],
+        }],
+        previewSummary: {
+          ...plan.previewSummary,
+          wikiReview: { currentCount: 0, stale: [], missing },
+          warnings: { ...plan.previewSummary.warnings, unknownProfiles },
+        },
+      },
+      fileName: 'large-folder', error: '', message: '', isPreviewing: false, isApplying: false,
+      ...phase4Props,
+    } })
+
+    expect(wrapper.text()).toContain('Wiki 19')
+    expect(wrapper.text()).not.toContain('Wiki 20')
+    expect(wrapper.text()).toContain('5 additional wiki review warning(s) are not shown.')
+    expect(wrapper.text()).toContain('review-19')
+    expect(wrapper.text()).not.toContain('review-20')
+    expect(wrapper.text()).toContain('5 additional unknown profile warning(s) are not shown.')
+    expect(wrapper.text()).toContain('No incoming changes were detected.')
+    expect(wrapper.find('[aria-label="Planned entity changes"]').exists()).toBe(false)
+    const apply = wrapper.findAll('button').find((button) => button.text() === 'Apply changes')!
+    expect(apply.attributes('disabled')).toBeDefined()
+  })
+
+  it('caps non-conflict operation details while always showing conflicts', () => {
+    const creates = Array.from({ length: 105 }, (_, index) => ({
+      key: `chapter\0chapter-${index}`, entityType: 'chapter', entityId: `chapter-${index}`,
+      bookId: 'book-1', bookTitle: 'A Book', title: `Chapter ${index}`,
+      kind: 'create' as const, changedFields: [],
+    }))
+    const conflict = {
+      ...plan.operations[0], key: 'chapter\0required-conflict', entityId: 'required-conflict', title: 'Required conflict',
+    }
+    const wrapper = mount(LibraryBundleImport, { props: {
+      plan: { ...plan, operations: [...creates, conflict] },
+      fileName: 'large-folder', error: '', message: '', isPreviewing: false, isApplying: false,
+      ...phase4Props,
+    } })
+
+    expect(wrapper.text()).toContain('Chapter 99')
+    expect(wrapper.text()).not.toContain('Chapter 100')
+    expect(wrapper.text()).toContain('Required conflict')
+    expect(wrapper.text()).toContain('5 additional non-conflict operation(s) are not shown.')
+  })
+
   it('keeps both write actions disabled when the plan has a fatal diagnostic', () => {
     const wrapper = mount(LibraryBundleImport, { props: {
       plan: {
@@ -146,7 +208,10 @@ describe('LibraryBundleImport', () => {
 
   it('emits selected files and apply actions and displays status messages', async () => {
     const wrapper = mount(LibraryBundleImport, { props: {
-      plan: { ...plan, unresolvedConflicts: 0, canApply: true }, fileName: '',
+      plan: {
+        ...plan, unresolvedConflicts: 0, canApply: true,
+        operations: plan.operations.map((operation) => ({ ...operation, resolution: 'use_incoming' as const })),
+      }, fileName: '',
       error: 'Bad ZIP', message: 'Done', isPreviewing: false, isApplying: false,
       ...phase4Props,
     } })

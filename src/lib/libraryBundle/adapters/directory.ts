@@ -12,6 +12,11 @@ export interface DirectoryBundleEntry {
   isSymlink?: boolean
 }
 
+export interface SelectedDirectoryBundleFile {
+  path: string
+  file: File
+}
+
 export interface BundleFileReadResult {
   files: BundleFileMap | null
   diagnostics: BundleDiagnostic[]
@@ -311,19 +316,22 @@ export function readBundleDirectoryEntries(
 }
 
 /** Browser adapter for files selected with webkitdirectory or a directory picker. */
-export async function readBundleDirectoryFiles(
-  selectedFiles: readonly File[],
-  limits: BundleReadLimits = DEFAULT_BUNDLE_READ_LIMITS,
-): Promise<BundleFileReadResult> {
+export function prepareBundleDirectoryFiles(selectedFiles: readonly File[]): SelectedDirectoryBundleFile[] {
   const rawPaths = selectedFiles.map((file) => file.webkitRelativePath || file.name)
   const firstSegments = rawPaths.map((path) => path.split('/')[0])
   const sharedDirectoryRoot = selectedFiles.length > 0
     && selectedFiles.every((file) => Boolean(file.webkitRelativePath))
     && new Set(firstSegments).size === 1
   const paths = rawPaths.map((path) => sharedDirectoryRoot ? path.slice(path.indexOf('/') + 1) : path)
-  const selected = selectedFiles
+  return selectedFiles
     .map((file, index) => ({ file, path: paths[index] }))
     .filter(({ path }) => !isIgnoredWorkspacePath(path))
+}
+
+export async function readPreparedBundleDirectoryFiles(
+  selected: readonly SelectedDirectoryBundleFile[],
+  limits: BundleReadLimits = DEFAULT_BUNDLE_READ_LIMITS,
+): Promise<BundleFileReadResult> {
   const metadata = selected.map(({ file, path }) => ({
     path,
     uncompressedBytes: file.size,
@@ -335,4 +343,12 @@ export async function readBundleDirectoryFiles(
     bytes: new Uint8Array(await file.arrayBuffer()),
   })))
   return readBundleDirectoryEntries(entries, limits)
+}
+
+/** Browser adapter for files selected with webkitdirectory or a directory picker. */
+export async function readBundleDirectoryFiles(
+  selectedFiles: readonly File[],
+  limits: BundleReadLimits = DEFAULT_BUNDLE_READ_LIMITS,
+): Promise<BundleFileReadResult> {
+  return readPreparedBundleDirectoryFiles(prepareBundleDirectoryFiles(selectedFiles), limits)
 }
