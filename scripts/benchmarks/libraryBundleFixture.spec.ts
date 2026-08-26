@@ -23,4 +23,9 @@ describe('large-library stress fixture generator', () => {
     const second = await generateBundleStressFixture('smoke', 2)
     expect(first.model.assets[0].sha256).not.toBe(second.model.assets[0].sha256)
   })
+
+  it('keeps the nightly scale representative of large illustrated libraries', () => {
+    expect(BUNDLE_STRESS_SCALES.nightly.assetCount * BUNDLE_STRESS_SCALES.nightly.assetBytes)
+      .toBeGreaterThanOrEqual(150 * 1024 * 1024)
+  })
 })

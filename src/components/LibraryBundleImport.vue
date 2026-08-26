@@ -6,6 +6,7 @@ import type { RecoveryBundleMetadata } from '@/lib/recovery/model'
 const props = withDefaults(defineProps<{
   plan: LibraryImportPlan | null
   fileName: string
+  exportedAt?: string | null
   error: string
   message: string
   isPreviewing: boolean
@@ -72,6 +73,18 @@ function formatBytes(bytes: number): string {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`
 }
 
+function formatExportedAt(value: string): string {
+  return new Date(value).toLocaleString()
+}
+
+const MAX_VISIBLE_IGNORED_FILES = 20
+const visibleIgnoredFiles = computed(() => props.plan?.previewSummary.warnings.ignoredFiles
+  .slice(0, MAX_VISIBLE_IGNORED_FILES) ?? [])
+const hiddenIgnoredFileCount = computed(() => Math.max(
+  0,
+  (props.plan?.previewSummary.warnings.ignoredFiles.length ?? 0) - MAX_VISIBLE_IGNORED_FILES,
+))
+
 const dedicatedDiagnosticCodes = new Set([
   'asset.bytes_omitted', 'review_state.stale', 'wiki.ambiguous_alias', 'review.unknown_profile', 'file.unknown',
 ])
@@ -134,6 +147,9 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
         <input class="sr-only" type="file" webkitdirectory multiple :disabled="isPreviewing || isApplying || isPreparingReplace || isReplacing" @change="selectDirectory">
       </label>
       <span v-if="fileName" class="ml-3 text-sm text-gray-600 dark:text-gray-300">{{ fileName }}</span>
+      <p v-if="exportedAt" class="text-xs text-gray-500 dark:text-gray-400">
+        Bundle exported {{ formatExportedAt(exportedAt) }}
+      </p>
 
       <div v-if="error" class="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300 whitespace-pre-wrap">{{ error }}</div>
       <div v-if="message" class="rounded border border-green-300 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300">{{ message }}</div>
@@ -207,10 +223,13 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
               <strong>Unknown review profile:</strong> {{ warning.title || warning.entityId }}<template v-if="warning.path"> · {{ warning.path }}</template>
               <div class="text-xs">{{ warning.message }}</div>
             </div>
-            <div v-for="warning in plan.previewSummary.warnings.ignoredFiles" :key="`file-${warning.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <div v-for="warning in visibleIgnoredFiles" :key="`file-${warning.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
               <strong>Ignored file:</strong> {{ warning.path || warning.entityId }}
               <div class="text-xs">{{ warning.message }}</div>
             </div>
+            <p v-if="hiddenIgnoredFileCount" class="text-xs text-amber-800 dark:text-amber-200">
+              {{ hiddenIgnoredFileCount }} additional ignored file(s) are not shown.
+            </p>
           </div>
           <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400">No unknown profiles or ignored files.</p>
         </section>

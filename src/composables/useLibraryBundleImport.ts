@@ -51,6 +51,7 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   const recoveries = ref<RecoveryBundleMetadata[]>([])
   const preparedRecovery = ref<RecoveryBundleMetadata | null>(null)
   const plan = computed(() => preview.value?.plan ?? null)
+  const bundleExportedAt = computed(() => preview.value?.exportedAt ?? null)
   const recoveryStore = deps.recoveryStore ?? createRuntimeRecoveryStore()
   const replaceRemovalCounts = computed(() => {
     if (!preview.value) return { books: 0, chapters: 0, wikiPages: 0 }
@@ -90,6 +91,7 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
       preview.value = await previewBundleZipImport(zipBytes, databaseBackup, {
         readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
         intent: deps.intent,
+        retainLocalAssetBytes: deps.intent !== 'add-or-update-books',
       })
     } catch (error) {
       importError.value = error instanceof Error ? error.message : 'Could not preview this bundle.'
@@ -110,6 +112,7 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
       preview.value = await previewBundleDirectoryImport(files, databaseBackup, {
         readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
         intent: deps.intent,
+        retainLocalAssetBytes: deps.intent !== 'add-or-update-books',
       })
     } catch (error) {
       importError.value = error instanceof Error ? error.message : 'Could not preview this bundle folder.'
@@ -142,10 +145,16 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
         currentGeneration,
       )
       const imageStore = createRuntimeImageContentStore()
+      const assetIdsToWrite = new Set(activePreview.plan.operations
+        .filter((operation) => operation.entityType === 'asset'
+          && (operation.kind === 'create' || operation.kind === 'update'
+            || operation.kind === 'conflict' && operation.resolution === 'use_incoming'))
+        .map((operation) => operation.entityId))
       try {
         await importCanonicalLibraryModel(merged, {
           imageStore,
           importDatabaseBackup: deps.importDatabaseBackup,
+          assetIdsToWrite,
         })
       } catch (error) {
         const createdAssetIds = new Set(activePreview.plan.operations
@@ -288,7 +297,7 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   }
 
   return {
-    preview, plan, importFileName, importError, importMessage, isPreviewing, isApplying,
+    preview, plan, bundleExportedAt, importFileName, importError, importMessage, isPreviewing, isApplying,
     isPreparingReplace, isReplacing, recoveries, preparedRecovery, replaceRemovalCounts,
     previewFile, previewDirectory, resolveConflict, applyChanges, prepareReplace, replaceLibrary,
     refreshRecoveries, previewRecovery, downloadRecovery, resetImport,

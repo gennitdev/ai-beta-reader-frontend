@@ -27,6 +27,7 @@ const coverRefreshError = ref<string | null>(null)
 
 const {
   plan: importPlan,
+  bundleExportedAt,
   importFileName,
   importError,
   importMessage,
@@ -335,6 +336,7 @@ watch(
           :show-replace="false"
           :show-recoveries="false"
           :plan="importPlan"
+          :exported-at="bundleExportedAt"
           :file-name="importFileName"
           :error="importError"
           :message="importMessage"

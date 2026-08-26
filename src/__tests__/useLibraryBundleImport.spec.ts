@@ -80,6 +80,7 @@ describe('useLibraryBundleImport', () => {
     expect(state.importFileName.value).toBe('bundle.zip')
     expect(previewZip).toHaveBeenCalledWith(expect.any(Uint8Array), backup, expect.objectContaining({
       intent: 'add-or-update-books',
+      retainLocalAssetBytes: false,
     }))
 
     const folderFile = new File(['manifest'], 'beta-bot.yaml')
@@ -88,6 +89,9 @@ describe('useLibraryBundleImport', () => {
     expect(state.importFileName.value).toBe('my-library')
 
     await state.applyChanges()
+    expect(importCanonicalModel).toHaveBeenCalledWith(model, expect.objectContaining({
+      assetIdsToWrite: expect.any(Set),
+    }))
     expect(importDatabaseBackup).toHaveBeenCalledOnce()
     expect(state.importMessage.value).toBe('Bundle changes applied successfully.')
     expect(state.preview.value).toBeNull()
@@ -202,7 +206,7 @@ describe('useLibraryBundleImport', () => {
       conflictReason: 'different_edits' as const, changedFields: ['body'],
     }
     state.preview.value = {
-      localModel: model, incomingModel: model, databaseGeneration: 'g',
+      localModel: model, incomingModel: model, databaseGeneration: 'g', exportedAt: null,
       plan: {
         ...emptyPlan('g'), operations: [operation], canApply: false, unresolvedConflicts: 1,
         counts: { create: 0, update: 0, delete: 0, keep_local: 0, unchanged: 0, conflict: 1 },

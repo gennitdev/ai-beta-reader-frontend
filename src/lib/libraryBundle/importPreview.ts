@@ -13,6 +13,7 @@ import { sha256Hex } from './semanticHash'
 export interface PreviewBundleImportOptions {
   readLocalAssetBytes?: AssetByteReader
   intent?: LibraryImportIntent
+  retainLocalAssetBytes?: boolean
 }
 
 export interface PreviewedBundleImport {
@@ -20,6 +21,7 @@ export interface PreviewedBundleImport {
   localModel: Awaited<ReturnType<typeof createCanonicalLibrarySnapshot>>
   incomingModel: Awaited<ReturnType<typeof createCanonicalLibrarySnapshot>>
   databaseGeneration: string
+  exportedAt: string | null
 }
 
 export async function previewBundleZipImport(
@@ -54,7 +56,10 @@ export async function previewBundleFileMapImport(
     diagnostics: [...transportDiagnostics, ...parsed.diagnostics],
   }, files)
   const current = parseDatabaseImportData(JSON.parse(new TextDecoder().decode(currentDatabaseBackup)))
-  const localModel = await createCanonicalLibrarySnapshot(current, { readAssetBytes: options.readLocalAssetBytes })
+  const localModel = await createCanonicalLibrarySnapshot(current, {
+    readAssetBytes: options.readLocalAssetBytes,
+    retainAssetBytes: options.retainLocalAssetBytes,
+  })
   const databaseGeneration = await sha256Hex(currentDatabaseBackup)
   return {
     plan: await createLibraryImportPlan(validated, localModel, databaseGeneration, {
@@ -63,5 +68,6 @@ export async function previewBundleFileMapImport(
     localModel,
     incomingModel: validated.model ?? localModel,
     databaseGeneration,
+    exportedAt: validated.manifest?.exported_at ?? null,
   }
 }

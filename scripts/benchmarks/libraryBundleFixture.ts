@@ -15,7 +15,8 @@ export interface BundleStressScale {
 export const BUNDLE_STRESS_SCALES: Readonly<Record<BundleStressScaleName, BundleStressScale>> = Object.freeze({
   smoke: { books: 2, chaptersPerBook: 20, revisionsPerChapter: 2, assetCount: 4, assetBytes: 32 * 1024, chapterBodyBytes: 2 * 1024 },
   ci: { books: 10, chaptersPerBook: 50, revisionsPerChapter: 4, assetCount: 32, assetBytes: 64 * 1024, chapterBodyBytes: 4 * 1024 },
-  nightly: { books: 20, chaptersPerBook: 100, revisionsPerChapter: 10, assetCount: 100, assetBytes: 512 * 1024, chapterBodyBytes: 8 * 1024 },
+  // Approximate the 150–200 MiB illustrated libraries exercised by desktop users.
+  nightly: { books: 20, chaptersPerBook: 100, revisionsPerChapter: 10, assetCount: 100, assetBytes: 2 * 1024 * 1024, chapterBodyBytes: 8 * 1024 },
 })
 
 const TIMESTAMP = '2026-08-22T12:00:00.000Z'

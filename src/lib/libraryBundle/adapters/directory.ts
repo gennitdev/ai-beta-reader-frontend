@@ -17,6 +17,16 @@ export interface BundleFileReadResult {
   diagnostics: BundleDiagnostic[]
 }
 
+const IGNORED_WORKSPACE_SEGMENTS = new Set(['.git', '.hg', '.svn'])
+const IGNORED_WORKSPACE_FILES = new Set(['.DS_Store', 'Thumbs.db'])
+
+/** Files created by source-control clients and operating systems are never bundle content. */
+export function isIgnoredWorkspacePath(path: string): boolean {
+  const segments = path.split('/')
+  return segments.some((segment) => IGNORED_WORKSPACE_SEGMENTS.has(segment))
+    || IGNORED_WORKSPACE_FILES.has(segments.at(-1) ?? '')
+}
+
 export interface BundleWritableFile {
   write(data: Blob): Promise<void>
   close(): Promise<void>
@@ -288,14 +298,15 @@ export function readBundleDirectoryEntries(
   entries: readonly DirectoryBundleEntry[],
   limits: BundleReadLimits = DEFAULT_BUNDLE_READ_LIMITS,
 ): BundleFileReadResult {
-  const diagnostics = validateEntryMetadata(entries.map((entry) => ({
+  const bundleEntries = entries.filter((entry) => !isIgnoredWorkspacePath(entry.path))
+  const diagnostics = validateEntryMetadata(bundleEntries.map((entry) => ({
     path: entry.path,
     uncompressedBytes: entry.bytes.byteLength,
     isSymlink: entry.isSymlink,
   })), limits)
   if (hasBundleErrors(diagnostics)) return { files: null, diagnostics }
   const files: BundleFileMap = new Map()
-  for (const entry of entries) files.set(entry.path.normalize('NFC'), entry.bytes)
+  for (const entry of bundleEntries) files.set(entry.path.normalize('NFC'), entry.bytes)
   return { files, diagnostics }
 }
 
@@ -310,14 +321,17 @@ export async function readBundleDirectoryFiles(
     && selectedFiles.every((file) => Boolean(file.webkitRelativePath))
     && new Set(firstSegments).size === 1
   const paths = rawPaths.map((path) => sharedDirectoryRoot ? path.slice(path.indexOf('/') + 1) : path)
-  const metadata = selectedFiles.map((file, index) => ({
-    path: paths[index],
+  const selected = selectedFiles
+    .map((file, index) => ({ file, path: paths[index] }))
+    .filter(({ path }) => !isIgnoredWorkspacePath(path))
+  const metadata = selected.map(({ file, path }) => ({
+    path,
     uncompressedBytes: file.size,
   }))
   const diagnostics = validateEntryMetadata(metadata, limits)
   if (hasBundleErrors(diagnostics)) return { files: null, diagnostics }
-  const entries = await Promise.all(selectedFiles.map(async (file, index) => ({
-    path: paths[index],
+  const entries = await Promise.all(selected.map(async ({ file, path }) => ({
+    path,
     bytes: new Uint8Array(await file.arrayBuffer()),
   })))
   return readBundleDirectoryEntries(entries, limits)

@@ -104,6 +104,30 @@ describe('LibraryBundleImport', () => {
     expect(wrapper.text()).toContain('No unknown profiles or ignored files.')
   })
 
+  it('shows the bundle export time and bounds large ignored-file lists', () => {
+    const ignoredFiles = Array.from({ length: 25 }, (_, index) => ({
+      entityType: 'file', entityId: `ignored-${index}`, path: `ignored-${index}.tmp`,
+      message: 'Unknown file is ignored during database import.',
+    }))
+    const wrapper = mount(LibraryBundleImport, { props: {
+      plan: {
+        ...plan,
+        previewSummary: {
+          ...plan.previewSummary,
+          warnings: { ...plan.previewSummary.warnings, ignoredFiles },
+        },
+      },
+      exportedAt: '2026-08-20T15:00:00.000Z',
+      fileName: 'large.zip', error: '', message: '', isPreviewing: false, isApplying: false,
+      ...phase4Props,
+    } })
+
+    expect(wrapper.text()).toContain('Bundle exported')
+    expect(wrapper.text()).toContain('ignored-19.tmp')
+    expect(wrapper.text()).not.toContain('ignored-20.tmp')
+    expect(wrapper.text()).toContain('5 additional ignored file(s) are not shown.')
+  })
+
   it('keeps both write actions disabled when the plan has a fatal diagnostic', () => {
     const wrapper = mount(LibraryBundleImport, { props: {
       plan: {
