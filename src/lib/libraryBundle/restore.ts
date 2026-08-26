@@ -7,6 +7,7 @@ import type { BundleAsset, CanonicalLibraryModel } from './model'
 export interface CanonicalLibraryImporter {
   imageStore: ImageContentStore | null
   importDatabaseBackup: (bytes: Uint8Array) => Promise<void>
+  assetIdsToWrite?: ReadonlySet<string>
 }
 
 function safePathSegment(value: string, fallback: string): string {
@@ -69,7 +70,10 @@ export async function importCanonicalLibraryModel(
     throw new Error('This device cannot store the images contained in the library backup.')
   }
   if (importer.imageStore) {
-    for (const asset of model.assets) await writeAsset(importer.imageStore, asset)
+    const assetsToWrite = importer.assetIdsToWrite
+      ? model.assets.filter((asset) => importer.assetIdsToWrite?.has(asset.id))
+      : model.assets
+    for (const asset of assetsToWrite) await writeAsset(importer.imageStore, asset)
   }
 
   const databaseData = canonicalModelToDatabaseImport(model, {

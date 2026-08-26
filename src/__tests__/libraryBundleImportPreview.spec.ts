@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { completeCanonicalLibraryFixture, completeDatabaseExportFixture } from './fixtures/libraryBundle'
 import { writeLibraryBundle } from '@/lib/libraryBundle/write'
 import { createBundleZip } from '@/lib/libraryBundle/adapters/zip'
@@ -18,7 +18,41 @@ describe('bundle import preview orchestration', () => {
     expect(preview.plan.bundleId).toBe('bundle:test')
     expect(preview.plan.counts.conflict).toBe(0)
     expect(preview.databaseGeneration).toMatch(/^[a-f0-9]{64}$/)
+    expect(preview.exportedAt).toBe('2026-08-20T15:00:00.000Z')
     expect(Object.isFrozen(preview.plan)).toBe(true)
+  })
+
+  it('can compare local asset integrity without retaining local image bytes', async () => {
+    const model = completeCanonicalLibraryFixture()
+    const written = await writeLibraryBundle(model, {
+      bundleId: 'bundle:metadata-preview', exportedAt: '2026-08-20T15:00:00.000Z', appVersion: '1.0.0',
+    })
+    const database = completeDatabaseExportFixture()
+    database.image_assets[0] = {
+      ...(database.image_assets[0] as Record<string, unknown>),
+      content_hash: model.assets[0].sha256,
+      content_hash_algorithm: 'sha256-v1',
+      content_byte_length: model.assets[0].byte_length,
+    }
+    const backup = new TextEncoder().encode(JSON.stringify(database))
+    const readLocalAssetBytes = vi.fn(async () => new Uint8Array([1, 2, 3]))
+    const preview = await previewBundleDirectoryImport(
+      [...written.files].map(([path, bytes]) => {
+        const file = new File([bytes.slice().buffer], path.split('/').at(-1)!)
+        Object.defineProperty(file, 'webkitRelativePath', { value: `chosen/${path}` })
+        return file
+      }),
+      backup,
+      {
+        readLocalAssetBytes,
+        retainLocalAssetBytes: false,
+      },
+    )
+
+    expect(preview.localModel.assets).toHaveLength(1)
+    expect(preview.localModel.assets[0].bytes).toBeNull()
+    expect(preview.localModel.assets[0].sha256).toBe(model.assets[0].sha256)
+    expect(readLocalAssetBytes).not.toHaveBeenCalled()
   })
 
   it('rejects invalid ZIP input before parsing database data', async () => {

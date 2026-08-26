@@ -121,6 +121,7 @@ const {
 
 const {
   plan: importPlan,
+  bundleExportedAt,
   importFileName,
   importError,
   importMessage,
@@ -579,6 +580,7 @@ onMounted(async () => {
 
       <LibraryBundleImport
         :plan="importPlan"
+        :exported-at="bundleExportedAt"
         :file-name="importFileName"
         :error="importError"
         :message="importMessage"

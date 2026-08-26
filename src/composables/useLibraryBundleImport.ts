@@ -10,6 +10,11 @@ import {
 } from '@/lib/libraryBundle/restore'
 import { sha256Hex } from '@/lib/libraryBundle/semanticHash'
 import { MAX_BUNDLE_ARCHIVE_BYTES } from '@/lib/libraryBundle/limits'
+import {
+  LibraryBundlePreviewWorkerError,
+  LibraryBundlePreviewWorkerUnavailableError,
+  previewBundleZipInWorker,
+} from '@/lib/libraryBundle/previewWorkerClient'
 import { createPortableId } from '@/lib/portableIds'
 import type { RecoveryBundleMetadata, RecoveryStore } from '@/lib/recovery/model'
 import { createRuntimeRecoveryStore } from '@/lib/recovery/runtime'
@@ -50,7 +55,10 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   const isReplacing = ref(false)
   const recoveries = ref<RecoveryBundleMetadata[]>([])
   const preparedRecovery = ref<RecoveryBundleMetadata | null>(null)
+  let previewRequestId = 0
+  let previewAbortController: AbortController | null = null
   const plan = computed(() => preview.value?.plan ?? null)
+  const bundleExportedAt = computed(() => preview.value?.exportedAt ?? null)
   const recoveryStore = deps.recoveryStore ?? createRuntimeRecoveryStore()
   const replaceRemovalCounts = computed(() => {
     if (!preview.value) return { books: 0, chapters: 0, wikiPages: 0 }
@@ -71,6 +79,10 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   }
 
   async function previewFile(file: File): Promise<void> {
+    const requestId = ++previewRequestId
+    previewAbortController?.abort()
+    const previewController = new AbortController()
+    previewAbortController = previewController
     importError.value = ''
     importMessage.value = ''
     preview.value = null
@@ -83,22 +95,62 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
           `Bundle archive is ${file.size} bytes; the browser import limit is ${MAX_BUNDLE_ARCHIVE_BYTES} bytes.`,
         )
       }
-      const [zipBytes, databaseBackup] = await Promise.all([
+      let [zipBytes, databaseBackup] = await Promise.all([
         file.arrayBuffer().then((buffer) => new Uint8Array(buffer)),
         deps.exportDatabase(),
       ])
-      preview.value = await previewBundleZipImport(zipBytes, databaseBackup, {
-        readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
-        intent: deps.intent,
-      })
+      let result: PreviewedBundleImport
+      if (deps.intent === 'add-or-update-books') {
+        try {
+          result = await previewBundleZipInWorker(zipBytes, databaseBackup, {
+            intent: deps.intent,
+            signal: previewController.signal,
+          })
+        } catch (error) {
+          const shouldFallback = error instanceof LibraryBundlePreviewWorkerUnavailableError
+            || (error instanceof LibraryBundlePreviewWorkerError
+              && error.code === 'local-asset-bytes-required')
+          if (!shouldFallback || previewController.signal.aborted) throw error
+          // A worker runtime failure detaches transferred buffers; a browser
+          // without Worker support leaves the original inputs reusable.
+          if (zipBytes.byteLength === 0 || databaseBackup.byteLength === 0) {
+            const fallbackInputs = await Promise.all([
+              file.arrayBuffer().then((buffer) => new Uint8Array(buffer)),
+              deps.exportDatabase(),
+            ])
+            zipBytes = fallbackInputs[0]
+            databaseBackup = fallbackInputs[1]
+          }
+          result = await previewBundleZipImport(zipBytes, databaseBackup, {
+            readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+            intent: deps.intent,
+            retainLocalAssetBytes: false,
+          })
+        }
+      } else {
+        result = await previewBundleZipImport(zipBytes, databaseBackup, {
+          readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+          intent: deps.intent,
+          retainLocalAssetBytes: true,
+        })
+      }
+      if (requestId === previewRequestId) preview.value = result
     } catch (error) {
-      importError.value = error instanceof Error ? error.message : 'Could not preview this bundle.'
+      if (requestId === previewRequestId && !(error instanceof DOMException && error.name === 'AbortError')) {
+        importError.value = error instanceof Error ? error.message : 'Could not preview this bundle.'
+      }
     } finally {
-      isPreviewing.value = false
+      if (requestId === previewRequestId) {
+        isPreviewing.value = false
+        if (previewAbortController === previewController) previewAbortController = null
+      }
     }
   }
 
   async function previewDirectory(files: readonly File[]): Promise<void> {
+    const requestId = ++previewRequestId
+    previewAbortController?.abort()
+    previewAbortController = null
     importError.value = ''
     importMessage.value = ''
     preview.value = null
@@ -107,14 +159,18 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
     isPreviewing.value = true
     try {
       const databaseBackup = await deps.exportDatabase()
-      preview.value = await previewBundleDirectoryImport(files, databaseBackup, {
+      const result = await previewBundleDirectoryImport(files, databaseBackup, {
         readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
         intent: deps.intent,
+        retainLocalAssetBytes: deps.intent !== 'add-or-update-books',
       })
+      if (requestId === previewRequestId) preview.value = result
     } catch (error) {
-      importError.value = error instanceof Error ? error.message : 'Could not preview this bundle folder.'
+      if (requestId === previewRequestId) {
+        importError.value = error instanceof Error ? error.message : 'Could not preview this bundle folder.'
+      }
     } finally {
-      isPreviewing.value = false
+      if (requestId === previewRequestId) isPreviewing.value = false
     }
   }
 
@@ -142,10 +198,16 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
         currentGeneration,
       )
       const imageStore = createRuntimeImageContentStore()
+      const assetIdsToWrite = new Set(activePreview.plan.operations
+        .filter((operation) => operation.entityType === 'asset'
+          && (operation.kind === 'create' || operation.kind === 'update'
+            || operation.kind === 'conflict' && operation.resolution === 'use_incoming'))
+        .map((operation) => operation.entityId))
       try {
         await importCanonicalLibraryModel(merged, {
           imageStore,
           importDatabaseBackup: deps.importDatabaseBackup,
+          assetIdsToWrite,
         })
       } catch (error) {
         const createdAssetIds = new Set(activePreview.plan.operations
@@ -251,6 +313,9 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   }
 
   async function previewRecovery(id: string): Promise<void> {
+    const requestId = ++previewRequestId
+    previewAbortController?.abort()
+    previewAbortController = null
     importError.value = ''
     preparedRecovery.value = null
     isPreviewing.value = true
@@ -259,14 +324,19 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
         readVerifiedRecovery(recoveryStore, id),
         deps.exportDatabase(),
       ])
-      preview.value = await previewBundleZipImport(stored.bytes, currentBackup, {
+      const result = await previewBundleZipImport(stored.bytes, currentBackup, {
         readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
       })
-      importFileName.value = `Recovery from ${stored.metadata.createdAt}`
+      if (requestId === previewRequestId) {
+        preview.value = result
+        importFileName.value = `Recovery from ${stored.metadata.createdAt}`
+      }
     } catch (error) {
-      importError.value = error instanceof Error ? error.message : 'Could not preview recovery.'
+      if (requestId === previewRequestId) {
+        importError.value = error instanceof Error ? error.message : 'Could not preview recovery.'
+      }
     } finally {
-      isPreviewing.value = false
+      if (requestId === previewRequestId) isPreviewing.value = false
     }
   }
 
@@ -280,6 +350,10 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   }
 
   function resetImport(): void {
+    previewRequestId += 1
+    previewAbortController?.abort()
+    previewAbortController = null
+    isPreviewing.value = false
     preview.value = null
     importFileName.value = ''
     importError.value = ''
@@ -288,7 +362,7 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   }
 
   return {
-    preview, plan, importFileName, importError, importMessage, isPreviewing, isApplying,
+    preview, plan, bundleExportedAt, importFileName, importError, importMessage, isPreviewing, isApplying,
     isPreparingReplace, isReplacing, recoveries, preparedRecovery, replaceRemovalCounts,
     previewFile, previewDirectory, resolveConflict, applyChanges, prepareReplace, replaceLibrary,
     refreshRecoveries, previewRecovery, downloadRecovery, resetImport,

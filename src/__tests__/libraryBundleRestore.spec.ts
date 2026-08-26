@@ -66,6 +66,29 @@ describe('canonical library restore', () => {
     expect(canonicalAssetFilePath(asset)).toBe('images/library/.._.._cover/image')
   })
 
+  it('writes only selected changed assets while retaining all database metadata', async () => {
+    const model = completeCanonicalLibraryFixture()
+    model.assets.push({ ...model.assets[0], id: 'unchanged-image' })
+    const store = memoryImageStore()
+    const importDatabaseBackup = vi.fn(async (bytes: Uint8Array) => {
+      const data = JSON.parse(new TextDecoder().decode(bytes))
+      expect(data.image_assets.map((asset: { id: string }) => asset.id)).toEqual([
+        model.assets[0].id,
+        'unchanged-image',
+      ])
+    })
+
+    await importCanonicalLibraryModel(model, {
+      imageStore: store,
+      importDatabaseBackup,
+      assetIdsToWrite: new Set([model.assets[0].id]),
+    })
+
+    expect(store.write).toHaveBeenCalledOnce()
+    expect(store.write).toHaveBeenCalledWith(expect.objectContaining({ id: model.assets[0].id }), expect.any(Blob))
+    expect(importDatabaseBackup).toHaveBeenCalledOnce()
+  })
+
   it('requires an image store and complete bytes for illustrated backups', async () => {
     const model = completeCanonicalLibraryFixture()
     await expect(importCanonicalLibraryModel(model, {
