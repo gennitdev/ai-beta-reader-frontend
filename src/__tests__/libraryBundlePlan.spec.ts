@@ -302,6 +302,31 @@ describe('three-way library import planning', () => {
     expect(plan.previewSummary.wikiReview).toEqual({ currentCount: 0, stale: [], missing: [] })
   })
 
+  it('keeps deleted wiki pages separate from surviving relinked pages that need review', async () => {
+    const local = completeCanonicalLibraryFixture()
+    const survivingPage = { ...local.wiki_pages[0], id: 'wiki-2', page_name: 'Dr. Cassian Vale', aliases: [] }
+    local.wiki_pages.push(survivingPage)
+    const incoming = structuredClone(local)
+    incoming.wiki_pages = [survivingPage]
+    incoming.chapters[0].wiki_mentions[0].wiki_page_id = 'wiki-2'
+    incoming.book_characters[0].wiki_page_id = 'wiki-2'
+    incoming.assets[0].wiki_page_ids = ['wiki-2']
+    incoming.wiki_updates = []
+    incoming.wiki_review_state = []
+
+    const plan = await createLibraryImportPlan(await bundle(incoming), local, 'g')
+
+    expect(plan.operations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'wiki_page', entityId: 'wiki-1', kind: 'delete', title: 'Alice' }),
+    ]))
+    expect(plan.previewSummary.wikiReview.missing).toEqual([
+      expect.objectContaining({ wikiPageId: 'wiki-2', wikiPageTitle: 'Dr. Cassian Vale' }),
+    ])
+    expect(plan.previewSummary.wikiReview.missing).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ wikiPageId: 'wiki-1' }),
+    ]))
+  })
+
   it.each(['system:editorial', 'system:fanficnet', 'system:line-notes'])(
     'accepts built-in review profile reference %s without a bundled profile entity', async (profileRef) => {
       const model = completeCanonicalLibraryFixture()
