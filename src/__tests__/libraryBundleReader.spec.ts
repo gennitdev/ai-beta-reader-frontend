@@ -173,6 +173,16 @@ describe('library bundle reader and validation', () => {
     expect(moved.diagnostics.filter((value) => value.severity === 'error')).toEqual([])
   })
 
+  it('allows records to be deleted from aggregate files while retaining their baseline inventory entries', async () => {
+    const files = await validFiles()
+    files.set('_beta-bot/history/wiki-updates.jsonl', encodeBundleText(''))
+
+    const validated = await validateLibraryBundle(readLibraryBundle(files), files)
+
+    expect(validated.diagnostics.filter((value) => value.code === 'inventory.id_substitution')).toEqual([])
+    expect(validated.model?.wiki_updates).toEqual([])
+  })
+
   it('handles missing binary and review-state files and invalid UTF-8 JSONL', async () => {
     const files = await validFiles()
     const assetPath = [...files.keys()].find((value) => value.endsWith('/cover.png'))!
