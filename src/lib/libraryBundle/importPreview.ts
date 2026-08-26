@@ -2,7 +2,11 @@ import { parseDatabaseImportData } from '@/lib/databaseImportExport'
 import type { AssetByteReader } from './snapshot'
 import { createCanonicalLibrarySnapshot } from './snapshot'
 import { readBundleZip } from './adapters/zip'
-import { readBundleDirectoryFiles } from './adapters/directory'
+import {
+  readBundleDirectoryFiles,
+  readPreparedBundleDirectoryFiles,
+  type SelectedDirectoryBundleFile,
+} from './adapters/directory'
 import type { ReadonlyBundleFileMap } from './fileMap'
 import type { BundleDiagnostic } from './diagnostics'
 import { readLibraryBundle } from './read'
@@ -40,6 +44,16 @@ export async function previewBundleDirectoryImport(
   options: PreviewBundleImportOptions = {},
 ): Promise<PreviewedBundleImport> {
   const transport = await readBundleDirectoryFiles(selectedFiles)
+  if (!transport.files) throw new Error(transport.diagnostics.map((value) => value.message).join('\n'))
+  return previewBundleFileMapImport(transport.files, currentDatabaseBackup, transport.diagnostics, options)
+}
+
+export async function previewPreparedBundleDirectoryImport(
+  selectedFiles: readonly SelectedDirectoryBundleFile[],
+  currentDatabaseBackup: Uint8Array,
+  options: PreviewBundleImportOptions = {},
+): Promise<PreviewedBundleImport> {
+  const transport = await readPreparedBundleDirectoryFiles(selectedFiles)
   if (!transport.files) throw new Error(transport.diagnostics.map((value) => value.message).join('\n'))
   return previewBundleFileMapImport(transport.files, currentDatabaseBackup, transport.diagnostics, options)
 }

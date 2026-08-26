@@ -13,6 +13,7 @@ import { MAX_BUNDLE_ARCHIVE_BYTES } from '@/lib/libraryBundle/limits'
 import {
   LibraryBundlePreviewWorkerError,
   LibraryBundlePreviewWorkerUnavailableError,
+  previewBundleDirectoryInWorker,
   previewBundleZipInWorker,
 } from '@/lib/libraryBundle/previewWorkerClient'
 import { createPortableId } from '@/lib/portableIds'
@@ -150,7 +151,8 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   async function previewDirectory(files: readonly File[]): Promise<void> {
     const requestId = ++previewRequestId
     previewAbortController?.abort()
-    previewAbortController = null
+    const previewController = new AbortController()
+    previewAbortController = previewController
     importError.value = ''
     importMessage.value = ''
     preview.value = null
@@ -158,19 +160,43 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
     importFileName.value = files[0]?.webkitRelativePath.split('/')[0] || 'Selected folder'
     isPreviewing.value = true
     try {
-      const databaseBackup = await deps.exportDatabase()
-      const result = await previewBundleDirectoryImport(files, databaseBackup, {
-        readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
-        intent: deps.intent,
-        retainLocalAssetBytes: deps.intent !== 'add-or-update-books',
-      })
+      let databaseBackup = await deps.exportDatabase()
+      let result: PreviewedBundleImport
+      if (deps.intent === 'add-or-update-books') {
+        try {
+          result = await previewBundleDirectoryInWorker(files, databaseBackup, {
+            intent: deps.intent,
+            signal: previewController.signal,
+          })
+        } catch (error) {
+          const shouldFallback = error instanceof LibraryBundlePreviewWorkerUnavailableError
+            || (error instanceof LibraryBundlePreviewWorkerError
+              && error.code === 'local-asset-bytes-required')
+          if (!shouldFallback || previewController.signal.aborted) throw error
+          if (databaseBackup.byteLength === 0) databaseBackup = await deps.exportDatabase()
+          result = await previewBundleDirectoryImport(files, databaseBackup, {
+            readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+            intent: deps.intent,
+            retainLocalAssetBytes: false,
+          })
+        }
+      } else {
+        result = await previewBundleDirectoryImport(files, databaseBackup, {
+          readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+          intent: deps.intent,
+          retainLocalAssetBytes: true,
+        })
+      }
       if (requestId === previewRequestId) preview.value = result
     } catch (error) {
-      if (requestId === previewRequestId) {
+      if (requestId === previewRequestId && !(error instanceof DOMException && error.name === 'AbortError')) {
         importError.value = error instanceof Error ? error.message : 'Could not preview this bundle folder.'
       }
     } finally {
-      if (requestId === previewRequestId) isPreviewing.value = false
+      if (requestId === previewRequestId) {
+        isPreviewing.value = false
+        if (previewAbortController === previewController) previewAbortController = null
+      }
     }
   }
 

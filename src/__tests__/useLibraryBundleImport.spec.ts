@@ -65,7 +65,7 @@ describe('useLibraryBundleImport', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses a background worker for add/update ZIP previews', async () => {
+  it('uses a background worker for add/update ZIP and folder previews', async () => {
     const model = completeCanonicalLibraryFixture()
     const backup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
     const generation = await sha256Hex(backup)
@@ -74,11 +74,13 @@ describe('useLibraryBundleImport', () => {
       databaseGeneration: generation, exportedAt: '2026-08-25T03:20:00.000Z',
     }
     const transfers: Transferable[][] = []
+    const messages: Array<{ type?: string }> = []
     const terminate = vi.fn()
     class SuccessfulWorker {
       onmessage: ((event: MessageEvent) => void) | null = null
       onerror: ((event: ErrorEvent) => void) | null = null
-      postMessage(_message: unknown, transfer: Transferable[]) {
+      postMessage(message: { type?: string }, transfer: Transferable[]) {
+        messages.push(message)
         transfers.push(transfer)
         queueMicrotask(() => this.onmessage?.({
           data: { type: 'preview-complete', preview: workerPreview },
@@ -98,7 +100,16 @@ describe('useLibraryBundleImport', () => {
     expect(previewZip).not.toHaveBeenCalled()
     expect(transfers).toHaveLength(1)
     expect(transfers[0]).toHaveLength(2)
-    expect(terminate).toHaveBeenCalledOnce()
+    const folderFile = new File(['manifest'], 'beta-bot.yaml')
+    Object.defineProperty(folderFile, 'webkitRelativePath', { value: 'large-folder/beta-bot.yaml' })
+    await state.previewDirectory([folderFile])
+    expect(state.preview.value).toBe(workerPreview)
+    expect(previewDirectory).not.toHaveBeenCalled()
+    expect(messages.map((message) => message.type)).toEqual([
+      'preview-library-bundle', 'preview-library-bundle-directory',
+    ])
+    expect(transfers[1]).toHaveLength(1)
+    expect(terminate).toHaveBeenCalledTimes(2)
   })
 
   it('cancels an obsolete worker preview and ignores its result', async () => {

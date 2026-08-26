@@ -1,6 +1,9 @@
 /// <reference lib="webworker" />
 
-import { previewBundleZipImport } from '@/lib/libraryBundle/importPreview'
+import {
+  previewBundleZipImport,
+  previewPreparedBundleDirectoryImport,
+} from '@/lib/libraryBundle/importPreview'
 import {
   classifyLibraryBundlePreviewError,
   type LibraryBundlePreviewWorkerRequest,
@@ -21,12 +24,18 @@ export async function handleLibraryBundlePreviewRequest(
   request: LibraryBundlePreviewWorkerRequest,
 ): Promise<LibraryBundlePreviewWorkerResponse> {
   try {
-    return {
-      type: 'preview-complete',
-      preview: await previewBundleZipImport(request.zipBytes, request.databaseBackup, {
+    const preview = request.type === 'preview-library-bundle'
+      ? await previewBundleZipImport(request.zipBytes, request.databaseBackup, {
         intent: request.intent,
         retainLocalAssetBytes: false,
-      }),
+      })
+      : await previewPreparedBundleDirectoryImport(request.files, request.databaseBackup, {
+        intent: request.intent,
+        retainLocalAssetBytes: false,
+      })
+    return {
+      type: 'preview-complete',
+      preview,
     }
   } catch (error) {
     return { type: 'preview-failed', ...classifyLibraryBundlePreviewError(error) }
@@ -35,7 +44,7 @@ export async function handleLibraryBundlePreviewRequest(
 
 const workerScope = self as DedicatedWorkerGlobalScope
 workerScope.onmessage = async ({ data }: MessageEvent<LibraryBundlePreviewWorkerRequest>) => {
-  if (data.type !== 'preview-library-bundle') return
+  if (data.type !== 'preview-library-bundle' && data.type !== 'preview-library-bundle-directory') return
   const response = await handleLibraryBundlePreviewRequest(data)
   workerScope.postMessage(
     response,
