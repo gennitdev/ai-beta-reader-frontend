@@ -2,7 +2,12 @@ import { computed, ref, shallowRef } from 'vue'
 import packageInfo from '../../package.json'
 import type { ImageAsset } from '@/lib/database'
 import { previewBundleDirectoryImport, previewBundleZipImport, type PreviewedBundleImport } from '@/lib/libraryBundle/importPreview'
-import { resolveImportConflict, type ImportConflictResolution, type LibraryImportIntent } from '@/lib/libraryBundle/plan'
+import {
+  applyIncomingInventoryOverride,
+  resolveImportConflict,
+  type ImportConflictResolution,
+  type LibraryImportIntent,
+} from '@/lib/libraryBundle/plan'
 import { applyImportPlanToModel } from '@/lib/libraryBundle/apply'
 import {
   importCanonicalLibraryModel,
@@ -29,6 +34,7 @@ interface LibraryBundleImportDeps {
   getImageBlob: (asset: ImageAsset) => Promise<Blob>
   recoveryStore?: RecoveryStore
   confirmReplace?: (message: string) => boolean
+  confirmInventoryOverride?: (message: string) => boolean
   intent?: LibraryImportIntent
 }
 
@@ -206,6 +212,23 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
       ...preview.value,
       plan: resolveImportConflict(preview.value.plan, key, resolution),
     }
+  }
+
+  function overrideInventoryBaseline(): void {
+    if (!preview.value) return
+    const count = preview.value.plan.counts.keep_local
+    if (!count) return
+    const confirmOverride = deps.confirmInventoryOverride ?? ((message: string) => window.confirm(message))
+    const confirmed = confirmOverride(
+      `Treat ${count} keep-local difference(s) as incoming changes? This can overwrite local edits and delete local records absent from the bundle. Continue only if _beta-bot/inventory.json was regenerated after the bundle was edited.`,
+    )
+    if (!confirmed) return
+    preview.value = {
+      ...preview.value,
+      plan: applyIncomingInventoryOverride(preview.value.plan),
+    }
+    preparedRecovery.value = null
+    importMessage.value = `Inventory baseline override enabled for ${count} difference(s). Review every update and deletion before applying.`
   }
 
   async function applyChanges(): Promise<string[]> {
@@ -390,7 +413,7 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   return {
     preview, plan, bundleExportedAt, importFileName, importError, importMessage, isPreviewing, isApplying,
     isPreparingReplace, isReplacing, recoveries, preparedRecovery, replaceRemovalCounts,
-    previewFile, previewDirectory, resolveConflict, applyChanges, prepareReplace, replaceLibrary,
+    previewFile, previewDirectory, resolveConflict, overrideInventoryBaseline, applyChanges, prepareReplace, replaceLibrary,
     refreshRecoveries, previewRecovery, downloadRecovery, resetImport,
   }
 }

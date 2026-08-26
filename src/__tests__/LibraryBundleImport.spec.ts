@@ -128,7 +128,7 @@ describe('LibraryBundleImport', () => {
     expect(wrapper.text()).toContain('5 additional ignored file(s) are not shown.')
   })
 
-  it('bounds large review warning lists and omits keep-local operation cards', () => {
+  it('bounds large review warning lists and omits keep-local operation cards', async () => {
     const missing = Array.from({ length: 25 }, (_, index) => ({
       entityType: 'wiki_review_state', entityId: `wiki-${index}:chapter-1`, bookId: 'book-1',
       wikiPageId: `wiki-${index}`, wikiPageTitle: `Wiki ${index}`, chapterId: 'chapter-1',
@@ -164,7 +164,11 @@ describe('LibraryBundleImport', () => {
     expect(wrapper.text()).not.toContain('review-20')
     expect(wrapper.text()).toContain('5 additional unknown profile warning(s) are not shown.')
     expect(wrapper.text()).toContain('No incoming changes were detected.')
+    expect(wrapper.text()).toContain('1 difference(s) are classified “keep local.”')
     expect(wrapper.find('[aria-label="Planned entity changes"]').exists()).toBe(false)
+    const override = wrapper.findAll('button').find((button) => button.text().includes('Review keep-local'))!
+    await override.trigger('click')
+    expect(wrapper.emitted('overrideInventory')).toBeTruthy()
     const apply = wrapper.findAll('button').find((button) => button.text() === 'Apply changes')!
     expect(apply.attributes('disabled')).toBeDefined()
   })

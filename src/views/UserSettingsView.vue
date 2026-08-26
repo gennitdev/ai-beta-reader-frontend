@@ -135,6 +135,7 @@ const {
   previewFile,
   previewDirectory,
   resolveConflict,
+  overrideInventoryBaseline,
   applyChanges,
   prepareReplace,
   replaceLibrary,
@@ -594,6 +595,7 @@ onMounted(async () => {
         @select="previewFile"
         @select-directory="previewDirectory"
         @resolve="resolveConflict"
+        @override-inventory="overrideInventoryBaseline"
         @apply="applyChanges"
         @prepare-replace="prepareReplace"
         @replace="replaceLibrary"

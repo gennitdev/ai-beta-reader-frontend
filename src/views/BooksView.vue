@@ -41,6 +41,7 @@ const {
   previewFile,
   previewDirectory,
   resolveConflict,
+  overrideInventoryBaseline,
   applyChanges,
   resetImport,
 } = useLibraryBundleImport({
@@ -350,6 +351,7 @@ watch(
           @select="previewFile"
           @select-directory="previewDirectory"
           @resolve="resolveConflict"
+          @override-inventory="overrideInventoryBaseline"
           @apply="applyBookImport"
         />
       </div>

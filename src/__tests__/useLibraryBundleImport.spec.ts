@@ -349,6 +349,38 @@ describe('useLibraryBundleImport', () => {
     expect(state.plan.value?.canApply).toBe(true)
   })
 
+  it('requires confirmation before exposing keep-local rows as incoming changes', () => {
+    const confirmInventoryOverride = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn(), importDatabaseBackup: vi.fn(), getImageBlob: vi.fn(),
+      recoveryStore: memoryStore(), confirmInventoryOverride,
+    })
+    const model = completeCanonicalLibraryFixture()
+    const operation = {
+      key: 'wiki_page\0wiki-1', entityType: 'wiki_page', entityId: 'wiki-1', bookId: 'book-1',
+      kind: 'keep_local' as const, localHash: 'local', incomingHash: 'incoming', changedFields: ['body'],
+    }
+    state.preview.value = {
+      localModel: model, incomingModel: model, databaseGeneration: 'g', exportedAt: null,
+      plan: {
+        ...emptyPlan('g'), operations: [operation],
+        counts: { create: 0, update: 0, delete: 0, keep_local: 1, unchanged: 0, conflict: 0 },
+        countsByEntityType: {
+          wiki_page: { create: 0, update: 0, delete: 0, keep_local: 1, unchanged: 0, conflict: 0 },
+        },
+      },
+    }
+
+    state.overrideInventoryBaseline()
+    expect(state.plan.value?.operations[0].kind).toBe('keep_local')
+    state.overrideInventoryBaseline()
+
+    expect(confirmInventoryOverride).toHaveBeenCalledTimes(2)
+    expect(state.plan.value?.operations[0].kind).toBe('update')
+    expect(state.plan.value?.inventoryOverrideApplied).toBe(true)
+    expect(state.importMessage.value).toContain('Review every update and deletion')
+  })
+
   it('prepares a verified recovery, requires confirmation, replaces, restores, and downloads it', async () => {
     const localModel = completeCanonicalLibraryFixture()
     const incomingModel = completeCanonicalLibraryFixture()
