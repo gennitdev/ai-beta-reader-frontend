@@ -89,7 +89,8 @@ describe('useLibraryBundleImport', () => {
 
     await state.applyChanges()
     expect(importDatabaseBackup).toHaveBeenCalledOnce()
-    expect(state.importMessage.value).toBe('Bundle changes applied successfully.')
+    expect(state.importMessage.value).toContain('Bundle changes applied successfully.')
+    expect(state.importMessage.value).toContain('Re-export this workspace')
     expect(state.preview.value).toBeNull()
   })
 

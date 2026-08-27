@@ -267,7 +267,7 @@ describe('useDataExport', () => {
     expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 
-  it('exports the advanced text-only workspace as ZIP or a writable directory', async () => {
+  it('exports all or selected books as an editable text workspace ZIP or directory', async () => {
     const deps = createDeps()
     const directory = { kind: 'directory' as const }
     const chooseBundleDirectory = vi.fn(async () => directory)
@@ -277,10 +277,14 @@ describe('useDataExport', () => {
     state.handleExport()
     await finishExport(state)
     expect(bundleState.createText).toHaveBeenCalledOnce()
+    expect(bundleState.createText.mock.calls[0][2]).toBeUndefined()
     expect(state.exportProgress.value).toBe('Text-only workspace exported!')
 
+    state.bundleScope.value = 'selection'
+    state.selectedBookIds.value = ['book-1']
     await state.exportTextOnlyWorkspaceDirectory()
     expect(bundleState.createText).toHaveBeenCalledTimes(2)
+    expect(bundleState.createText.mock.calls[1][2]).toEqual(['book-1'])
     expect(directoryState.write).toHaveBeenCalledWith(directory, expect.any(Map), expect.any(Map))
     expect(state.exportProgress.value).toContain('Text-only workspace updated')
   })

@@ -23,7 +23,7 @@ const props = withDefaults(defineProps<{
   embedded?: boolean
 }>(), {
   heading: 'Import a Library Bundle',
-  description: 'Preview a Beta Bot ZIP with three-way conflict detection. Nothing changes until you confirm the immutable plan.',
+  description: 'Preview a Beta Bot ZIP or folder against its export-time inventory and your current library. Nothing changes until you confirm.',
   applyLabel: 'Apply changes',
   showReplace: true,
   showRecoveries: true,

@@ -4,6 +4,7 @@ import { bundleError, bundleWarning, hasBundleErrors, type BundleDiagnostic } fr
 import { canonicalEntityKey, collectCanonicalModelEntities } from './entities'
 import { chapterContentHash, sha256Hex } from './semanticHash'
 import { isReplaceStructurallyEligible } from './manifest'
+import { normalizeDeletedWikiReferences } from './normalize'
 
 export interface ValidatedLibraryBundle extends ReadLibraryBundleResult {
   diagnostics: readonly BundleDiagnostic[]
@@ -30,8 +31,19 @@ export async function validateLibraryBundle(
   files: ReadonlyBundleFileMap,
 ): Promise<ValidatedLibraryBundle> {
   const diagnostics = [...parsed.diagnostics]
-  const { model, manifest, inventory } = parsed
-  if (!model || !manifest || !inventory) return { ...parsed, diagnostics, replaceEligible: false }
+  const { model: parsedModel, manifest, inventory } = parsed
+  if (!parsedModel || !manifest || !inventory) return { ...parsed, diagnostics, replaceEligible: false }
+  const normalized = normalizeDeletedWikiReferences(parsedModel, inventory)
+  const model = normalized.model
+  normalized.cascades.forEach((cascade) => {
+    const removed = cascade.wikiUpdates + cascade.wikiReviewStates + cascade.chapterMentions
+      + cascade.assetTags + cascade.bookCharacters
+    if (removed > 0) diagnostics.push(bundleWarning(
+      'reference.wiki_page_deletion_cascade',
+      `Removed ${removed} dependent reference${removed === 1 ? '' : 's'} because inventoried wiki page ${cascade.wikiPageId} is absent from the incoming bundle.`,
+      { entityType: 'wiki_page', entityId: cascade.wikiPageId },
+    ))
+  })
 
   if (manifest.bundle_id !== inventory.bundle_id) {
     diagnostics.push(bundleError('inventory.bundle_id', 'Manifest and inventory bundle IDs do not match.', { path: '_beta-bot/inventory.json' }))
@@ -156,9 +168,18 @@ export async function validateLibraryBundle(
     const [entityType, entityId] = key.split('\0')
     diagnostics.push(bundleError('inventory.duplicate', 'Inventory contains a duplicate entity.', { entityType, entityId, path: '_beta-bot/inventory.json' }))
   })
+  const inventoryEntriesByPath = new Map<string, { count: number; entityTypes: Set<string> }>()
+  inventory.entities.forEach((entry) => {
+    const pathEntries = inventoryEntriesByPath.get(entry.path) ?? { count: 0, entityTypes: new Set<string>() }
+    pathEntries.count++
+    pathEntries.entityTypes.add(entry.entity_type)
+    inventoryEntriesByPath.set(entry.path, pathEntries)
+  })
   for (const entry of inventory.entities) {
     const occupants = sourcesByPath.get(entry.path) ?? []
-    if (occupants.length && !occupants.some((source) => source.entityType === entry.entity_type && source.id === entry.id)) {
+    const pathEntries = inventoryEntriesByPath.get(entry.path)
+    const wasSharedPath = !!pathEntries && pathEntries.count > 1 && pathEntries.entityTypes.size === 1
+    if (!wasSharedPath && occupants.length && !occupants.some((source) => source.entityType === entry.entity_type && source.id === entry.id)) {
       diagnostics.push(bundleError('inventory.id_substitution', 'An inventoried file contains a different entity ID or type.', { entityType: entry.entity_type, entityId: entry.id, path: entry.path }))
     }
   }
@@ -173,7 +194,7 @@ export async function validateLibraryBundle(
     && (!manifest.includes.audit_records || files.has('_beta-bot/history/wiki-updates.jsonl') && files.has('_beta-bot/review-state.jsonl'))
   if (!completeDeclaredFiles) diagnostics.push(bundleError('manifest.missing_declared_data', 'Manifest declares history or audit data whose managed files are missing.'))
   return {
-    ...parsed,
+    ...parsed, model,
     diagnostics,
     replaceEligible: isReplaceStructurallyEligible(manifest) && completeDeclaredFiles && !hasBundleErrors(diagnostics),
   }

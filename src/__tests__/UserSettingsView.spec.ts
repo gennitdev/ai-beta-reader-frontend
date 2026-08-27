@@ -344,7 +344,9 @@ describe('UserSettingsView', () => {
     await flushPromises()
 
     expect(h.exportDatabase).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('Full library backup (recommended)')
+    expect(wrapper.text()).toContain('Complete library backup')
+    expect(wrapper.get('[data-testid="round-trip-workflow"]').text()).toContain('leave _beta-bot/inventory.json unchanged')
+    expect(wrapper.get('[data-testid="round-trip-workflow"]').text()).toContain('export to the workspace again')
   })
 
   it('offers Git workspace folder export when the browser supports directory access', async () => {
@@ -354,7 +356,7 @@ describe('UserSettingsView', () => {
 
     expect(button(wrapper, 'Export full bundle to folder').exists()).toBe(true)
     expect(wrapper.text()).toContain('preserves unknown files')
-    expect(wrapper.text()).toContain('Text-only Git workspace (advanced)')
+    expect(wrapper.text()).toContain('Editable text workspace (recommended for file editing)')
     expect(wrapper.text()).toContain('Not a complete backup')
   })
 
@@ -376,5 +378,8 @@ describe('UserSettingsView', () => {
     await wrapper.get('[data-testid="selected-book-book-2"]').setValue(true)
     expect((wrapper.get('[data-testid="selected-book-book-1"]').element as HTMLInputElement).checked).toBe(true)
     expect((wrapper.get('[data-testid="selected-book-book-2"]').element as HTMLInputElement).checked).toBe(true)
+
+    await wrapper.get('input[value="text-workspace"]').setValue()
+    expect(button(wrapper, 'Export selected books workspace ZIP').attributes('disabled')).toBeUndefined()
   })
 })

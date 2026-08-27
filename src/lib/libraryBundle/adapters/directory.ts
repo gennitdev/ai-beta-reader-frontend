@@ -310,14 +310,14 @@ export async function readBundleDirectoryFiles(
     && selectedFiles.every((file) => Boolean(file.webkitRelativePath))
     && new Set(firstSegments).size === 1
   const paths = rawPaths.map((path) => sharedDirectoryRoot ? path.slice(path.indexOf('/') + 1) : path)
-  const metadata = selectedFiles.map((file, index) => ({
-    path: paths[index],
-    uncompressedBytes: file.size,
-  }))
+  const selectedEntries = selectedFiles
+    .map((file, index) => ({ file, path: paths[index] }))
+    .filter((entry) => !entry.path.split('/').includes('.git'))
+  const metadata = selectedEntries.map(({ file, path }) => ({ path, uncompressedBytes: file.size }))
   const diagnostics = validateEntryMetadata(metadata, limits)
   if (hasBundleErrors(diagnostics)) return { files: null, diagnostics }
-  const entries = await Promise.all(selectedFiles.map(async (file, index) => ({
-    path: paths[index],
+  const entries = await Promise.all(selectedEntries.map(async ({ file, path }) => ({
+    path,
     bytes: new Uint8Array(await file.arrayBuffer()),
   })))
   return readBundleDirectoryEntries(entries, limits)

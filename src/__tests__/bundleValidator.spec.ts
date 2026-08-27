@@ -43,6 +43,8 @@ describe('standalone bundle validator', () => {
     await writeFile(join(directory, '.github', 'workflows', 'validate.yml'), 'name: Validate\n')
     await mkdir(join(directory, '.git'))
     await writeFile(join(directory, '.git', 'config'), 'ignored git metadata')
+    await mkdir(join(directory, 'books', 'example', '.git'), { recursive: true })
+    await writeFile(join(directory, 'books', 'example', '.git', 'config'), 'ignored nested git metadata')
 
     const result = await validateBundlePath(directory)
 

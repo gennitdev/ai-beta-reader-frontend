@@ -173,6 +173,48 @@ describe('library bundle reader and validation', () => {
     expect(moved.diagnostics.filter((value) => value.severity === 'error')).toEqual([])
   })
 
+  it('allows an inventoried entity to be deleted from a shared JSONL file', async () => {
+    const model = completeCanonicalLibraryFixture()
+    model.wiki_updates.push({
+      ...model.wiki_updates[0],
+      id: 'wiki-update-2',
+      created_at: '2026-08-20T16:00:00.000Z',
+    })
+    const files = (await writeLibraryBundle(model, options)).files
+    const historyPath = '_beta-bot/history/wiki-updates.jsonl'
+    const records = new TextDecoder().decode(files.get(historyPath)!).trimEnd().split('\n')
+    files.set(historyPath, encodeBundleText(`${records.slice(1).join('\n')}\n`))
+
+    const validated = await validateLibraryBundle(readLibraryBundle(files), files)
+
+    expect(validated.diagnostics.map((value) => value.code)).not.toContain('inventory.id_substitution')
+    expect(validated.diagnostics.filter((value) => value.severity === 'error')).toEqual([])
+  })
+
+  it('cascades an authored wiki-page deletion through generated references', async () => {
+    const files = await validFiles()
+    const wikiPath = [...files.keys()].find((value) => /\/wiki\/.*\.md$/.test(value))!
+    files.delete(wikiPath)
+
+    const validated = await validateLibraryBundle(readLibraryBundle(files), files)
+
+    expect(validated.diagnostics.filter((value) => value.severity === 'error')).toEqual([])
+    expect(validated.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'reference.wiki_page_deletion_cascade',
+      severity: 'warning',
+      entityType: 'wiki_page',
+      entityId: 'wiki-1',
+    }))
+    expect(validated.model).toMatchObject({
+      wiki_pages: [],
+      wiki_updates: [],
+      wiki_review_state: [],
+      chapters: [{ wiki_mentions: [] }],
+      assets: [{ wiki_page_ids: [] }],
+      book_characters: [{ wiki_page_id: null }],
+    })
+  })
+
   it('handles missing binary and review-state files and invalid UTF-8 JSONL', async () => {
     const files = await validFiles()
     const assetPath = [...files.keys()].find((value) => value.endsWith('/cover.png'))!

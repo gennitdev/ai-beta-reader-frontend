@@ -1,6 +1,6 @@
 # Git and agent workspaces
 
-Beta Bot can export the canonical library bundle directly to a folder in browsers that support the File System Access API. Choose **Text-only Git workspace** as the export format in Settings, export to a folder, then select either an empty folder or a folder containing an earlier Beta Bot bundle.
+Beta Bot can export the canonical library bundle directly to a folder in browsers that support the File System Access API. Choose **Editable text workspace** as the export format in Settings, export to a folder, then select either an empty folder or a folder containing an earlier Beta Bot bundle.
 
 ZIP remains available on every supported platform. Folder export is progressive enhancement for Chromium-class browsers and compatible desktop builds.
 
@@ -32,25 +32,25 @@ npm run validate:bundle -- /absolute/path/to/library.zip
 
 Errors produce a nonzero exit status. Warnings are printed but do not make an otherwise valid bundle fail. A successful full library bundle is also reported as eligible for Replace.
 
-The directory validator ignores the root `.git/` directory and recognizes the generated `AGENTS.md`, optional `CLAUDE.md`, and `.gitattributes` as workspace support files. Other unknown files remain visible as warnings while being ignored by database import.
+The directory validator and browser folder import ignore `.git/` directories anywhere in the selected workspace and recognize the generated `AGENTS.md`, optional `CLAUDE.md`, and `.gitattributes` as workspace support files. Other unknown files remain visible as warnings while being ignored by database import.
 
 ## Generated agent instructions
 
 New folder workspaces receive an `AGENTS.md` containing the operating rules from the canonical-format design:
 
 1. Read the format specification before editing managed files.
-2. Never change an existing entity ID or edit `_beta-bot/inventory.json`.
+2. Never change an existing entity ID or edit any file under `_beta-bot/`. The inventory remains the immutable export-time baseline while authored files change.
 3. Give new entities globally unique, correctly namespaced IDs.
 4. Search page names and aliases when reconciling wiki pages.
-5. Preserve explicit wiki mentions.
-6. Record wiki review state against the exact chapter content hash.
-7. Run the standalone validator before opening a pull request.
+5. Preserve explicit wiki mentions. When deliberately deleting an entity, update authored references while leaving its inventory entry untouched.
+6. Run the standalone validator before opening a pull request.
+7. After Apply changes succeeds, re-export to the workspace before another editing round so the inventory records the new baseline.
 8. Use a pull request rather than committing directly to a protected branch.
 
 The source template is `src/lib/libraryBundle/agentWorkspace.ts`, which keeps the generated instructions and the policy documented here in one maintained implementation.
 
 ## Recommended `.gitattributes`
 
-The generated policy normalizes authored YAML, Markdown, JSON, JSONL, and SVG text to LF. It disables automatic merges for the generated inventory and history/review-state JSONL files: those files should be regenerated after authored conflicts are resolved, not line-merged speculatively.
+The generated policy normalizes authored YAML, Markdown, JSON, JSONL, and SVG text to LF. It disables automatic merges for the generated inventory and history/review-state JSONL files. Do not line-merge or rebuild those files from edited content; after Beta Bot applies the authored changes, re-export the workspace to establish the next baseline.
 
 Common raster asset extensions are marked binary. Their sibling `asset.yaml` metadata remains ordinary diffable text. This preserves useful manuscript diffs without asking Git to merge image bytes or app-owned recovery records.
