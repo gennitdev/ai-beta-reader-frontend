@@ -85,8 +85,9 @@ import { setTheme, THEME_STORAGE_KEY } from '@/composables/useTheme'
 
 const wrappers: VueWrapper[] = []
 
-function mountView() {
+function mountView(section: 'settings' | 'library-data' = 'settings') {
   const wrapper = mount(UserSettingsView, {
+    props: { section },
     global: {
       stubs: {
         ArrowLeftIcon: true, DocumentArrowDownIcon: true, KeyIcon: true,
@@ -179,6 +180,8 @@ describe('UserSettingsView', () => {
     const input = wrapper.get('input[placeholder="sk-..."]')
     expect((input.element as HTMLInputElement).value).toBe('')
     expect(wrapper.text()).toContain('An API key is saved')
+    expect(wrapper.get('[data-testid="library-data-link"]').text()).toContain('editable workspaces')
+    expect(wrapper.text()).not.toContain('Backup to Google Drive')
   })
 
   describe('OpenAI API key', () => {
@@ -232,16 +235,19 @@ describe('UserSettingsView', () => {
 
   describe('cloud backup and restore', () => {
     it('discloses the limited Google Drive access before authorization', async () => {
-      const wrapper = mountView()
+      const wrapper = mountView('library-data')
       await flushPromises()
 
+      expect(wrapper.text()).toContain('Editable workspaces and imports')
+      expect(wrapper.text()).toContain('Backup and restore')
+      expect(wrapper.text()).toContain('Other export formats')
       expect(wrapper.text()).toContain('only the backup file it creates')
       expect(wrapper.text()).toContain('It cannot access unrelated Drive files')
       expect(wrapper.text()).toContain('Privacy Policy')
     })
 
     it('disables backup and restore until an encryption password is entered', async () => {
-      const wrapper = mountView()
+      const wrapper = mountView('library-data')
       await flushPromises()
 
       // No password yet -> both actions disabled.
@@ -258,7 +264,7 @@ describe('UserSettingsView', () => {
     })
 
     it('backs up to the cloud with the entered password', async () => {
-      const wrapper = mountView()
+      const wrapper = mountView('library-data')
       await flushPromises()
 
       await wrapper
@@ -273,7 +279,7 @@ describe('UserSettingsView', () => {
 
     it('surfaces a backup failure message', async () => {
       h.backupToCloud.mockRejectedValueOnce(new Error('drive offline'))
-      const wrapper = mountView()
+      const wrapper = mountView('library-data')
       await flushPromises()
 
       await wrapper
@@ -286,7 +292,7 @@ describe('UserSettingsView', () => {
     })
 
     it('restores from the cloud after confirmation', async () => {
-      const wrapper = mountView()
+      const wrapper = mountView('library-data')
       await flushPromises()
 
       await wrapper
@@ -302,7 +308,7 @@ describe('UserSettingsView', () => {
 
     it('does not restore when the confirmation is dismissed', async () => {
       vi.stubGlobal('confirm', vi.fn(() => false))
-      const wrapper = mountView()
+      const wrapper = mountView('library-data')
       await flushPromises()
 
       await wrapper
@@ -320,7 +326,7 @@ describe('UserSettingsView', () => {
         appVersion: '2.0.0', bundleFormatVersion: 1, encryptedByteLength: 123,
         ciphertextSha256: 'a'.repeat(64),
       }])
-      const wrapper = mountView()
+      const wrapper = mountView('library-data')
       await flushPromises()
       await button(wrapper, 'Show Available Backups').trigger('click')
       await flushPromises()
@@ -337,24 +343,26 @@ describe('UserSettingsView', () => {
       createObjectURL: vi.fn(() => 'blob:mock'),
       revokeObjectURL: vi.fn(),
     })
-    const wrapper = mountView()
+    const wrapper = mountView('library-data')
     await flushPromises()
 
     await button(wrapper, 'Export full library backup').trigger('click')
     await flushPromises()
 
     expect(h.exportDatabase).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('Full library backup (recommended)')
+    expect(wrapper.text()).toContain('Complete library backup')
+    expect(wrapper.get('[data-testid="round-trip-workflow"]').text()).toContain('leave _beta-bot/inventory.json unchanged')
+    expect(wrapper.get('[data-testid="round-trip-workflow"]').text()).toContain('export to the workspace again')
   })
 
   it('offers Git workspace folder export when the browser supports directory access', async () => {
     vi.stubGlobal('showDirectoryPicker', vi.fn())
-    const wrapper = mountView()
+    const wrapper = mountView('library-data')
     await flushPromises()
 
     expect(button(wrapper, 'Export full bundle to folder').exists()).toBe(true)
     expect(wrapper.text()).toContain('preserves unknown files')
-    expect(wrapper.text()).toContain('Text-only Git workspace (advanced)')
+    expect(wrapper.text()).toContain('Editable text workspace (recommended for file editing)')
     expect(wrapper.text()).toContain('Not a complete backup')
   })
 
@@ -363,7 +371,7 @@ describe('UserSettingsView', () => {
       { id: 'book-1', title: 'Same Title' },
       { id: 'book-2', title: 'Same Title' },
     ]
-    const wrapper = mountView()
+    const wrapper = mountView('library-data')
     await flushPromises()
 
     await wrapper.get('[data-testid="bundle-scope-selection"]').setValue()
@@ -376,5 +384,8 @@ describe('UserSettingsView', () => {
     await wrapper.get('[data-testid="selected-book-book-2"]').setValue(true)
     expect((wrapper.get('[data-testid="selected-book-book-1"]').element as HTMLInputElement).checked).toBe(true)
     expect((wrapper.get('[data-testid="selected-book-book-2"]').element as HTMLInputElement).checked).toBe(true)
+
+    await wrapper.get('input[value="text-workspace"]').setValue()
+    expect(button(wrapper, 'Export selected books workspace ZIP').attributes('disabled')).toBeUndefined()
   })
 })

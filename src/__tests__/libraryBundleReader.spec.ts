@@ -183,6 +183,30 @@ describe('library bundle reader and validation', () => {
     expect(validated.model?.wiki_updates).toEqual([])
   })
 
+  it('cascades an authored wiki-page deletion through generated references', async () => {
+    const files = await validFiles()
+    const wikiPath = [...files.keys()].find((value) => /\/wiki\/.*\.md$/.test(value))!
+    files.delete(wikiPath)
+
+    const validated = await validateLibraryBundle(readLibraryBundle(files), files)
+
+    expect(validated.diagnostics.filter((value) => value.severity === 'error')).toEqual([])
+    expect(validated.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'reference.wiki_page_deletion_cascade',
+      severity: 'warning',
+      entityType: 'wiki_page',
+      entityId: 'wiki-1',
+    }))
+    expect(validated.model).toMatchObject({
+      wiki_pages: [],
+      wiki_updates: [],
+      wiki_review_state: [],
+      chapters: [{ wiki_mentions: [] }],
+      assets: [{ wiki_page_ids: [] }],
+      book_characters: [{ wiki_page_id: null }],
+    })
+  })
+
   it('handles missing binary and review-state files and invalid UTF-8 JSONL', async () => {
     const files = await validFiles()
     const assetPath = [...files.keys()].find((value) => value.endsWith('/cover.png'))!

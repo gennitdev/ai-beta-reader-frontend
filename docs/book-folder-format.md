@@ -490,6 +490,10 @@ This requires a new `wiki_review_state` table keyed by `(wiki_page_id, chapter_i
 
 `_beta-bot/inventory.json` makes safe three-way import possible. It is written at export time and is never edited by users or agents.
 
+The inventory is a baseline, not an index of the workspace's current contents. It is expected to disagree with authored files after an external edit. A content change must leave the old semantic hash in place; a deletion must leave the deleted entity's inventory entry in place. Rebuilding the inventory from edited files would make those edits appear to be the original export and prevent Apply changes from classifying them correctly.
+
+After Beta Bot successfully applies a workspace, the user re-exports to that workspace before beginning another external editing round. The new export records the accepted app state as the next baseline. Continuing to edit against an older inventory is safe but can produce avoidable conflicts because both the current app state and incoming files have moved away from the same old base.
+
 It contains:
 
 ```json
@@ -847,12 +851,12 @@ Coverage for new codec and planning modules should be at least 90 percent becaus
 A bundle intended for Git includes a sample `AGENTS.md` or `CLAUDE.md` outside the managed format tree. The instructions should say:
 
 1. Read this specification before editing managed files.
-2. Never change an existing entity ID or edit `_beta-bot/inventory.json`.
+2. Never change an existing entity ID or edit files under `_beta-bot/`; they record the immutable export baseline and app-owned history.
 3. New entities require globally unique, correctly namespaced IDs.
 4. Search both `page_name` and every alias when reconciling a wiki page.
-5. Preserve explicit `wiki_mentions`; do not infer that absence of a text match means the relationship should be deleted.
-6. Record wiki review state with the exact semantic chapter content hash.
-7. Run a standalone bundle validator before opening a pull request.
+5. Preserve explicit `wiki_mentions`; do not infer that absence of a text match means the relationship should be deleted. When deliberately deleting an entity, update authored references but leave its inventory entry untouched.
+6. Run a standalone bundle validator before opening a pull request.
+7. After Beta Bot applies the changes, re-export before another editing round to establish the next inventory baseline.
 8. Open a pull request instead of committing directly to the protected branch.
 
 Provide a small Node-based validator command that uses the same schema, migration, and validation modules as the app. It performs no database access and exits nonzero on errors.
@@ -874,7 +878,7 @@ Folder selection is progressive enhancement. ZIP is supported everywhere; Chromi
 
 Suggested import help text:
 
-> Import a Beta Bot bundle from a ZIP or folder. Files are matched by stable IDs, so they may be renamed or reorganized. Beta Bot compares the bundle with both its original export and your current library, then asks you to resolve any conflicting edits before anything is changed.
+> Import a Beta Bot bundle from a ZIP or folder. Files are matched by stable IDs, so they may be renamed or reorganized. Beta Bot compares the bundle with both its original export inventory and your current library, then asks you to resolve any conflicting edits before anything is changed. Leave the inventory unchanged while editing; after Apply changes succeeds, re-export before beginning another editing round.
 
 Suggested Replace confirmation:
 

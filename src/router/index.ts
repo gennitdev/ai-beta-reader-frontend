@@ -172,6 +172,12 @@ const router = createRouter({
       component: () => import('../views/UserSettingsView.vue')
     },
     {
+      path: '/library-data',
+      name: 'library-data',
+      component: () => import('../views/LibraryDataView.vue'),
+      meta: { title: 'Library Data | beta bot' }
+    },
+    {
       path: '/challenges',
       name: 'challenges',
       component: () => import('../views/ChallengesView.vue')

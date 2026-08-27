@@ -3,7 +3,9 @@ import { getPrimaryNavItems } from '@/config/navigation'
 
 describe('primary navigation', () => {
   it('includes Bardwall by default', () => {
-    expect(getPrimaryNavItems().map((item) => item.to)).toContain('/bardwall')
+    const paths = getPrimaryNavItems().map((item) => item.to)
+    expect(paths).toContain('/bardwall')
+    expect(paths).toContain('/library-data')
   })
 
   it('hides only the Bardwall link when the feature is disabled', () => {

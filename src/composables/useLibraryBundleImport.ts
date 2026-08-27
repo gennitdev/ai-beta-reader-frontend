@@ -333,7 +333,7 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
         )
         throw error
       }
-      importMessage.value = 'Bundle changes applied successfully.'
+      importMessage.value = 'Bundle changes applied successfully. Re-export this workspace before making another round of file edits so the inventory records the new comparison baseline.'
       preview.value = null
       return [...activePreview.plan.bookIds]
     } catch (error) {

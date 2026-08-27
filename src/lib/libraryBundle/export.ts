@@ -48,6 +48,7 @@ export async function createSelectedBooksBundleExport(
 export async function createTextOnlyLibraryBundleExport(
   databaseBackup: Uint8Array,
   options: FullLibraryBundleExportOptions,
+  bookIds?: readonly string[],
 ) {
-  return createCanonicalBundleExport(databaseBackup, options, undefined, 'text-only')
+  return createCanonicalBundleExport(databaseBackup, options, bookIds, 'text-only')
 }

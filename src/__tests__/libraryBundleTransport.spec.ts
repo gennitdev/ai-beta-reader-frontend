@@ -32,6 +32,12 @@ describe('untrusted bundle transports', () => {
     const nested = new File(['manifest'], 'beta-bot.yaml')
     Object.defineProperty(nested, 'webkitRelativePath', { value: 'selected-folder/beta-bot.yaml' })
     expect((await readBundleDirectoryFiles([nested])).files?.has('beta-bot.yaml')).toBe(true)
+
+    const gitMetadata = new File(['private'], 'config')
+    Object.defineProperty(gitMetadata, 'webkitRelativePath', { value: 'selected-folder/books/example/.git/config' })
+    const withoutGitMetadata = await readBundleDirectoryFiles([nested, gitMetadata])
+    expect(withoutGitMetadata.files?.has('beta-bot.yaml')).toBe(true)
+    expect(withoutGitMetadata.files?.has('books/example/.git/config')).toBe(false)
     expect((await readBundleDirectoryFiles([])).files?.size).toBe(0)
   })
 

@@ -112,7 +112,7 @@ export function useDataExport(deps: UseDataExportDeps) {
       },
     }
     const bundle = contentMode === 'text-only'
-      ? await createTextOnlyLibraryBundleExport(databaseBackup, options)
+      ? await createTextOnlyLibraryBundleExport(databaseBackup, options, bookIds)
       : bookIds
       ? await createSelectedBooksBundleExport(databaseBackup, bookIds, options)
       : await createFullLibraryBundleExport(databaseBackup, options)
@@ -232,11 +232,13 @@ export function useDataExport(deps: UseDataExportDeps) {
     exportError.value = ''
     isExporting.value = true
     try {
-      const { bundle, exportedAt } = await createCanonicalBundle(undefined, 'text-only')
+      const selection = bundleScope.value === 'selection' ? selectedBookIds.value : undefined
+      if (selection && !selectedBooksAreValid.value) throw new Error('Select at least one book to export.')
+      const { bundle, exportedAt } = await createCanonicalBundle(selection, 'text-only')
       exportProgress.value = 'Creating text-only workspace ZIP...'
       triggerZipDownload(
         new Blob([bundle.zipBytes.slice().buffer], { type: 'application/zip' }),
-        `beta-bot-text-workspace-${exportedAt.slice(0, 10)}.zip`,
+        `beta-bot-${selection ? 'selected-books-' : ''}text-workspace-${exportedAt.slice(0, 10)}.zip`,
       )
       exportProgress.value = 'Text-only workspace exported!'
       setTimeout(() => { exportProgress.value = '' }, 3000)
@@ -259,7 +261,9 @@ export function useDataExport(deps: UseDataExportDeps) {
       if (!choose) throw new Error('Folder export is not supported by this browser.')
       exportProgress.value = 'Choose an empty folder or an existing Beta Bot bundle...'
       const directory = await choose()
-      const { bundle } = await createCanonicalBundle(undefined, 'text-only')
+      const selection = bundleScope.value === 'selection' ? selectedBookIds.value : undefined
+      if (selection && !selectedBooksAreValid.value) throw new Error('Select at least one book to export.')
+      const { bundle } = await createCanonicalBundle(selection, 'text-only')
       exportProgress.value = 'Updating text files while preserving omitted image bytes and other files...'
       const result = await writeBundleDirectory(directory, bundle.files, createAgentWorkspaceScaffold())
       exportProgress.value = `Text-only workspace updated: ${result.writtenFiles} managed files written, ${result.deletedFiles} obsolete text files removed.`

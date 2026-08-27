@@ -92,6 +92,19 @@ describe('createFullLibraryBundleExport', () => {
     const zip = await JSZip.loadAsync(multiple.zipBytes)
     expect(zip.file('books/a-book--book-1/book.yaml')).not.toBeNull()
     expect(zip.file('books/a-book--book-2/book.yaml')).not.toBeNull()
+
+    const textSelection = await createTextOnlyLibraryBundleExport(
+      backup,
+      { ...options, bundleId: 'bundle:text-selection-test' },
+      ['book-2'],
+    )
+    expect(textSelection.model).toMatchObject({
+      bundle_kind: 'selection',
+      content_mode: 'text-only',
+      book_ids: ['book-2'],
+    })
+    expect(textSelection.model.books.map((book) => book.id)).toEqual(['book-2'])
+    expect(textSelection.model.includes).toEqual({ image_bytes: false, history: false, audit_records: false })
   })
 
   it('rejects empty, duplicate, and stale selections before writing a bundle', async () => {

@@ -271,7 +271,7 @@ const breadcrumbs = computed(() => {
 })
 
 const showBreadcrumbs = computed(() => breadcrumbs.value.length > 0)
-const isSettingsRoute = computed(() => route.path.startsWith('/settings'))
+const isUtilityRoute = computed(() => route.path.startsWith('/settings') || route.path.startsWith('/library-data'))
 const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
 </script>
 
@@ -347,7 +347,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
                 </span>
               </template>
             </nav>
-            <nav v-else-if="!isSettingsRoute" class="flex items-center space-x-6 whitespace-nowrap">
+            <nav v-else-if="!isUtilityRoute" class="flex items-center space-x-6 whitespace-nowrap">
               <router-link
                 to="/books"
                 class="font-medium text-gray-700 transition-colors hover:text-gold-700 dark:text-gray-200 dark:hover:text-gold-300"
@@ -553,7 +553,7 @@ const isBardwallRoute = computed(() => route.path.startsWith('/bardwall'))
               </span>
             </template>
           </nav>
-          <nav v-else-if="!isSettingsRoute" class="flex items-center">
+          <nav v-else-if="!isUtilityRoute" class="flex items-center">
             <router-link
               to="/books"
               class="font-medium text-gray-700 transition-colors hover:text-gold-700 dark:text-gray-200 dark:hover:text-gold-300"

@@ -16,6 +16,12 @@ import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, C
 
 const router = useRouter()
 
+const props = withDefaults(defineProps<{
+  section?: 'settings' | 'library-data'
+}>(), {
+  section: 'settings',
+})
+
 // Local database + image library provide the primitives the settings composables build on.
 const {
   books,
@@ -148,15 +154,18 @@ const {
 
 onMounted(async () => {
   await initializeDatabase()
-  await loadBooks()
-  await loadApiKey()
-  await refreshBrowserStorage()
-  await refreshRecoveries()
-  if (!cloudSyncReady.value) {
-    try {
-      await prepareCloudSync()
-    } catch (error) {
-      console.error('Failed to prepare cloud sync:', error)
+  if (props.section === 'settings') {
+    await loadApiKey()
+  } else {
+    await loadBooks()
+    await refreshBrowserStorage()
+    await refreshRecoveries()
+    if (!cloudSyncReady.value) {
+      try {
+        await prepareCloudSync()
+      } catch (error) {
+        console.error('Failed to prepare cloud sync:', error)
+      }
     }
   }
 })
@@ -175,13 +184,19 @@ onMounted(async () => {
             <ArrowLeftIcon class="w-5 h-5 mr-2" />
             Back
           </button>
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">User Settings</h1>
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ props.section === 'settings' ? 'User Settings' : 'Library Data' }}</h1>
+            <p v-if="props.section === 'library-data'" class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Edit books outside Beta Bot, create backups, restore your library, or export reading copies.
+            </p>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Main Content -->
     <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <template v-if="props.section === 'settings'">
       <section class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800" aria-labelledby="appearance-heading">
         <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <h2 id="appearance-heading" class="text-lg font-semibold text-gray-900 dark:text-white">Appearance</h2>
@@ -362,6 +377,41 @@ onMounted(async () => {
         </div>
       </div>
 
+      <RouterLink
+        to="/library-data"
+        data-testid="library-data-link"
+        class="group block rounded-lg border border-gold-200 bg-gold-50 p-6 shadow-sm transition-colors hover:border-gold-400 hover:bg-gold-100 dark:border-gold-800 dark:bg-gold-900/20 dark:hover:border-gold-600 dark:hover:bg-gold-900/30"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex gap-3">
+            <CircleStackIcon class="mt-0.5 h-6 w-6 shrink-0 text-gold-700 dark:text-gold-300" />
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Library Data</h2>
+              <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                Manage editable workspaces, complete backups, Google Drive restore, recovery snapshots, and other export formats.
+              </p>
+            </div>
+          </div>
+          <span class="text-sm font-medium text-gold-700 group-hover:underline dark:text-gold-300">Open →</span>
+        </div>
+      </RouterLink>
+      </template>
+
+      <template v-else>
+      <nav class="grid gap-3 sm:grid-cols-3" aria-label="Library data sections">
+        <a href="#editable-workspaces" class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-950 transition-colors hover:border-blue-400 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+          <span class="block font-semibold">Editable workspaces</span>
+          <span class="mt-1 block text-xs opacity-80">Round-trip books through Markdown and YAML.</span>
+        </a>
+        <a href="#backup-and-restore" class="rounded-lg border border-gold-200 bg-gold-50 p-4 text-gold-950 transition-colors hover:border-gold-400 dark:border-gold-900 dark:bg-gold-950/30 dark:text-gold-100">
+          <span class="block font-semibold">Backup and restore</span>
+          <span class="mt-1 block text-xs opacity-80">Protect or recover your complete library.</span>
+        </a>
+        <a href="#other-exports" class="rounded-lg border border-gray-200 bg-white p-4 text-gray-900 transition-colors hover:border-gray-400 dark:border-gray-700 dark:bg-navy-800 dark:text-white">
+          <span class="block font-semibold">Other export formats</span>
+          <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">Create legacy ZIP or reading copies.</span>
+        </a>
+      </nav>
 
       <div
         v-if="showBrowserStorage"
@@ -425,6 +475,11 @@ onMounted(async () => {
 
 
       <!-- Cloud Backup Section -->
+      <section id="backup-and-restore" class="scroll-mt-6 space-y-3" aria-labelledby="backup-and-restore-heading">
+        <div>
+          <h2 id="backup-and-restore-heading" class="text-xl font-semibold text-gray-900 dark:text-white">Backup and restore</h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Use encrypted cloud backups or export a complete local bundle below.</p>
+        </div>
       <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex items-center space-x-2">
@@ -580,7 +635,12 @@ onMounted(async () => {
           </p>
         </div>
       </div>
+      </section>
 
+      <div id="editable-workspaces" class="scroll-mt-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Editable workspaces and imports</h2>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Preview external edits, restore a recovery snapshot, or apply a portable library bundle.</p>
+      </div>
       <LibraryBundleImport
         :plan="importPlan"
         :exported-at="bundleExportedAt"
@@ -612,7 +672,7 @@ onMounted(async () => {
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Export Your Data</h2>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Export a workspace, backup, or reading copy</h2>
               <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Download all your books, chapters, and character data in a structured format.
               </p>
@@ -620,7 +680,7 @@ onMounted(async () => {
             <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <button
                 @click="handleExport"
-                :disabled="isExporting || (exportFormat === 'bundle' && bundleScope === 'selection' && !selectedBooksAreValid)"
+                :disabled="isExporting || ((exportFormat === 'bundle' || exportFormat === 'text-workspace') && bundleScope === 'selection' && !selectedBooksAreValid)"
                 class="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium whitespace-nowrap w-full sm:w-auto"
               >
                 <DocumentArrowDownIcon class="w-5 h-5 mr-2" />
@@ -628,18 +688,20 @@ onMounted(async () => {
                   ? 'Exporting...'
                   : exportFormat === 'bundle'
                     ? bundleScope === 'selection' ? 'Export selected books' : 'Export full library backup'
-                    : exportFormat === 'text-workspace' ? 'Export text-only workspace ZIP' : 'Export Data' }}
+                  : exportFormat === 'text-workspace'
+                    ? bundleScope === 'selection' ? 'Export selected books workspace ZIP' : 'Export text workspace ZIP'
+                    : 'Export Data' }}
               </button>
               <button
                 v-if="canExportBundleDirectory && (exportFormat === 'bundle' || exportFormat === 'text-workspace')"
                 type="button"
-                :disabled="isExporting || (exportFormat === 'bundle' && bundleScope === 'selection' && !selectedBooksAreValid)"
+                :disabled="isExporting || ((exportFormat === 'bundle' || exportFormat === 'text-workspace') && bundleScope === 'selection' && !selectedBooksAreValid)"
                 class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-lg border border-green-600 px-4 py-2 font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20 sm:w-auto"
                 @click="exportFormat === 'bundle' ? exportBundleDirectory() : exportTextOnlyWorkspaceDirectory()"
               >
                 <DocumentArrowDownIcon class="mr-2 h-5 w-5" />
                 {{ exportFormat === 'text-workspace'
-                  ? 'Export text-only workspace to folder'
+                  ? bundleScope === 'selection' ? 'Export selected books workspace to folder' : 'Export text workspace to folder'
                   : bundleScope === 'selection' ? 'Export selected books to folder' : 'Export full bundle to folder' }}
               </button>
             </div>
@@ -647,6 +709,17 @@ onMounted(async () => {
         </div>
 
         <div class="px-6 py-4 space-y-4">
+          <section data-testid="round-trip-workflow" class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100" aria-labelledby="round-trip-workflow-heading">
+            <h3 id="round-trip-workflow-heading" class="font-semibold">Editing books outside Beta Bot</h3>
+            <ol class="mt-2 list-decimal space-y-1 pl-5">
+              <li>Export an <strong>Editable text workspace</strong>.</li>
+              <li>Edit its Markdown and YAML files. Keep existing IDs and leave <code>_beta-bot/inventory.json</code> unchanged—it records the original export used to detect your edits.</li>
+              <li>Import the ZIP or folder and review creates, updates, deletions, and conflicts before applying.</li>
+              <li>After Apply changes succeeds, export to the workspace again before starting another editing round. This establishes the next comparison baseline.</li>
+            </ol>
+            <p class="mt-2 text-xs opacity-80">Use a complete library backup for recovery or device transfer, not as the default editing workspace.</p>
+          </section>
+
           <!-- Export Format Selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -661,7 +734,7 @@ onMounted(async () => {
                   class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
                 />
                 <span class="ml-2">
-                  <span class="block text-sm text-gray-900 dark:text-white">Full library backup (recommended)</span>
+                  <span class="block text-sm text-gray-900 dark:text-white">Complete library backup</span>
                   <span class="block text-xs text-gray-500 dark:text-gray-400">
                     Creates a complete canonical Beta Bot bundle with images, history, profiles, and audit records
                   </span>
@@ -678,15 +751,18 @@ onMounted(async () => {
                   class="mt-0.5 h-4 w-4 text-green-600 border-gray-300 dark:border-gray-600 focus:ring-green-500"
                 />
                 <span class="ml-2">
-                  <span class="block text-sm text-gray-900 dark:text-white">Text-only Git workspace (advanced)</span>
+                  <span class="block text-sm text-gray-900 dark:text-white">Editable text workspace (recommended for file editing)</span>
                   <span class="block text-xs text-gray-500 dark:text-gray-400">
-                    For Git and coding agents. Includes editable Markdown/YAML, stable IDs, relationships, image metadata, and inventory hashes.
+                    Export, edit Markdown/YAML in Git or a coding agent, then import with a three-way preview. The inventory records the original export and must stay unchanged.
                   </span>
                   <span class="mt-1 block text-xs font-medium text-amber-700 dark:text-amber-300">
                     Not a complete backup: image bytes, recovery history, and audit data are omitted. It cannot replace your library.
                   </span>
                 </span>
               </label>
+              <div id="other-exports" class="scroll-mt-6 border-t border-gray-200 pt-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                Other export formats
+              </div>
               <label class="flex items-start cursor-pointer">
                 <input
                   type="radio"
@@ -718,20 +794,20 @@ onMounted(async () => {
             </div>
           </div>
 
-          <fieldset v-if="exportFormat === 'bundle'" class="space-y-3 border-l-2 border-gray-200 pl-6 dark:border-gray-700">
-            <legend class="text-sm font-medium text-gray-700 dark:text-gray-300">Bundle contents</legend>
+          <fieldset v-if="exportFormat === 'bundle' || exportFormat === 'text-workspace'" class="space-y-3 border-l-2 border-gray-200 pl-6 dark:border-gray-700">
+            <legend class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ exportFormat === 'text-workspace' ? 'Workspace contents' : 'Bundle contents' }}</legend>
             <label class="flex cursor-pointer items-start">
               <input v-model="bundleScope" type="radio" value="library" class="mt-0.5 h-4 w-4 border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-600" />
               <span class="ml-2">
-                <span class="block text-sm text-gray-900 dark:text-white">Full library</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">Includes every book and can be used with Apply changes or Replace library.</span>
+                <span class="block text-sm text-gray-900 dark:text-white">Entire library</span>
+                <span class="block text-xs text-gray-500 dark:text-gray-400">{{ exportFormat === 'text-workspace' ? 'Includes editable files for every book. Apply changes preserves omitted history and image bytes.' : 'Includes every book and can be used with Apply changes or Replace library.' }}</span>
               </span>
             </label>
             <label class="flex cursor-pointer items-start">
               <input v-model="bundleScope" data-testid="bundle-scope-selection" type="radio" value="selection" class="mt-0.5 h-4 w-4 border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-600" />
               <span class="ml-2">
                 <span class="block text-sm text-gray-900 dark:text-white">Selected books</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">Creates a canonical selection bundle for Apply changes. Selection bundles cannot replace a library.</span>
+                <span class="block text-xs text-gray-500 dark:text-gray-400">{{ exportFormat === 'text-workspace' ? 'Creates a smaller editable workspace for Apply changes.' : 'Creates a canonical selection bundle for Apply changes. Selection bundles cannot replace a library.' }}</span>
               </span>
             </label>
 
@@ -856,6 +932,7 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+      </template>
     </div>
   </div>
 </template>

@@ -324,6 +324,9 @@ watch(
           <p class="mt-2 text-gray-600 dark:text-gray-300">
             {{ importedBookIds.length === 1 ? 'Your book is ready to edit.' : `${importedBookIds.length} books are ready to edit.` }}
           </p>
+          <p class="mx-auto mt-3 max-w-xl text-sm text-gray-500 dark:text-gray-400">
+            If this was an externally edited workspace, export to that workspace again before the next editing round. The refreshed inventory becomes the baseline for the next three-way comparison.
+          </p>
           <div class="mt-6 flex justify-center gap-3">
             <button class="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:border-gray-600 dark:text-gray-200" @click="closeImportModal">Done</button>
             <button v-if="importedBookIds.length === 1" class="rounded-lg bg-gold-600 px-4 py-2 font-medium text-white hover:bg-gold-700" @click="openImportedBook">Open book</button>
@@ -334,7 +337,7 @@ watch(
           v-else
           embedded
           heading="Choose a Beta Bot bundle"
-          description="Preview a ZIP or bundle folder before adding or updating its books. Nothing changes until you confirm."
+          description="Preview a ZIP or folder against its export-time inventory and your current library. Nothing changes until you confirm."
           :apply-label="importApplyLabel"
           :show-replace="false"
           :show-recoveries="false"

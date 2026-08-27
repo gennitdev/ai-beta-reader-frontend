@@ -4,6 +4,7 @@ import { bundleError, bundleWarning, hasBundleErrors, type BundleDiagnostic } fr
 import { canonicalEntityKey, collectCanonicalModelEntities } from './entities'
 import { chapterContentHash, sha256Hex } from './semanticHash'
 import { isReplaceStructurallyEligible } from './manifest'
+import { normalizeDeletedWikiReferences } from './normalize'
 import { isBuiltInReviewProfileId } from '@/lib/reviewerProfileIdentity'
 
 export interface ValidatedLibraryBundle extends ReadLibraryBundleResult {
@@ -39,8 +40,19 @@ export async function validateLibraryBundle(
   files: ReadonlyBundleFileMap,
 ): Promise<ValidatedLibraryBundle> {
   const diagnostics = [...parsed.diagnostics]
-  const { model, manifest, inventory } = parsed
-  if (!model || !manifest || !inventory) return { ...parsed, diagnostics, replaceEligible: false }
+  const { model: parsedModel, manifest, inventory } = parsed
+  if (!parsedModel || !manifest || !inventory) return { ...parsed, diagnostics, replaceEligible: false }
+  const normalized = normalizeDeletedWikiReferences(parsedModel, inventory)
+  const model = normalized.model
+  normalized.cascades.forEach((cascade) => {
+    const removed = cascade.wikiUpdates + cascade.wikiReviewStates + cascade.chapterMentions
+      + cascade.assetTags + cascade.bookCharacters
+    if (removed > 0) diagnostics.push(bundleWarning(
+      'reference.wiki_page_deletion_cascade',
+      `Removed ${removed} dependent reference${removed === 1 ? '' : 's'} because inventoried wiki page ${cascade.wikiPageId} is absent from the incoming bundle.`,
+      { entityType: 'wiki_page', entityId: cascade.wikiPageId },
+    ))
+  })
 
   if (manifest.bundle_id !== inventory.bundle_id) {
     diagnostics.push(bundleError('inventory.bundle_id', 'Manifest and inventory bundle IDs do not match.', { path: '_beta-bot/inventory.json' }))
@@ -186,7 +198,7 @@ export async function validateLibraryBundle(
     && (!manifest.includes.audit_records || files.has('_beta-bot/history/wiki-updates.jsonl') && files.has('_beta-bot/review-state.jsonl'))
   if (!completeDeclaredFiles) diagnostics.push(bundleError('manifest.missing_declared_data', 'Manifest declares history or audit data whose managed files are missing.'))
   return {
-    ...parsed,
+    ...parsed, model,
     diagnostics,
     replaceEligible: isReplaceStructurallyEligible(manifest) && completeDeclaredFiles && !hasBundleErrors(diagnostics),
   }

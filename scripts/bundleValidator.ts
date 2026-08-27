@@ -33,7 +33,7 @@ async function discoverDirectory(
   const discovered: DiscoveredEntry[] = []
   const children = await readdir(absoluteDirectory, { withFileTypes: true })
   for (const child of children) {
-    if (!relativeDirectory && child.name === '.git') continue
+    if (child.name === '.git') continue
     const relativePath = relativeDirectory ? `${relativeDirectory}/${child.name}` : child.name
     if (isIgnoredWorkspacePath(relativePath)) continue
     const absolutePath = join(absoluteDirectory, child.name)

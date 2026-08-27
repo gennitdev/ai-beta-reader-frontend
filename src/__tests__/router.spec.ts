@@ -13,6 +13,7 @@ describe('router', () => {
     expect(byName.get('example-books')).toBe('/example-books')
     expect(byName.get('book')).toBe('/books/:id')
     expect(byName.get('settings')).toBe('/settings')
+    expect(byName.get('library-data')).toBe('/library-data')
     expect(byName.get('ai-profiles')).toBe('/ai-profiles')
     expect(byName.get('challenges')).toBe('/challenges')
     expect(byName.get('bardwall')).toBe('/bardwall')

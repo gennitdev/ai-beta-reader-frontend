@@ -48,7 +48,7 @@ Browser storage can still be deleted through browser settings. Keep encrypted Dr
 
 ## Troubleshooting
 
-- Missing preview: check Settings → Browser Storage and restore a backup containing the image if the Blob/file is missing.
+- Missing preview: check Library Data → Browser Storage and restore a backup containing the image if the Blob/file is missing.
 - Browser storage full: free device space or remove unused images, then retry.
 - Temporary/private browsing: use a regular browser window and allow site storage.
 - Electron IPC failure: inspect `electron/src/image-bridge.ts` logs and verify filesystem permissions.

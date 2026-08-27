@@ -264,13 +264,13 @@ Create a `.env.local` file (or copy [.env.example](.env.example)) and configure 
 
 Beta bot's bundle format lets the visual app and a plain-text writing workflow share the same book. This is useful when you want the app for reading, organization, illustrations, summaries, and story-bible navigation, but prefer editing Markdown and YAML in a text editor—or with an AI coding tool such as the Codex or Claude desktop app or CLI.
 
-1. In beta bot, choose **Text-only Git workspace** as the export format and export the selected book as a folder or ZIP.
+1. In beta bot, choose **Editable text workspace** as the export format, select the books you want, and export a folder or ZIP.
 2. Open the exported workspace in your editor, a Git repository, Codex, or Claude. Chapters, part summaries, chapter summaries, and wiki pages are ordinary Markdown; book structure and relationships use YAML.
-3. Edit and review the changes as normal text diffs. Keep existing entity IDs and frontmatter relationships intact, and do not edit `_beta-bot/inventory.json` by hand.
+3. Edit and review the changes as normal text diffs. Keep existing entity IDs and frontmatter relationships intact, and do not edit anything under `_beta-bot/`. Its inventory is the immutable export-time baseline; changing or regenerating it would erase Beta Bot's evidence of your edits.
 4. Return to **My Books → Import Bundle**. Beta bot previews every create, update, and conflict before anything is written to the local library.
-5. Continue working in the visual UI. When you want to move back to plain text, export again; folder export safely updates app-managed files while preserving unknown files and customized workspace instructions.
+5. After Apply changes succeeds, export to the workspace again before beginning another external editing round. This records the accepted app state as the next comparison baseline while preserving unknown files and customized workspace instructions.
 
-This makes the bundle a round-trip workspace rather than a one-way export. You can move between the UI and plain text repeatedly, keep the workspace under Git, and resolve overlapping edits explicitly during import. Full-library bundles remain the right choice for backup and device migration because they include image bytes, history, profiles, and audit data; text-only workspaces are optimized for editing and preserve matching local image content when reapplied.
+This makes the bundle a round-trip workspace rather than a one-way export. The inventory plays the role of a Git merge base: import compares that original export, the current app library, and the incoming edited files. You can move between the UI and plain text repeatedly, keep the workspace under Git, and resolve overlapping edits explicitly during import. Full-library bundles remain the right choice for backup and device migration because they include image bytes, history, profiles, and audit data; text-only workspaces are optimized for editing and preserve matching local image content when reapplied.
 
 ### Google Drive Backup & Restore
 
