@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { LibraryImportPlan, ImportConflictResolution, ImportPlanOperation } from '@/lib/libraryBundle/plan'
 import type { RecoveryBundleMetadata } from '@/lib/recovery/model'
+import LibraryBundleFieldDiff from '@/components/LibraryBundleFieldDiff.vue'
 
 const props = withDefaults(defineProps<{
   plan: LibraryImportPlan | null
@@ -57,11 +58,6 @@ function selectDirectory(event: Event) {
   input.value = ''
 }
 
-function formatValue(value: unknown): string {
-  if (typeof value === 'string') return value
-  return JSON.stringify(value, null, 2) ?? 'absent'
-}
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes.toLocaleString()} bytes`
   const units = ['KB', 'MB', 'GB']
@@ -72,6 +68,10 @@ function formatBytes(bytes: number): string {
     unit = units[index]
   }
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`
+}
+
+function formatCount(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? '' : 's'}`
 }
 
 function formatExportedAt(value: string): string {
@@ -97,6 +97,9 @@ const hiddenWikiReviewWarningCount = computed(() => Math.max(
     + (props.plan?.previewSummary.wikiReview.missing.length ?? 0)
     - MAX_VISIBLE_REVIEW_WARNINGS,
 ))
+const deletedWikiPages = computed(() => props.plan?.operations.filter((operation) =>
+  operation.entityType === 'wiki_page' && (operation.kind === 'delete'
+    || operation.kind === 'conflict' && operation.resolution === 'use_incoming' && !operation.incomingHash)) ?? [])
 const visibleUnknownProfiles = computed(() => props.plan?.previewSummary.warnings.unknownProfiles
   .slice(0, MAX_VISIBLE_UNKNOWN_PROFILES) ?? [])
 const hiddenUnknownProfileCount = computed(() => Math.max(
@@ -240,21 +243,26 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
         </section>
 
         <section aria-labelledby="wiki-review-heading" class="rounded border border-gray-200 p-3 dark:border-gray-700">
-          <h3 id="wiki-review-heading" class="text-sm font-semibold text-gray-900 dark:text-white">Wiki review impact</h3>
+          <h3 id="wiki-review-heading" class="text-sm font-semibold text-gray-900 dark:text-white">Wiki impact</h3>
           <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
-            {{ plan.previewSummary.wikiReview.currentCount }} current ·
+            {{ formatCount(deletedWikiPages.length, 'page') }} deleted ·
+            {{ formatCount(plan.previewSummary.wikiReview.currentCount, 'review') }} current ·
             {{ plan.previewSummary.wikiReview.stale.length }} stale ·
-            {{ plan.previewSummary.wikiReview.missing.length }} missing
+            {{ formatCount(plan.previewSummary.wikiReview.missing.length, 'link') }} {{ plan.previewSummary.wikiReview.missing.length === 1 ? 'needs' : 'need' }} review
+          </p>
+          <p v-if="deletedWikiPages.length" class="mt-2 text-xs text-gray-600 dark:text-gray-300">
+            Deleted pages are included as normal delete operations below. Review notices refer only to surviving pages that are newly linked to chapters.
           </p>
           <div v-if="plan.previewSummary.wikiReview.stale.length || plan.previewSummary.wikiReview.missing.length" class="mt-2 space-y-2 text-xs">
             <div v-for="warning in visibleWikiReviewWarnings" :key="`${warning.kind}-${warning.item.entityId}`" class="rounded bg-amber-50 p-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-              <strong>{{ warning.kind }}:</strong> {{ warning.item.wikiPageTitle }} for {{ warning.item.chapterTitle }}<template v-if="warning.item.path"> · {{ warning.item.path }}</template>
+              <strong>{{ warning.kind === 'Missing' ? 'Needs review' : warning.kind }}:</strong> {{ warning.item.wikiPageTitle }} for {{ warning.item.chapterTitle }}<template v-if="warning.item.path"> · {{ warning.item.path }}</template>
+              <div v-if="warning.kind === 'Missing'" class="mt-1 opacity-80">This surviving wiki page has a new or changed chapter link without a review record; the page itself is not missing.</div>
             </div>
             <p v-if="hiddenWikiReviewWarningCount" class="text-xs text-amber-800 dark:text-amber-200">
-              {{ hiddenWikiReviewWarningCount }} additional wiki review warning(s) are not shown.
+              {{ hiddenWikiReviewWarningCount }} additional wiki review notice(s) are not shown.
             </p>
           </div>
-          <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400">No stale or missing wiki review state.</p>
+          <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400">No wiki links need review.</p>
         </section>
 
         <section aria-labelledby="alias-heading" class="rounded border border-gray-200 p-3 dark:border-gray-700">
@@ -304,16 +312,19 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
               <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ typeGroup.entityType.replaceAll('_', ' ') }}</h4>
               <div v-for="operation in typeGroup.operations" :key="operation.key" class="mt-2 rounded border border-gray-200 p-3 dark:border-gray-700">
                 <div class="flex flex-wrap items-start justify-between gap-2">
-                  <div>
+                  <div class="min-w-0 flex-1">
                     <div class="text-sm font-medium text-gray-900 dark:text-white">{{ operation.title || operation.entityId }}</div>
                     <div class="text-xs text-gray-500">{{ operation.entityType }} · {{ operation.kind.replace('_', ' ') }}<template v-if="operation.path"> · {{ operation.path }}</template></div>
                     <div v-if="operation.changedFields.length" class="mt-1 text-xs text-gray-500">Changed: {{ operation.changedFields.join(', ') }}</div>
                     <details v-if="operation.changedFields.length" class="mt-2 text-xs">
                       <summary class="cursor-pointer text-gray-600 dark:text-gray-300">Show field differences</summary>
-                      <div v-for="field in operation.changedFields" :key="field" class="mt-2 grid gap-2 sm:grid-cols-2">
-                        <div><strong>Local {{ field }}</strong><pre class="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 dark:bg-navy-900">{{ formatValue((operation.localValue as Record<string, unknown> | undefined)?.[field]) }}</pre></div>
-                        <div><strong>Incoming {{ field }}</strong><pre class="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 dark:bg-navy-900">{{ formatValue((operation.incomingValue as Record<string, unknown> | undefined)?.[field]) }}</pre></div>
-                      </div>
+                      <LibraryBundleFieldDiff
+                        v-for="field in operation.changedFields"
+                        :key="field"
+                        :field="field"
+                        :local-value="(operation.localValue as Record<string, unknown> | undefined)?.[field]"
+                        :incoming-value="(operation.incomingValue as Record<string, unknown> | undefined)?.[field]"
+                      />
                     </details>
                   </div>
                   <div v-if="operation.kind === 'conflict' && operation.conflictReason !== 'cross_book_id_collision'" class="flex gap-2">

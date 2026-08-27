@@ -171,9 +171,9 @@ async function createPreviewSummary(
   const missing = model.chapters.flatMap((chapter) => chapter.wiki_mentions
     .filter((mention) => {
       const id = `${mention.wiki_page_id}:${chapter.id}`
-      return !reviewIds.has(id) && !localMissingIds.has(id)
+      return pages.has(mention.wiki_page_id) && !reviewIds.has(id) && !localMissingIds.has(id)
     })
-    .map((mention) => wikiReference(mention.wiki_page_id, chapter.id, 'This explicit wiki mention has no review record.')))
+    .map((mention) => wikiReference(mention.wiki_page_id, chapter.id, 'This new or changed chapter link has no review record.')))
 
   const aliases = new Map<string, { alias: string; pageIds: Set<string> }>()
   for (const page of model.wiki_pages) for (const alias of page.aliases) {
