@@ -263,7 +263,7 @@ describe('useDataExport', () => {
       expect.any(Map),
       expect.any(Map),
     )
-    expect(state.exportProgress.value).toContain('2 managed files written, 1 obsolete files removed')
+    expect(state.exportProgress.value).toBe('Complete backup folder updated: 2 managed files written, 1 obsolete files removed.')
     expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 

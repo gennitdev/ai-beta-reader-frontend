@@ -693,16 +693,14 @@ onMounted(async () => {
                     : 'Export Data' }}
               </button>
               <button
-                v-if="canExportBundleDirectory && (exportFormat === 'bundle' || exportFormat === 'text-workspace')"
+                v-if="canExportBundleDirectory && exportFormat === 'text-workspace'"
                 type="button"
-                :disabled="isExporting || ((exportFormat === 'bundle' || exportFormat === 'text-workspace') && bundleScope === 'selection' && !selectedBooksAreValid)"
+                :disabled="isExporting || (bundleScope === 'selection' && !selectedBooksAreValid)"
                 class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-lg border border-green-600 px-4 py-2 font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-300 dark:hover:bg-green-900/20 sm:w-auto"
-                @click="exportFormat === 'bundle' ? exportBundleDirectory() : exportTextOnlyWorkspaceDirectory()"
+                @click="exportTextOnlyWorkspaceDirectory()"
               >
                 <DocumentArrowDownIcon class="mr-2 h-5 w-5" />
-                {{ exportFormat === 'text-workspace'
-                  ? bundleScope === 'selection' ? 'Export selected books workspace to folder' : 'Export text workspace to folder'
-                  : bundleScope === 'selection' ? 'Export selected books to folder' : 'Export full bundle to folder' }}
+                {{ bundleScope === 'selection' ? 'Export selected books workspace to folder' : 'Export text workspace to folder' }}
               </button>
             </div>
           </div>
@@ -736,10 +734,7 @@ onMounted(async () => {
                 <span class="ml-2">
                   <span class="block text-sm text-gray-900 dark:text-white">Complete library backup</span>
                   <span class="block text-xs text-gray-500 dark:text-gray-400">
-                    Creates a complete canonical Beta Bot bundle with images, history, profiles, and audit records
-                  </span>
-                  <span v-if="canExportBundleDirectory" class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                    Folder export can safely update an existing bundle, preserves unknown files, and creates starter AGENTS.md and .gitattributes files once.
+                    Downloads a portable ZIP with images, history, profiles, and audit records. Use it for recovery, safekeeping, or moving your library to another device.
                   </span>
                 </span>
               </label>
@@ -828,6 +823,39 @@ onMounted(async () => {
               <p v-if="selectedBookIds.length === 0" class="text-xs text-amber-600 dark:text-amber-400">Select at least one book to export.</p>
             </div>
           </fieldset>
+
+          <section
+            v-if="canExportBundleDirectory && exportFormat === 'bundle'"
+            data-testid="complete-backup-folder-option"
+            class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-navy-900/40"
+            aria-labelledby="complete-backup-folder-heading"
+          >
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 id="complete-backup-folder-heading" class="text-sm font-semibold text-gray-900 dark:text-white">
+                  Advanced: {{ bundleScope === 'selection' ? 'selected-books bundle folder' : 'complete backup folder' }}
+                </h3>
+                <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                  <template v-if="bundleScope === 'selection'">
+                    Writes an unpacked canonical bundle for the selected books. It can be applied to a library, but cannot replace one.
+                  </template>
+                  <template v-else>
+                    Updates an unpacked, complete copy of your library for local archival or inspection. For a portable backup, download the ZIP above; for external drafting, use an Editable text workspace.
+                  </template>
+                  Existing Beta Bot bundle folders are updated safely: unknown files are preserved and obsolete managed files are removed only after verified writes.
+                </p>
+              </div>
+              <button
+                type="button"
+                :disabled="isExporting || (bundleScope === 'selection' && !selectedBooksAreValid)"
+                class="inline-flex w-full shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-gray-400 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800 sm:w-auto"
+                @click="exportBundleDirectory()"
+              >
+                <DocumentArrowDownIcon class="mr-2 h-4 w-4" />
+                {{ bundleScope === 'selection' ? 'Export selected-books bundle folder' : 'Update complete backup folder' }}
+              </button>
+            </div>
+          </section>
 
           <!-- Markdown Options (only for markdown export) -->
           <div v-if="exportFormat === 'markdown'" class="pl-6 border-l-2 border-gray-200 dark:border-gray-700 space-y-4">
