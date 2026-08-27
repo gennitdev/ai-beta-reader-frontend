@@ -212,7 +212,8 @@ export function useDataExport(deps: UseDataExportDeps) {
       const { bundle } = await createCanonicalBundle(selection)
       exportProgress.value = 'Updating managed bundle files and preserving your other files...'
       const result = await writeBundleDirectory(directory, bundle.files, createAgentWorkspaceScaffold())
-      exportProgress.value = `Folder updated: ${result.writtenFiles} managed files written, ${result.deletedFiles} obsolete files removed.`
+      const folderLabel = selection ? 'Selected-books bundle folder' : 'Complete backup folder'
+      exportProgress.value = `${folderLabel} updated: ${result.writtenFiles} managed files written, ${result.deletedFiles} obsolete files removed.`
       setTimeout(() => { exportProgress.value = '' }, 5000)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {

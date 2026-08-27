@@ -302,7 +302,9 @@ See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secre
 
 ### Folder export and validation
 
-- Folder export can write either a complete library bundle or the editable text-only Git workspace, depending on the selected export format.
+- **Complete library backup ZIP** is the default choice for recovery, safekeeping, and device transfer. It is portable and contains the entire library.
+- **Update complete backup folder** is an advanced, unpacked version of the same complete data. Use it for local archival or inspection when a normal ZIP is inconvenient; it is not the recommended external-editing workflow.
+- **Editable text workspace** is the recommended export for drafting in Git, an editor, or a coding agent, followed by an Apply changes import. It deliberately omits image bytes and app-owned history, so it is not a backup.
 - Existing bundles are updated from their prior inventory: unknown files and customized workspace guidance are preserved, and obsolete managed files are removed only after verified writes.
 - Validate either transport without opening the app or database:
 

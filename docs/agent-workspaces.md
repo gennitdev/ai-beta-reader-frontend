@@ -1,10 +1,12 @@
 # Git and agent workspaces
 
-Beta Bot can export the canonical library bundle directly to a folder in browsers that support the File System Access API. Open **Library Data**, choose **Editable text workspace**, export to a folder, then select either an empty folder or a folder containing an earlier Beta Bot bundle.
+Beta Bot can export directly to a folder in browsers that support the File System Access API. For normal external drafting, open **Library Data**, choose **Editable text workspace**, export to a folder, then select either an empty folder or a folder containing an earlier Beta Bot workspace.
 
 ZIP remains available on every supported platform. Folder export is progressive enhancement for Chromium-class browsers and compatible desktop builds.
 
-Text-only workspaces keep the authored Markdown, YAML, relationships, stable IDs, and image metadata needed for an editable round trip without duplicating image binaries or app-owned recovery history. Full-library folder export remains available when a complete, replace-capable backup is needed.
+Text-only workspaces keep the authored Markdown, YAML, relationships, stable IDs, and image metadata needed for an editable round trip without duplicating image binaries or app-owned recovery history.
+
+The separate **Update complete backup folder** action is an advanced option. It writes the full canonical library—including image bytes and app-owned history—as an unpacked, replace-capable backup for local archival or inspection. Prefer the complete library backup ZIP for portable recovery and device transfer, and do not use the complete backup folder as the default drafting workspace.
 
 ## Safe folder updates
 

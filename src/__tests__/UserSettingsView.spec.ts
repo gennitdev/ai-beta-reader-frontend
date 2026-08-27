@@ -355,15 +355,22 @@ describe('UserSettingsView', () => {
     expect(wrapper.get('[data-testid="round-trip-workflow"]').text()).toContain('export to the workspace again')
   })
 
-  it('offers Git workspace folder export when the browser supports directory access', async () => {
+  it('distinguishes the advanced complete backup folder from the editable workspace', async () => {
     vi.stubGlobal('showDirectoryPicker', vi.fn())
     const wrapper = mountView('library-data')
     await flushPromises()
 
-    expect(button(wrapper, 'Export full bundle to folder').exists()).toBe(true)
-    expect(wrapper.text()).toContain('preserves unknown files')
+    expect(button(wrapper, 'Update complete backup folder').exists()).toBe(true)
+    expect(wrapper.findAll('button').some((candidate) => candidate.text().includes('Export full bundle to folder'))).toBe(false)
+    expect(wrapper.get('[data-testid="complete-backup-folder-option"]').text()).toContain('local archival or inspection')
+    expect(wrapper.get('[data-testid="complete-backup-folder-option"]').text()).toContain('For a portable backup, download the ZIP above')
+    expect(wrapper.text()).toContain('unknown files are preserved')
     expect(wrapper.text()).toContain('Editable text workspace (recommended for file editing)')
     expect(wrapper.text()).toContain('Not a complete backup')
+
+    await wrapper.get('input[value="text-workspace"]').setValue()
+    expect(button(wrapper, 'Export text workspace to folder').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="complete-backup-folder-option"]').exists()).toBe(false)
   })
 
   it('lets the user choose one or multiple books for selected-book export', async () => {
