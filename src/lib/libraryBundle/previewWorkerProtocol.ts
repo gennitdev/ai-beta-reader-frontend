@@ -1,4 +1,5 @@
 import type { PreviewedBundleImport } from './importPreview'
+import type { LibraryBundlePreviewStage } from './importPreview'
 import type { LibraryImportIntent } from './plan'
 import type { SelectedDirectoryBundleFile } from './adapters/directory'
 
@@ -22,6 +23,9 @@ export type LibraryBundlePreviewWorkerRequest = LibraryBundleZipPreviewWorkerReq
 export type LibraryBundlePreviewWorkerErrorCode = 'local-asset-bytes-required' | 'preview-failed'
 
 export type LibraryBundlePreviewWorkerResponse = {
+  type: 'preview-progress'
+  stage: LibraryBundlePreviewStage
+} | {
   type: 'preview-complete'
   preview: PreviewedBundleImport
 } | {

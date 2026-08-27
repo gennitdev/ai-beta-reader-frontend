@@ -18,7 +18,10 @@ export interface PreviewBundleImportOptions {
   readLocalAssetBytes?: AssetByteReader
   intent?: LibraryImportIntent
   retainLocalAssetBytes?: boolean
+  onProgress?: (stage: LibraryBundlePreviewStage) => void
 }
+
+export type LibraryBundlePreviewStage = 'reading' | 'validating' | 'planning'
 
 export interface PreviewedBundleImport {
   plan: LibraryImportPlan
@@ -33,6 +36,7 @@ export async function previewBundleZipImport(
   currentDatabaseBackup: Uint8Array,
   options: PreviewBundleImportOptions = {},
 ): Promise<PreviewedBundleImport> {
+  options.onProgress?.('reading')
   const transport = await readBundleZip(zipBytes)
   if (!transport.files) throw new Error(transport.diagnostics.map((value) => value.message).join('\n'))
   return previewBundleFileMapImport(transport.files, currentDatabaseBackup, transport.diagnostics, options)
@@ -43,6 +47,7 @@ export async function previewBundleDirectoryImport(
   currentDatabaseBackup: Uint8Array,
   options: PreviewBundleImportOptions = {},
 ): Promise<PreviewedBundleImport> {
+  options.onProgress?.('reading')
   const transport = await readBundleDirectoryFiles(selectedFiles)
   if (!transport.files) throw new Error(transport.diagnostics.map((value) => value.message).join('\n'))
   return previewBundleFileMapImport(transport.files, currentDatabaseBackup, transport.diagnostics, options)
@@ -53,6 +58,7 @@ export async function previewPreparedBundleDirectoryImport(
   currentDatabaseBackup: Uint8Array,
   options: PreviewBundleImportOptions = {},
 ): Promise<PreviewedBundleImport> {
+  options.onProgress?.('reading')
   const transport = await readPreparedBundleDirectoryFiles(selectedFiles)
   if (!transport.files) throw new Error(transport.diagnostics.map((value) => value.message).join('\n'))
   return previewBundleFileMapImport(transport.files, currentDatabaseBackup, transport.diagnostics, options)
@@ -64,12 +70,14 @@ export async function previewBundleFileMapImport(
   transportDiagnostics: readonly BundleDiagnostic[] = [],
   options: PreviewBundleImportOptions = {},
 ): Promise<PreviewedBundleImport> {
+  options.onProgress?.('validating')
   const parsed = readLibraryBundle(files)
   const validated = await validateLibraryBundle({
     ...parsed,
     diagnostics: [...transportDiagnostics, ...parsed.diagnostics],
   }, files)
   const current = parseDatabaseImportData(JSON.parse(new TextDecoder().decode(currentDatabaseBackup)))
+  options.onProgress?.('planning')
   const localModel = await createCanonicalLibrarySnapshot(current, {
     readAssetBytes: options.readLocalAssetBytes,
     retainAssetBytes: options.retainLocalAssetBytes,
