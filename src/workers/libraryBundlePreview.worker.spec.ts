@@ -51,9 +51,9 @@ describe('libraryBundlePreview worker', () => {
     await expect(handleLibraryBundlePreviewRequest({
       type: 'preview-library-bundle', zipBytes, databaseBackup, intent: 'add-or-update-books',
     })).resolves.toEqual({ type: 'preview-complete', preview })
-    expect(previewZip).toHaveBeenCalledWith(zipBytes, databaseBackup, {
-      intent: 'add-or-update-books', retainLocalAssetBytes: false,
-    })
+    expect(previewZip).toHaveBeenCalledWith(zipBytes, databaseBackup, expect.objectContaining({
+      intent: 'add-or-update-books', retainLocalAssetBytes: false, onProgress: undefined,
+    }))
   })
 
   it('dispatches prepared folder files without reading them on the main thread', async () => {
@@ -65,9 +65,9 @@ describe('libraryBundlePreview worker', () => {
     await expect(handleLibraryBundlePreviewRequest({
       type: 'preview-library-bundle-directory', files, databaseBackup, intent: 'add-or-update-books',
     })).resolves.toEqual({ type: 'preview-complete', preview })
-    expect(previewDirectory).toHaveBeenCalledWith(files, databaseBackup, {
-      intent: 'add-or-update-books', retainLocalAssetBytes: false,
-    })
+    expect(previewDirectory).toHaveBeenCalledWith(files, databaseBackup, expect.objectContaining({
+      intent: 'add-or-update-books', retainLocalAssetBytes: false, onProgress: undefined,
+    }))
   })
 
   it('returns classified failures instead of losing worker errors', async () => {
@@ -106,5 +106,24 @@ describe('libraryBundlePreview worker', () => {
 
     await workerScope.onmessage?.({ data: { type: 'unrelated' } } as unknown as MessageEvent<LibraryBundlePreviewWorkerRequest>)
     expect(postMessage).toHaveBeenCalledOnce()
+  })
+
+  it('posts progress stages before the final result', async () => {
+    previewZip.mockImplementation(async (_zip, _backup, options) => {
+      options.onProgress?.('reading')
+      options.onProgress?.('validating')
+      return preview
+    })
+    const request: LibraryBundlePreviewWorkerRequest = {
+      type: 'preview-library-bundle', zipBytes: new Uint8Array(), databaseBackup: new Uint8Array(),
+    }
+
+    await workerScope.onmessage?.({ data: request } as MessageEvent<LibraryBundlePreviewWorkerRequest>)
+
+    expect(postMessage.mock.calls.map((call) => call[0])).toEqual([
+      { type: 'preview-progress', stage: 'reading' },
+      { type: 'preview-progress', stage: 'validating' },
+      expect.objectContaining({ type: 'preview-complete' }),
+    ])
   })
 })

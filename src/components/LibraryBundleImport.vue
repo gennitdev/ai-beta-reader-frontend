@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import type { LibraryImportPlan, ImportConflictResolution, ImportPlanOperation } from '@/lib/libraryBundle/plan'
 import type { RecoveryBundleMetadata } from '@/lib/recovery/model'
 import LibraryBundleFieldDiff from '@/components/LibraryBundleFieldDiff.vue'
@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<{
   error: string
   message: string
   isPreviewing: boolean
+  previewProgress?: { label: string, detail: string } | null
   isApplying: boolean
   isPreparingReplace: boolean
   isReplacing: boolean
@@ -30,6 +31,7 @@ const props = withDefaults(defineProps<{
   showReplace: true,
   showRecoveries: true,
   embedded: false,
+  previewProgress: null,
 })
 
 const emit = defineEmits<{
@@ -37,6 +39,7 @@ const emit = defineEmits<{
   selectDirectory: [files: File[]]
   resolve: [key: string, resolution: ImportConflictResolution]
   overrideInventory: []
+  cancelPreview: []
   apply: []
   prepareReplace: []
   replace: []
@@ -47,6 +50,7 @@ const emit = defineEmits<{
 function selectFile(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
+  selectionProgress.value = null
   if (file) emit('select', file)
   input.value = ''
 }
@@ -54,8 +58,26 @@ function selectFile(event: Event) {
 function selectDirectory(event: Event) {
   const input = event.target as HTMLInputElement
   const files = [...(input.files ?? [])]
+  selectionProgress.value = null
   if (files.length) emit('selectDirectory', files)
   input.value = ''
+}
+
+const zipInput = ref<HTMLInputElement | null>(null)
+const directoryInput = ref<HTMLInputElement | null>(null)
+const selectionProgress = ref<{ label: string, detail: string } | null>(null)
+const chooserDisabled = computed(() => props.isPreviewing || props.isApplying || props.isPreparingReplace || props.isReplacing)
+
+function openBundleChooser(kind: 'zip' | 'folder'): void {
+  if (chooserDisabled.value) return
+  selectionProgress.value = kind === 'folder'
+    ? { label: 'Waiting for folder selection…', detail: 'Choose the bundle folder in the browser dialog. No changes are being applied.' }
+    : { label: 'Waiting for ZIP selection…', detail: 'Choose the bundle ZIP in the browser dialog. No changes are being applied.' }
+  ;(kind === 'folder' ? directoryInput.value : zipInput.value)?.click()
+}
+
+function cancelBundleSelection(): void {
+  selectionProgress.value = null
 }
 
 function formatBytes(bytes: number): string {
@@ -165,6 +187,33 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
     entityTypes: [...byType.entries()].map(([entityType, operations]) => ({ entityType, operations })),
   }))
 })
+
+const previewElapsedSeconds = ref(0)
+let previewElapsedTimer: ReturnType<typeof setInterval> | null = null
+
+function stopPreviewElapsedTimer(): void {
+  if (previewElapsedTimer !== null) clearInterval(previewElapsedTimer)
+  previewElapsedTimer = null
+}
+
+const showPreviewProgress = computed(() => props.isPreviewing || selectionProgress.value !== null)
+const activePreviewProgress = computed(() => props.previewProgress ?? selectionProgress.value)
+
+watch(showPreviewProgress, (isPreviewing) => {
+  stopPreviewElapsedTimer()
+  previewElapsedSeconds.value = 0
+  if (isPreviewing) {
+    previewElapsedTimer = setInterval(() => { previewElapsedSeconds.value++ }, 1000)
+  }
+}, { immediate: true })
+
+onUnmounted(stopPreviewElapsedTimer)
+
+const previewElapsedLabel = computed(() => {
+  const minutes = Math.floor(previewElapsedSeconds.value / 60)
+  const seconds = previewElapsedSeconds.value % 60
+  return minutes ? `${minutes}m ${seconds.toString().padStart(2, '0')}s` : `${seconds}s`
+})
 </script>
 
 <template>
@@ -179,14 +228,24 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
       </p>
     </div>
     <div class="px-6 py-4 space-y-4">
-      <label class="inline-flex cursor-pointer items-center rounded-lg bg-navy-700 px-4 py-2 text-sm font-medium text-white hover:bg-navy-600">
+      <button
+        type="button"
+        class="inline-flex cursor-pointer items-center rounded-lg bg-navy-700 px-4 py-2 text-sm font-medium text-white hover:bg-navy-600 disabled:cursor-not-allowed disabled:opacity-60"
+        :disabled="chooserDisabled"
+        @click="openBundleChooser('zip')"
+      >
         {{ isPreviewing ? 'Reading bundle…' : 'Choose bundle ZIP' }}
-        <input class="sr-only" type="file" accept=".zip,application/zip" :disabled="isPreviewing || isApplying || isPreparingReplace || isReplacing" @change="selectFile">
-      </label>
-      <label class="ml-2 inline-flex cursor-pointer items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-navy-700">
+      </button>
+      <input ref="zipInput" class="sr-only" type="file" accept=".zip,application/zip" :disabled="chooserDisabled" @change="selectFile" @cancel="cancelBundleSelection">
+      <button
+        type="button"
+        class="ml-2 inline-flex cursor-pointer items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-navy-700"
+        :disabled="chooserDisabled"
+        @click="openBundleChooser('folder')"
+      >
         Choose bundle folder
-        <input class="sr-only" type="file" webkitdirectory multiple :disabled="isPreviewing || isApplying || isPreparingReplace || isReplacing" @change="selectDirectory">
-      </label>
+      </button>
+      <input ref="directoryInput" class="sr-only" type="file" webkitdirectory multiple :disabled="chooserDisabled" @change="selectDirectory" @cancel="cancelBundleSelection">
       <span v-if="fileName" class="ml-3 text-sm text-gray-600 dark:text-gray-300">{{ fileName }}</span>
       <p v-if="exportedAt" class="text-xs text-gray-500 dark:text-gray-400">
         Bundle exported {{ formatExportedAt(exportedAt) }}
@@ -388,4 +447,31 @@ const operationGroups = computed<OperationBookGroup[]>(() => {
       </div>
     </div>
   </div>
+
+  <Teleport to="body">
+    <div v-if="showPreviewProgress" class="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <section
+        class="w-full max-w-md rounded-xl border border-gold-300/50 bg-white p-6 text-center shadow-2xl dark:border-gold-700/60 dark:bg-navy-800"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        data-testid="bundle-preview-progress"
+      >
+        <div class="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gold-200 border-t-gold-600 dark:border-gold-900 dark:border-t-gold-300" aria-hidden="true" />
+        <h2 class="mt-4 text-lg font-semibold text-gray-900 dark:text-white">Preparing your bundle preview</h2>
+        <p class="mt-2 text-sm font-medium text-gold-700 dark:text-gold-300">{{ activePreviewProgress?.label ?? 'Reading bundle…' }}</p>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ activePreviewProgress?.detail ?? 'No changes are being applied.' }}</p>
+        <div class="mt-4 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-navy-900" aria-hidden="true">
+          <div class="h-full w-1/2 animate-pulse rounded-full bg-gold-500" />
+        </div>
+        <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          Large libraries can take a few minutes. Elapsed: {{ previewElapsedLabel }}
+        </p>
+        <button v-if="isPreviewing" class="mt-4 rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-navy-700" @click="emit('cancelPreview')">
+          Cancel preview
+        </button>
+        <p v-else class="mt-4 text-xs text-gray-500 dark:text-gray-400">Use Cancel in the browser dialog to return.</p>
+      </section>
+    </div>
+  </Teleport>
 </template>

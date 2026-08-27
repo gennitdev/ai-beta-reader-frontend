@@ -52,6 +52,25 @@ describe('previewBundleZipInWorker', () => {
     expect(worker.terminate).toHaveBeenCalledOnce()
   })
 
+  it('forwards progress events without settling or terminating the worker', async () => {
+    const worker = new FakePreviewWorker()
+    const onProgress = vi.fn()
+    const pending = previewBundleZipInWorker(new Uint8Array([1]), new Uint8Array([2]), {
+      workerFactory: () => worker,
+      onProgress,
+    })
+
+    worker.onmessage?.({
+      data: { type: 'preview-progress', stage: 'validating' },
+    } as MessageEvent<LibraryBundlePreviewWorkerResponse>)
+    expect(onProgress).toHaveBeenCalledWith('validating')
+    expect(worker.terminate).not.toHaveBeenCalled()
+
+    worker.onmessage?.({ data: { type: 'preview-complete', preview } } as MessageEvent<LibraryBundlePreviewWorkerResponse>)
+    await expect(pending).resolves.toBe(preview)
+    expect(worker.terminate).toHaveBeenCalledOnce()
+  })
+
   it('sends normalized folder paths to the worker without materializing file bytes', async () => {
     const worker = new FakePreviewWorker()
     const manifest = new File(['manifest'], 'beta-bot.yaml')

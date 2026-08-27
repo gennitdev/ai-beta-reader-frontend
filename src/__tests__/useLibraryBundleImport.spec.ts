@@ -149,6 +149,41 @@ describe('useLibraryBundleImport', () => {
     expect(state.isPreviewing.value).toBe(false)
   })
 
+  it('reports worker progress and lets the user cancel without applying changes', async () => {
+    const backup = new Uint8Array([1, 2, 3])
+    let worker: {
+      onmessage: ((event: MessageEvent) => void) | null
+      onerror: ((event: ErrorEvent) => void) | null
+      postMessage: ReturnType<typeof vi.fn>
+      terminate: ReturnType<typeof vi.fn>
+    } | undefined
+    const WorkerStub = vi.fn(function () {
+      worker = { onmessage: null, onerror: null, postMessage: vi.fn(), terminate: vi.fn() }
+      return worker
+    })
+    vi.stubGlobal('Worker', WorkerStub)
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn().mockResolvedValue(backup), importDatabaseBackup: vi.fn(),
+      getImageBlob: vi.fn(), recoveryStore: memoryStore(), intent: 'add-or-update-books',
+    })
+    const folderFile = new File(['manifest'], 'beta-bot.yaml')
+    Object.defineProperty(folderFile, 'webkitRelativePath', { value: 'large-folder/beta-bot.yaml' })
+
+    const pending = state.previewDirectory([folderFile])
+    await vi.waitFor(() => expect(worker).toBeDefined())
+    worker!.onmessage?.({ data: { type: 'preview-progress', stage: 'validating' } } as MessageEvent)
+    expect(state.previewProgress.value?.label).toBe('Validating bundle structure…')
+    expect(state.previewProgress.value?.detail).toContain('No changes are being applied.')
+
+    state.cancelPreview()
+    await pending
+    expect(worker!.terminate).toHaveBeenCalledOnce()
+    expect(state.isPreviewing.value).toBe(false)
+    expect(state.previewProgress.value).toBeNull()
+    expect(state.importMessage.value).toBe('Bundle preview cancelled. No changes were applied.')
+    expect(state.preview.value).toBeNull()
+  })
+
   it('re-exports a detached database backup before falling back from a crashed folder worker', async () => {
     const model = completeCanonicalLibraryFixture()
     const firstBackup = new Uint8Array([1, 2, 3])

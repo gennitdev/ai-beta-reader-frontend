@@ -80,7 +80,8 @@ describe('LibraryBundleImport', () => {
     expect(wrapper.get('[aria-label="Planned entity changes"]').text()).toContain('A Book')
     expect(wrapper.get('[aria-label="Planned entity changes"]').text()).toContain('chapter')
     expect(wrapper.get('button[title*="recovery"]').attributes('disabled')).toBeUndefined()
-    await wrapper.get('button:nth-of-type(1)').trigger('click')
+    const useIncoming = wrapper.findAll('button').find((button) => button.text() === 'Use incoming')!
+    await useIncoming.trigger('click')
     expect(wrapper.emitted('resolve')).toBeTruthy()
   })
 
@@ -103,6 +104,46 @@ describe('LibraryBundleImport', () => {
     expect(wrapper.text()).toContain('No wiki links need review.')
     expect(wrapper.text()).toContain('No ambiguous aliases.')
     expect(wrapper.text()).toContain('No unknown profiles or ignored files.')
+  })
+
+  it('keeps a visible, cancellable progress surface over the page while previewing', async () => {
+    const wrapper = mount(LibraryBundleImport, { props: {
+      plan: null, fileName: 'large-folder', error: '', message: '', isPreviewing: true,
+      previewProgress: {
+        label: 'Validating bundle structure…',
+        detail: '796 files · 162 MB selected. No changes are being applied.',
+      },
+      isApplying: false, ...phase4Props,
+    } })
+
+    const progress = document.body.querySelector('[data-testid="bundle-preview-progress"]') as HTMLElement
+    expect(progress).not.toBeNull()
+    expect(progress.textContent).toContain('Validating bundle structure…')
+    expect(progress.textContent).toContain('No changes are being applied.')
+    expect(progress.textContent).toContain('Large libraries can take a few minutes.')
+    ;(progress.querySelector('button') as HTMLButtonElement).click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('cancelPreview')).toBeTruthy()
+    wrapper.unmount()
+  })
+
+  it('shows feedback before the browser finishes selecting a large folder', async () => {
+    const wrapper = mount(LibraryBundleImport, { props: {
+      plan: null, fileName: '', error: '', message: '', isPreviewing: false,
+      isApplying: false, ...phase4Props,
+    } })
+
+    const folderButton = wrapper.findAll('button').find((button) => button.text() === 'Choose bundle folder')!
+    await folderButton.trigger('click')
+    const progress = document.body.querySelector('[data-testid="bundle-preview-progress"]') as HTMLElement
+    expect(progress.textContent).toContain('Waiting for folder selection…')
+    expect(progress.textContent).toContain('No changes are being applied.')
+    expect(progress.textContent).toContain('Use Cancel in the browser dialog to return.')
+    expect(progress.querySelector('button')).toBeNull()
+
+    await wrapper.get('input[webkitdirectory]').trigger('cancel')
+    expect(document.body.querySelector('[data-testid="bundle-preview-progress"]')).toBeNull()
+    wrapper.unmount()
   })
 
   it('shows the bundle export time and bounds large ignored-file lists', () => {

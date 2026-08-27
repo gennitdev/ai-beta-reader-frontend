@@ -1,4 +1,5 @@
 import type { PreviewedBundleImport } from './importPreview'
+import type { LibraryBundlePreviewStage } from './importPreview'
 import type { LibraryImportIntent } from './plan'
 import { prepareBundleDirectoryFiles } from './adapters/directory'
 import type {
@@ -18,6 +19,7 @@ export interface PreviewBundleInWorkerOptions {
   intent?: LibraryImportIntent
   signal?: AbortSignal
   workerFactory?: () => PreviewWorkerLike
+  onProgress?: (stage: LibraryBundlePreviewStage) => void
 }
 
 export class LibraryBundlePreviewWorkerUnavailableError extends Error {
@@ -77,7 +79,9 @@ function previewBundleInWorker(
     const handleAbort = () => finish(() => reject(abortError()))
 
     worker.onmessage = ({ data }) => {
-      if (data.type === 'preview-complete') {
+      if (data.type === 'preview-progress') {
+        options.onProgress?.(data.stage)
+      } else if (data.type === 'preview-complete') {
         finish(() => resolve(data.preview))
       } else {
         finish(() => reject(new LibraryBundlePreviewWorkerError(data.message, data.code)))
