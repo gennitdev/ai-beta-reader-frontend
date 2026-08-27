@@ -41,7 +41,7 @@ onMounted(async () => {
   >
     <p>
       {{ message }}
-      <RouterLink to="/settings" class="font-medium underline">View storage details</RouterLink>
+      <RouterLink to="/library-data" class="font-medium underline">View storage details</RouterLink>
     </p>
     <button type="button" class="font-medium underline" @click="dismissed = true">Dismiss</button>
   </div>

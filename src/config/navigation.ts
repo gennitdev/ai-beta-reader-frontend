@@ -3,6 +3,7 @@ import {
   BookOpenIcon,
   SparklesIcon,
   Cog6ToothIcon,
+  CircleStackIcon,
   DocumentTextIcon,
   InformationCircleIcon,
   MusicalNoteIcon,
@@ -47,6 +48,12 @@ export const primaryNavItems: NavItem[] = [
     label: 'About Beta Bot',
     icon: InformationCircleIcon,
     isActive: (path: string) => path === '/'
+  },
+  {
+    to: '/library-data',
+    label: 'Library Data',
+    icon: CircleStackIcon,
+    isActive: (path: string) => path.startsWith('/library-data')
   },
   {
     to: '/settings',

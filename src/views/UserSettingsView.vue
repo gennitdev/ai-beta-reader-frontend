@@ -16,6 +16,12 @@ import { ArrowLeftIcon, DocumentArrowDownIcon, KeyIcon, EyeIcon, EyeSlashIcon, C
 
 const router = useRouter()
 
+const props = withDefaults(defineProps<{
+  section?: 'settings' | 'library-data'
+}>(), {
+  section: 'settings',
+})
+
 // Local database + image library provide the primitives the settings composables build on.
 const {
   books,
@@ -144,15 +150,18 @@ const {
 
 onMounted(async () => {
   await initializeDatabase()
-  await loadBooks()
-  await loadApiKey()
-  await refreshBrowserStorage()
-  await refreshRecoveries()
-  if (!cloudSyncReady.value) {
-    try {
-      await prepareCloudSync()
-    } catch (error) {
-      console.error('Failed to prepare cloud sync:', error)
+  if (props.section === 'settings') {
+    await loadApiKey()
+  } else {
+    await loadBooks()
+    await refreshBrowserStorage()
+    await refreshRecoveries()
+    if (!cloudSyncReady.value) {
+      try {
+        await prepareCloudSync()
+      } catch (error) {
+        console.error('Failed to prepare cloud sync:', error)
+      }
     }
   }
 })
@@ -171,13 +180,19 @@ onMounted(async () => {
             <ArrowLeftIcon class="w-5 h-5 mr-2" />
             Back
           </button>
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">User Settings</h1>
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ props.section === 'settings' ? 'User Settings' : 'Library Data' }}</h1>
+            <p v-if="props.section === 'library-data'" class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Edit books outside Beta Bot, create backups, restore your library, or export reading copies.
+            </p>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Main Content -->
     <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <template v-if="props.section === 'settings'">
       <section class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-navy-800" aria-labelledby="appearance-heading">
         <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <h2 id="appearance-heading" class="text-lg font-semibold text-gray-900 dark:text-white">Appearance</h2>
@@ -358,6 +373,41 @@ onMounted(async () => {
         </div>
       </div>
 
+      <RouterLink
+        to="/library-data"
+        data-testid="library-data-link"
+        class="group block rounded-lg border border-gold-200 bg-gold-50 p-6 shadow-sm transition-colors hover:border-gold-400 hover:bg-gold-100 dark:border-gold-800 dark:bg-gold-900/20 dark:hover:border-gold-600 dark:hover:bg-gold-900/30"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex gap-3">
+            <CircleStackIcon class="mt-0.5 h-6 w-6 shrink-0 text-gold-700 dark:text-gold-300" />
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Library Data</h2>
+              <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                Manage editable workspaces, complete backups, Google Drive restore, recovery snapshots, and other export formats.
+              </p>
+            </div>
+          </div>
+          <span class="text-sm font-medium text-gold-700 group-hover:underline dark:text-gold-300">Open →</span>
+        </div>
+      </RouterLink>
+      </template>
+
+      <template v-else>
+      <nav class="grid gap-3 sm:grid-cols-3" aria-label="Library data sections">
+        <a href="#editable-workspaces" class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-950 transition-colors hover:border-blue-400 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+          <span class="block font-semibold">Editable workspaces</span>
+          <span class="mt-1 block text-xs opacity-80">Round-trip books through Markdown and YAML.</span>
+        </a>
+        <a href="#backup-and-restore" class="rounded-lg border border-gold-200 bg-gold-50 p-4 text-gold-950 transition-colors hover:border-gold-400 dark:border-gold-900 dark:bg-gold-950/30 dark:text-gold-100">
+          <span class="block font-semibold">Backup and restore</span>
+          <span class="mt-1 block text-xs opacity-80">Protect or recover your complete library.</span>
+        </a>
+        <a href="#other-exports" class="rounded-lg border border-gray-200 bg-white p-4 text-gray-900 transition-colors hover:border-gray-400 dark:border-gray-700 dark:bg-navy-800 dark:text-white">
+          <span class="block font-semibold">Other export formats</span>
+          <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">Create legacy ZIP or reading copies.</span>
+        </a>
+      </nav>
 
       <div
         v-if="showBrowserStorage"
@@ -421,6 +471,11 @@ onMounted(async () => {
 
 
       <!-- Cloud Backup Section -->
+      <section id="backup-and-restore" class="scroll-mt-6 space-y-3" aria-labelledby="backup-and-restore-heading">
+        <div>
+          <h2 id="backup-and-restore-heading" class="text-xl font-semibold text-gray-900 dark:text-white">Backup and restore</h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Use encrypted cloud backups or export a complete local bundle below.</p>
+        </div>
       <div class="bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex items-center space-x-2">
@@ -576,7 +631,12 @@ onMounted(async () => {
           </p>
         </div>
       </div>
+      </section>
 
+      <div id="editable-workspaces" class="scroll-mt-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Editable workspaces and imports</h2>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Preview external edits, restore a recovery snapshot, or apply a portable library bundle.</p>
+      </div>
       <LibraryBundleImport
         :plan="importPlan"
         :file-name="importFileName"
@@ -604,7 +664,7 @@ onMounted(async () => {
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Export Your Data</h2>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Export a workspace, backup, or reading copy</h2>
               <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Download all your books, chapters, and character data in a structured format.
               </p>
@@ -692,6 +752,9 @@ onMounted(async () => {
                   </span>
                 </span>
               </label>
+              <div id="other-exports" class="scroll-mt-6 border-t border-gray-200 pt-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                Other export formats
+              </div>
               <label class="flex items-start cursor-pointer">
                 <input
                   type="radio"
@@ -861,6 +924,7 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+      </template>
     </div>
   </div>
 </template>

@@ -1,6 +1,6 @@
 # Git and agent workspaces
 
-Beta Bot can export the canonical library bundle directly to a folder in browsers that support the File System Access API. Choose **Editable text workspace** as the export format in Settings, export to a folder, then select either an empty folder or a folder containing an earlier Beta Bot bundle.
+Beta Bot can export the canonical library bundle directly to a folder in browsers that support the File System Access API. Open **Library Data**, choose **Editable text workspace**, export to a folder, then select either an empty folder or a folder containing an earlier Beta Bot bundle.
 
 ZIP remains available on every supported platform. Folder export is progressive enhancement for Chromium-class browsers and compatible desktop builds.
 

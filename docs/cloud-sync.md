@@ -133,7 +133,7 @@ adb logcat | grep "authenticateNative"
 
 ### Verifying a Backup
 
-Use **Show Available Backups** in Settings to inspect generation time, app version, bundle format, and encrypted size. Restore rechecks ciphertext integrity and the complete canonical bundle before any database write. Decrypted ZIPs and directory exports can be checked independently with `npm run validate:bundle -- <path>`; see [Git and agent workspaces](agent-workspaces.md).
+Use **Show Available Backups** on the **Library Data** page to inspect generation time, app version, bundle format, and encrypted size. Restore rechecks ciphertext integrity and the complete canonical bundle before any database write. Decrypted ZIPs and directory exports can be checked independently with `npm run validate:bundle -- <path>`; see [Git and agent workspaces](agent-workspaces.md).
 
 ---
 
