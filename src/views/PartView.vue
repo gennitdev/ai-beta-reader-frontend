@@ -17,6 +17,7 @@ import { useLibraryContext } from "@/composables/useLibraryContext";
 import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue';
 import { useImageLibrary } from "@/composables/useImageLibrary";
 import { usePartImages } from "@/composables/usePartImages";
+import { useCoverImage } from "@/composables/useCoverImage";
 import {
   usePartSummaryContext,
 } from "@/composables/usePartSummaryContext";
@@ -24,10 +25,10 @@ import {
   generatePartSummary as generatePartSummaryAi,
 } from "@/lib/openai";
 import { loadOpenAIApiKey } from "@/lib/apiKeyStorage";
-import type { Book, BookPart, ImageAsset } from "@/lib/database";
+import type { Book, BookPart } from "@/lib/database";
+import ImageLightbox from "@/components/images/ImageLightbox.vue";
 import IllustrationDetail from "@/components/images/IllustrationDetail.vue";
 import CoverHeroImage from "@/components/images/CoverHeroImage.vue";
-import Modal from "@/components/Modal.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -73,13 +74,18 @@ const {
   activeImage: partActiveImage,
   activeImageSource: partActiveImageSource,
   activeImageTags: partActiveImageTags,
-  activeImageLabel: partActiveImageLabel,
+  activeImagePosition: partActiveImagePosition,
+  albumImageCount: partAlbumImageCount,
+  hasNextImage: partHasNextImage,
+  hasPrevImage: partHasPrevImage,
   savingImageNotes: partSavingImageNotes,
   savingImageTags: partSavingImageTags,
   refreshPartImages,
   openImageModal: openPartImageModal,
   openImageAsset: openPartCoverImageModal,
   closeImageModal: closePartImageModal,
+  goToNextImage: goToNextPartImage,
+  goToPrevImage: goToPrevPartImage,
   handleSaveActiveImageNotes: handleSavePartImageNotes,
   handleSaveActiveImageTags: handleSavePartImageTags,
   handleDownloadImage: handleDownloadPartImage,
@@ -94,10 +100,27 @@ const generatingSummary = ref(false);
 const savingSummary = ref(false);
 const isEditingSummary = ref(false);
 const errorMessage = ref<string | null>(null);
-const partCoverImage = ref<ImageAsset | null>(null);
-const partCoverSrc = ref<string | null>(null);
-const partCoverLoading = ref(false);
-const partCoverError = ref<string | null>(null);
+const {
+  coverImage: partCoverImage,
+  coverSrc: partCoverSrc,
+  coverLoading: partCoverLoading,
+  coverError: partCoverError,
+  loadCover: loadPartCoverImage,
+  selectCover: handleSelectPartCover,
+  removeCover: removePartCover,
+} = useCoverImage<BookPart>({
+  entity: part,
+  fetchCover: fetchPartCover,
+  getImageSource: getPartImageSource,
+  pickCover: (targetPartId) => pickPartCover(bookId.value, targetPartId),
+  deleteImage,
+  setCoverImageId: setPartCoverImageId,
+  messages: {
+    load: "Failed to load part cover",
+    update: "Failed to update part cover",
+    remove: "Failed to delete part cover",
+  },
+});
 const showDeletePartCoverModal = ref(false);
 const deletingPartCover = ref(false);
 const chapterThumbnails = ref<Record<string, string>>({});
@@ -197,47 +220,6 @@ const loadChapterThumbnailsForPart = async () => {
   }
 };
 
-const loadPartCoverImage = async (targetPartId: string) => {
-  partCoverLoading.value = true;
-  partCoverError.value = null;
-  try {
-    const asset = await fetchPartCover(targetPartId);
-    partCoverImage.value = asset;
-    if (asset) {
-      try {
-        partCoverSrc.value = await getPartImageSource(asset);
-      } catch {
-        partCoverSrc.value = null;
-      }
-    } else {
-      partCoverSrc.value = null;
-    }
-  } catch (error) {
-    partCoverError.value = error instanceof Error ? error.message : "Failed to load part cover";
-  } finally {
-    partCoverLoading.value = false;
-  }
-};
-
-const handleSelectPartCover = async () => {
-  if (!part.value) return;
-
-  partCoverLoading.value = true;
-  partCoverError.value = null;
-  try {
-    const asset = await pickPartCover(bookId.value, part.value.id);
-    if (asset) {
-      partCoverImage.value = asset;
-      partCoverSrc.value = await getPartImageSource(asset);
-      part.value.cover_image_id = asset.id;
-    }
-  } catch (error) {
-    partCoverError.value = error instanceof Error ? error.message : "Failed to update part cover";
-  } finally {
-    partCoverLoading.value = false;
-  }
-};
-
 const requestDeletePartCover = () => {
   if (!part.value || !partCoverImage.value) return;
   showDeletePartCoverModal.value = true;
@@ -252,16 +234,9 @@ const handleDeletePartCover = async () => {
   if (!part.value || !partCoverImage.value) return;
 
   deletingPartCover.value = true;
-  partCoverError.value = null;
   try {
-    await deleteImage(partCoverImage.value);
-    await setPartCoverImageId(part.value.id, null);
-    partCoverImage.value = null;
-    partCoverSrc.value = null;
-    part.value.cover_image_id = null;
-    showDeletePartCoverModal.value = false;
-  } catch (error) {
-    partCoverError.value = error instanceof Error ? error.message : "Failed to delete part cover";
+    const removed = await removePartCover();
+    if (removed) showDeletePartCoverModal.value = false;
   } finally {
     deletingPartCover.value = false;
   }
@@ -752,7 +727,7 @@ watch([bookId, partId], async () => {
                   :key="image.id"
                   type="button"
                   class="group overflow-hidden rounded-lg border border-gray-200 bg-gray-50 text-left transition hover:shadow dark:border-gray-700 dark:bg-navy-800"
-                  @click="openPartImageModal(image.id)"
+                  @click="openPartImageModal(image.id, partCoverImage, partCoverSrc)"
                 >
                   <div class="aspect-[4/3] w-full overflow-hidden bg-gray-200 dark:bg-gray-700">
                     <img
@@ -913,27 +888,36 @@ watch([bookId, partId], async () => {
     </div>
   </div>
 
-  <Modal
+  <ImageLightbox
     :show="partImageModalOpen"
-    :title="partActiveImageLabel || 'Illustration'"
-    max-width="4xl"
+    :image="partActiveImage"
+    :image-src="partActiveImageSource"
+    :current-index="partActiveImagePosition"
+    :total-images="partAlbumImageCount"
+    :has-previous="partHasPrevImage"
+    :has-next="partHasNextImage"
     @close="closePartImageModal"
+    @previous="goToPrevPartImage"
+    @next="goToNextPartImage"
   >
-    <IllustrationDetail
-      :image="partActiveImage"
-      :image-src="partActiveImageSource"
-      :wiki-pages="bookWikiPages"
-      :tags="partActiveImageTags"
-      :saving-notes="partSavingImageNotes"
-      :saving-tags="partSavingImageTags"
-      :can-edit-notes="true"
-      :can-edit-tags="true"
-      :can-download="true"
-      @save-notes="handleSavePartImageNotes"
-      @save-tags="handleSavePartImageTags"
-      @download="handleDownloadPartImage"
-    />
-  </Modal>
+    <template #details>
+      <IllustrationDetail
+        :image="partActiveImage"
+        :image-src="partActiveImageSource"
+        :wiki-pages="bookWikiPages"
+        :tags="partActiveImageTags"
+        :saving-notes="partSavingImageNotes"
+        :saving-tags="partSavingImageTags"
+        :can-edit-notes="true"
+        :can-edit-tags="true"
+        :can-download="true"
+        :show-preview="false"
+        @save-notes="handleSavePartImageNotes"
+        @save-tags="handleSavePartImageTags"
+        @download="handleDownloadPartImage"
+      />
+    </template>
+  </ImageLightbox>
 
   <!-- Delete Part Cover Confirmation Modal -->
   <teleport to="body">

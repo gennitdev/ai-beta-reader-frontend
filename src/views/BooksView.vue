@@ -27,10 +27,12 @@ const coverRefreshError = ref<string | null>(null)
 
 const {
   plan: importPlan,
+  bundleExportedAt,
   importFileName,
   importError,
   importMessage,
   isPreviewing,
+  previewProgress,
   isApplying,
   isPreparingReplace,
   isReplacing,
@@ -39,7 +41,9 @@ const {
   replaceRemovalCounts,
   previewFile,
   previewDirectory,
+  cancelPreview,
   resolveConflict,
+  overrideInventoryBaseline,
   applyChanges,
   resetImport,
 } = useLibraryBundleImport({
@@ -338,10 +342,12 @@ watch(
           :show-replace="false"
           :show-recoveries="false"
           :plan="importPlan"
+          :exported-at="bundleExportedAt"
           :file-name="importFileName"
           :error="importError"
           :message="importMessage"
           :is-previewing="isPreviewing"
+          :preview-progress="previewProgress"
           :is-applying="isApplying"
           :is-preparing-replace="isPreparingReplace"
           :is-replacing="isReplacing"
@@ -350,7 +356,9 @@ watch(
           :replace-removal-counts="replaceRemovalCounts"
           @select="previewFile"
           @select-directory="previewDirectory"
+          @cancel-preview="cancelPreview"
           @resolve="resolveConflict"
+          @override-inventory="overrideInventoryBaseline"
           @apply="applyBookImport"
         />
       </div>

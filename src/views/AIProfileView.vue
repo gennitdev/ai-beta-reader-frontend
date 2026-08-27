@@ -260,11 +260,17 @@ onMounted(() => {
                 {{ profileData.profile.name }}
               </h1>
               <div class="flex items-center space-x-3 mt-2">
-                <span v-if="profileData.profile.is_system" class="px-3 py-1 text-sm bg-purple-100 text-purple-800 rounded-full flex items-center">
+                <span
+                  v-if="profileData.profile.is_system"
+                  class="flex items-center rounded-full border border-purple-200 bg-purple-100 px-3 py-1 text-sm font-medium text-purple-800 dark:border-purple-700/60 dark:bg-purple-950/70 dark:text-purple-200"
+                >
                   <SparklesIcon class="w-4 h-4 mr-1" />
                   System Profile
                 </span>
-                <span v-if="profileData.profile.is_default" class="px-3 py-1 text-sm bg-gold-100 text-gold-800 rounded-full">
+                <span
+                  v-if="profileData.profile.is_default"
+                  class="rounded-full border border-gold-200 bg-gold-100 px-3 py-1 text-sm font-medium text-gold-800 dark:border-gold-700/60 dark:bg-gold-950/70 dark:text-gold-200"
+                >
                   Default
                 </span>
                 <span class="text-sm text-gray-500 dark:text-gray-400">

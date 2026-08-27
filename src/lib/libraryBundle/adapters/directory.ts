@@ -12,9 +12,24 @@ export interface DirectoryBundleEntry {
   isSymlink?: boolean
 }
 
+export interface SelectedDirectoryBundleFile {
+  path: string
+  file: File
+}
+
 export interface BundleFileReadResult {
   files: BundleFileMap | null
   diagnostics: BundleDiagnostic[]
+}
+
+const IGNORED_WORKSPACE_SEGMENTS = new Set(['.git', '.hg', '.svn'])
+const IGNORED_WORKSPACE_FILES = new Set(['.DS_Store', 'Thumbs.db'])
+
+/** Files created by source-control clients and operating systems are never bundle content. */
+export function isIgnoredWorkspacePath(path: string): boolean {
+  const segments = path.split('/')
+  return segments.some((segment) => IGNORED_WORKSPACE_SEGMENTS.has(segment))
+    || IGNORED_WORKSPACE_FILES.has(segments.at(-1) ?? '')
 }
 
 export interface BundleWritableFile {
@@ -288,15 +303,46 @@ export function readBundleDirectoryEntries(
   entries: readonly DirectoryBundleEntry[],
   limits: BundleReadLimits = DEFAULT_BUNDLE_READ_LIMITS,
 ): BundleFileReadResult {
-  const diagnostics = validateEntryMetadata(entries.map((entry) => ({
+  const bundleEntries = entries.filter((entry) => !isIgnoredWorkspacePath(entry.path))
+  const diagnostics = validateEntryMetadata(bundleEntries.map((entry) => ({
     path: entry.path,
     uncompressedBytes: entry.bytes.byteLength,
     isSymlink: entry.isSymlink,
   })), limits)
   if (hasBundleErrors(diagnostics)) return { files: null, diagnostics }
   const files: BundleFileMap = new Map()
-  for (const entry of entries) files.set(entry.path.normalize('NFC'), entry.bytes)
+  for (const entry of bundleEntries) files.set(entry.path.normalize('NFC'), entry.bytes)
   return { files, diagnostics }
+}
+
+/** Browser adapter for files selected with webkitdirectory or a directory picker. */
+export function prepareBundleDirectoryFiles(selectedFiles: readonly File[]): SelectedDirectoryBundleFile[] {
+  const rawPaths = selectedFiles.map((file) => file.webkitRelativePath || file.name)
+  const firstSegments = rawPaths.map((path) => path.split('/')[0])
+  const sharedDirectoryRoot = selectedFiles.length > 0
+    && selectedFiles.every((file) => Boolean(file.webkitRelativePath))
+    && new Set(firstSegments).size === 1
+  const paths = rawPaths.map((path) => sharedDirectoryRoot ? path.slice(path.indexOf('/') + 1) : path)
+  return selectedFiles
+    .map((file, index) => ({ file, path: paths[index] }))
+    .filter(({ path }) => !isIgnoredWorkspacePath(path))
+}
+
+export async function readPreparedBundleDirectoryFiles(
+  selected: readonly SelectedDirectoryBundleFile[],
+  limits: BundleReadLimits = DEFAULT_BUNDLE_READ_LIMITS,
+): Promise<BundleFileReadResult> {
+  const metadata = selected.map(({ file, path }) => ({
+    path,
+    uncompressedBytes: file.size,
+  }))
+  const diagnostics = validateEntryMetadata(metadata, limits)
+  if (hasBundleErrors(diagnostics)) return { files: null, diagnostics }
+  const entries = await Promise.all(selected.map(async ({ file, path }) => ({
+    path,
+    bytes: new Uint8Array(await file.arrayBuffer()),
+  })))
+  return readBundleDirectoryEntries(entries, limits)
 }
 
 /** Browser adapter for files selected with webkitdirectory or a directory picker. */
@@ -304,21 +350,5 @@ export async function readBundleDirectoryFiles(
   selectedFiles: readonly File[],
   limits: BundleReadLimits = DEFAULT_BUNDLE_READ_LIMITS,
 ): Promise<BundleFileReadResult> {
-  const rawPaths = selectedFiles.map((file) => file.webkitRelativePath || file.name)
-  const firstSegments = rawPaths.map((path) => path.split('/')[0])
-  const sharedDirectoryRoot = selectedFiles.length > 0
-    && selectedFiles.every((file) => Boolean(file.webkitRelativePath))
-    && new Set(firstSegments).size === 1
-  const paths = rawPaths.map((path) => sharedDirectoryRoot ? path.slice(path.indexOf('/') + 1) : path)
-  const selectedEntries = selectedFiles
-    .map((file, index) => ({ file, path: paths[index] }))
-    .filter((entry) => !entry.path.split('/').includes('.git'))
-  const metadata = selectedEntries.map(({ file, path }) => ({ path, uncompressedBytes: file.size }))
-  const diagnostics = validateEntryMetadata(metadata, limits)
-  if (hasBundleErrors(diagnostics)) return { files: null, diagnostics }
-  const entries = await Promise.all(selectedEntries.map(async ({ file, path }) => ({
-    path,
-    bytes: new Uint8Array(await file.arrayBuffer()),
-  })))
-  return readBundleDirectoryEntries(entries, limits)
+  return readPreparedBundleDirectoryFiles(prepareBundleDirectoryFiles(selectedFiles), limits)
 }

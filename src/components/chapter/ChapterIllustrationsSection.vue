@@ -16,6 +16,10 @@ defineProps<{
   error: string | null;
   settingCoverId: string | null;
   canAddImages: boolean;
+  canDeleteImage?: (image: ImageAsset) => boolean;
+  title?: string;
+  description?: string;
+  emptyText?: string;
   layout?: 'grid' | 'panel';
 }>();
 
@@ -39,10 +43,10 @@ const emit = defineEmits<{
     >
       <div>
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-          Chapter Illustrations
+          {{ title || 'Chapter Illustrations' }}
         </h2>
         <p class="text-sm text-gray-500 dark:text-gray-400">
-          {{ canAddImages ? "Images are stored locally on this device." : "Restored images are available for viewing." }}
+          {{ description || (canAddImages ? "Images are stored locally on this device." : "Restored images are available for viewing.") }}
         </p>
       </div>
       <ExampleDisabledControl v-if="canAddImages" :active="readOnly" :explanation="readOnlyReason">
@@ -78,8 +82,9 @@ const emit = defineEmits<{
       :can-set-cover="!readOnly"
       :can-download="true"
       :can-delete="!readOnly"
+      :can-delete-image="canDeleteImage"
       :layout="layout"
-      empty-text="No illustrations yet."
+      :empty-text="emptyText || 'No illustrations yet.'"
       @open-image="emit('open-image', $event)"
       @set-cover="emit('set-cover', $event)"
       @download="emit('download', $event)"

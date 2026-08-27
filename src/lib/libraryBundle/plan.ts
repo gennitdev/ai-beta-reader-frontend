@@ -2,7 +2,7 @@ import type { CanonicalLibraryModel } from './model'
 import type { ValidatedLibraryBundle } from './validate'
 import { bundleError, hasBundleErrors } from './diagnostics'
 import { canonicalEntityKey, collectCanonicalModelEntities, type CanonicalModelEntity } from './entities'
-import { semanticHash } from './semanticHash'
+import { chapterContentHash, semanticHash } from './semanticHash'
 
 export type ImportOperationKind = 'create' | 'update' | 'delete' | 'keep_local' | 'unchanged' | 'conflict'
 export type ImportConflictResolution = 'keep_local' | 'use_incoming'
@@ -91,6 +91,8 @@ export interface LibraryImportPlan {
   readonly unresolvedConflicts: number
   readonly canApply: boolean
   readonly replaceEligible: boolean
+  readonly inventoryOverrideApplied?: boolean
+  readonly inventoryOverrideOperationCount?: number
   readonly diagnostics: ValidatedLibraryBundle['diagnostics']
   readonly previewSummary: ImportPlanPreviewSummary
 }
@@ -104,7 +106,30 @@ function emptyPreviewSummary(): ImportPlanPreviewSummary {
   }
 }
 
-function createPreviewSummary(bundle: ValidatedLibraryBundle): ImportPlanPreviewSummary {
+async function staleReviewStateIds(model: CanonicalLibraryModel): Promise<Set<string>> {
+  const chapters = new Map(model.chapters.map((chapter) => [chapter.id, chapter]))
+  const stale = new Set<string>()
+  for (const state of model.wiki_review_state) {
+    const chapter = chapters.get(state.chapter_id)
+    if (chapter && await chapterContentHash(chapter) !== state.chapter_content_sha256) {
+      stale.add(`${state.wiki_page_id}:${state.chapter_id}`)
+    }
+  }
+  return stale
+}
+
+function missingReviewStateIds(model: CanonicalLibraryModel): Set<string> {
+  const reviewIds = new Set(model.wiki_review_state.map((state) => `${state.wiki_page_id}:${state.chapter_id}`))
+  return new Set(model.chapters.flatMap((chapter) => chapter.wiki_mentions
+    .map((mention) => `${mention.wiki_page_id}:${chapter.id}`)
+    .filter((id) => !reviewIds.has(id))))
+}
+
+async function createPreviewSummary(
+  bundle: ValidatedLibraryBundle,
+  localModel?: CanonicalLibraryModel,
+  operations: readonly ImportPlanOperation[] = [],
+): Promise<ImportPlanPreviewSummary> {
   if (!bundle.model) return emptyPreviewSummary()
   const model = bundle.model
   const sources = new Map(bundle.entitySources.map((source) => [canonicalEntityKey(source.entityType, source.id), source.path]))
@@ -112,10 +137,17 @@ function createPreviewSummary(bundle: ValidatedLibraryBundle): ImportPlanPreview
     .map((entity) => [canonicalEntityKey(entity.entityType, entity.id), entity]))
   const chapters = new Map(model.chapters.map((chapter) => [chapter.id, chapter]))
   const pages = new Map(model.wiki_pages.map((page) => [page.id, page]))
-  const staleIds = new Set(bundle.diagnostics
+  const incomingStaleIds = new Set(bundle.diagnostics
     .filter((diagnostic) => diagnostic.code === 'review_state.stale')
     .map((diagnostic) => diagnostic.entityId))
   const reviewIds = new Set(model.wiki_review_state.map((state) => `${state.wiki_page_id}:${state.chapter_id}`))
+  const localStaleIds = localModel ? await staleReviewStateIds(localModel) : new Set<string>()
+  const localMissingIds = localModel ? missingReviewStateIds(localModel) : new Set<string>()
+  const changedReviewStateIds = new Set(operations
+    .filter((operation) => operation.entityType === 'wiki_review_state'
+      && operation.incomingHash
+      && (operation.kind === 'create' || operation.kind === 'update' || operation.kind === 'conflict'))
+    .map((operation) => operation.entityId))
 
   const wikiReference = (wikiPageId: string, chapterId: string, message?: string): ImportPlanWikiReviewReference => {
     const page = pages.get(wikiPageId)
@@ -131,11 +163,17 @@ function createPreviewSummary(bundle: ValidatedLibraryBundle): ImportPlanPreview
     }
   }
   const stale = model.wiki_review_state
-    .filter((state) => staleIds.has(`${state.wiki_page_id}:${state.chapter_id}`))
+    .filter((state) => {
+      const id = `${state.wiki_page_id}:${state.chapter_id}`
+      return incomingStaleIds.has(id) && !localStaleIds.has(id)
+    })
     .map((state) => wikiReference(state.wiki_page_id, state.chapter_id, 'Chapter content changed after this review.'))
   const missing = model.chapters.flatMap((chapter) => chapter.wiki_mentions
-    .filter((mention) => !reviewIds.has(`${mention.wiki_page_id}:${chapter.id}`))
-    .map((mention) => wikiReference(mention.wiki_page_id, chapter.id, 'This explicit wiki mention has no review record.')))
+    .filter((mention) => {
+      const id = `${mention.wiki_page_id}:${chapter.id}`
+      return pages.has(mention.wiki_page_id) && !reviewIds.has(id) && !localMissingIds.has(id)
+    })
+    .map((mention) => wikiReference(mention.wiki_page_id, chapter.id, 'This new or changed chapter link has no review record.')))
 
   const aliases = new Map<string, { alias: string; pageIds: Set<string> }>()
   for (const page of model.wiki_pages) for (const alias of page.aliases) {
@@ -183,7 +221,12 @@ function createPreviewSummary(bundle: ValidatedLibraryBundle): ImportPlanPreview
       return summary
     }, { includedCount: 0, includedBytes: 0, omittedCount: 0, omittedBytes: 0 }),
     wikiReview: {
-      currentCount: model.wiki_review_state.length - stale.length,
+      currentCount: localModel
+        ? model.wiki_review_state.filter((state) => {
+          const id = `${state.wiki_page_id}:${state.chapter_id}`
+          return changedReviewStateIds.has(id) && !incomingStaleIds.has(id)
+        }).length
+        : model.wiki_review_state.length - stale.length,
       stale,
       missing,
     },
@@ -280,7 +323,7 @@ export async function createLibraryImportPlan(
     return finishPlan({
       planVersion: 1, bundleId: bundle.manifest?.bundle_id ?? 'invalid', databaseGeneration,
       bookIds: bundle.manifest?.book_ids ?? [], operations: [], replaceEligible: false,
-      diagnostics: bundle.diagnostics, previewSummary: createPreviewSummary(bundle),
+      diagnostics: bundle.diagnostics, previewSummary: await createPreviewSummary(bundle),
     })
   }
   const incomingEntities = collectCanonicalModelEntities(bundle.model)
@@ -382,7 +425,30 @@ export async function createLibraryImportPlan(
   return finishPlan({
     planVersion: 1, bundleId: bundle.manifest.bundle_id, databaseGeneration,
     bookIds: [...bundle.manifest.book_ids], operations, replaceEligible: bundle.replaceEligible,
-    diagnostics, previewSummary: createPreviewSummary(bundle),
+    diagnostics, previewSummary: await createPreviewSummary(bundle, localModel, operations),
+  })
+}
+
+/**
+ * Explicitly reinterpret inventory-backed keep-local rows as incoming changes.
+ * This is intentionally separate from planning because the three hashes cannot
+ * distinguish local edits from an inventory regenerated after bundle edits.
+ */
+export function applyIncomingInventoryOverride(plan: LibraryImportPlan): LibraryImportPlan {
+  const overridden = plan.operations.filter((operation) => operation.kind === 'keep_local').length
+  if (!overridden) return plan
+  const operations = plan.operations.map((operation): ImportPlanOperation => {
+    if (operation.kind !== 'keep_local') return operation
+    return {
+      ...operation,
+      kind: operation.incomingHash ? (operation.localHash ? 'update' : 'create') : 'delete',
+    }
+  })
+  return finishPlan({
+    ...plan,
+    operations,
+    inventoryOverrideApplied: true,
+    inventoryOverrideOperationCount: overridden,
   })
 }
 

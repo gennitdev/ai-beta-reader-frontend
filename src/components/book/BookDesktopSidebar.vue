@@ -4,7 +4,6 @@ import type { Component } from 'vue'
 import {
   BookOpenIcon,
   ChevronDownIcon,
-  Cog6ToothIcon,
   DocumentTextIcon,
   MagnifyingGlassIcon,
   PencilIcon,
@@ -12,10 +11,9 @@ import {
   TrashIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline'
-import type { Book, ImageAsset } from '@/lib/database'
+import type { Book } from '@/lib/database'
 import type { BookChapter, BookChaptersByPart, BookWikiPage } from '@/types/bookView'
 import BookDesktopChapterSidebar from './BookDesktopChapterSidebar.vue'
-import BookDesktopImagesSidebar from './BookDesktopImagesSidebar.vue'
 import BookDesktopWikiSidebar from './BookDesktopWikiSidebar.vue'
 import { useLibraryContext } from '@/composables/useLibraryContext'
 import ExampleDisabledControl from '@/components/ExampleDisabledControl.vue'
@@ -66,13 +64,8 @@ const props = defineProps<{
   coverError?: string | null
   selectBookCover: () => void
   deleteBookCover?: (() => void) | null
-  requestDeleteBook?: () => void
   chapterThumbnails: Record<string, string>
   partThumbnails: Record<string, string>
-  bookImages: ImageAsset[]
-  bookImageSources: Record<string, string>
-  loadingImages: boolean
-  selectedImageId?: string | null
 }>()
 const { booksPath, readOnly, readOnlyReason } = useLibraryContext()
 
@@ -151,7 +144,7 @@ const closeLightbox = () => {
   <div
     class="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-navy-800 overflow-y-auto relative"
   >
-    <div class="p-2 pt-2 pb-16">
+    <div class="p-2 pt-2">
       <div class="mb-4">
         <div
           v-if="coverImageSrc"
@@ -431,36 +424,6 @@ const closeLightbox = () => {
         :filter-label="wikiTypeFilter"
       />
 
-      <BookDesktopImagesSidebar
-        v-else-if="currentTab === 'images'"
-        :book-id="bookId"
-        :can-select-images="canSelectImages"
-        :book-images="bookImages"
-        :book-image-sources="bookImageSources"
-        :loading-images="loadingImages"
-        :selected-image-id="selectedImageId"
-      />
-
-      <div class="fixed bottom-4 left-4 z-10 flex items-center gap-2">
-        <router-link
-          to="/settings"
-          class="inline-flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors rounded-lg bg-white dark:bg-navy-800 hover:bg-gray-100 dark:hover:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-700"
-          title="User Settings"
-        >
-          <Cog6ToothIcon class="w-5 h-5 mr-2" />
-          Settings
-        </router-link>
-        <button
-          v-if="!readOnly && requestDeleteBook"
-          type="button"
-          class="inline-flex items-center rounded-lg border border-red-300 bg-white px-3 py-2 text-sm text-red-600 shadow-sm transition-colors hover:bg-red-50 dark:border-red-800 dark:bg-navy-800 dark:text-red-400 dark:hover:bg-red-900/20"
-          title="Delete book"
-          @click="requestDeleteBook"
-        >
-          <TrashIcon class="mr-2 h-5 w-5" />
-          Delete
-        </button>
-      </div>
     </div>
   </div>
 

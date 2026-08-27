@@ -16,6 +16,7 @@ const props = defineProps<{
   canEditNotes?: boolean
   canEditTags?: boolean
   canDownload?: boolean
+  showPreview?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -72,7 +73,7 @@ function updateTags(wikiPageIds: string[]) {
 
 <template>
   <div v-if="image" class="flex h-full flex-col bg-white dark:bg-navy-900">
-    <div class="flex min-h-0 flex-1 items-center justify-center bg-gray-100 p-4 dark:bg-navy-800">
+    <div v-if="showPreview !== false" class="flex min-h-0 flex-1 items-center justify-center bg-gray-100 p-4 dark:bg-navy-800">
       <img
         v-if="imageSrc"
         :src="imageSrc"
@@ -84,7 +85,7 @@ function updateTags(wikiPageIds: string[]) {
       </div>
     </div>
 
-    <div class="space-y-5 border-t border-gray-200 p-4 dark:border-gray-700">
+    <div class="space-y-5 p-4" :class="showPreview !== false ? 'border-t border-gray-200 dark:border-gray-700' : ''">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">
           <h2 class="truncate text-lg font-medium text-gray-900 dark:text-white">

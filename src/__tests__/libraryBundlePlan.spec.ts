@@ -3,10 +3,15 @@ import { completeCanonicalLibraryFixture } from './fixtures/libraryBundle'
 import { writeLibraryBundle } from '@/lib/libraryBundle/write'
 import { readLibraryBundle } from '@/lib/libraryBundle/read'
 import { validateLibraryBundle, type ValidatedLibraryBundle } from '@/lib/libraryBundle/validate'
-import { createLibraryImportPlan, resolveImportConflict, assertImportPlanCurrent } from '@/lib/libraryBundle/plan'
+import {
+  applyIncomingInventoryOverride,
+  createLibraryImportPlan,
+  resolveImportConflict,
+  assertImportPlanCurrent,
+} from '@/lib/libraryBundle/plan'
 import { applyImportPlanToModel, canonicalModelToDatabaseImport } from '@/lib/libraryBundle/apply'
 import { createCanonicalLibrarySnapshot } from '@/lib/libraryBundle/snapshot'
-import { semanticHash } from '@/lib/libraryBundle/semanticHash'
+import { chapterContentHash, semanticHash } from '@/lib/libraryBundle/semanticHash'
 import { migrateLibraryBundleModel } from '@/lib/libraryBundle/migrate'
 
 const options = { bundleId: 'bundle:test', exportedAt: '2026-08-20T15:00:00.000Z', appVersion: '1.0.0' }
@@ -73,6 +78,30 @@ describe('three-way library import planning', () => {
     )
 
     expect(chapterOperation(plan).kind).toBe('update')
+  })
+
+  it('can explicitly expose edits hidden by a regenerated inventory baseline', async () => {
+    const local = completeCanonicalLibraryFixture()
+    const incoming = structuredClone(local)
+    incoming.chapters[0].body = 'Incoming edit hidden by regenerated inventory'
+    incoming.reviews = []
+    const written = await writeLibraryBundle(incoming, options)
+    const validated = await validateLibraryBundle(readLibraryBundle(written.files), written.files)
+    const plan = await createLibraryImportPlan(validated, local, 'generation')
+
+    expect(chapterOperation(plan).kind).toBe('keep_local')
+    expect(plan.operations.find((operation) => operation.entityId === 'review-1')?.kind).toBe('keep_local')
+
+    const overridden = applyIncomingInventoryOverride(plan)
+    expect(chapterOperation(overridden).kind).toBe('update')
+    expect(overridden.operations.find((operation) => operation.entityId === 'review-1')?.kind).toBe('delete')
+    expect(overridden.inventoryOverrideApplied).toBe(true)
+    expect(overridden.inventoryOverrideOperationCount).toBe(2)
+    expect(overridden.canApply).toBe(true)
+
+    const applied = applyImportPlanToModel(overridden, local, incoming, 'generation')
+    expect(applied.chapters[0].body).toBe('Incoming edit hidden by regenerated inventory')
+    expect(applied.reviews).toEqual([])
   })
 
   it('blocks cross-book identity collisions during a first import', async () => {
@@ -242,7 +271,9 @@ describe('three-way library import planning', () => {
     model.wiki_pages.push({ ...model.wiki_pages[0], id: 'wiki-2', page_name: 'Alison', aliases: ['al'] })
     model.chapters[0].wiki_mentions.push({ ...model.chapters[0].wiki_mentions[0], id: 'mention-2', wiki_page_id: 'wiki-2' })
     const validated = await validateLibraryBundle(parsed, written.files)
-    const plan = await createLibraryImportPlan(validated, structuredClone(original), 'g')
+    const local = structuredClone(original)
+    local.wiki_review_state[0].chapter_content_sha256 = await chapterContentHash(local.chapters[0])
+    const plan = await createLibraryImportPlan(validated, local, 'g')
 
     expect(plan.previewSummary.images).toEqual({ includedCount: 0, includedBytes: 0, omittedCount: 1, omittedBytes: 3 })
     expect(plan.previewSummary.wikiReview).toEqual(expect.objectContaining({ currentCount: 0 }))
@@ -259,6 +290,58 @@ describe('three-way library import planning', () => {
     expect(plan.previewSummary.warnings.ignoredFiles[0]).toEqual(expect.objectContaining({ path: 'draft.tmp' }))
     expect(Object.isFrozen(plan.previewSummary.ambiguousAliases[0].pages)).toBe(true)
   })
+
+  it('omits pre-existing missing wiki review state from import impact', async () => {
+    const unchanged = completeCanonicalLibraryFixture()
+    unchanged.wiki_review_state = []
+    const written = await writeLibraryBundle(unchanged, options)
+    const validated = await validateLibraryBundle(readLibraryBundle(written.files), written.files)
+
+    const plan = await createLibraryImportPlan(validated, structuredClone(unchanged), 'g')
+
+    expect(plan.previewSummary.wikiReview).toEqual({ currentCount: 0, stale: [], missing: [] })
+  })
+
+  it('keeps deleted wiki pages separate from surviving relinked pages that need review', async () => {
+    const local = completeCanonicalLibraryFixture()
+    const survivingPage = { ...local.wiki_pages[0], id: 'wiki-2', page_name: 'Dr. Cassian Vale', aliases: [] }
+    local.wiki_pages.push(survivingPage)
+    const incoming = structuredClone(local)
+    incoming.wiki_pages = [survivingPage]
+    incoming.chapters[0].wiki_mentions[0].wiki_page_id = 'wiki-2'
+    incoming.book_characters[0].wiki_page_id = 'wiki-2'
+    incoming.assets[0].wiki_page_ids = ['wiki-2']
+    incoming.wiki_updates = []
+    incoming.wiki_review_state = []
+
+    const plan = await createLibraryImportPlan(await bundle(incoming), local, 'g')
+
+    expect(plan.operations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'wiki_page', entityId: 'wiki-1', kind: 'delete', title: 'Alice' }),
+    ]))
+    expect(plan.previewSummary.wikiReview.missing).toEqual([
+      expect.objectContaining({ wikiPageId: 'wiki-2', wikiPageTitle: 'Dr. Cassian Vale' }),
+    ])
+    expect(plan.previewSummary.wikiReview.missing).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ wikiPageId: 'wiki-1' }),
+    ]))
+  })
+
+  it.each(['system:editorial', 'system:fanficnet', 'system:line-notes'])(
+    'accepts built-in review profile reference %s without a bundled profile entity', async (profileRef) => {
+      const model = completeCanonicalLibraryFixture()
+      model.profiles = []
+      model.reviews[0].profile_ref = profileRef
+      const written = await writeLibraryBundle(model, options)
+      const validated = await validateLibraryBundle(readLibraryBundle(written.files), written.files)
+
+      expect(validated.diagnostics).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'review.unknown_profile' }),
+      ]))
+      const plan = await createLibraryImportPlan(validated, structuredClone(model), 'g')
+      expect(plan.previewSummary.warnings.unknownProfiles).toEqual([])
+    },
+  )
 
   it('converts an applied canonical model back to a complete database contract', async () => {
     const model = completeCanonicalLibraryFixture()

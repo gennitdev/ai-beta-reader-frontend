@@ -127,10 +127,12 @@ const {
 
 const {
   plan: importPlan,
+  bundleExportedAt,
   importFileName,
   importError,
   importMessage,
   isPreviewing,
+  previewProgress,
   isApplying,
   isPreparingReplace,
   isReplacing,
@@ -139,7 +141,9 @@ const {
   replaceRemovalCounts,
   previewFile,
   previewDirectory,
+  cancelPreview,
   resolveConflict,
+  overrideInventoryBaseline,
   applyChanges,
   prepareReplace,
   replaceLibrary,
@@ -639,10 +643,12 @@ onMounted(async () => {
       </div>
       <LibraryBundleImport
         :plan="importPlan"
+        :exported-at="bundleExportedAt"
         :file-name="importFileName"
         :error="importError"
         :message="importMessage"
         :is-previewing="isPreviewing"
+        :preview-progress="previewProgress"
         :is-applying="isApplying"
         :is-preparing-replace="isPreparingReplace"
         :is-replacing="isReplacing"
@@ -651,7 +657,9 @@ onMounted(async () => {
         :replace-removal-counts="replaceRemovalCounts"
         @select="previewFile"
         @select-directory="previewDirectory"
+        @cancel-preview="cancelPreview"
         @resolve="resolveConflict"
+        @override-inventory="overrideInventoryBaseline"
         @apply="applyChanges"
         @prepare-replace="prepareReplace"
         @replace="replaceLibrary"

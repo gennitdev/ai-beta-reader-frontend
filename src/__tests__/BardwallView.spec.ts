@@ -108,8 +108,12 @@ describe('BardwallView', () => {
     expect(cards).toHaveLength(3)
     const firstCardId = cards[0].attributes('data-testid').replace('challenge-card-', '')
     const firstCard = BARDWALL_CHALLENGE_CARDS.find((card) => card.id === firstCardId)!
+    const cardTitle = wrapper.get('[data-testid="ink-ember-card-title"]')
+    expect(cardTitle.classes()).toEqual(expect.arrayContaining(['flex', 'h-[11%]', 'items-center', 'justify-center']))
     await wrapper.get(`[data-testid="preview-challenge-card-${firstCardId}"]`).trigger('click')
     expect(document.body.querySelector('[data-testid="challenge-card-preview"]')?.textContent).toContain(firstCard.name)
+    const previewTitle = document.body.querySelector('[data-testid="ink-ember-card-preview-title"]')!
+    expect(Array.from(previewTitle.classList)).toEqual(expect.arrayContaining(['flex', 'h-[11%]', 'items-center', 'justify-center']))
     ;(document.body.querySelector('[data-testid="close-challenge-card-preview"]') as HTMLButtonElement).click()
     await flushPromises()
     for (const card of cards) await card.trigger('click')

@@ -60,6 +60,7 @@ withDefaults(defineProps<{
   partThumbnails?: Record<string, string>
   bookImages?: ImageAsset[]
   bookImageSources?: Record<string, string>
+  bookImageTags?: Record<string, ImageWikiTag[]>
   loadingImages?: boolean
   selectedImageId?: string | null
   selectedImageSrc?: string | null
@@ -71,6 +72,7 @@ withDefaults(defineProps<{
   saveSelectedImageNotes?: (notes: string) => void | Promise<void>
   saveSelectedImageTags?: (wikiPageIds: string[]) => void | Promise<void>
   downloadSelectedImage?: (imageId: string) => void
+  selectBookImage?: (imageId: string | null) => void
   wikiPagePinChanged: (payload: { id: string; isPinned: boolean; updatedAt: string }) => void
   revisionActivity?: ChapterRevisionActivity[]
 }>(), {
@@ -99,6 +101,7 @@ withDefaults(defineProps<{
   partThumbnails: () => ({}),
   bookImages: () => [],
   bookImageSources: () => ({}),
+  bookImageTags: () => ({}),
   loadingImages: false,
   selectedImageId: null,
   selectedImageSrc: null,
@@ -110,6 +113,7 @@ withDefaults(defineProps<{
   saveSelectedImageNotes: undefined,
   saveSelectedImageTags: undefined,
   downloadSelectedImage: undefined,
+  selectBookImage: undefined,
   revisionActivity: () => []
 })
 </script>
@@ -163,13 +167,8 @@ withDefaults(defineProps<{
         :cover-error="coverError"
         :select-book-cover="selectBookCover"
         :delete-book-cover="deleteBookCover"
-        :request-delete-book="requestDeleteBook"
         :chapter-thumbnails="chapterThumbnails"
         :part-thumbnails="partThumbnails"
-        :book-images="bookImages"
-        :book-image-sources="bookImageSources"
-        :loading-images="loadingImages"
-        :selected-image-id="selectedImageId"
       />
 
       <BookDesktopMainPane
@@ -179,7 +178,18 @@ withDefaults(defineProps<{
         :chapters-by-part="chaptersByPart"
         :part-summaries="partSummaries"
         :part-thumbnails="partThumbnails"
+        :loading-wiki="loadingWiki"
+        :wiki-pages-by-type="wikiPagesByType"
+        :wiki-page-thumbnails="wikiPageThumbnails"
+        :get-type-icon="getTypeIcon"
+        :get-type-color="getTypeColor"
+        :toggle-wiki-page-pinned="toggleWikiPagePinned"
+        :open-create-wiki-modal="openCreateWikiModal"
         :format-word-count="formatWordCount"
+        :book-images="bookImages"
+        :book-image-sources="bookImageSources"
+        :book-image-tags="bookImageTags"
+        :loading-images="loadingImages"
         :selected-image-id="selectedImageId"
         :selected-image-src="selectedImageSrc"
         :selected-image="selectedImage"
@@ -190,8 +200,10 @@ withDefaults(defineProps<{
         :save-selected-image-notes="saveSelectedImageNotes"
         :save-selected-image-tags="saveSelectedImageTags"
         :download-selected-image="downloadSelectedImage"
+        :select-book-image="selectBookImage"
         :is-on-book-only="isOnBookOnly"
         :revision-activity="revisionActivity"
+        :request-delete-book="requestDeleteBook"
         :router-view-key="routerViewKey"
         :wiki-page-pin-changed="wikiPagePinChanged"
       />

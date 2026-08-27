@@ -1,5 +1,6 @@
-import { ref, type Ref } from 'vue'
+import type { Ref } from 'vue'
 import type { Book, ImageAsset } from '@/lib/database'
+import { useCoverImage } from '@/composables/useCoverImage'
 
 interface UseBookCoverDeps {
   book: Ref<Book | null>
@@ -13,7 +14,8 @@ interface UseBookCoverDeps {
 
 /**
  * The book's cover image: loading it, picking a new one, and removing it, plus
- * the derived source URL and loading/error state.
+ * the derived source URL and loading/error state. A thin adapter over the
+ * generic {@link useCoverImage} that adds a native-confirm delete flow.
  */
 export function useBookCover(deps: UseBookCoverDeps) {
   const {
@@ -26,70 +28,33 @@ export function useBookCover(deps: UseBookCoverDeps) {
     confirmDelete = (message: string) => globalThis.confirm(message),
   } = deps
 
-  const bookCoverImage = ref<ImageAsset | null>(null)
-  const bookCoverSrc = ref<string | null>(null)
-  const coverLoading = ref(false)
-  const coverError = ref<string | null>(null)
-
-  const loadBookCoverImage = async (targetBookId: string) => {
-    coverLoading.value = true
-    coverError.value = null
-    try {
-      const asset = await fetchBookCover(targetBookId)
-      bookCoverImage.value = asset
-      bookCoverSrc.value = asset ? await getImageSource(asset) : null
-    } catch (error) {
-      coverError.value = error instanceof Error ? error.message : 'Failed to load book cover'
-    } finally {
-      coverLoading.value = false
-    }
-  }
-
-  const handleSelectBookCover = async () => {
-    if (!book.value) return
-
-    coverLoading.value = true
-    coverError.value = null
-    try {
-      const asset = await pickNewBookCover(book.value.id)
-      if (asset) {
-        bookCoverImage.value = asset
-        bookCoverSrc.value = await getImageSource(asset)
-        book.value.cover_image_id = asset.id
-      }
-    } catch (error) {
-      coverError.value = error instanceof Error ? error.message : 'Failed to update book cover'
-    } finally {
-      coverLoading.value = false
-    }
-  }
+  const cover = useCoverImage({
+    entity: book,
+    fetchCover: fetchBookCover,
+    getImageSource,
+    pickCover: (bookId) => pickNewBookCover(bookId),
+    deleteImage,
+    setCoverImageId: setBookCoverImageId,
+    messages: {
+      load: 'Failed to load book cover',
+      update: 'Failed to update book cover',
+      remove: 'Failed to delete book cover',
+    },
+  })
 
   const handleDeleteBookCover = async () => {
-    if (!book.value || !bookCoverImage.value) return
+    if (!book.value || !cover.coverImage.value) return
     if (!confirmDelete('Permanently delete this book cover image? This action cannot be undone.')) return
-
-    coverLoading.value = true
-    coverError.value = null
-    try {
-      await deleteImage(bookCoverImage.value)
-      await setBookCoverImageId(book.value.id, null)
-      bookCoverImage.value = null
-      bookCoverSrc.value = null
-      book.value.cover_image_id = null
-    } catch (error) {
-      coverError.value = error instanceof Error ? error.message : 'Failed to delete book cover'
-    } finally {
-      coverLoading.value = false
-    }
+    await cover.removeCover()
   }
 
   return {
-    bookCoverImage,
-    bookCoverSrc,
-    coverLoading,
-    coverError,
-    loadBookCoverImage,
-    handleSelectBookCover,
+    bookCoverImage: cover.coverImage,
+    bookCoverSrc: cover.coverSrc,
+    coverLoading: cover.coverLoading,
+    coverError: cover.coverError,
+    loadBookCoverImage: cover.loadCover,
+    handleSelectBookCover: cover.selectCover,
     handleDeleteBookCover,
   }
 }

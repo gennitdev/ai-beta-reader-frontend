@@ -2,6 +2,7 @@ import { lstat, readFile, readdir } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { bundleError, hasBundleErrors, type BundleDiagnostic } from '../src/lib/libraryBundle/diagnostics'
 import {
+  isIgnoredWorkspacePath,
   readBundleDirectoryEntries,
   type DirectoryBundleEntry,
 } from '../src/lib/libraryBundle/adapters/directory'
@@ -34,6 +35,7 @@ async function discoverDirectory(
   for (const child of children) {
     if (child.name === '.git') continue
     const relativePath = relativeDirectory ? `${relativeDirectory}/${child.name}` : child.name
+    if (isIgnoredWorkspacePath(relativePath)) continue
     const absolutePath = join(absoluteDirectory, child.name)
     if (child.isDirectory()) {
       discovered.push(...await discoverDirectory(absolutePath, relativePath))

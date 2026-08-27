@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import JSZip from 'jszip'
-import { readBundleDirectoryEntries, readBundleDirectoryFiles } from '@/lib/libraryBundle/adapters/directory'
+import { isIgnoredWorkspacePath, readBundleDirectoryEntries, readBundleDirectoryFiles } from '@/lib/libraryBundle/adapters/directory'
 import { readBundleZip, readZipCentralDirectory } from '@/lib/libraryBundle/adapters/zip'
 import { normalizedPortablePath, validateEntryMetadata } from '@/lib/libraryBundle/limits'
 
@@ -48,6 +48,26 @@ describe('untrusted bundle transports', () => {
     expect(result.files).toBeNull()
     expect(result.diagnostics[0].code).toBe('path.unsafe')
     expect(arrayBuffer).not.toHaveBeenCalled()
+  })
+
+  it('does not materialize source-control and operating-system metadata', async () => {
+    const manifest = new File(['manifest'], 'beta-bot.yaml')
+    Object.defineProperty(manifest, 'webkitRelativePath', { value: 'library/beta-bot.yaml' })
+    const gitObject = new File(['large repository object'], 'object')
+    Object.defineProperty(gitObject, 'webkitRelativePath', { value: 'library/books/story/.git/objects/object' })
+    const finderMetadata = new File(['metadata'], '.DS_Store')
+    Object.defineProperty(finderMetadata, 'webkitRelativePath', { value: 'library/books/.DS_Store' })
+    const gitRead = vi.spyOn(gitObject, 'arrayBuffer')
+    const metadataRead = vi.spyOn(finderMetadata, 'arrayBuffer')
+
+    const result = await readBundleDirectoryFiles([manifest, gitObject, finderMetadata])
+
+    expect(result.files?.has('beta-bot.yaml')).toBe(true)
+    expect(result.files?.size).toBe(1)
+    expect(gitRead).not.toHaveBeenCalled()
+    expect(metadataRead).not.toHaveBeenCalled()
+    expect(isIgnoredWorkspacePath('books/story/.git/objects/one')).toBe(true)
+    expect(isIgnoredWorkspacePath('books/story/chapter.md')).toBe(false)
   })
 
   it.each(['', '/root', '../escape', 'a/../b', 'a//b', 'C:/drive', 'a\\b', 'a\0b'])('rejects unsafe path %j', (path) => {

@@ -139,7 +139,7 @@ export const bundleAssetSchema = z.strictObject({
   id: idSchema,
   book_id: idSchema,
   chapter_id: nullableIdSchema,
-  asset_type: z.enum(['cover', 'chapter', 'part_cover']),
+  asset_type: z.enum(['cover', 'chapter', 'part_cover', 'wiki']),
   file_name: z.string().min(1),
   mime_type: z.string().nullable(),
   notes: z.string(),

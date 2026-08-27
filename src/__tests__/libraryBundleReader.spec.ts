@@ -173,22 +173,14 @@ describe('library bundle reader and validation', () => {
     expect(moved.diagnostics.filter((value) => value.severity === 'error')).toEqual([])
   })
 
-  it('allows an inventoried entity to be deleted from a shared JSONL file', async () => {
-    const model = completeCanonicalLibraryFixture()
-    model.wiki_updates.push({
-      ...model.wiki_updates[0],
-      id: 'wiki-update-2',
-      created_at: '2026-08-20T16:00:00.000Z',
-    })
-    const files = (await writeLibraryBundle(model, options)).files
-    const historyPath = '_beta-bot/history/wiki-updates.jsonl'
-    const records = new TextDecoder().decode(files.get(historyPath)!).trimEnd().split('\n')
-    files.set(historyPath, encodeBundleText(`${records.slice(1).join('\n')}\n`))
+  it('allows records to be deleted from aggregate files while retaining their baseline inventory entries', async () => {
+    const files = await validFiles()
+    files.set('_beta-bot/history/wiki-updates.jsonl', encodeBundleText(''))
 
     const validated = await validateLibraryBundle(readLibraryBundle(files), files)
 
-    expect(validated.diagnostics.map((value) => value.code)).not.toContain('inventory.id_substitution')
-    expect(validated.diagnostics.filter((value) => value.severity === 'error')).toEqual([])
+    expect(validated.diagnostics.filter((value) => value.code === 'inventory.id_substitution')).toEqual([])
+    expect(validated.model?.wiki_updates).toEqual([])
   })
 
   it('cascades an authored wiki-page deletion through generated references', async () => {

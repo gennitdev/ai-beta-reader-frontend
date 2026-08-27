@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from "vue";
-import { logger } from '@/lib/logger'
 import { useRoute, useRouter } from "vue-router";
 import { useDatabase } from "@/composables/useDatabase";
 import { useLibraryContext } from "@/composables/useLibraryContext";
@@ -9,12 +8,15 @@ import type { Book as DatabaseBook, BookDeletionPreview, BookPart, Chapter as Da
 import type { FindReplaceScope } from "@/lib/findReplace";
 import type {
   BookChapter,
-  BookOrganizedPart,
-  BookChaptersByPart,
 } from "@/types/bookView";
 import { useBookCover } from "@/composables/useBookCover";
 import { useBookWiki } from "@/composables/useBookWiki";
 import { useBookImages } from "@/composables/useBookImages";
+import {
+  useBookChapterOrdering,
+  parseIdArray,
+  applyOrder,
+} from "@/composables/useBookChapterOrdering";
 import {
   formatWordCount,
   wordCountForChapters,
@@ -169,6 +171,7 @@ const {
 const {
   bookImages,
   bookImageSources,
+  bookImageTags,
   loadingImages,
   savingSelectedImageNotes,
   savingSelectedImageTags,
@@ -180,6 +183,7 @@ const {
   saveSelectedImageNotes,
   saveSelectedImageTags,
   downloadSelectedImage,
+  selectBookImage,
 } = useBookImages({
   bookId,
   wikiPages,
@@ -195,7 +199,6 @@ const {
 const chapters = ref<BookChapter[]>([]);
 const parts = ref<BookPart[]>([]);
 const partSummaries = ref<Record<string, string>>({});
-const partOrder = ref<string[]>([]);
 const loading = ref(false);
 const expandedSummaries = ref<Set<string>>(new Set());
 const routerViewKey = ref(0);
@@ -268,79 +271,25 @@ const totalWordCount = computed(() => {
 const chapterCount = computed(() => chapters.value.length);
 const hasChapters = computed(() => chapterCount.value > 0);
 
-const orderedParts = computed(() => {
-  const partMap = new Map(parts.value.map((part) => [part.id, part]));
-  const orderedList: BookPart[] = [];
-
-  partOrder.value.forEach((partId) => {
-    const part = partMap.get(partId);
-    if (part) {
-      orderedList.push(part);
-      partMap.delete(partId);
-    }
-  });
-
-  if (partMap.size > 0) {
-    const remaining = Array.from(partMap.values()).sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-    orderedList.push(...remaining);
-  }
-
-  return orderedList;
+const {
+  partOrder,
+  sidebarPartLists,
+  sidebarUncategorized,
+  orderedParts,
+  chaptersByPart,
+  syncSidebarLists,
+  syncPartOrderWithParts,
+  saveSidebarChapterOrder,
+} = useBookChapterOrdering({
+  book,
+  parts,
+  chapters,
+  sortedChapters,
+  bookId,
+  updateChapterOrders,
+  updatePartOrder,
+  loadBook: () => loadBook(),
 });
-
-// Organize chapters by parts
-const chaptersByPart = computed<BookChaptersByPart>(() => {
-  const partList = orderedParts.value;
-  const partIdSet = new Set(partList.map((part) => part.id));
-  const uncategorizedChapters = sortedChapters.value.filter(
-    (chapter) => !chapter.part_id || !partIdSet.has(chapter.part_id)
-  );
-
-  const organizedParts: BookOrganizedPart[] = partList.map((part) => {
-    const partChapters = sortedChapters.value.filter((chapter) => chapter.part_id === part.id);
-    const wordCount = partChapters.reduce((total, chapter) => total + (chapter.word_count || 0), 0);
-
-    return {
-      ...part,
-      chapters: partChapters,
-      wordCount,
-    };
-  });
-
-  const uncategorizedWordCount = uncategorizedChapters.reduce(
-    (total, chapter) => total + (chapter.word_count || 0),
-    0
-  );
-
-  return {
-    parts: organizedParts,
-    uncategorized: uncategorizedChapters,
-    uncategorizedWordCount,
-  };
-});
-
-const sidebarPartLists = ref<Record<string, BookChapter[]>>({});
-const sidebarUncategorized = ref<BookChapter[]>([]);
-
-const syncSidebarLists = () => {
-  const nextParts: Record<string, Chapter[]> = {};
-
-  orderedParts.value.forEach((part) => {
-    nextParts[part.id] = chapters.value
-      .filter((chapter) => chapter.part_id === part.id)
-      .map((chapter) => chapter);
-  });
-
-  sidebarPartLists.value = nextParts;
-
-  const partIdSet = new Set(Object.keys(nextParts));
-
-  sidebarUncategorized.value = chapters.value
-    .filter((chapter) => !chapter.part_id || !partIdSet.has(chapter.part_id))
-    .map((chapter) => chapter);
-};
 
 watch(
   () => [chapters.value, orderedParts.value],
@@ -429,101 +378,6 @@ watch(
     }
   }
 );
-
-const parseIdArray = (value: string | null | undefined): string[] => {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-const applyOrder = (items: Chapter[], orderIds: string[]) => {
-  if (!orderIds.length) return items;
-  const chapterMap = new Map(items.map((chapter) => [chapter.id, chapter]));
-  const ordered: Chapter[] = [];
-
-  orderIds.forEach((id) => {
-    const chapter = chapterMap.get(id);
-    if (chapter) {
-      ordered.push(chapter);
-      chapterMap.delete(id);
-    }
-  });
-
-  chapterMap.forEach((chapter) => {
-    ordered.push(chapter);
-  });
-
-  return ordered.map((chapter, index) => ({
-    ...chapter,
-    position: index,
-  }));
-};
-
-const arraysEqual = (a: string[], b: string[]) =>
-  a.length === b.length && a.every((value, index) => value === b[index]);
-
-const setPartOrderState = (newOrder: string[]) => {
-  const uniqueOrder = Array.from(new Set(newOrder));
-  partOrder.value = uniqueOrder;
-  if (book.value) {
-    book.value.part_order = JSON.stringify(uniqueOrder);
-  }
-};
-
-const syncPartOrderWithParts = async () => {
-  if (!book.value) {
-    partOrder.value = [];
-    return;
-  }
-
-  const storedOrder = parseIdArray(book.value.part_order);
-  const partIds = parts.value.map((part) => part.id);
-  const sanitized = storedOrder.filter((id) => partIds.includes(id));
-  const missing = parts.value
-    .filter((part) => !sanitized.includes(part.id))
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-    .map((part) => part.id);
-
-  const updatedOrder = [...sanitized, ...missing];
-
-  if (!arraysEqual(updatedOrder, storedOrder)) {
-    try {
-    await updatePartOrder(bookId.value, updatedOrder);
-    } catch (error) {
-      console.error("Failed to synchronize part order:", error);
-    }
-  }
-
-  setPartOrderState(updatedOrder);
-};
-
-const buildChapterOrder = (partUpdates: Record<string, string[]>) => {
-  const chapterOrder: string[] = [];
-
-  if (partUpdates["null"]) {
-    chapterOrder.push(...partUpdates["null"]);
-  }
-
-  const visited = new Set<string>();
-  partOrder.value.forEach((partId) => {
-    visited.add(partId);
-    if (partUpdates[partId]) {
-      chapterOrder.push(...partUpdates[partId]);
-    }
-  });
-
-  Object.entries(partUpdates).forEach(([partId, chapterIds]) => {
-    if (partId !== "null" && !visited.has(partId)) {
-      chapterOrder.push(...chapterIds);
-    }
-  });
-
-  return chapterOrder;
-};
 
 const startEditingBookTitle = () => {
   if (!book.value) return;
@@ -720,45 +574,6 @@ const onSidebarDragEnd = async () => {
   isDraggingInSidebar.value = false;
 };
 
-const buildSidebarPartUpdates = () => {
-  const partUpdates: Record<string, string[]> = {};
-
-  partUpdates["null"] = sidebarUncategorized.value.map((c) => c.id);
-
-  orderedParts.value.forEach((part) => {
-    const list = sidebarPartLists.value[part.id] || [];
-    partUpdates[part.id] = list.map((c) => c.id);
-  });
-
-  Object.entries(sidebarPartLists.value).forEach(([partId, list]) => {
-    if (!(partId in partUpdates)) {
-      partUpdates[partId] = list.map((c) => c.id);
-    }
-  });
-
-  return partUpdates;
-};
-
-const saveSidebarChapterOrder = async () => {
-  try {
-    const partUpdates = buildSidebarPartUpdates();
-
-    const chapterOrder = buildChapterOrder(partUpdates);
-
-    // Send array-based reorder to backend
-    await updateChapterOrders(bookId.value, chapterOrder, partUpdates, partOrder.value);
-
-    logger.log("Saved sidebar chapter order with arrays:", { chapterOrder, partUpdates });
-
-    // Reload to ensure UI reflects the saved state
-    await loadBook();
-  } catch (error) {
-    console.error("Failed to save sidebar chapter order:", error);
-    // Reload on error to revert UI to correct state
-    await loadBook();
-  }
-};
-
 const toggleSummary = (chapterId: string) => {
   if (expandedSummaries.value.has(chapterId)) {
     expandedSummaries.value.delete(chapterId);
@@ -931,6 +746,7 @@ onMounted(async () => {
     :part-thumbnails="partThumbnails"
     :book-images="bookImages"
     :book-image-sources="bookImageSources"
+    :book-image-tags="bookImageTags"
     :loading-images="loadingImages"
     :selected-image-id="selectedImageId"
     :selected-image-src="selectedImageSrc"
@@ -942,6 +758,7 @@ onMounted(async () => {
     :save-selected-image-notes="saveSelectedImageNotes"
     :save-selected-image-tags="saveSelectedImageTags"
     :download-selected-image="downloadSelectedImage"
+    :select-book-image="selectBookImage"
     :wiki-page-pin-changed="handleWikiPagePinChanged"
     :revision-activity="revisionActivity"
   />

@@ -1,5 +1,6 @@
 import type { ImageAsset } from '@/lib/database'
 import type { DatabaseImportData } from '@/lib/databaseImportExport'
+import { IMAGE_CONTENT_HASH_ALGORITHM } from '@/lib/imageContentHash'
 import { createLogicalDatabaseDump, type LogicalRow } from './logicalDump'
 import type { CanonicalLibraryModel } from './model'
 import { canonicalLibraryModelSchema } from './schemas'
@@ -10,6 +11,8 @@ export type AssetByteReader = (asset: ImageAsset) => Promise<Uint8Array>
 export interface CanonicalSnapshotOptions {
   readAssetBytes?: AssetByteReader
   contentMode?: 'full' | 'text-only'
+  /** Keep full-library entities while omitting already-fingerprinted local image bytes. */
+  retainAssetBytes?: boolean
   /** Omit for a full-library snapshot; provide one or more exact book IDs for a selection. */
   bookIds?: readonly string[]
 }
@@ -222,24 +225,25 @@ export async function createCanonicalLibrarySnapshot(
   const chapterSummaries = selectCurrentRows(tables.chapter_summaries, 'chapter_id')
   const partSummaries = selectCurrentRows(tables.part_summaries, 'part_id')
   const contentMode = options.contentMode ?? 'full'
+  const retainAssetBytes = options.retainAssetBytes ?? contentMode === 'full'
 
   const assets = await Promise.all(tables.image_assets.map(async (row) => {
     const storedHash = nullableString(row, 'content_hash')
     const storedAlgorithm = nullableString(row, 'content_hash_algorithm')
     const storedByteLength = row.content_byte_length
-    const hasStoredIntegrity = storedAlgorithm === 'sha256'
+    const hasStoredIntegrity = (storedAlgorithm === IMAGE_CONTENT_HASH_ALGORITHM || storedAlgorithm === 'sha256')
       && Boolean(storedHash?.match(/^[a-f0-9]{64}$/))
       && typeof storedByteLength === 'number'
       && Number.isInteger(storedByteLength)
       && storedByteLength >= 0
-    const loadedBytes = contentMode === 'full' || !hasStoredIntegrity
+    const loadedBytes = retainAssetBytes || !hasStoredIntegrity
       ? await readAssetBytes(row, options.readAssetBytes)
       : null
     return {
       id: stringValue(row, 'id'),
       book_id: stringValue(row, 'book_id'),
       chapter_id: nullableString(row, 'chapter_id'),
-      asset_type: stringValue(row, 'asset_type') as 'cover' | 'chapter' | 'part_cover',
+      asset_type: stringValue(row, 'asset_type') as ImageAsset['asset_type'],
       file_name: stringValue(row, 'file_name'),
       mime_type: nullableString(row, 'mime_type'),
       notes: stringValue(row, 'notes'),
@@ -249,7 +253,7 @@ export async function createCanonicalLibrarySnapshot(
       updated_at: stringValue(row, 'updated_at'),
       sha256: loadedBytes ? await sha256Hex(loadedBytes) : storedHash as string,
       byte_length: loadedBytes ? loadedBytes.byteLength : storedByteLength as number,
-      bytes: contentMode === 'full' ? loadedBytes : null,
+      bytes: retainAssetBytes ? loadedBytes : null,
     }
   }))
 

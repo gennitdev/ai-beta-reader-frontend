@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { completeCanonicalLibraryFixture } from './fixtures/libraryBundle'
 import { useLibraryBundleImport } from '@/composables/useLibraryBundleImport'
 import { canonicalModelToDatabaseImport } from '@/lib/libraryBundle/apply'
@@ -61,6 +61,172 @@ describe('useLibraryBundleImport', () => {
     })
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('uses a background worker for add/update ZIP and folder previews', async () => {
+    const model = completeCanonicalLibraryFixture()
+    const backup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
+    const generation = await sha256Hex(backup)
+    const workerPreview = {
+      plan: emptyPlan(generation), localModel: model, incomingModel: model,
+      databaseGeneration: generation, exportedAt: '2026-08-25T03:20:00.000Z',
+    }
+    const transfers: Transferable[][] = []
+    const messages: Array<{ type?: string }> = []
+    const terminate = vi.fn()
+    class SuccessfulWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null
+      onerror: ((event: ErrorEvent) => void) | null = null
+      postMessage(message: { type?: string }, transfer: Transferable[]) {
+        messages.push(message)
+        transfers.push(transfer)
+        queueMicrotask(() => this.onmessage?.({
+          data: { type: 'preview-complete', preview: workerPreview },
+        } as MessageEvent))
+      }
+      terminate = terminate
+    }
+    vi.stubGlobal('Worker', SuccessfulWorker)
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn().mockResolvedValue(backup), importDatabaseBackup: vi.fn(),
+      getImageBlob: vi.fn(), recoveryStore: memoryStore(), intent: 'add-or-update-books',
+    })
+
+    await state.previewFile(new File(['zip'], 'large.zip'))
+
+    expect(state.preview.value).toBe(workerPreview)
+    expect(previewZip).not.toHaveBeenCalled()
+    expect(transfers).toHaveLength(1)
+    expect(transfers[0]).toHaveLength(2)
+    const folderFile = new File(['manifest'], 'beta-bot.yaml')
+    Object.defineProperty(folderFile, 'webkitRelativePath', { value: 'large-folder/beta-bot.yaml' })
+    await state.previewDirectory([folderFile])
+    expect(state.preview.value).toBe(workerPreview)
+    expect(previewDirectory).not.toHaveBeenCalled()
+    expect(messages.map((message) => message.type)).toEqual([
+      'preview-library-bundle', 'preview-library-bundle-directory',
+    ])
+    expect(transfers[1]).toHaveLength(1)
+    expect(terminate).toHaveBeenCalledTimes(2)
+  })
+
+  it('cancels an obsolete worker preview and ignores its result', async () => {
+    const model = completeCanonicalLibraryFixture()
+    const backup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
+    const generation = await sha256Hex(backup)
+    const workers: PendingWorker[] = []
+    class PendingWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null
+      onerror: ((event: ErrorEvent) => void) | null = null
+      postMessage = vi.fn()
+      terminate = vi.fn()
+      constructor() { workers.push(this) }
+    }
+    vi.stubGlobal('Worker', PendingWorker)
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn().mockResolvedValue(backup), importDatabaseBackup: vi.fn(),
+      getImageBlob: vi.fn(), recoveryStore: memoryStore(), intent: 'add-or-update-books',
+    })
+
+    const obsolete = state.previewFile(new File(['old'], 'old.zip'))
+    await vi.waitFor(() => expect(workers).toHaveLength(1))
+    const current = state.previewFile(new File(['new'], 'new.zip'))
+    await vi.waitFor(() => expect(workers).toHaveLength(2))
+    expect(workers[0].terminate).toHaveBeenCalledOnce()
+    const currentPreview = {
+      plan: emptyPlan(generation), localModel: model, incomingModel: model,
+      databaseGeneration: generation, exportedAt: null,
+    }
+    workers[1].onmessage?.({
+      data: { type: 'preview-complete', preview: currentPreview },
+    } as MessageEvent)
+
+    await Promise.all([obsolete, current])
+    expect(state.preview.value).toBe(currentPreview)
+    expect(state.importFileName.value).toBe('new.zip')
+    expect(state.isPreviewing.value).toBe(false)
+  })
+
+  it('reports worker progress and lets the user cancel without applying changes', async () => {
+    const backup = new Uint8Array([1, 2, 3])
+    let worker: {
+      onmessage: ((event: MessageEvent) => void) | null
+      onerror: ((event: ErrorEvent) => void) | null
+      postMessage: ReturnType<typeof vi.fn>
+      terminate: ReturnType<typeof vi.fn>
+    } | undefined
+    const WorkerStub = vi.fn(function () {
+      worker = { onmessage: null, onerror: null, postMessage: vi.fn(), terminate: vi.fn() }
+      return worker
+    })
+    vi.stubGlobal('Worker', WorkerStub)
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn().mockResolvedValue(backup), importDatabaseBackup: vi.fn(),
+      getImageBlob: vi.fn(), recoveryStore: memoryStore(), intent: 'add-or-update-books',
+    })
+    const folderFile = new File(['manifest'], 'beta-bot.yaml')
+    Object.defineProperty(folderFile, 'webkitRelativePath', { value: 'large-folder/beta-bot.yaml' })
+
+    const pending = state.previewDirectory([folderFile])
+    await vi.waitFor(() => expect(worker).toBeDefined())
+    worker!.onmessage?.({ data: { type: 'preview-progress', stage: 'validating' } } as MessageEvent)
+    expect(state.previewProgress.value?.label).toBe('Validating bundle structure…')
+    expect(state.previewProgress.value?.detail).toContain('No changes are being applied.')
+
+    state.cancelPreview()
+    await pending
+    expect(worker!.terminate).toHaveBeenCalledOnce()
+    expect(state.isPreviewing.value).toBe(false)
+    expect(state.previewProgress.value).toBeNull()
+    expect(state.importMessage.value).toBe('Bundle preview cancelled. No changes were applied.')
+    expect(state.preview.value).toBeNull()
+  })
+
+  it('re-exports a detached database backup before falling back from a crashed folder worker', async () => {
+    const model = completeCanonicalLibraryFixture()
+    const firstBackup = new Uint8Array([1, 2, 3])
+    const fallbackBackup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
+    const generation = await sha256Hex(fallbackBackup)
+    const fallbackPreview = {
+      plan: emptyPlan(generation), localModel: model, incomingModel: model,
+      databaseGeneration: generation, exportedAt: null,
+    }
+    const exportDatabase = vi.fn()
+      .mockResolvedValueOnce(firstBackup)
+      .mockResolvedValueOnce(fallbackBackup)
+    class CrashingWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null
+      onerror: ((event: ErrorEvent) => void) | null = null
+      terminate = vi.fn()
+      postMessage(_message: unknown, transfer: Transferable[]) {
+        structuredClone(firstBackup, { transfer })
+        queueMicrotask(() => this.onerror?.({
+          message: 'worker crashed', preventDefault: vi.fn(),
+        } as unknown as ErrorEvent))
+      }
+    }
+    vi.stubGlobal('Worker', CrashingWorker)
+    previewDirectory.mockResolvedValue(fallbackPreview)
+    const state = useLibraryBundleImport({
+      exportDatabase, importDatabaseBackup: vi.fn(), getImageBlob: vi.fn(),
+      recoveryStore: memoryStore(), intent: 'add-or-update-books',
+    })
+    const folderFile = new File(['manifest'], 'beta-bot.yaml')
+    Object.defineProperty(folderFile, 'webkitRelativePath', { value: 'large-folder/beta-bot.yaml' })
+
+    await state.previewDirectory([folderFile])
+
+    expect(firstBackup.byteLength).toBe(0)
+    expect(exportDatabase).toHaveBeenCalledTimes(2)
+    expect(previewDirectory).toHaveBeenCalledWith([folderFile], fallbackBackup, expect.objectContaining({
+      intent: 'add-or-update-books', retainLocalAssetBytes: false,
+    }))
+    expect(state.preview.value).toBe(fallbackPreview)
+    expect(state.importError.value).toBe('')
+  })
+
   it('previews ZIPs and directories, resolves a conflict, and applies against the same generation', async () => {
     const model = completeCanonicalLibraryFixture()
     const backup = new TextEncoder().encode(JSON.stringify(canonicalModelToDatabaseImport(model)))
@@ -80,6 +246,7 @@ describe('useLibraryBundleImport', () => {
     expect(state.importFileName.value).toBe('bundle.zip')
     expect(previewZip).toHaveBeenCalledWith(expect.any(Uint8Array), backup, expect.objectContaining({
       intent: 'add-or-update-books',
+      retainLocalAssetBytes: false,
     }))
 
     const folderFile = new File(['manifest'], 'beta-bot.yaml')
@@ -88,6 +255,9 @@ describe('useLibraryBundleImport', () => {
     expect(state.importFileName.value).toBe('my-library')
 
     await state.applyChanges()
+    expect(importCanonicalModel).toHaveBeenCalledWith(model, expect.objectContaining({
+      assetIdsToWrite: expect.any(Set),
+    }))
     expect(importDatabaseBackup).toHaveBeenCalledOnce()
     expect(state.importMessage.value).toContain('Bundle changes applied successfully.')
     expect(state.importMessage.value).toContain('Re-export this workspace')
@@ -203,7 +373,7 @@ describe('useLibraryBundleImport', () => {
       conflictReason: 'different_edits' as const, changedFields: ['body'],
     }
     state.preview.value = {
-      localModel: model, incomingModel: model, databaseGeneration: 'g',
+      localModel: model, incomingModel: model, databaseGeneration: 'g', exportedAt: null,
       plan: {
         ...emptyPlan('g'), operations: [operation], canApply: false, unresolvedConflicts: 1,
         counts: { create: 0, update: 0, delete: 0, keep_local: 0, unchanged: 0, conflict: 1 },
@@ -213,6 +383,38 @@ describe('useLibraryBundleImport', () => {
     state.resolveConflict(operation.key, 'keep_local')
     expect(state.plan.value?.operations[0].resolution).toBe('keep_local')
     expect(state.plan.value?.canApply).toBe(true)
+  })
+
+  it('requires confirmation before exposing keep-local rows as incoming changes', () => {
+    const confirmInventoryOverride = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const state = useLibraryBundleImport({
+      exportDatabase: vi.fn(), importDatabaseBackup: vi.fn(), getImageBlob: vi.fn(),
+      recoveryStore: memoryStore(), confirmInventoryOverride,
+    })
+    const model = completeCanonicalLibraryFixture()
+    const operation = {
+      key: 'wiki_page\0wiki-1', entityType: 'wiki_page', entityId: 'wiki-1', bookId: 'book-1',
+      kind: 'keep_local' as const, localHash: 'local', incomingHash: 'incoming', changedFields: ['body'],
+    }
+    state.preview.value = {
+      localModel: model, incomingModel: model, databaseGeneration: 'g', exportedAt: null,
+      plan: {
+        ...emptyPlan('g'), operations: [operation],
+        counts: { create: 0, update: 0, delete: 0, keep_local: 1, unchanged: 0, conflict: 0 },
+        countsByEntityType: {
+          wiki_page: { create: 0, update: 0, delete: 0, keep_local: 1, unchanged: 0, conflict: 0 },
+        },
+      },
+    }
+
+    state.overrideInventoryBaseline()
+    expect(state.plan.value?.operations[0].kind).toBe('keep_local')
+    state.overrideInventoryBaseline()
+
+    expect(confirmInventoryOverride).toHaveBeenCalledTimes(2)
+    expect(state.plan.value?.operations[0].kind).toBe('update')
+    expect(state.plan.value?.inventoryOverrideApplied).toBe(true)
+    expect(state.importMessage.value).toContain('Review every update and deletion')
   })
 
   it('prepares a verified recovery, requires confirmation, replaces, restores, and downloads it', async () => {

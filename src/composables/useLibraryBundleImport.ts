@@ -1,8 +1,13 @@
-import { computed, ref, shallowRef } from 'vue'
+import { computed, nextTick, ref, shallowRef } from 'vue'
 import packageInfo from '../../package.json'
 import type { ImageAsset } from '@/lib/database'
 import { previewBundleDirectoryImport, previewBundleZipImport, type PreviewedBundleImport } from '@/lib/libraryBundle/importPreview'
-import { resolveImportConflict, type ImportConflictResolution, type LibraryImportIntent } from '@/lib/libraryBundle/plan'
+import {
+  applyIncomingInventoryOverride,
+  resolveImportConflict,
+  type ImportConflictResolution,
+  type LibraryImportIntent,
+} from '@/lib/libraryBundle/plan'
 import { applyImportPlanToModel } from '@/lib/libraryBundle/apply'
 import {
   importCanonicalLibraryModel,
@@ -10,12 +15,24 @@ import {
 } from '@/lib/libraryBundle/restore'
 import { sha256Hex } from '@/lib/libraryBundle/semanticHash'
 import { MAX_BUNDLE_ARCHIVE_BYTES } from '@/lib/libraryBundle/limits'
+import {
+  LibraryBundlePreviewWorkerError,
+  LibraryBundlePreviewWorkerUnavailableError,
+  previewBundleDirectoryInWorker,
+  previewBundleZipInWorker,
+} from '@/lib/libraryBundle/previewWorkerClient'
 import { createPortableId } from '@/lib/portableIds'
 import type { RecoveryBundleMetadata, RecoveryStore } from '@/lib/recovery/model'
 import { createRuntimeRecoveryStore } from '@/lib/recovery/runtime'
 import { prepareLibraryReplacement, replaceLibraryWithRecovery } from '@/lib/recovery/replacement'
 import { readVerifiedRecovery } from '@/lib/recovery/service'
 import { createRuntimeImageContentStore } from '@/lib/runtimeImageContentStore'
+import type { LibraryBundlePreviewStage } from '@/lib/libraryBundle/importPreview'
+
+export interface LibraryBundlePreviewProgress {
+  label: string
+  detail: string
+}
 
 interface LibraryBundleImportDeps {
   exportDatabase: () => Promise<Uint8Array>
@@ -23,6 +40,7 @@ interface LibraryBundleImportDeps {
   getImageBlob: (asset: ImageAsset) => Promise<Blob>
   recoveryStore?: RecoveryStore
   confirmReplace?: (message: string) => boolean
+  confirmInventoryOverride?: (message: string) => boolean
   intent?: LibraryImportIntent
 }
 
@@ -45,12 +63,16 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   const importError = ref('')
   const importMessage = ref('')
   const isPreviewing = ref(false)
+  const previewProgress = ref<LibraryBundlePreviewProgress | null>(null)
   const isApplying = ref(false)
   const isPreparingReplace = ref(false)
   const isReplacing = ref(false)
   const recoveries = ref<RecoveryBundleMetadata[]>([])
   const preparedRecovery = ref<RecoveryBundleMetadata | null>(null)
+  let previewRequestId = 0
+  let previewAbortController: AbortController | null = null
   const plan = computed(() => preview.value?.plan ?? null)
+  const bundleExportedAt = computed(() => preview.value?.exportedAt ?? null)
   const recoveryStore = deps.recoveryStore ?? createRuntimeRecoveryStore()
   const replaceRemovalCounts = computed(() => {
     if (!preview.value) return { books: 0, chapters: 0, wikiPages: 0 }
@@ -62,6 +84,32 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
     }
   })
 
+  async function yieldForPreviewPaint(): Promise<void> {
+    await nextTick()
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
+
+  function formatPreviewBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes.toLocaleString()} bytes`
+    const units = ['KB', 'MB', 'GB']
+    let value = bytes / 1024
+    let unit = units[0]
+    for (let index = 1; value >= 1024 && index < units.length; index++) {
+      value /= 1024
+      unit = units[index]
+    }
+    return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`
+  }
+
+  function updatePreviewStage(stage: LibraryBundlePreviewStage, detail: string): void {
+    const labels: Record<LibraryBundlePreviewStage, string> = {
+      reading: 'Reading bundle files…',
+      validating: 'Validating bundle structure…',
+      planning: 'Comparing changes with your library…',
+    }
+    previewProgress.value = { label: labels[stage], detail }
+  }
+
   async function refreshRecoveries(): Promise<void> {
     try {
       recoveries.value = (await recoveryStore.list()).sort((left, right) => right.createdAt.localeCompare(left.createdAt))
@@ -71,51 +119,155 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   }
 
   async function previewFile(file: File): Promise<void> {
+    const requestId = ++previewRequestId
+    previewAbortController?.abort()
+    const previewController = new AbortController()
+    previewAbortController = previewController
     importError.value = ''
     importMessage.value = ''
     preview.value = null
     preparedRecovery.value = null
     importFileName.value = file.name
     isPreviewing.value = true
+    const sourceDetail = `${file.name} · ${formatPreviewBytes(file.size)} selected. No changes are being applied.`
+    previewProgress.value = { label: 'Preparing bundle preview…', detail: sourceDetail }
     try {
       if (file.size > MAX_BUNDLE_ARCHIVE_BYTES) {
         throw new Error(
           `Bundle archive is ${file.size} bytes; the browser import limit is ${MAX_BUNDLE_ARCHIVE_BYTES} bytes.`,
         )
       }
-      const [zipBytes, databaseBackup] = await Promise.all([
+      await yieldForPreviewPaint()
+      previewProgress.value = { label: 'Reading your current library…', detail: sourceDetail }
+      let [zipBytes, databaseBackup] = await Promise.all([
         file.arrayBuffer().then((buffer) => new Uint8Array(buffer)),
         deps.exportDatabase(),
       ])
-      preview.value = await previewBundleZipImport(zipBytes, databaseBackup, {
-        readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
-        intent: deps.intent,
-      })
+      let result: PreviewedBundleImport
+      previewProgress.value = { label: 'Starting background analysis…', detail: sourceDetail }
+      await yieldForPreviewPaint()
+      if (deps.intent === 'add-or-update-books') {
+        try {
+          result = await previewBundleZipInWorker(zipBytes, databaseBackup, {
+            intent: deps.intent,
+            signal: previewController.signal,
+            onProgress: (stage) => updatePreviewStage(stage, sourceDetail),
+          })
+        } catch (error) {
+          const shouldFallback = error instanceof LibraryBundlePreviewWorkerUnavailableError
+            || (error instanceof LibraryBundlePreviewWorkerError
+              && error.code === 'local-asset-bytes-required')
+          if (!shouldFallback || previewController.signal.aborted) throw error
+          // A worker runtime failure detaches transferred buffers; a browser
+          // without Worker support leaves the original inputs reusable.
+          if (zipBytes.byteLength === 0 || databaseBackup.byteLength === 0) {
+            const fallbackInputs = await Promise.all([
+              file.arrayBuffer().then((buffer) => new Uint8Array(buffer)),
+              deps.exportDatabase(),
+            ])
+            zipBytes = fallbackInputs[0]
+            databaseBackup = fallbackInputs[1]
+          }
+          result = await previewBundleZipImport(zipBytes, databaseBackup, {
+            readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+            intent: deps.intent,
+            retainLocalAssetBytes: false,
+            onProgress: (stage) => updatePreviewStage(stage, sourceDetail),
+          })
+        }
+      } else {
+        result = await previewBundleZipImport(zipBytes, databaseBackup, {
+          readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+          intent: deps.intent,
+          retainLocalAssetBytes: true,
+          onProgress: (stage) => updatePreviewStage(stage, sourceDetail),
+        })
+      }
+      if (requestId === previewRequestId) preview.value = result
     } catch (error) {
-      importError.value = error instanceof Error ? error.message : 'Could not preview this bundle.'
+      if (requestId === previewRequestId && !(error instanceof DOMException && error.name === 'AbortError')) {
+        importError.value = error instanceof Error ? error.message : 'Could not preview this bundle.'
+      }
     } finally {
-      isPreviewing.value = false
+      if (requestId === previewRequestId) {
+        isPreviewing.value = false
+        previewProgress.value = null
+        if (previewAbortController === previewController) previewAbortController = null
+      }
     }
   }
 
   async function previewDirectory(files: readonly File[]): Promise<void> {
+    const requestId = ++previewRequestId
+    previewAbortController?.abort()
+    const previewController = new AbortController()
+    previewAbortController = previewController
     importError.value = ''
     importMessage.value = ''
     preview.value = null
     preparedRecovery.value = null
     importFileName.value = files[0]?.webkitRelativePath.split('/')[0] || 'Selected folder'
     isPreviewing.value = true
+    const totalBytes = files.reduce((sum, file) => sum + file.size, 0)
+    const sourceDetail = `${files.length.toLocaleString()} files · ${formatPreviewBytes(totalBytes)} selected. No changes are being applied.`
+    previewProgress.value = { label: 'Preparing folder preview…', detail: sourceDetail }
     try {
-      const databaseBackup = await deps.exportDatabase()
-      preview.value = await previewBundleDirectoryImport(files, databaseBackup, {
-        readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
-        intent: deps.intent,
-      })
+      await yieldForPreviewPaint()
+      previewProgress.value = { label: 'Reading your current library…', detail: sourceDetail }
+      let databaseBackup = await deps.exportDatabase()
+      let result: PreviewedBundleImport
+      previewProgress.value = { label: 'Starting background analysis…', detail: sourceDetail }
+      await yieldForPreviewPaint()
+      if (deps.intent === 'add-or-update-books') {
+        try {
+          result = await previewBundleDirectoryInWorker(files, databaseBackup, {
+            intent: deps.intent,
+            signal: previewController.signal,
+            onProgress: (stage) => updatePreviewStage(stage, sourceDetail),
+          })
+        } catch (error) {
+          const shouldFallback = error instanceof LibraryBundlePreviewWorkerUnavailableError
+            || (error instanceof LibraryBundlePreviewWorkerError
+              && error.code === 'local-asset-bytes-required')
+          if (!shouldFallback || previewController.signal.aborted) throw error
+          if (databaseBackup.byteLength === 0) databaseBackup = await deps.exportDatabase()
+          result = await previewBundleDirectoryImport(files, databaseBackup, {
+            readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+            intent: deps.intent,
+            retainLocalAssetBytes: false,
+            onProgress: (stage) => updatePreviewStage(stage, sourceDetail),
+          })
+        }
+      } else {
+        result = await previewBundleDirectoryImport(files, databaseBackup, {
+          readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
+          intent: deps.intent,
+          retainLocalAssetBytes: true,
+          onProgress: (stage) => updatePreviewStage(stage, sourceDetail),
+        })
+      }
+      if (requestId === previewRequestId) preview.value = result
     } catch (error) {
-      importError.value = error instanceof Error ? error.message : 'Could not preview this bundle folder.'
+      if (requestId === previewRequestId && !(error instanceof DOMException && error.name === 'AbortError')) {
+        importError.value = error instanceof Error ? error.message : 'Could not preview this bundle folder.'
+      }
     } finally {
-      isPreviewing.value = false
+      if (requestId === previewRequestId) {
+        isPreviewing.value = false
+        previewProgress.value = null
+        if (previewAbortController === previewController) previewAbortController = null
+      }
     }
+  }
+
+  function cancelPreview(): void {
+    if (!isPreviewing.value) return
+    previewRequestId += 1
+    previewAbortController?.abort()
+    previewAbortController = null
+    isPreviewing.value = false
+    previewProgress.value = null
+    importMessage.value = 'Bundle preview cancelled. No changes were applied.'
   }
 
   function resolveConflict(key: string, resolution: ImportConflictResolution): void {
@@ -124,6 +276,23 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
       ...preview.value,
       plan: resolveImportConflict(preview.value.plan, key, resolution),
     }
+  }
+
+  function overrideInventoryBaseline(): void {
+    if (!preview.value) return
+    const count = preview.value.plan.counts.keep_local
+    if (!count) return
+    const confirmOverride = deps.confirmInventoryOverride ?? ((message: string) => window.confirm(message))
+    const confirmed = confirmOverride(
+      `Treat ${count} keep-local difference(s) as incoming changes? This can overwrite local edits and delete local records absent from the bundle. Continue only if _beta-bot/inventory.json was regenerated after the bundle was edited.`,
+    )
+    if (!confirmed) return
+    preview.value = {
+      ...preview.value,
+      plan: applyIncomingInventoryOverride(preview.value.plan),
+    }
+    preparedRecovery.value = null
+    importMessage.value = `Inventory baseline override enabled for ${count} difference(s). Review every update and deletion before applying.`
   }
 
   async function applyChanges(): Promise<string[]> {
@@ -142,10 +311,16 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
         currentGeneration,
       )
       const imageStore = createRuntimeImageContentStore()
+      const assetIdsToWrite = new Set(activePreview.plan.operations
+        .filter((operation) => operation.entityType === 'asset'
+          && (operation.kind === 'create' || operation.kind === 'update'
+            || operation.kind === 'conflict' && operation.resolution === 'use_incoming'))
+        .map((operation) => operation.entityId))
       try {
         await importCanonicalLibraryModel(merged, {
           imageStore,
           importDatabaseBackup: deps.importDatabaseBackup,
+          assetIdsToWrite,
         })
       } catch (error) {
         const createdAssetIds = new Set(activePreview.plan.operations
@@ -251,22 +426,35 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   }
 
   async function previewRecovery(id: string): Promise<void> {
+    const requestId = ++previewRequestId
+    previewAbortController?.abort()
+    previewAbortController = null
     importError.value = ''
     preparedRecovery.value = null
     isPreviewing.value = true
+    previewProgress.value = { label: 'Preparing recovery preview…', detail: 'No changes are being applied.' }
     try {
+      await yieldForPreviewPaint()
       const [stored, currentBackup] = await Promise.all([
         readVerifiedRecovery(recoveryStore, id),
         deps.exportDatabase(),
       ])
-      preview.value = await previewBundleZipImport(stored.bytes, currentBackup, {
+      const result = await previewBundleZipImport(stored.bytes, currentBackup, {
         readLocalAssetBytes: async (asset) => new Uint8Array(await (await deps.getImageBlob(asset)).arrayBuffer()),
       })
-      importFileName.value = `Recovery from ${stored.metadata.createdAt}`
+      if (requestId === previewRequestId) {
+        preview.value = result
+        importFileName.value = `Recovery from ${stored.metadata.createdAt}`
+      }
     } catch (error) {
-      importError.value = error instanceof Error ? error.message : 'Could not preview recovery.'
+      if (requestId === previewRequestId) {
+        importError.value = error instanceof Error ? error.message : 'Could not preview recovery.'
+      }
     } finally {
-      isPreviewing.value = false
+      if (requestId === previewRequestId) {
+        isPreviewing.value = false
+        previewProgress.value = null
+      }
     }
   }
 
@@ -280,6 +468,11 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   }
 
   function resetImport(): void {
+    previewRequestId += 1
+    previewAbortController?.abort()
+    previewAbortController = null
+    isPreviewing.value = false
+    previewProgress.value = null
     preview.value = null
     importFileName.value = ''
     importError.value = ''
@@ -288,9 +481,9 @@ export function useLibraryBundleImport(deps: LibraryBundleImportDeps) {
   }
 
   return {
-    preview, plan, importFileName, importError, importMessage, isPreviewing, isApplying,
+    preview, plan, bundleExportedAt, importFileName, importError, importMessage, isPreviewing, previewProgress, isApplying,
     isPreparingReplace, isReplacing, recoveries, preparedRecovery, replaceRemovalCounts,
-    previewFile, previewDirectory, resolveConflict, applyChanges, prepareReplace, replaceLibrary,
+    previewFile, previewDirectory, cancelPreview, resolveConflict, overrideInventoryBaseline, applyChanges, prepareReplace, replaceLibrary,
     refreshRecoveries, previewRecovery, downloadRecovery, resetImport,
   }
 }

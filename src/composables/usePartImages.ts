@@ -41,38 +41,46 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
   const externalImageTags = ref<ImageWikiTag[]>([]);
 
   const activeImageSource = computed(() => {
-    if (externalImage.value) return externalImageSource.value;
     const id = activeImageId.value;
-    if (!id) return null;
+    if (!id) return externalImageSource.value;
     return partImageSources.value[id] ?? null;
   });
 
   const activeImage = computed(() => {
-    if (externalImage.value) return externalImage.value;
-    if (!activeImageId.value) return null;
+    if (!activeImageId.value) return externalImage.value;
     return partImages.value.find((item) => item.id === activeImageId.value) ?? null;
   });
 
   const activeImageTags = computed(() => {
-    if (externalImage.value) return externalImageTags.value;
-    if (!activeImageId.value) return [];
+    if (!activeImageId.value) return externalImageTags.value;
     return partImageTags.value[activeImageId.value] ?? [];
   });
 
   const activeImageLabel = computed(() => {
-    if (externalImage.value) return externalImage.value.file_name ?? "";
-    if (!activeImageId.value) return "";
+    if (!activeImageId.value) return externalImage.value?.file_name ?? "";
     const image = partImages.value.find((item) => item.id === activeImageId.value);
     return image?.file_name ?? "";
   });
 
-  const currentImageIndex = computed(() => {
-    if (!activeImageId.value) return -1;
-    return partImages.value.findIndex((img) => img.id === activeImageId.value);
+  const albumImages = computed(() => {
+    const availableImages = partImages.value.filter((image) => partImageSources.value[image.id]);
+    const cover = externalImage.value;
+    return cover
+      ? [cover, ...availableImages.filter((image) => image.id !== cover.id)]
+      : availableImages;
   });
 
+  const currentImageIndex = computed(() => {
+    const currentId = activeImageId.value ?? externalImage.value?.id;
+    if (!currentId) return -1;
+    return albumImages.value.findIndex((img) => img.id === currentId);
+  });
+
+  const activeImagePosition = computed(() => currentImageIndex.value + 1);
+  const albumImageCount = computed(() => albumImages.value.length);
+
   const hasNextImage = computed(() => {
-    return currentImageIndex.value >= 0 && currentImageIndex.value < partImages.value.length - 1;
+    return currentImageIndex.value >= 0 && currentImageIndex.value < albumImages.value.length - 1;
   });
 
   const hasPrevImage = computed(() => {
@@ -132,13 +140,26 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
     }
   };
 
-  const openImageModal = (imageId: string) => {
+  const loadExternalImageTags = async (asset: ImageAsset) => {
+    try {
+      externalImageTags.value = await getImageWikiTags(asset.id);
+    } catch (error) {
+      console.warn("Failed to load image tags", error);
+    }
+  };
+
+  const openImageModal = (
+    imageId: string,
+    coverAsset: ImageAsset | null = null,
+    coverSource: string | null = null,
+  ) => {
     if (!partImageSources.value[imageId]) return;
-    externalImage.value = null;
-    externalImageSource.value = null;
+    externalImage.value = coverAsset;
+    externalImageSource.value = coverSource;
     externalImageTags.value = [];
     activeImageId.value = imageId;
     showImageLightbox.value = true;
+    if (coverAsset && coverSource) void loadExternalImageTags(coverAsset);
   };
 
   const openImageAsset = async (asset: ImageAsset, source: string) => {
@@ -147,11 +168,7 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
     externalImageSource.value = source;
     externalImageTags.value = [];
     showImageLightbox.value = true;
-    try {
-      externalImageTags.value = await getImageWikiTags(asset.id);
-    } catch (error) {
-      console.warn("Failed to load image tags", error);
-    }
+    await loadExternalImageTags(asset);
   };
 
   const closeImageModal = () => {
@@ -174,7 +191,7 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
         notes,
         updated_at: new Date().toISOString(),
       };
-      if (externalImage.value && externalImage.value.id === image.id) {
+      if (externalImage.value?.id === image.id) {
         externalImage.value = updatedImage;
       } else {
         partImages.value = partImages.value.map((item) =>
@@ -216,19 +233,15 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
   const goToNextImage = () => {
     if (!hasNextImage.value) return;
     const nextIndex = currentImageIndex.value + 1;
-    const nextImage = partImages.value[nextIndex];
-    if (nextImage && partImageSources.value[nextImage.id]) {
-      activeImageId.value = nextImage.id;
-    }
+    const nextImage = albumImages.value[nextIndex];
+    if (nextImage) activeImageId.value = nextImage.id === externalImage.value?.id ? null : nextImage.id;
   };
 
   const goToPrevImage = () => {
     if (!hasPrevImage.value) return;
     const prevIndex = currentImageIndex.value - 1;
-    const prevImage = partImages.value[prevIndex];
-    if (prevImage && partImageSources.value[prevImage.id]) {
-      activeImageId.value = prevImage.id;
-    }
+    const prevImage = albumImages.value[prevIndex];
+    if (prevImage) activeImageId.value = prevImage.id === externalImage.value?.id ? null : prevImage.id;
   };
 
   const handleDownloadImage = async (imageId: string) => {
@@ -267,6 +280,9 @@ export function usePartImages(partIdRef: () => string | undefined, bookIdRef: ()
     activeImage,
     activeImageTags,
     activeImageLabel,
+    albumImages,
+    activeImagePosition,
+    albumImageCount,
     hasNextImage,
     hasPrevImage,
 
