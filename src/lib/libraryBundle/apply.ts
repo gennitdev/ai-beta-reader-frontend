@@ -71,6 +71,32 @@ export function applyImportPlanToModel(
       else values.push(incoming)
     }
   }
+
+  // Text-only workspaces intentionally omit history and audit records. Keep
+  // those local records when their parents survive, but cascade deliberate
+  // parent deletions so the merged database cannot retain dangling foreign
+  // keys to chapters, books, or wiki pages removed by the import.
+  const survivingBookIds = new Set(result.books.map((book) => book.id))
+  const survivingChapterIds = new Set(result.chapters.map((chapter) => chapter.id))
+  const survivingWikiPageIds = new Set(result.wiki_pages.map((page) => page.id))
+  if (!incomingModel.includes.history) {
+    result.chapter_revisions = result.chapter_revisions.filter((revision) => (
+      survivingBookIds.has(revision.book_id) && survivingChapterIds.has(revision.chapter_id)
+    ))
+    result.chapter_activity = result.chapter_activity.filter((activity) => (
+      survivingBookIds.has(activity.book_id) && survivingChapterIds.has(activity.chapter_id)
+    ))
+  }
+  if (!incomingModel.includes.audit_records) {
+    result.wiki_updates = result.wiki_updates.filter((update) => (
+      survivingWikiPageIds.has(update.wiki_page_id)
+      && (update.chapter_id === null || survivingChapterIds.has(update.chapter_id))
+    ))
+    result.wiki_review_state = result.wiki_review_state.filter((state) => (
+      survivingWikiPageIds.has(state.wiki_page_id) && survivingChapterIds.has(state.chapter_id)
+    ))
+  }
+
   result.book_ids = result.books.map((book) => book.id).sort()
   return canonicalLibraryModelSchema.parse(result)
 }

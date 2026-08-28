@@ -256,6 +256,48 @@ describe('three-way library import planning', () => {
     expect(applied.wiki_review_state).toEqual(local.wiki_review_state)
   })
 
+  it('cascades parent deletions into omitted local history and audit records', async () => {
+    const local = completeCanonicalLibraryFixture()
+    const incoming = structuredClone(local)
+    incoming.content_mode = 'text-only'
+    incoming.includes = { image_bytes: false, history: false, audit_records: false }
+    incoming.books[0].chapter_order = []
+    incoming.chapters = []
+    incoming.chapter_notes = []
+    incoming.chapter_summaries = []
+    incoming.reviews = []
+    incoming.chapter_revisions = []
+    incoming.chapter_activity = []
+    incoming.wiki_updates = []
+    incoming.wiki_review_state = []
+    incoming.assets[0].bytes = null
+
+    const validated = await bundle(incoming)
+    const textOnlyBundle = {
+      ...validated,
+      manifest: {
+        ...validated.manifest!,
+        content_mode: 'text-only' as const,
+        includes: incoming.includes,
+      },
+      inventory: {
+        ...validated.inventory!,
+        entities: validated.inventory!.entities.filter((entity) => ![
+          'chapter_revision', 'chapter_activity', 'wiki_update', 'wiki_review_state',
+        ].includes(entity.entity_type)),
+      },
+    }
+    const plan = await createLibraryImportPlan(textOnlyBundle, local, 'generation')
+    const applied = applyImportPlanToModel(plan, local, incoming, 'generation')
+
+    expect(chapterOperation(plan).kind).toBe('delete')
+    expect(plan.operations.some((operation) => operation.entityType === 'chapter_revision')).toBe(false)
+    expect(applied.chapter_revisions).toEqual([])
+    expect(applied.chapter_activity).toEqual([])
+    expect(applied.wiki_updates).toEqual([])
+    expect(applied.wiki_review_state).toEqual([])
+  })
+
   it('captures all decision-support summaries in the immutable plan', async () => {
     const original = completeCanonicalLibraryFixture()
     const written = await writeLibraryBundle(original, options)
