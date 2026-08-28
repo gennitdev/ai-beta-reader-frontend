@@ -261,6 +261,12 @@ export async function importDatabase(ctx: DatabaseContext, data: Uint8Array): Pr
     await execute('PRAGMA foreign_keys = ON')
     await beginTransaction()
     transactionStarted = true
+    // Native databases can contain relationship-bearing tables created by an
+    // older app version that are not part of the portable backup contract.
+    // Defer checks so replacing a parent row with the same ID does not fail in
+    // the brief interval between clearing and restoring the canonical tables.
+    // SQLite still validates every relationship when the transaction commits.
+    await execute('PRAGMA defer_foreign_keys = ON')
 
     const tablesToClear = [
       'chapter_wiki_mentions',
