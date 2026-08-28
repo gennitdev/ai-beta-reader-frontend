@@ -244,6 +244,30 @@ describe('database import safety', () => {
     expect(await db.getChapters('book-1')).toEqual([])
     expect(await db.getBookImages('book-1')).toEqual([])
   })
+
+  it('defers foreign keys while replacing parents retained by legacy tables', async () => {
+    await db.saveBook(book())
+    const connection = rawDatabase(db)
+    connection.run(`CREATE TABLE legacy_book_links (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL,
+      FOREIGN KEY (book_id) REFERENCES books(id)
+    )`)
+    connection.run('INSERT INTO legacy_book_links (id, book_id) VALUES (?, ?)', ['link-1', 'book-1'])
+
+    await db.importDatabase(new TextEncoder().encode(JSON.stringify({
+      version: 5,
+      books: [book({ title: 'Restored Book' })],
+      chapters: [],
+    })))
+
+    expect(await db.getBooks()).toEqual([expect.objectContaining({
+      id: 'book-1',
+      title: 'Restored Book',
+    })])
+    expect(connection.exec('SELECT book_id FROM legacy_book_links')[0].values).toEqual([['book-1']])
+    expect(connection.exec('PRAGMA foreign_key_check')).toEqual([])
+  })
 })
 
 describe('chapters', () => {
