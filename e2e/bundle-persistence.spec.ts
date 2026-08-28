@@ -12,7 +12,7 @@ test('full bundle Replace persists across restart with verified recovery outside
     chapterText: `${marker} — content that must survive export and replacement.`,
   })
 
-  await page.goto('/settings')
+  await page.goto('/library-data')
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export full library backup' }).click()
   const download = await downloadPromise
@@ -26,7 +26,7 @@ test('full bundle Replace persists across restart with verified recovery outside
     chapterText: 'This book was created after the recovery point.',
   })
 
-  await page.goto('/settings')
+  await page.goto('/library-data')
   await page.locator('input[type="file"][accept*=".zip"]').setInputFiles(bundlePath as string)
   await expect(page.getByRole('button', { name: 'Prepare Replace library' })).toBeEnabled()
   await page.getByRole('button', { name: 'Prepare Replace library' }).click()
@@ -75,7 +75,7 @@ test('failed browser persistence during Replace rolls back the prior library and
     chapterText: 'ROLLBACK-BASELINE-132 — present in the incoming and local libraries.',
   })
 
-  await page.goto('/settings')
+  await page.goto('/library-data')
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export full library backup' }).click()
   const bundlePath = await (await downloadPromise).path()
@@ -88,7 +88,7 @@ test('failed browser persistence during Replace rolls back the prior library and
     chapterText: 'ROLLBACK-LOCAL-ONLY-132 — must return after the failed Replace.',
   })
 
-  await page.goto('/settings')
+  await page.goto('/library-data')
   await page.locator('input[type="file"][accept*=".zip"]').setInputFiles(bundlePath as string)
   await expect(page.getByRole('button', { name: 'Prepare Replace library' })).toBeEnabled()
   await page.getByRole('button', { name: 'Prepare Replace library' }).click()

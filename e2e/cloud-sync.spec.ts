@@ -31,7 +31,7 @@ test('backup → wipe → restore preserves book and chapter data', async ({ pag
   })
 
   // --- Back up to (stubbed) Google Drive ---
-  await page.goto('/settings')
+  await page.goto('/library-data')
   await page.locator('#cloud-password').fill(PASSWORD)
   await page.getByRole('button', { name: 'Backup to Google Drive' }).click()
   await expect(page.getByText('Backup saved to Google Drive.')).toBeVisible()
@@ -53,7 +53,7 @@ test('backup → wipe → restore preserves book and chapter data', async ({ pag
 
   // --- Restore from (stubbed) Google Drive ---
   page.once('dialog', (dialog) => dialog.accept()) // confirm() before restore
-  await page.goto('/settings')
+  await page.goto('/library-data')
   await page.locator('#cloud-password').fill(PASSWORD)
   await page.getByRole('button', { name: 'Restore from Backup' }).click()
   await expect(page.getByText('Backup restored from Google Drive.')).toBeVisible()
@@ -80,7 +80,7 @@ test('restore with the wrong password fails without destroying anything', async 
     chapterText: `${MARKER} — content that must never be silently lost.`,
   })
 
-  await page.goto('/settings')
+  await page.goto('/library-data')
   await page.locator('#cloud-password').fill(PASSWORD)
   await page.getByRole('button', { name: 'Backup to Google Drive' }).click()
   await expect(page.getByText('Backup saved to Google Drive.')).toBeVisible()
