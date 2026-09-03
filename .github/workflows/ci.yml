@@ -21,41 +21,41 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Install Electron dependencies
-        run: npm ci --prefix electron --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
       - name: Type check
-        run: npm run type-check
+        run: pnpm type-check
 
       - name: Type check Electron
-        run: npm run type-check:electron
+        run: pnpm type-check:electron
 
       - name: Build
-        run: npm run build-only
+        run: pnpm build-only
 
       - name: Run unit tests
-        run: npm run test:coverage
+        run: pnpm test:coverage
 
       - name: Enforce strict line coverage ratchet
-        run: npm run test:coverage:strict
+        run: pnpm test:coverage:strict
 
       - name: Run deterministic bundle fuzz tests
         env:
           BUNDLE_FUZZ_SEED: 132202608
           BUNDLE_FUZZ_RUNS: 1000
-        run: npm run test:fuzz
+        run: pnpm test:fuzz
 
       - name: Retain bundle fuzz counterexamples
         if: ${{ failure() }}
@@ -67,10 +67,10 @@ jobs:
           retention-days: 30
 
       - name: Run Electron runtime tests
-        run: npm run test:electron
+        run: pnpm test:electron
 
       - name: Run deterministic bundle stress benchmark
-        run: npm run benchmark:bundle:ci
+        run: pnpm benchmark:bundle:ci
 
       - name: Upload bundle stress report
         if: ${{ !cancelled() }}
@@ -94,7 +94,7 @@ jobs:
       # Tighten to a blocking `--audit-level=high` once those are resolved.
       - name: Security audit (production dependencies)
         continue-on-error: true
-        run: npm audit --omit=dev --audit-level=high
+        run: pnpm audit --prod --audit-level=high
 
   # End-to-end tests run as a separate job so a flaky browser run never blocks
   # the fast lint/type-check/unit signal from `quality`.
@@ -106,29 +106,32 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       # `--ignore-scripts` skips the postinstall that copies the sql.js WASM
       # asset into public/. The browser fetches it from the dev server at
       # runtime, so the E2E suite needs it present.
       - name: Copy sql.js WASM asset
-        run: npm run copy:wasm
+        run: pnpm copy:wasm
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Type-check E2E sources
-        run: npm run type-check:e2e
+        run: pnpm type-check:e2e
 
       - name: Run Playwright E2E tests
-        run: npm run test:e2e
+        run: pnpm test:e2e
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

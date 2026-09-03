@@ -9,8 +9,8 @@ Repository-wide contribution and safety rules live in [AGENTS.md](AGENTS.md). Th
 Requires Node.js 22.12+ or 24+.
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 The Vite development server is available at `http://localhost:5173`. Google Drive configuration is optional; copy [.env.example](.env.example) to `.env.local` only when exercising OAuth and backup flows.
@@ -18,15 +18,15 @@ The Vite development server is available at `http://localhost:5173`. Google Driv
 ## Verification commands
 
 ```bash
-npm run lint
-npm run type-check
-npm run build
-npm run test:unit
-npm run test:coverage
-npm run test:e2e
-npm run test:electron
-npm run type-check:electron
-npm run validate:bundle -- /absolute/path/to/bundle-or.zip
+pnpm lint
+pnpm type-check
+pnpm build
+pnpm test:unit
+pnpm test:coverage
+pnpm test:e2e
+pnpm test:electron
+pnpm type-check:electron
+pnpm validate:bundle /absolute/path/to/bundle-or.zip
 ```
 
 CI installs with `--ignore-scripts`, copies the sql.js WASM explicitly, and runs lint, browser and Electron type checks, the production build, coverage, Electron runtime tests, and Playwright.
@@ -35,14 +35,14 @@ CI installs with `--ignore-scripts`, copies the sql.js WASM explicitly, and runs
 
 ```bash
 # Android
-npm run build
-npx cap sync android
-npx cap run android --target <serial>
+pnpm build
+pnpm exec cap sync android
+pnpm exec cap run android --target <serial>
 
 # Electron
-npm install --prefix electron
-npm run electron:dev
-npm run electron:build
+pnpm install
+pnpm electron:dev
+pnpm electron:build
 ```
 
 ## Architecture

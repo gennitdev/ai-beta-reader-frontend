@@ -10,7 +10,7 @@ function formatDiagnostic(diagnostic: BundleDiagnostic): string {
 }
 const inputPath = process.argv[2]
 if (!inputPath) {
-  console.error('Usage: npm run validate:bundle -- <bundle-directory-or-zip>')
+  console.error('Usage: pnpm validate:bundle <bundle-directory-or-zip>')
   process.exitCode = 2
 } else {
   const result = await validateBundlePath(inputPath)

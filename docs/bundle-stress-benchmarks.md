@@ -6,13 +6,13 @@ Issue [#132](https://github.com/gennitdev/ai-beta-reader-frontend/issues/132) tr
 
 ```sh
 # Fast local feedback; records results without enforcing CI ceilings.
-npm run benchmark:bundle
+pnpm benchmark:bundle
 
 # Pull-request scale with deterministic seed and deliberately generous gates.
-npm run benchmark:bundle:ci
+pnpm benchmark:bundle:ci
 
 # Opt-in workstation/nightly characterization. This does not enforce PR gates.
-npm run benchmark:bundle:nightly
+pnpm benchmark:bundle:nightly
 ```
 
 Override the seed or artifact path with `--seed=<integer>` and `--output=<path>`. The default report is `artifacts/bundle-stress.json`; generated artifacts are ignored by Git and uploaded by CI.

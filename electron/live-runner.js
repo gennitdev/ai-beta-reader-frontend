@@ -5,7 +5,7 @@ const chokidar = require('chokidar');
 const electron = require('electron');
 
 let child = null;
-const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const reloadWatcher = {
   debouncer: null,
   ready: false,
@@ -16,7 +16,7 @@ const reloadWatcher = {
 ///*
 function runBuild() {
   return new Promise((resolve, _reject) => {
-    let tempChild = cp.spawn(npmCmd, ['run', 'build']);
+    let tempChild = cp.spawn(pnpmCmd, ['run', 'build']);
     tempChild.once('exit', () => {
       resolve();
     });

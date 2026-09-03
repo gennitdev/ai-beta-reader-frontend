@@ -29,7 +29,7 @@ Scopes such as `feat(bardwall): ...` are optional. For a breaking change in a on
 The `Release` workflow runs after changes land on `main`. Release Please reads conventional squash commits since the previous release and maintains one release pull request containing:
 
 - the next semantic version;
-- matching updates to `package.json` and `package-lock.json`;
+- matching updates to `package.json` and `pnpm-lock.yaml`;
 - generated `CHANGELOG.md` entries.
 
 Review and merge that release pull request when the accumulated changes are ready to publish. Its merge causes the workflow to create the `vX.Y.Z` tag and corresponding GitHub Release. This repository is a private npm package, so the workflow does not publish anything to npm. Vercel deployment remains independent and continues to follow `main`.

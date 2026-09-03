@@ -33,34 +33,37 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Copy sql.js WebAssembly asset
-        run: npm run copy:wasm
+        run: pnpm copy:wasm
 
       - name: Install Chromium with Linux dependencies
         if: runner.os == 'Linux'
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Install Chromium
         if: runner.os != 'Linux'
-        run: npx playwright install chromium
+        run: pnpm exec playwright install chromium
 
       - name: Type-check browser acceptance sources
-        run: npm run type-check:e2e
+        run: pnpm type-check:e2e
 
       - name: Verify portable paths and transports
-        run: npx vitest run src/__tests__/libraryBundleWriter.spec.ts src/__tests__/libraryBundleTransport.spec.ts src/__tests__/directoryBundleWriter.spec.ts src/__tests__/libraryBundleFilesystemAcceptance.spec.ts
+        run: pnpm exec vitest run src/__tests__/libraryBundleWriter.spec.ts src/__tests__/libraryBundleTransport.spec.ts src/__tests__/directoryBundleWriter.spec.ts src/__tests__/libraryBundleFilesystemAcceptance.spec.ts
 
       - name: Verify real browser persistence and recovery
-        run: npx playwright test e2e/bundle-persistence.spec.ts --workers=1
+        run: pnpm exec playwright test e2e/bundle-persistence.spec.ts --workers=1
 
       - name: Retain browser acceptance report
         if: ${{ !cancelled() }}
