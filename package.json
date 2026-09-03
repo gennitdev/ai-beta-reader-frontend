@@ -4,8 +4,10 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "packageManager": "pnpm@10.28.2",
   "engines": {
-    "node": "^22.12.0 || ^24.0.0"
+    "node": "^22.12.0 || ^24.0.0",
+    "pnpm": ">=10.28.2"
   },
   "scripts": {
     "dev": "vite",
@@ -28,13 +30,13 @@
     "test:e2e:report": "playwright show-report",
     "validate:bundle": "tsx scripts/validate-bundle.ts",
     "type-check:e2e": "tsc -p e2e/tsconfig.json",
-    "type-check:electron": "npm --prefix electron exec tsc -- --noEmit -p electron/tsconfig.json",
+    "type-check:electron": "pnpm --dir electron exec tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "copy:wasm": "cp node_modules/sql.js/dist/sql-wasm.wasm public/",
-    "postinstall": "npm run copy:wasm && npm run build && npx cap sync android @capacitor-community/electron",
-    "electron:dev": "npm run build && cd electron && npm run electron:start-live",
-    "electron:build": "cd electron && npm run electron:make"
+    "postinstall": "pnpm copy:wasm && pnpm build && pnpm exec cap sync android @capacitor-community/electron",
+    "electron:dev": "pnpm build && pnpm --dir electron electron:start-live",
+    "electron:build": "pnpm --dir electron electron:make"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.0",
@@ -105,5 +107,12 @@
     "vite-plugin-vue-devtools": "^8.2.1",
     "vitest": "^4.1.11",
     "vue-tsc": "^3.3.10"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3-multiple-ciphers",
+      "electron-winstaller",
+      "esbuild"
+    ]
   }
 }

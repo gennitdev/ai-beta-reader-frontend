@@ -40,7 +40,7 @@ export default defineConfig({
   // Boot the Vite dev server for the tests. Locally we reuse an already-running
   // server if present; CI always starts a fresh one.
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1',
+    command: 'pnpm dev -- --host 127.0.0.1',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

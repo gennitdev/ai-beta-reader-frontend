@@ -217,7 +217,7 @@ beta bot is a client application, so running it means a Vite dev server or a sta
 1. **Install dependencies:**
 
    ```bash
-   npm install
+   pnpm install
    ```
 
 2. **Optional: configure Google Drive backup and restore:**
@@ -226,7 +226,7 @@ beta bot is a client application, so running it means a Vite dev server or a sta
 3. **Start development server:**
 
    ```bash
-   npm run dev
+   pnpm dev
    ```
 
 ## Environment Variables
@@ -309,7 +309,7 @@ See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secre
 - Validate either transport without opening the app or database:
 
   ```bash
-  npm run validate:bundle -- /path/to/library-folder-or.zip
+  pnpm validate:bundle -- /path/to/library-folder-or.zip
   ```
 
 See [`docs/agent-workspaces.md`](docs/agent-workspaces.md) for the rollback model, generated `AGENTS.md`, and recommended Git attributes.
@@ -334,43 +334,43 @@ See [`docs/agent-workspaces.md`](docs/agent-workspaces.md) for the rollback mode
 ## Development Workflow
 
 ```bash
-npm install          # install deps
-npm run dev          # local dev server (Vite)
-npm run build        # type-check + production bundle (outputs to dist/)
-npm run preview      # serve production bundle locally
+pnpm install          # install deps for the app and Electron workspace
+pnpm dev              # local dev server (Vite)
+pnpm build            # type-check + production bundle (outputs to dist/)
+pnpm preview          # serve production bundle locally
 
 # Lint and types
-npm run lint             # ESLint check
-npm run lint:fix         # ESLint autofix
-npm run type-check       # vue-tsc --build (browser app)
-npm run type-check:electron  # Electron main/preload types
-npm run type-check:e2e   # Playwright spec types
+pnpm lint             # ESLint check
+pnpm lint:fix         # ESLint autofix
+pnpm type-check       # vue-tsc --build (browser app)
+pnpm type-check:electron  # Electron main/preload types
+pnpm type-check:e2e   # Playwright spec types
 
 # Tests
-npm run test:unit             # Vitest unit suite
-npm run test:coverage         # Vitest with coverage
-npm run test:coverage:strict  # coverage with the enforced thresholds
-npm run test:fuzz             # property/fuzz suite for the bundle codec
-npm run test:e2e              # Playwright browser suite
-npm run test:electron         # Electron runtime unit suite
-npm run test:electron-security # Electron sandbox/IPC security checks
+pnpm test:unit             # Vitest unit suite
+pnpm test:coverage         # Vitest with coverage
+pnpm test:coverage:strict  # coverage with the enforced thresholds
+pnpm test:fuzz             # property/fuzz suite for the bundle codec
+pnpm test:e2e              # Playwright browser suite
+pnpm test:electron         # Electron runtime unit suite
+pnpm test:electron-security # Electron sandbox/IPC security checks
 
 # Bundles and fixtures
-npm run validate:bundle -- /path/to/bundle  # offline directory/ZIP validation
-npm run benchmark:bundle     # bundle stress benchmarks (smoke scale by default)
-npm run example-story:sync   # rebuild the demo book ZIP from ../example-story-jack
+pnpm validate:bundle -- /path/to/bundle  # offline directory/ZIP validation
+pnpm benchmark:bundle     # bundle stress benchmarks (smoke scale by default)
+pnpm example-story:sync   # rebuild the demo book ZIP from ../example-story-jack
 
 # Android
-npx cap sync android # sync Capacitor plugins & web assets (run after build)
-npx cap run android --target <serial>  # deploy to device/emulator
+pnpm exec cap sync android # sync Capacitor plugins & web assets (run after build)
+pnpm exec cap run android --target <serial>  # deploy to device/emulator
 
 # Electron Desktop
-npm install --prefix electron # first time only
-npm run electron:dev          # build and launch with the live runner
-npm run electron:build        # create configured distributable packages
+pnpm install                  # installs Electron dependencies via the workspace
+pnpm electron:dev             # build and launch with the live runner
+pnpm electron:build           # create configured distributable packages
 ```
 
-CI runs lint, browser and Electron type checks, the production build, coverage, Electron runtime tests, and the Playwright suite. Run `npm run lint`, `npm run type-check`, `npm run type-check:electron`, and `npm run test:unit` before pushing to catch the common failures locally.
+CI runs lint, browser and Electron type checks, the production build, coverage, Electron runtime tests, and the Playwright suite. Run `pnpm lint`, `pnpm type-check`, `pnpm type-check:electron`, and `pnpm test:unit` before pushing to catch the common failures locally.
 
 ## Contributing
 
@@ -379,13 +379,13 @@ Contribution guidelines — project layout, coding style, testing expectations, 
 ## Hosting & Deployment
 
 - **Web (beta-bot.net)**: Vercel builds from `main`. Make sure the env vars above are set in Vercel before deploying.
-- **Android**: Use `npx cap sync android` after every `npm run build`. Launch via Android Studio or the `npx cap run` helper.
+- **Android**: Use `pnpm exec cap sync android` after every `pnpm build`. Launch via Android Studio or the `pnpm exec cap run` helper.
   - The production Android OAuth client must include:
     - Package name `com.betareader.app`
     - Google Play **app-signing certificate** SHA‑1 from Play Console → Setup → App integrity. The upload-key SHA‑1 identifies the upload artifact, not the Play-installed production app.
   - Local debug builds need a separate Android OAuth client entry for `com.betareader.app` and the debug certificate SHA‑1 shown by `./gradlew signingReport`.
   - Status bar height is handled via `@capacitor/status-bar` to avoid UI overlap.
-- **Electron Desktop**: Run `npm run electron:dev` for development or `npm run electron:build` for configured packages.
+- **Electron Desktop**: Run `pnpm electron:dev` for development or `pnpm electron:build` for configured packages.
   - Uses the same `sql.js` + IndexedDB database persistence as the browser build.
   - Uses an Electron preload/IPC bridge for native file selection and image filesystem access.
   - Image files live in the Electron app-data directory and are embedded in user-initiated encrypted Drive backups.

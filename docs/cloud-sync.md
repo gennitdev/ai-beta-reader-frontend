@@ -79,10 +79,10 @@ Android authorization has no Vite environment variables. Google Play services re
    ```
 4. Build & deploy after any frontend change:
    ```bash
-   npm install              # if dependencies changed
-   npm run build
-   npx cap sync android
-   npx cap run android --target <serial>   # or open in Android Studio
+   pnpm install              # if dependencies changed
+   pnpm build
+   pnpm exec cap sync android
+   pnpm exec cap run android --target <serial>   # or open in Android Studio
    ```
 5. For local verification, accept the native Google authorization prompt. For production verification, upload a release bundle and install it from a Play internal-testing track so the app-signing certificate—not the upload certificate—is exercised.
 6. Verify backup, backup listing, and restore on a physical device. Cancel the account/consent UI once and retry to confirm the recoverable error path. Leave the app idle long enough for a token to expire (or use a test build with a shortened expiry) and confirm the next operation reacquires authorization without changing backup data.
@@ -133,7 +133,7 @@ adb logcat | grep "authenticateNative"
 
 ### Verifying a Backup
 
-Use **Show Available Backups** on the **Library Data** page to inspect generation time, app version, bundle format, and encrypted size. Restore rechecks ciphertext integrity and the complete canonical bundle before any database write. Decrypted ZIPs and directory exports can be checked independently with `npm run validate:bundle -- <path>`; see [Git and agent workspaces](agent-workspaces.md).
+Use **Show Available Backups** on the **Library Data** page to inspect generation time, app version, bundle format, and encrypted size. Restore rechecks ciphertext integrity and the complete canonical bundle before any database write. Decrypted ZIPs and directory exports can be checked independently with `pnpm validate:bundle -- <path>`; see [Git and agent workspaces](agent-workspaces.md).
 
 ---
 
@@ -141,13 +141,13 @@ Use **Show Available Backups** on the **Library Data** page to inspect generatio
 
 ```bash
 # Local development
-npm run dev
+pnpm dev
 
 # Production build
-npm run build
+pnpm build
 
 # Type safety
-npm run type-check
+pnpm type-check
 
 # Signing report for SHA-1
 cd android
@@ -165,6 +165,6 @@ sudo adb start-server
 1. Device online, USB debugging enabled, `adb devices` shows `device`.
 2. Android OAuth client has package `com.betareader.app` and the installed build's signing SHA‑1.
 3. For Play internal testing, confirm that SHA‑1 is the Play app-signing certificate, not the upload key.
-4. `npm run build` → `npx cap sync android` → deploy to device.
+4. `pnpm build` → `pnpm exec cap sync android` → deploy to device.
 5. Trigger **Restore** in-app, approve Google consent, watch `adb logcat | grep CloudSync`.
 6. Success message: `✅ Database restored successfully!`

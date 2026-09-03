@@ -27,9 +27,9 @@ The validator reads a directory or ZIP and runs the same resource limits, parser
 From a checkout of this repository:
 
 ```bash
-npm install
-npm run validate:bundle -- /absolute/path/to/library-folder
-npm run validate:bundle -- /absolute/path/to/library.zip
+pnpm install
+pnpm validate:bundle -- /absolute/path/to/library-folder
+pnpm validate:bundle -- /absolute/path/to/library.zip
 ```
 
 Errors produce a nonzero exit status. Warnings are printed but do not make an otherwise valid bundle fail. A successful full library bundle is also reported as eligible for Replace.
