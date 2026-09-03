@@ -26,7 +26,7 @@ pnpm test:coverage
 pnpm test:e2e
 pnpm test:electron
 pnpm type-check:electron
-pnpm validate:bundle -- /absolute/path/to/bundle-or.zip
+pnpm validate:bundle /absolute/path/to/bundle-or.zip
 ```
 
 CI installs with `--ignore-scripts`, copies the sql.js WASM explicitly, and runs lint, browser and Electron type checks, the production build, coverage, Electron runtime tests, and Playwright.

@@ -9,7 +9,7 @@ This repository contains a canonical Beta Bot library bundle. Treat stable IDs a
 3. Give every new entity a globally unique, correctly namespaced ID.
 4. Search both \`page_name\` and every alias when reconciling a wiki page.
 5. Preserve explicit \`wiki_mentions\`; absence of a text match is not permission to delete a relationship. When deliberately deleting an entity, update authored references to it while leaving its inventory entry untouched.
-6. Run \`pnpm validate:bundle -- /absolute/path/to/this/workspace\` from a checkout of the Beta Bot application before opening a pull request.
+6. Run \`pnpm validate:bundle /absolute/path/to/this/workspace\` from a checkout of the Beta Bot application before opening a pull request.
 7. After Beta Bot successfully applies the changes, export to this workspace again before beginning another editing round. That export establishes the next comparison baseline.
 8. Open a pull request; do not commit directly to the protected branch.
 

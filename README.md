@@ -309,7 +309,7 @@ See [`docs/cloud-sync.md`](docs/cloud-sync.md) for troubleshooting (client secre
 - Validate either transport without opening the app or database:
 
   ```bash
-  pnpm validate:bundle -- /path/to/library-folder-or.zip
+  pnpm validate:bundle /path/to/library-folder-or.zip
   ```
 
 See [`docs/agent-workspaces.md`](docs/agent-workspaces.md) for the rollback model, generated `AGENTS.md`, and recommended Git attributes.
@@ -356,7 +356,7 @@ pnpm test:electron         # Electron runtime unit suite
 pnpm test:electron-security # Electron sandbox/IPC security checks
 
 # Bundles and fixtures
-pnpm validate:bundle -- /path/to/bundle  # offline directory/ZIP validation
+pnpm validate:bundle /path/to/bundle  # offline directory/ZIP validation
 pnpm benchmark:bundle     # bundle stress benchmarks (smoke scale by default)
 pnpm example-story:sync   # rebuild the demo book ZIP from ../example-story-jack
 

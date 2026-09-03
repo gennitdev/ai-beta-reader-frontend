@@ -28,8 +28,8 @@ From a checkout of this repository:
 
 ```bash
 pnpm install
-pnpm validate:bundle -- /absolute/path/to/library-folder
-pnpm validate:bundle -- /absolute/path/to/library.zip
+pnpm validate:bundle /absolute/path/to/library-folder
+pnpm validate:bundle /absolute/path/to/library.zip
 ```
 
 Errors produce a nonzero exit status. Warnings are printed but do not make an otherwise valid bundle fail. A successful full library bundle is also reported as eligible for Replace.
