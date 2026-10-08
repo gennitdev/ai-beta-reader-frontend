@@ -40,11 +40,11 @@
     "@electron/rebuild": "^4.2.0",
     "electron": "^43.4.1",
     "electron-builder": "~26.15.3",
-    "node-gyp": "^13.0.1",
+    "node-gyp": "^13.1.0",
     "typescript": "^7.0.2"
   },
   "overrides": {
-    "node-gyp": "^13.0.1"
+    "node-gyp": "^13.1.0"
   },
   "keywords": [
     "capacitor",
